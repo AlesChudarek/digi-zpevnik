@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+
+# Environment
+.venv/
+env/
+venv/
+
+# Databáze a nahrávky
+backend/db/*.db
+backend/static/uploads/
+
+# VS Code nastavení
+.vscode/
+
+# OS soubory
+.DS_Store
+Thumbs.db
