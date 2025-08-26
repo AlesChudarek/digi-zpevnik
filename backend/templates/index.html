@@ -1,0 +1,45 @@
+{% extends "blank.html" %}
+{% block title %}Domů{% endblock %}
+{% block content %}
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: linear-gradient(135deg, #4CAF50, #2E7D32);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+  }
+  .landing-container {
+    text-align: center;
+    color: white;
+  }
+  .landing-container h1 {
+    font-size: 3em;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+  }
+  .landing-container a.btn {
+    margin-top: 20px;
+    padding: 15px 30px;
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #4CAF50;
+    background: white;
+    border-radius: 30px;
+    text-decoration: none;
+    transition: 0.3s;
+    box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+  }
+  .landing-container a.btn:hover {
+    background: #f1f1f1;
+    transform: scale(1.05);
+  }
+</style>
+
+<div class="landing-container">
+  <h1>Vítej v DigiZpěvníku<br>Handicap Zlín</h1>
+  <a href="{{ url_for('login') }}" class="btn">Vstoupit</a>
+</div>
+{% endblock %}

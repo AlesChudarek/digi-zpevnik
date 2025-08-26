@@ -1,0 +1,134 @@
+
+
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>Digitální Zpěvník – Přihlášení / Registrace</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #4CAF50, #2E7D32);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      background-color: white;
+      border-radius: 8px;
+      width: 350px;
+      padding: 30px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    .tabs {
+      display: flex;
+      justify-content: space-around;
+      margin-bottom: 20px;
+    }
+    .tab {
+      cursor: pointer;
+      padding: 10px 20px;
+      font-weight: bold;
+      border-bottom: 2px solid transparent;
+    }
+    .tab.active {
+      color: #2E7D32;
+      border-bottom: 2px solid #2E7D32;
+    }
+    form {
+      display: none;
+      flex-direction: column;
+    }
+    form.active {
+      display: flex;
+    }
+    input {
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45A049;
+    }
+    .guest-link {
+      margin-top: 15px;
+      text-align: center;
+    }
+    .guest-link a {
+      color: #2E7D32;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .guest-link a:hover {
+      text-decoration: underline;
+    }
+    .flash {
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      text-align: center;
+    }
+    .flash.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .flash.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="tabs">
+      <div class="tab active" onclick="showForm('login')">Přihlásit</div>
+      <div class="tab" onclick="showForm('register')">Registrovat</div>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form id="login" class="active" method="POST" action="{{ url_for('login') }}">
+      <input type="email" name="email" placeholder="Email" required>
+      <input type="password" name="password" placeholder="Heslo" required>
+      <button type="submit">Přihlásit se</button>
+    </form>
+
+    <form id="register" method="POST" action="{{ url_for('register') }}">
+      <input type="email" name="email" placeholder="Email" required>
+      <input type="password" name="password" placeholder="Heslo" required>
+      <button type="submit">Registrovat se</button>
+    </form>
+
+    <div class="guest-link">
+      <a href="{{ url_for('guest_login') }}">Přihlásit jako host</a>
+    </div>
+  </div>
+
+  <script>
+    function showForm(formId) {
+      document.querySelectorAll('form').forEach(f => f.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.getElementById(formId).classList.add('active');
+      document.querySelector(`.tab[onclick*="${formId}"]`).classList.add('active');
+    }
+  </script>
+</body>
+</html>

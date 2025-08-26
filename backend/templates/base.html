@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <title>{% block title %}Zpěvník{% endblock %}</title>
+  <style>
+    .flash {
+      padding: 10px;
+      margin: 15px 0;
+      font-weight: bold;
+      border: 1px solid;
+    }
+    .flash-error {
+      background-color: #ffdddd;
+      border-color: red;
+      color: darkred;
+    }
+    .flash-success {
+      background-color: #ddffdd;
+      border-color: green;
+      color: darkgreen;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="{{ url_for('index') }}">Domů</a> |
+    {% if current_user.is_authenticated %}
+      <a href="{{ url_for('dashboard') }}">Moje zpěvníky</a> |
+      <a href="{{ url_for('logout') }}">Odhlásit se</a>
+    {% else %}
+      <a href="{{ url_for('login') }}">Přihlásit</a> |
+      <a href="{{ url_for('register') }}">Registrovat</a> |
+      <a href="{{ url_for('guest_login') }}">Přihlásit jako host</a>
+    {% endif %}
+  </nav>
+  <hr>
+  {% set messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+  {% block content %}{% endblock %}
+</body>
+</html>

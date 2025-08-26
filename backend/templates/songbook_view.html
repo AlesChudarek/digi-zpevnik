@@ -1,0 +1,384 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Zpěvník{% endblock %}
+
+{% block content %}
+<style>
+  .zoom-scroll-wrapper {
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    overflow: auto;
+  }
+</style>
+
+<style>
+    .viewer-container {
+        display: block;
+        min-width: fit-content;
+        min-height: fit-content;
+        width: max-content;
+        margin: 0 auto;
+        padding: 40px 20px;
+    }
+
+    .page-pair {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 20px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .page-pair img,
+    .scroll-mode img {
+        width: auto;
+        max-width: none;
+        height: auto;
+        box-shadow: 0 0 15px rgba(0,0,0,0.3);
+        background: white;
+        border-radius: 10px;
+    }
+
+    .nav-buttons {
+        margin-top: 10px;
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+    }
+
+    .nav-buttons button,
+    .mode-buttons button {
+        background: white;
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        cursor: pointer;
+        transition: transform 0.2s;
+        position: relative;
+        overflow: visible;
+        z-index: 1;
+    }
+
+    .nav-buttons button:hover,
+    .mode-buttons button:hover {
+        transform: scale(1.1);
+    }
+
+    .nav-buttons img,
+    .mode-buttons img {
+        width: 30px;
+        height: 30px;
+    }
+
+    .mode-buttons {
+        position: fixed;
+        top: 90px;
+        right: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 100;
+    }
+
+    .scroll-mode {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        overflow: auto;
+    }
+
+    .scroll-mode img {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+
+    .button-container {
+        position: relative;
+    }
+
+    .tooltip-text {
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        font-size: 0.75em;
+        padding: 6px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+        pointer-events: none;
+        z-index: 9999;
+    }
+
+    .button-container:hover .tooltip-text {
+        opacity: 1;
+    }
+
+    #toc-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        justify-content: center;
+        align-items: center;
+    }
+
+    #toc-modal .content {
+        background: white;
+        padding: 30px;
+        border-radius: 10px;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    #toc-modal table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #toc-modal td {
+        padding: 10px 20px;
+        border-bottom: 1px solid #ccc;
+        cursor: pointer;
+    }
+
+    #toc-modal td:hover {
+        background: #f5f5f5;
+    }
+</style>
+
+<style>
+  .zoom-buttons {
+    position: fixed;
+    top: 90px;
+    left: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 100;
+  }
+  .zoom-buttons .button-container {
+    position: relative;
+  }
+
+  .zoom-buttons button {
+    background: white;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 1;
+  }
+
+  .zoom-buttons button:hover {
+    transform: scale(1.1);
+  }
+</style>
+
+<style>
+    /* Make tooltip text visible on hover for mode-buttons */
+    .mode-buttons button:hover + .tooltip-text,
+    .mode-buttons button:hover .tooltip-text {
+        opacity: 1;
+        pointer-events: auto;
+    }
+</style>
+
+<div class="zoom-scroll-wrapper">
+  <div class="viewer-container">
+  <div id="double-page" class="page-pair">
+    <img id="left-page" src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/page1.png') }}">
+    <img id="right-page" src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/page2.png') }}">
+  </div>
+
+  <div id="scroll-mode" class="scroll-mode">
+    {% for i in range(1, total_pages + 1) %}
+      <img src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/page' ~ i ~ '.png') }}" id="scroll-page-{{ i }}">
+    {% endfor %}
+  </div>
+
+  <div class="nav-buttons">
+    <button onclick="prevPage()" class="tooltip" data-tooltip="Předchozí">
+      <img src="{{ url_for('static', filename='img/icons/left-arrow.png') }}">
+    </button>
+    <button onclick="nextPage()" class="tooltip" data-tooltip="Další">
+      <img src="{{ url_for('static', filename='img/icons/right-arrow.png') }}">
+    </button>
+  </div>
+
+  <div id="toc-modal">
+    <div class="content">
+      <h3>Obsah</h3>
+      <table id="toc-table"></table>
+    </div>
+  </div>
+
+  <div class="zoom-buttons">
+    <div class="button-container">
+      <button onclick="zoomIn()">＋</button>
+      <div class="tooltip-text">Přiblížit</div>
+    </div>
+    <div class="button-container">
+      <button onclick="zoomOut()">－</button>
+      <div class="tooltip-text">Oddálit</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="mode-buttons">
+  <div class="button-container">
+    <button onclick="enableScrollMode()">⇅</button>
+    <div class="tooltip-text">Zobrazit jako seznam</div>
+  </div>
+  <div class="button-container">
+    <button onclick="enableDoublePageMode()">📖</button>
+    <div class="tooltip-text">Zobrazit jako dvojstranu</div>
+  </div>
+  <div class="button-container">
+    <button onclick="toggleToc()">≡</button>
+    <div class="tooltip-text">Zobrazit obsah</div>
+  </div>
+</div>
+
+<script>
+  let currentPage = 1;
+  const totalPages = {{ total_pages }};
+
+  function updatePages() {
+    document.getElementById('left-page').src = `/static/songbooks/{{ book_id }}/page${currentPage}.png`;
+    document.getElementById('right-page').src = `/static/songbooks/{{ book_id }}/page${currentPage + 1}.png`;
+    applyZoom();
+  }
+
+  function nextPage() {
+    if (currentPage + 2 <= totalPages) {
+      currentPage += 2;
+      updatePages();
+    }
+  }
+
+  function prevPage() {
+    if (currentPage - 2 >= 1) {
+      currentPage -= 2;
+      updatePages();
+    }
+  }
+
+  function enableScrollMode() {
+    document.getElementById('double-page').style.display = 'none';
+    document.getElementById('scroll-mode').style.display = 'flex';
+    applyZoom();
+    const wrapper = document.querySelector('.zoom-scroll-wrapper');
+    wrapper.scrollTop = 0;
+    wrapper.scrollLeft = 0;
+  }
+
+  function enableDoublePageMode() {
+    document.getElementById('scroll-mode').style.display = 'none';
+    document.getElementById('double-page').style.display = 'flex';
+    updatePages();
+    applyZoom();
+  }
+
+  function toggleToc() {
+    const modal = document.getElementById("toc-modal");
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+    } else {
+      modal.style.display = "flex";
+      fetch(`/static/songbooks/{{ book_id }}/toc.json`)
+        .then(response => response.json())
+        .then(data => {
+          const table = document.getElementById("toc-table");
+          table.innerHTML = "";
+          data.forEach(entry => {
+            const row = document.createElement("tr");
+            const cell1 = document.createElement("td");
+            cell1.textContent = entry.title;
+            const cell2 = document.createElement("td");
+            cell2.textContent = entry.page;
+            row.appendChild(cell1);
+            row.appendChild(cell2);
+            row.onclick = () => {
+              currentPage = parseInt(entry.page);
+              updatePages();
+              enableDoublePageMode();
+              modal.style.display = "none";
+              document.getElementById("scroll-page-" + entry.page)?.scrollIntoView({ behavior: "smooth" });
+            };
+            table.appendChild(row);
+          });
+        });
+    }
+  }
+// --- Zoom functionality ---
+let zoomLevel = 1.0;
+
+function applyZoom() {
+  const doublePage = document.querySelectorAll('#double-page img');
+  const scrollPages = document.querySelectorAll('#scroll-mode img');
+
+  doublePage.forEach(img => {
+    img.style.width = `${zoomLevel * 600}px`;
+  });
+  scrollPages.forEach(img => {
+    img.style.width = `${zoomLevel * 1200}px`;
+  });
+}
+
+function zoomIn() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const prevScrollY = wrapper.scrollTop;
+  const prevScrollX = wrapper.scrollLeft;
+  const prevScrollHeight = wrapper.scrollHeight;
+  const prevScrollWidth = wrapper.scrollWidth;
+
+  zoomLevel = Math.min(2, zoomLevel + 0.1);
+  applyZoom();
+
+  const newScrollHeight = wrapper.scrollHeight;
+  const newScrollWidth = wrapper.scrollWidth;
+
+  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
+  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+}
+
+function zoomOut() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const prevScrollY = wrapper.scrollTop;
+  const prevScrollX = wrapper.scrollLeft;
+  const prevScrollHeight = wrapper.scrollHeight;
+  const prevScrollWidth = wrapper.scrollWidth;
+
+  zoomLevel = Math.max(0.5, zoomLevel - 0.1);
+  applyZoom();
+
+  const newScrollHeight = wrapper.scrollHeight;
+  const newScrollWidth = wrapper.scrollWidth;
+
+  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
+  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyZoom();
+});
+</script>
+{% endblock %}
