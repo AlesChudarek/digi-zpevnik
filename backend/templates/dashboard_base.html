@@ -4,6 +4,18 @@
   <meta charset="UTF-8">
   <title>{% block title %}DigiZpěvník{% endblock %}</title>
   <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      background-color: transparent;
+      background-image: linear-gradient(135deg, #4CAF50, #2E7D32);
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+    
     body {
       margin: 0;
       font-family: Arial, sans-serif;
@@ -16,12 +28,49 @@
     }
 
     .navbar {
+      background-color: #38843B;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background-color: rgba(0,0,0,0.2);
       padding: 15px 30px;
       border: none;
+      z-index: 1000;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      transition: transform 0.3s ease-in-out;
+    }
+    .navbar.hidden {
+      transform: translateY(-100%);
+    }
+
+    .navbar-spacer {
+      height: 70px;
+      transition: height 0.3s ease-in-out;
+    }
+    .navbar.hidden ~ .navbar-spacer {
+      height: 0;
+    }
+
+    .navbar-toggle {
+      position: fixed;
+      top: 0;
+      right: 10px;
+      z-index: 1001;
+      background: #1b5e20;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      cursor: pointer;
+      border-bottom-left-radius: 6px;
+      border-bottom-right-radius: 6px;
+      font-size: 18px;
+      transition: opacity 0.3s;
+    }
+
+    .navbar.hidden + .navbar-toggle {
+      top: 0;
     }
 
     .navbar a {
@@ -35,6 +84,7 @@
       display: inline-block;
     }
 
+    /* velke tlacitko v menu */
     .navbar a.highlight {
       background-color: #ffffff33;
       border: 2px solid white;
@@ -44,6 +94,7 @@
 
     .navbar .right {
       margin-left: auto;
+      padding-right: 100px;
     }
 
     .main-buttons {
@@ -83,14 +134,17 @@
     }
 
     body::before {
-        content: "";
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: -1;
-        background: linear-gradient(135deg, #4CAF50, #2E7D32);
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: linear-gradient(135deg, #4CAF50, #2E7D32);      
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      background-size: cover;
+      z-index: -2;
     }
 
     .disabled {
@@ -135,7 +189,7 @@
       <a href="{{ url_for('public_songbooks') }}" class="highlight">Naše zpěvníky</a>
       {% if guest is defined and guest %}
         <span class="tooltip" data-tooltip="Pouze pro přihlášené uživatele">
-          <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#ccc;">Moje zpěvníky</a>
+          <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#cccccc;">Moje zpěvníky</a>
         </span>
       {% else %}
         <a href="{{ url_for('dashboard') }}">Moje zpěvníky</a>
@@ -146,12 +200,16 @@
       {% if guest is defined and guest %}
         <a href="{{ url_for('login') }}" style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block;">Přihlásit</a>
       {% else %}
-        <form action="{{ url_for('logout') }}" method="post" style="display:inline;">
-          <button type="submit" style="background:none;border:2px solid transparent;color:white;font-weight:bold;cursor:pointer;padding:8px 15px;border-radius:8px;">Odhlásit</button>
-        </form>
+        <a href="#" onclick="document.getElementById('logout-form').submit(); return false;"
+          style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block; background: none; color: white; font-weight: bold; cursor: pointer;">
+          Odhlásit
+        </a>
+        <form id="logout-form" action="{{ url_for('logout') }}" method="post" style="display: none;"></form>
       {% endif %}
     </div>
   </div>
+  <button class="navbar-toggle" onclick="toggleNavbar()">↑</button>
+  <div class="navbar-spacer"></div>
 
   {% block content %}{% endblock %}
 
@@ -160,6 +218,53 @@
       event.preventDefault();
       alert("Tato funkce je dostupná pouze pro přihlášené uživatele.");
     }
+    function toggleNavbar() {
+      const navbar = document.querySelector('.navbar');
+      const toggle = document.querySelector('.navbar-toggle');
+      const spacer = document.querySelector('.navbar-spacer');
+      const isHidden = navbar.classList.toggle('hidden');
+      toggle.textContent = isHidden ? '↓' : '↑';
+      toggle.title = isHidden ? 'Zobrazit horní lištu' : 'Schovat horní lištu';
+      document.body.classList.toggle('navbar-hidden', isHidden);
+      if (isHidden) {
+        spacer.classList.add('collapsed');
+      } else {
+        spacer.classList.remove('collapsed');
+      }
+    }
+  </script>
+  <script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const wrapper = document.querySelector(".zoom-scroll-wrapper");
+    const navbar = document.querySelector(".navbar");
+    const toggle = document.querySelector(".navbar-toggle");
+
+    let scrolledToTop = false;
+    let lastScrollTime = 0;
+
+    if (wrapper && navbar) {
+      wrapper.addEventListener("wheel", (e) => {
+        const now = Date.now();
+
+        if (wrapper.scrollTop === 0) {
+          if (!scrolledToTop) {
+            // just reached the top, record timestamp
+            scrolledToTop = true;
+            lastScrollTime = now;
+          } else if (now - lastScrollTime > 1500 && e.deltaY < 0 && navbar.classList.contains("hidden")) {
+            // second independent scroll attempt at top
+            navbar.classList.remove("hidden");
+            toggle.textContent = "↑";
+            toggle.title = "Schovat horní lištu";
+            document.body.classList.remove("navbar-hidden");
+            scrolledToTop = false;
+          }
+        } else {
+          scrolledToTop = false;
+        }
+      });
+    }
+  });
   </script>
 </body>
 </html>

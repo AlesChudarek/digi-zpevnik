@@ -122,9 +122,64 @@ def public_songbooks():
 @login_required
 def songbook_detail(book_id):
     pages_dir = os.path.join(app.static_folder, 'songbooks', str(book_id))
-    page_files = [f for f in os.listdir(pages_dir) if f.startswith("page") and f.endswith(".png")]
-    total_pages = len(page_files)
-    return render_template('songbook_view.html', book_id=book_id, total_pages=total_pages)
+    metadata_path = os.path.join(pages_dir, 'toc.json')
+
+    # Load TOC info
+    first_page_side = 'left'
+    toc_data = {}
+    if os.path.exists(metadata_path):
+        with open(metadata_path, 'r', encoding='utf-8') as f:
+            toc_data = json.load(f)
+            first_page_side = toc_data.get('first_page_side', 'left')
+
+    # Collect files
+    all_files = os.listdir(pages_dir)
+
+    # If fron cover exists, load it and check if inner cover exists
+    coverfrontout = ["none","coverfrontout.png"] if 'coverfrontout.png' in all_files else []
+    coverfrontin = ["coverfrontin.png"] if 'coverfrontin.png' in all_files and coverfrontout else []
+    coverfrontin = ["blank"] if coverfrontout and not coverfrontin else coverfrontin
+
+    intro_pages = sorted([f for f in all_files if f.startswith('intro') and f.endswith('.png')],
+                        key=lambda x: int(x.replace('intro', '').replace('.png', '')))
+
+    add_blank = ["blank"] if (len(intro_pages) + ((first_page_side == "right") != bool(coverfrontout))) % 2 else []
+
+    page_pages = sorted([f for f in all_files if f.startswith('page') and f.endswith('.png')],
+                        key=lambda x: int(x.replace('page', '').replace('.png', '')))
+
+    outro_pages = sorted([f for f in all_files if f.startswith('outro') and f.endswith('.png')],
+                        key=lambda x: int(x.replace('outro', '').replace('.png', '')))
+
+    full_songbook = coverfrontout + coverfrontin + intro_pages + add_blank + page_pages + outro_pages
+    
+    # full_songbook = [page for page in full_songbook if page is not None]
+
+    coverbackout = 'coverbackout.png' if 'coverbackout.png' in all_files else None
+    coverbackin = 'coverbackin.png' if 'coverbackin.png' in all_files and coverbackout else "blank"
+
+    if (len(full_songbook) % 2 == 0) == bool(coverbackout):
+        full_songbook.append("blank")
+
+    if coverbackout:   
+        full_songbook.append(coverbackin)
+        full_songbook.append(coverbackout)
+        full_songbook.append("none")
+
+    page_files = list(zip(full_songbook[::2], full_songbook[1::2]))
+    # Odstraníme "blank" pro scrollovací režim
+    scroll_page_files = [p for pair in page_files for p in pair if p != "blank"]
+    print(page_files)
+
+    toc_entries = toc_data.get("pages", []) if isinstance(toc_data, dict) else []
+
+    return render_template(
+        'songbook_view.html',
+        book_id=book_id,
+        page_files=page_files,
+        scroll_page_files=scroll_page_files,
+        toc_entries=toc_entries
+    )
 
 @app.context_processor
 def inject_user_status():
