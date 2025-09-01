@@ -187,10 +187,9 @@
       color: black;
       padding: 30px;
       border-radius: 10px;
-      max-height: calc(100vh - 80px);
+      max-height: 80vh;
       overflow-y: auto;
       overflow-x: hidden;
-      overflow: visible;
       position: relative;
     }
 
@@ -270,25 +269,15 @@
 <div class="zoom-scroll-wrapper">
   <div class="viewer-container">
   <div id="double-page" class="page-pair">
-  {% set is_coverfrontout = page_files[0][1] == "coverfrontout.png" and page_files[0][0] == "none" %}
-  {% set is_coverbackin = page_files[-1][0] == "coverbackin.png" and page_files[-1][1] == "none" %}
-  {% if is_coverfrontout %}
-    <img id="left-page" src="" style="display:none;">
-    <img id="right-page" src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/coverfrontout.png') }}">
-  {% elif is_coverbackin %}
-    <img id="left-page" src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/coverbackin.png') }}">
-    <img id="right-page" src="" style="display:none;">
-  {% else %}
-    <img id="left-page" src="">
-    <img id="right-page" src="">
-  {% endif %}
+  <img id="left-page" src="">
+  <img id="right-page" src="">
 </div>
 
   <div id="scroll-mode" class="scroll-mode">
     {% for pair in page_files %}
       {% for page in pair %}
-        {% if page and page != 'none' and page != 'blank'%}
-          <img src="{{ url_for('static', filename='songbooks/' ~ book_id ~ '/' ~ page) }}" id="scroll-page-{{ loop.index }}">
+        {% if page and page != 'none' and page != 'blank' %}
+          <img src="{{ url_for('static', filename='songbooks/' ~ page) }}" id="scroll-page-{{ loop.index }}">
         {% endif %}
       {% endfor %}
     {% endfor %}
@@ -364,24 +353,36 @@
 </div>
 
 <script>
-  const pageFiles = {{ page_files | tojson | safe }};
+  const pageFilesRaw = {{ page_files | tojson | safe }};
+  // Map pageFiles into objects with file and page_number
+  const pageFiles = pageFilesRaw.map(pair => pair.map(file => {
+    if (file === 'blank' || file === 'none') return { file, page_number: null };
+    const match = file && file.match(/page(\d+)\.png$/);
+    const page_number = match ? parseInt(match[1]) : null;
+    return { file, page_number };
+  }));
   let currentPage = 1;
+  // Page memory for smooth transitions
+  let lastDoublePage;
+  let lastScrollPage;
   const totalPages = {{ page_files | length }};
 
   function updatePages() {
+    // Save lastDoublePage for memory
+    lastDoublePage = currentPage;
     const pair = pageFiles[currentPage - 1];
-    const leftPageFile = pair?.[0] || '';
-    const rightPageFile = pair?.[1] || '';
+    const leftPageFile = pair?.[0] || { file: '', page_number: null };
+    const rightPageFile = pair?.[1] || { file: '', page_number: null };
 
     const leftPage = document.getElementById('left-page');
     const rightPage = document.getElementById('right-page');
 
     // Updated logic to handle "blank" pages as white rectangles
-    if (leftPageFile && leftPageFile !== 'none' && leftPageFile !== 'blank') {
+    if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
       leftPage.style.display = 'block';
-      leftPage.src = `/static/songbooks/{{ book_id }}/${leftPageFile}`;
+      leftPage.src = `/static/songbooks/${leftPageFile.file}`;
       leftPage.style.background = 'none';
-    } else if (leftPageFile === 'blank') {
+    } else if (leftPageFile.file === 'blank') {
       leftPage.style.display = 'block';
       leftPage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
       leftPage.style.background = 'white';
@@ -390,11 +391,11 @@
       leftPage.src = '';
     }
 
-    if (rightPageFile && rightPageFile !== 'none' && rightPageFile !== 'blank') {
+    if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
       rightPage.style.display = 'block';
-      rightPage.src = `/static/songbooks/{{ book_id }}/${rightPageFile}`;
+      rightPage.src = `/static/songbooks/${rightPageFile.file}`;
       rightPage.style.background = 'none';
-    } else if (rightPageFile === 'blank') {
+    } else if (rightPageFile.file === 'blank') {
       rightPage.style.display = 'block';
       rightPage.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==';
       rightPage.style.background = 'white';
@@ -403,14 +404,12 @@
       rightPage.src = '';
     }
 
-    const isPage = name => name && name.startsWith("page");
-    const extractNumber = name => name.replace("page", "").replace(".png", "");
-
-    let leftNumber = isPage(leftPageFile) ? extractNumber(leftPageFile) : "";
-    let rightNumber = isPage(rightPageFile) ? extractNumber(rightPageFile) : "";
+    // Use page_number directly
+    let leftNumber = leftPageFile.page_number;
+    let rightNumber = rightPageFile.page_number;
 
     let display = "";
-    if (leftNumber && rightNumber) {
+    if (leftNumber && rightNumber && leftNumber !== rightNumber) {
       display = `${leftNumber}–${rightNumber}`;
     } else if (leftNumber) {
       display = `${leftNumber}`;
@@ -426,20 +425,17 @@
 
   function jumpToPage() {
     const input = document.getElementById('page-input');
-    let val = input.value.split(/[–-]/)[0];  // get first number before dash
-    let page = parseInt(val);
-    if (isNaN(page)) return;
+    let val = input.value.trim().split(/[–-]/)[0];  // get first number before dash
+    let pageNumber = parseInt(val);
+    if (isNaN(pageNumber)) return;
 
-    // Find actual index of the pair that includes this page
-    let targetIndex = -1;
-    for (let i = 0; i < pageFiles.length; i++) {
-      if (pageFiles[i].includes(`page${page}.png`)) {
-        targetIndex = i;
-        break;
-      }
-    }
+    // Najdi dvojici, která obsahuje page_number == pageNumber
+    const targetIndex = pageFiles.findIndex(pair =>
+      pair.some(file => file && file.page_number === pageNumber)
+    );
 
     if (targetIndex !== -1) {
+      enableDoublePageMode();  // přepni do double mode pokud už tam nejsme
       currentPage = targetIndex + 1;
       updatePages();
     }
@@ -460,6 +456,8 @@
   }
 
   function enableScrollMode() {
+    // Store last double page before switching
+    lastDoublePage = currentPage;
     document.getElementById('double-page').style.display = 'none';
     document.getElementById('scroll-mode').style.display = 'flex';
     document.getElementById('nav-controls').style.display = 'none';
@@ -467,8 +465,21 @@
     zoomLevel = 1.0;
     applyZoom();
     const wrapper = document.querySelector('.zoom-scroll-wrapper');
-    wrapper.scrollTop = 0;
-    wrapper.scrollLeft = 0;
+    // Try to restore scroll position based on lastDoublePage
+    if (typeof lastDoublePage !== 'undefined') {
+      const pair = pageFiles[lastDoublePage - 1];
+      const pageToScroll = pair?.find(p => p && p.file && p.file.includes('page'));
+      if (pageToScroll) {
+        const target = document.querySelector(`#scroll-mode img[src$="/${pageToScroll.file}"]`);
+        if (target) {
+          wrapper.scrollTo({ top: target.offsetTop, behavior: "instant" });
+          if (pageToScroll.page_number) lastScrollPage = pageToScroll.page_number;
+        }
+      }
+    } else {
+      wrapper.scrollTop = 0;
+      wrapper.scrollLeft = 0;
+    }
     document.getElementById("jump-up-button").style.display = "block";
     // Hide TOC modal if open
     const modal = document.getElementById("toc-modal");
@@ -478,22 +489,70 @@
     }
   }
 
-  function enableDoublePageMode() {
-    document.getElementById('scroll-mode').style.display = 'none';
-    document.getElementById('double-page').style.display = 'flex';
-    document.getElementById('nav-controls').style.display = 'flex';
-    document.querySelector('.viewer-container').classList.add('double-page-mode');
-    updatePages();
-    zoomLevel = 1.0;
-    applyZoom();
-    document.getElementById("jump-up-button").style.display = "none";
-    // Hide TOC modal if open
-    const modal = document.getElementById("toc-modal");
-    if (modal.style.display === "flex") {
-      modal.style.display = "none";
-      document.body.style.overflow = '';
+function enableDoublePageMode() {
+  // Try to determine the current scroll image file
+  let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
+    const rect = img.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+  });
+
+  // Fallback if no image is fully visible: use the image closest to center
+  if (!visibleImage) {
+    const wrapperMiddle = window.innerHeight / 2;
+    let closestImage = null;
+    let smallestDistance = Infinity;
+
+    for (let img of document.querySelectorAll('#scroll-mode img')) {
+      const rect = img.getBoundingClientRect();
+      const imgMiddle = rect.top + rect.height / 2;
+      const distance = Math.abs(imgMiddle - wrapperMiddle);
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+        closestImage = img;
+      }
+    }
+
+    visibleImage = closestImage;
+  }
+
+  let file = null;
+
+  if (visibleImage) {
+    const src = visibleImage.getAttribute("src");
+    const match = src && src.match(/\/songbooks\/(.+)$/);
+    if (match) {
+      file = match[1];
     }
   }
+  console.log(visibleImage, file, lastScrollPage);
+
+  if (!file && lastScrollPage) {
+    file = lastScrollPage;
+  }
+
+  if (file) {
+    const pageIndex = pageFiles.findIndex(pair =>
+      pair.some(entry => entry?.file === file)
+    );
+    if (pageIndex !== -1) {
+      currentPage = pageIndex + 1;
+    }
+  }
+
+  document.getElementById('scroll-mode').style.display = 'none';
+  document.getElementById('double-page').style.display = 'flex';
+  document.getElementById('nav-controls').style.display = 'flex';
+  document.querySelector('.viewer-container').classList.add('double-page-mode');
+  updatePages();
+  zoomLevel = 1.0;
+  applyZoom();
+  document.getElementById("jump-up-button").style.display = "none";
+  const modal = document.getElementById("toc-modal");
+  if (modal.style.display === "flex") {
+    modal.style.display = "none";
+    document.body.style.overflow = '';
+  }
+}
 
   // Helper function to format page label by stripping known image extensions and "page" prefix
   function formatPageLabel(filename) {
@@ -509,7 +568,7 @@
     } else {
       modal.style.display = "flex";
       document.body.style.overflow = 'hidden';
-      fetch(`/static/songbooks/{{ book_id }}/toc.json`)
+      fetch(`/api/songbook/{{ book_id }}/toc`)
         .then(response => response.json())
         .then(data => {
           const table = document.getElementById("toc-table");
@@ -570,6 +629,8 @@
               const scrollMode = document.getElementById("scroll-mode").style.display === "flex";
 
               if (scrollMode) {
+                // Before scrolling, store lastScrollPage from entry.page
+                lastScrollPage = entry.page;
                 // SCROLL MODE: ignoruj blanky a none, zjisti správný offset
                 const target = document.querySelector(`#scroll-mode img[src$="/${entry.page}"]`);
                 if (target) {
@@ -582,14 +643,14 @@
 
               } else {
                 // DOUBLE PAGE MODE
-                const pageIndex = pageFiles.findIndex(pair => pair.includes(entry.page));
-                if (pageIndex !== -1 && !pageFiles[pageIndex].includes("none")) {
-                  currentPage = pageIndex + 1;
-                  updatePages();
-                }
+              const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
+              enableDoublePageMode();  // Ensure double page mode is active before jump
+              if (pageIndex !== -1 && !pageFiles[pageIndex].some(f => f.file === "none")) {
+                currentPage = pageIndex + 1;
+                updatePages();
+              }
               }
 
-              // enableDoublePageMode();  // Zajistí návrat z TOC i při kliknutí ze scroll módu
               modal.style.display = "none";
               document.body.style.overflow = '';
             };
@@ -653,6 +714,7 @@ function scrollToTop() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  trackScrollPage();
   applyZoom();
   document.addEventListener('click', (event) => {
     const modal = document.getElementById("toc-modal");
@@ -662,6 +724,39 @@ document.addEventListener('DOMContentLoaded', () => {
       document.body.style.overflow = '';
     }
   });
+  updatePages();
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') {
+      prevPage();
+    } else if (event.key === 'ArrowRight') {
+      nextPage();
+    }
+  });
 });
+
+function trackScrollPage() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const scrollImages = Array.from(document.querySelectorAll('#scroll-mode img'));
+
+  wrapper.addEventListener('scroll', () => {
+    const wrapperMiddle = wrapper.scrollTop + wrapper.clientHeight / 2;
+    for (let img of scrollImages) {
+      const rect = img.getBoundingClientRect();
+      const top = rect.top + window.scrollY - wrapper.offsetTop;
+      const bottom = top + rect.height;
+
+      if (top <= wrapperMiddle && bottom >= wrapperMiddle) {
+        const src = img.getAttribute("src");
+        const match = src && src.match(/\/songbooks\/(.+)$/);
+        if (match) {
+          const file = match[1];  // e.g., "10026/page6.png"
+          lastScrollPage = file; // použijeme název souboru
+          return;
+        }
+        break;
+      }
+    }
+  });
+}
 </script>
 {% endblock %}

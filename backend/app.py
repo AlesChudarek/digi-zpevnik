@@ -1,22 +1,26 @@
 import os
 import json
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 
+from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
+
 # Načti konfiguraci z .env
 load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY")
-app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DATABASE_URL")
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'db', 'zpevnik.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializace databáze
-db = SQLAlchemy(app)
+init_app(app)
 
 # Správa loginu
 login_manager = LoginManager()
@@ -102,6 +106,20 @@ def guest_login():
     # flash('Přihlášen jako host.', 'success')
     return redirect(url_for('dashboard'))
 
+@app.route('/api/songbook/<songbook_id>/toc')
+def get_songbook_toc(songbook_id):
+    # songbook = Songbook.query.filter_by(id=songbook_id).first_or_404()
+    toc = []
+    pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(SongbookPage.page_number).all()
+    for page in pages:
+        song = page.song
+        toc.append({
+            "title": song.title,
+            "author": song.author.name if song.author else "",
+            "page": f"page{page.page_number}.png"
+        })
+    return jsonify({"pages": toc})
+
 @app.route('/dashboard')
 @login_required
 def dashboard():
@@ -112,73 +130,107 @@ def dashboard():
 @app.route('/public-songbooks')
 @login_required
 def public_songbooks():
-    metadata_path = os.path.join(app.static_folder, 'songbooks', 'metadata.json')
-    with open(metadata_path, 'r', encoding='utf-8') as f:
-        songbooks = json.load(f)
+    # Load public songbooks from the database
+    songbooks = db.session.execute(
+        db.select(Songbook).where(Songbook.is_public == 1)
+    ).scalars().all()
     is_guest = (current_user.email == "guest@guest.com")
     return render_template('public_songbooks.html', songbooks=songbooks, guest=is_guest)
 
 @app.route('/songbook/<int:book_id>')
 @login_required
 def songbook_detail(book_id):
-    pages_dir = os.path.join(app.static_folder, 'songbooks', str(book_id))
-    metadata_path = os.path.join(pages_dir, 'toc.json')
+    songbook = Songbook.query.get_or_404(book_id)
 
-    # Load TOC info
-    first_page_side = 'left'
-    toc_data = {}
-    if os.path.exists(metadata_path):
-        with open(metadata_path, 'r', encoding='utf-8') as f:
-            toc_data = json.load(f)
-            first_page_side = toc_data.get('first_page_side', 'left')
+    # Determine first_page_side from songbook attribute or default
+    first_page_side = getattr(songbook, 'first_page_side', 'left')
 
-    # Collect files
-    all_files = os.listdir(pages_dir)
+    # Query intro pages ordered by page_number
+    intros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='intro').order_by(SongbookIntroOutroImage.sort_order).all()
 
-    # If fron cover exists, load it and check if inner cover exists
-    coverfrontout = ["none","coverfrontout.png"] if 'coverfrontout.png' in all_files else []
-    coverfrontin = ["coverfrontin.png"] if 'coverfrontin.png' in all_files and coverfrontout else []
-    coverfrontin = ["blank"] if coverfrontout and not coverfrontin else coverfrontin
+    # Query outro pages ordered by page_number
+    outros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='outro').order_by(SongbookIntroOutroImage.sort_order).all()
 
-    intro_pages = sorted([f for f in all_files if f.startswith('intro') and f.endswith('.png')],
-                        key=lambda x: int(x.replace('intro', '').replace('.png', '')))
+    # Query songbook pages ordered by page_number
+    pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
 
-    add_blank = ["blank"] if (len(intro_pages) + ((first_page_side == "right") != bool(coverfrontout))) % 2 else []
+    def pair_pages(intros, pages, outros, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
+        list_of_pages = []
+        if cover_front_outer:
+            list_of_pages.append("none")
+            list_of_pages.append(cover_front_outer)
+            if cover_front_inner: 
+                list_of_pages.append(cover_front_inner)
+            else:
+                list_of_pages.append("blank")
+            if first_side == "left":
+                list_of_pages.append("blank")
+        elif first_side == "right":
+            list_of_pages.append("blank")
+        
+        list_of_pages.extend(intros)
+        list_of_pages.extend(pages)
+        list_of_pages.extend(outros)
 
-    page_pages = sorted([f for f in all_files if f.startswith('page') and f.endswith('.png')],
-                        key=lambda x: int(x.replace('page', '').replace('.png', '')))
+        if len(list_of_pages) % 2 != 0:
+            if cover_back_outer and cover_back_inner:
+                list_of_pages.append(cover_back_inner)
+            else:
+                list_of_pages.append("blank")
 
-    outro_pages = sorted([f for f in all_files if f.startswith('outro') and f.endswith('.png')],
-                        key=lambda x: int(x.replace('outro', '').replace('.png', '')))
+        if cover_back_outer:
+            list_of_pages.append(cover_back_outer)
+            list_of_pages.append("none")
 
-    full_songbook = coverfrontout + coverfrontin + intro_pages + add_blank + page_pages + outro_pages
-    
-    # full_songbook = [page for page in full_songbook if page is not None]
+        return list(zip(list_of_pages[::2], list_of_pages[1::2]))
 
-    coverbackout = 'coverbackout.png' if 'coverbackout.png' in all_files else None
-    coverbackin = 'coverbackin.png' if 'coverbackin.png' in all_files and coverbackout else "blank"
+    # Získej obrázky intro a outro stran
+    intro_images = [img.image_path for img in intros]
+    outro_images = [img.image_path for img in outros]
 
-    if (len(full_songbook) % 2 == 0) == bool(coverbackout):
-        full_songbook.append("blank")
+    # Získej obrázky stránek (z tabulky SongImage)
+    page_images = []
+    for page in pages:
+        song = Song.query.get(page.song_id)
+        image = SongImage.query.filter_by(song_id=song.id).first()
+        if image:
+            page_images.append(image.image_path)
+        else:
+            page_images.append("blank")
 
-    if coverbackout:   
-        full_songbook.append(coverbackin)
-        full_songbook.append(coverbackout)
-        full_songbook.append("none")
+    # Sestav page_files přes pomocnou funkci
+    page_files = pair_pages(
+        intro_images,
+        page_images,
+        outro_images,
+        first_page_side,
+        getattr(songbook, 'img_path_cover_front_outer', None),
+        getattr(songbook, 'img_path_cover_front_inner', None),
+        getattr(songbook, 'img_path_cover_back_inner', None),
+        getattr(songbook, 'img_path_cover_back_outer', None)
+    )
+    print("page_files:", page_files)
 
-    page_files = list(zip(full_songbook[::2], full_songbook[1::2]))
-    # Odstraníme "blank" pro scrollovací režim
-    scroll_page_files = [p for pair in page_files for p in pair if p != "blank"]
-    print(page_files)
+    # Pro scroll mód stačí seznam všech obrázků kromě blank
+    scroll_page_files = [img for img in page_images if img != "blank"]
 
-    toc_entries = toc_data.get("pages", []) if isinstance(toc_data, dict) else []
+    # Build toc_entries from songbook pages or other source
+    toc_entries = []
+    for page in pages:
+        toc_entries.append({
+            'page_number': page.page_number,
+            'title': getattr(page, 'title', '')
+        })
 
     return render_template(
         'songbook_view.html',
         book_id=book_id,
+        toc_entries=toc_entries,
         page_files=page_files,
         scroll_page_files=scroll_page_files,
-        toc_entries=toc_entries
+        first_page_side=first_page_side,
+        intros=intros,
+        outros=outros
     )
 
 @app.context_processor
