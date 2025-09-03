@@ -19,12 +19,17 @@ CREATE TABLE IF NOT EXISTS songs (
     FOREIGN KEY (author_id) REFERENCES authors(id)
 );
 
--- SONG IMAGES
-CREATE TABLE IF NOT EXISTS song_images (
+-- SONG PARTS
+CREATE TABLE IF NOT EXISTS song_parts (
     id INTEGER PRIMARY KEY,
     song_id TEXT NOT NULL,
     image_path TEXT NOT NULL,
-    FOREIGN KEY (song_id) REFERENCES songs(id)
+    position INTEGER DEFAULT 0,
+    page_number_hint INTEGER,
+    title TEXT,
+    author_id INTEGER,
+    FOREIGN KEY (song_id) REFERENCES songs(id),
+    FOREIGN KEY (author_id) REFERENCES authors(id)
 );
 
 -- SONGBOOKS
@@ -71,12 +76,3 @@ CREATE TABLE IF NOT EXISTS songbook_pages (
     FOREIGN KEY (songbook_id) REFERENCES songbooks(id)
 );
 
--- SONG PARTS
-CREATE TABLE IF NOT EXISTS song_parts (
-    id INTEGER PRIMARY KEY,
-    song_id TEXT NOT NULL,
-    image_path TEXT NOT NULL,
-    position INTEGER DEFAULT 0,
-    page_number_hint INTEGER,
-    FOREIGN KEY (song_id) REFERENCES songs(id)
-);

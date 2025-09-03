@@ -580,14 +580,11 @@ function enableDoublePageMode() {
             const cell2 = document.createElement("td");
             cell2.textContent = entry.author || '';
             const cell3 = document.createElement("td");
-            cell3.textContent = formatPageLabel(entry.page);
+            cell3.textContent = entry.page_number || formatPageLabel(entry.page);
 
             const cell4 = document.createElement("td");
-
-            // --- Begin button with icon and tooltip ---
             const addBtn = document.createElement("button");
             addBtn.className = "add-to-songbook-button";
-            // Add icon instead of "+"
             const icon = document.createElement("img");
             icon.src = "{{ url_for('static', filename='img/icons/add_song.svg') }}";
             icon.alt = "Přidat";
@@ -596,14 +593,12 @@ function enableDoublePageMode() {
             icon.style.pointerEvents = "none";
             addBtn.appendChild(icon);
 
-            // Wrap in container for tooltip positioning
             const container = document.createElement("div");
             container.className = "button-container";
             container.appendChild(addBtn);
 
             {% if guest %}
             addBtn.classList.add("disabled");
-            // Remove title attribute, add tooltip element instead
             addBtn.addEventListener("click", function(e) {
               e.preventDefault();
               e.stopPropagation();
@@ -615,23 +610,21 @@ function enableDoublePageMode() {
             {% else %}
             addBtn.onclick = (e) => {
               e.stopPropagation();
-              // future: open "vložit do zpěvníku" dialog
             };
             {% endif %}
+
             cell4.appendChild(container);
-            // --- End button with icon and tooltip ---
 
             row.appendChild(cell1);
             row.appendChild(cell2);
             row.appendChild(cell3);
             row.appendChild(cell4);
+
             row.onclick = () => {
               const scrollMode = document.getElementById("scroll-mode").style.display === "flex";
 
               if (scrollMode) {
-                // Before scrolling, store lastScrollPage from entry.page
                 lastScrollPage = entry.page;
-                // SCROLL MODE: ignoruj blanky a none, zjisti správný offset
                 const target = document.querySelector(`#scroll-mode img[src$="/${entry.page}"]`);
                 if (target) {
                   const wrapper = document.querySelector(".zoom-scroll-wrapper");
@@ -640,20 +633,19 @@ function enableDoublePageMode() {
                     behavior: "smooth"
                   });
                 }
-
               } else {
-                // DOUBLE PAGE MODE
-              const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
-              enableDoublePageMode();  // Ensure double page mode is active before jump
-              if (pageIndex !== -1 && !pageFiles[pageIndex].some(f => f.file === "none")) {
-                currentPage = pageIndex + 1;
-                updatePages();
-              }
+                const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
+                enableDoublePageMode();
+                if (pageIndex !== -1 && !pageFiles[pageIndex].some(f => f.file === "none")) {
+                  currentPage = pageIndex + 1;
+                  updatePages();
+                }
               }
 
               modal.style.display = "none";
               document.body.style.overflow = '';
             };
+
             table.appendChild(row);
           });
         });

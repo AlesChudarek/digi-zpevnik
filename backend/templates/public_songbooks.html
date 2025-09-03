@@ -44,9 +44,15 @@
 <h1 style="text-align:center; margin-top: 30px;">Naše zpěvníky</h1>
 
 <div class="grid-container">
-  {% for book in songbooks %}
+  {% for book in songbooks|sort(attribute='id') %}
     <a href="{{ url_for('songbook_detail', book_id=book.id) }}" class="songbook-card">
-      <img src="{{ url_for('static', filename='songbooks/' ~ book.id ~ '/cover.png') }}" alt="cover">
+      {% if book.img_path_cover_preview %}
+        <img src="{{ url_for('static', filename='songbooks/' + book.img_path_cover_preview) }}">
+      {% else %}
+        <div style="width:100%; height:250px; background:#eee; display:flex; align-items:center; justify-content:center;">
+          <span style="color: #888;">Bez obalu</span>
+        </div>
+      {% endif %}
       <p>{{ book.title }}</p>
     </a>
   {% endfor %}

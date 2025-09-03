@@ -1,0 +1,209 @@
+{
+  "title": "Můj zpěvník č.2",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10002/coverfrontout.png",
+  "img_path_cover_front_outer": "10002/coverfrontout.png",
+  "img_path_cover_front_inner": "10002/coverfrontin.png",
+  "img_path_cover_back_inner": "10002/coverbackin.png",
+  "img_path_cover_back_outer": "10002/coverbackout.png",
+  "intros": [],
+  "outros": [],
+  "pages": [
+    {
+      "title": "Abeceda",
+      "author": "-",
+      "image_paths": [
+        "10002/page1.png"
+      ]
+    },
+    {
+      "title": "Amazonka",
+      "author": "-",
+      "image_paths": [
+        "10002/page2.png"
+      ]
+    },
+    {
+      "title": "A te Rehradice",
+      "author": "-",
+      "image_paths": [
+        "10002/page3.png"
+      ]
+    },
+    {
+      "title": "Balada pro banditu",
+      "author": "Balada pro banditu",
+      "image_paths": [
+        "10002/page4.png"
+      ]
+    },
+    {
+      "title": "Dělání, dělání",
+      "author": "Princové jsou na draka",
+      "image_paths": [
+        "10002/page5.png"
+      ]
+    },
+    {
+      "title": "Dezertéři",
+      "author": "-",
+      "image_paths": [
+        "10002/page6.png"
+      ]
+    },
+    {
+      "title": "František  Dobrota",
+      "author": "-",
+      "image_paths": [
+        "10002/page7.png"
+      ]
+    },
+    {
+      "title": "Hlídač krav",
+      "author": "-",
+      "image_paths": [
+        "10002/page8.png"
+      ]
+    },
+    {
+      "title": "Hlupáku, najdu tě",
+      "author": "Princové jsou na draka",
+      "image_paths": [
+        "10002/page9.png"
+      ]
+    },
+    {
+      "title": "Hrobař",
+      "author": "-",
+      "image_paths": [
+        "10002/page10.png"
+      ]
+    },
+    {
+      "title": "Jak se loví gorila",
+      "author": "-",
+      "image_paths": [
+        "10002/page11.png"
+      ]
+    },
+    {
+      "title": "Krtek",
+      "author": "-",
+      "image_paths": [
+        "10002/page11.png"
+      ]
+    },
+    {
+      "title": "Jarda",
+      "author": "-",
+      "image_paths": [
+        "10002/page12.png"
+      ]
+    },
+    {
+      "title": "Jdem zpátky do lesů",
+      "author": "-",
+      "image_paths": [
+        "10002/page13.png"
+      ]
+    },
+    {
+      "title": "Jupí čerte",
+      "author": "Greenhorns",
+      "image_paths": [
+        "10002/page14.png"
+      ]
+    },
+    {
+      "title": "Kapr",
+      "author": "-",
+      "image_paths": [
+        "10002/page15.png"
+      ]
+    },
+    {
+      "title": "Kozel",
+      "author": "-",
+      "image_paths": [
+        "10002/page16.png"
+      ]
+    },
+    {
+      "title": "Kozliatka",
+      "author": "-",
+      "image_paths": [
+        "10002/page17.png"
+      ]
+    },
+    {
+      "title": "Královské reggae",
+      "author": "Královské reggae",
+      "image_paths": [
+        "10002/page18.png"
+      ]
+    },
+    {
+      "title": "Loď John B",
+      "author": "-",
+      "image_paths": [
+        "10002/page19.png"
+      ]
+    },
+    {
+      "title": "Lodníkův nářek",
+      "author": "-",
+      "image_paths": [
+        "10002/page20.png"
+      ]
+    },
+    {
+      "title": "Mraveneček",
+      "author": "-",
+      "image_paths": [
+        "10002/page21.png"
+      ]
+    },
+    {
+      "title": "Na kopečku",
+      "author": "-",
+      "image_paths": [
+        "10002/page22.png"
+      ]
+    },
+    {
+      "title": "Nezacházej slunce",
+      "author": "-",
+      "image_paths": [
+        "10002/page23.png"
+      ]
+    },
+    {
+      "title": "Proklatej vůz",
+      "author": "-",
+      "image_paths": [
+        "10002/page24.png"
+      ]
+    },
+    {
+      "title": "Tři čuníci",
+      "author": "J. Nohavica",
+      "image_paths": [
+        "10002/page25.png"
+      ]
+    },
+    {
+      "title": "Už to nenapravím",
+      "author": "-",
+      "image_paths": [
+        "10002/page26.png"
+      ]
+    },
+    {
+      "title": "Vrána",
+      "author": "-",
+      "image_paths": [
+        "10002/page27.png"
+      ]
+    }
+  ]
+}

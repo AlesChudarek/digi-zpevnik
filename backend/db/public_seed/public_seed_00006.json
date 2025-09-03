@@ -1,0 +1,161 @@
+{
+  "title": "Můj zpěvník č.6",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10006/coverfrontout.png",
+  "img_path_cover_front_outer": "10006/coverfrontout.png",
+  "img_path_cover_front_inner": "10006/coverfrontin.png",
+  "img_path_cover_back_inner": "10006/coverbackin.png",
+  "img_path_cover_back_outer": "10006/coverbackout.png",
+  "intros": [],
+  "outros": [],
+  "pages": [
+    {
+      "title": "Aranka umí hula hop",
+      "author": "Ivan Hlas",
+      "image_paths": [
+        "10006/page3.png"
+      ]
+    },
+    {
+      "title": "Čo bolí, to prebolí",
+      "author": "Miro Žbirka",
+      "image_paths": [
+        "10006/page4.png"
+      ]
+    },
+    {
+      "title": "Dva havrani",
+      "author": "Asonance",
+      "image_paths": [
+        "10006/page5.png"
+      ]
+    },
+    {
+      "title": "Hardy",
+      "author": "Greenhorns",
+      "image_paths": [
+        "10006/page6.png"
+      ]
+    },
+    {
+      "title": "Hej kapitáne!",
+      "author": "Hop Trop",
+      "image_paths": [
+        "10006/page7.png"
+      ]
+    },
+    {
+      "title": "Hej člověče boží",
+      "author": "Nezmaři",
+      "image_paths": [
+        "10006/page8.png"
+      ]
+    },
+    {
+      "title": "Husličky",
+      "author": "Vlasta Redl",
+      "image_paths": [
+        "10006/page9.png"
+      ]
+    },
+    {
+      "title": "Já odcházím",
+      "author": "Greenhorns",
+      "image_paths": [
+        "10006/page10.png"
+      ]
+    },
+    {
+      "title": "Jižní kříž",
+      "author": "Nedvěd",
+      "image_paths": [
+        "10006/page11.png"
+      ]
+    },
+    {
+      "title": "Kutil",
+      "author": "Chinasky",
+      "image_paths": [
+        "10006/page12.png"
+      ]
+    },
+    {
+      "title": "Malageo",
+      "author": "Ivan Hlas",
+      "image_paths": [
+        "10006/page13.png"
+      ]
+    },
+    {
+      "title": "Mašinka",
+      "author": "Semtex",
+      "image_paths": [
+        "10006/page14.png"
+      ]
+    },
+    {
+      "title": "Námořník",
+      "author": "Asonance",
+      "image_paths": [
+        "10006/page15.png"
+      ]
+    },
+    {
+      "title": "Otázky",
+      "author": "Olympic",
+      "image_paths": [
+        "10006/page16.png"
+      ]
+    },
+    {
+      "title": "Prašná cestička",
+      "author": "Mrazík",
+      "image_paths": [
+        "10006/page17.png"
+      ]
+    },
+    {
+      "title": "Srdce jako kníže Rohan",
+      "author": "Richard Müller",
+      "image_paths": [
+        "10006/page18.png",
+        "10006/page19.png"
+      ]
+    },
+    {
+      "title": "Tohle je ráj",
+      "author": "Argema",
+      "image_paths": [
+        "10006/page20.png"
+      ]
+    },
+    {
+      "title": "Večerníček",
+      "author": "-",
+      "image_paths": [
+        "10006/page21.png"
+      ]
+    },
+    {
+      "title": "Země vzdálená",
+      "author": "BSP",
+      "image_paths": [
+        "10006/page22.png"
+      ]
+    },
+    {
+      "title": "Ženy",
+      "author": "Kryštof",
+      "image_paths": [
+        "10006/page23.png"
+      ]
+    },
+    {
+      "title": "Žily",
+      "author": "No Name",
+      "image_paths": [
+        "10006/page24.png"
+      ]
+    }
+  ]
+}

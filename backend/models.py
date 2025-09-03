@@ -74,3 +74,16 @@ class SongbookPage(db.Model):
 # Funkce pro propojení db s Flask aplikací
 def init_app(app):
     db.init_app(app)
+
+
+# Nová třída reprezentující části písně (např. pro více stran nebo více písní na stránce)
+class SongPart(db.Model):
+    __tablename__ = "song_parts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
+    title = db.Column(db.String, nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey("authors.id"), nullable=True)
+    image_path = db.Column(db.String, nullable=False)
+    song = db.relationship("Song", backref="parts")
+    author = db.relationship("Author", backref="song_parts")

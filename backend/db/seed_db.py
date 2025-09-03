@@ -78,7 +78,8 @@ def seed_from_public_seed_folder(seed_path, db_path):
         filepath = os.path.join(seed_path, filename)
         data = load_json(filepath)
 
-        songbook_id = data.get("id", os.path.splitext(filename)[0])
+        raw_id = os.path.splitext(filename)[0]
+        songbook_id = data.get("id", raw_id[-5:] if raw_id[-5:].isdigit() else raw_id)
         title = data.get("title", songbook_id)
         insert_songbook(
             cursor,
@@ -97,12 +98,15 @@ def seed_from_public_seed_folder(seed_path, db_path):
             song_id = f"{songbook_id}_{i+1}"
             title = entry.get("title", f"Untitled {i+1}")
             author = entry.get("author", "Neznámý autor")
-            image_path = entry.get("image_path")
             page_number = i + 1
 
             author_id = insert_author(cursor, author, author_cache)
             insert_song(cursor, song_id, title, author_id)
-            insert_song_image(cursor, song_id, image_path)
+            image_paths = entry.get("image_paths", [])
+            if not image_paths or not all(image_paths):
+                print(f"⚠️  Píseň '{title}' ve zpěvníku {songbook_id} nemá definovaný žádný platný obrázek (image_paths): {image_paths}")
+            for path in image_paths:
+                insert_song_image(cursor, song_id, path)
             insert_songbook_page(cursor, songbook_id, song_id, page_number)
 
         for i, image_path in enumerate(data.get("intros", [])):

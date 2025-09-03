@@ -1,0 +1,202 @@
+{
+  "title": "Můj zpěvník č.15",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10015/coverfrontout.png",
+  "img_path_cover_front_outer": "10015/coverfrontout.png",
+  "img_path_cover_front_inner": "10015/coverfrontin.png",
+  "img_path_cover_back_inner": "10015/coverbackin.png",
+  "img_path_cover_back_outer": "10015/coverbackout.png",
+  "intros": [],
+  "outros": [
+    "10015/outro1.png",
+    "10015/outro2.png",
+    "10015/outro3.png",
+    "10015/outro4.png",
+    "10015/outro5.png",
+    "10015/outro6.png"
+  ],
+  "pages": [
+    {
+      "title": "Anděl",
+      "author": "Karel Kryl",
+      "image_paths": [
+        "10015/page1.png"
+      ]
+    },
+    {
+      "title": "Colu, pijeme colu",
+      "author": "Michal David",
+      "image_paths": [
+        "10015/page2.png"
+      ]
+    },
+    {
+      "title": "Chňapík, maličký krokodýl",
+      "author": "Joy Gruttman",
+      "image_paths": [
+        "10015/page3.png"
+      ]
+    },
+    {
+      "title": "Čůrej",
+      "author": "Kašpárek v rohlíku",
+      "image_paths": [
+        "10015/page4.png"
+      ]
+    },
+    {
+      "title": "Čert ví proč",
+      "author": "Zuzana Navarová",
+      "image_paths": [
+        "10015/page5.png"
+      ]
+    },
+    {
+      "title": "Dávno",
+      "author": "Divokej Bill",
+      "image_paths": [
+        "10015/page6.png"
+      ]
+    },
+    {
+      "title": "Decibely lásky",
+      "author": "Michal David",
+      "image_paths": [
+        "10015/page7.png"
+      ]
+    },
+    {
+      "title": "Hlídej lásku, skálo má",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10015/page8.png"
+      ]
+    },
+    {
+      "title": "Holky a mašiny",
+      "author": "Daniel Landa",
+      "image_paths": [
+        "10015/page9.png"
+      ]
+    },
+    {
+      "title": "Já s tebou žít nebudu",
+      "author": "Zuzana Navarová",
+      "image_paths": [
+        "10015/page10.png"
+      ]
+    },
+    {
+      "title": "Kytka",
+      "author": "Příbuzní",
+      "image_paths": [
+        "10015/page11.png"
+      ]
+    },
+    {
+      "title": "Na sever",
+      "author": "Kabát",
+      "image_paths": [
+        "10015/page12.png"
+      ]
+    },
+    {
+      "title": "Mumuland",
+      "author": "Kotvald",
+      "image_paths": [
+        "10015/page13.png"
+      ]
+    },
+    {
+      "title": "Na ptáky jsme krátký",
+      "author": "Janek Ledecký",
+      "image_paths": [
+        "10015/page14.png"
+      ]
+    },
+    {
+      "title": "Podvod",
+      "author": "Nedvěd",
+      "image_paths": [
+        "10015/page15.png"
+      ]
+    },
+    {
+      "title": "Růže z papíru",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10015/page16.png"
+      ]
+    },
+    {
+      "title": "Sedmikráska",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10015/page17.png"
+      ]
+    },
+    {
+      "title": "Slečna závist",
+      "author": "Arakain",
+      "image_paths": [
+        "10015/page18.png"
+      ]
+    },
+    {
+      "title": "Slunovrat",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10015/page19.png"
+      ]
+    },
+    {
+      "title": "Stromy",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10015/page20.png"
+      ]
+    },
+    {
+      "title": "Svatá Kateřina",
+      "author": "Žalman",
+      "image_paths": [
+        "10015/page21.png"
+      ]
+    },
+    {
+      "title": "Šaman",
+      "author": "Kabát",
+      "image_paths": [
+        "10015/page22.png"
+      ]
+    },
+    {
+      "title": "V pekle sudy válej",
+      "author": "Kabát",
+      "image_paths": [
+        "10015/page23.png"
+      ]
+    },
+    {
+      "title": "Výlet do bájí",
+      "author": "Aleš Brichta",
+      "image_paths": [
+        "10015/page24.png"
+      ]
+    },
+    {
+      "title": "Zatanči",
+      "author": "J. Nohavica",
+      "image_paths": [
+        "10015/page25.png"
+      ]
+    },
+    {
+      "title": "Zavři oči, když se červenám",
+      "author": "I. Csáková",
+      "image_paths": [
+        "10015/page26.png"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "title": "Můj zpěvník č.22",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10022/coverfrontout.png",
+  "img_path_cover_front_outer": "10022/coverfrontout.png",
+  "img_path_cover_front_inner": "10022/coverfrontin.png",
+  "img_path_cover_back_inner": "10022/coverbackin.png",
+  "img_path_cover_back_outer": "10022/coverbackout.png",
+  "intros": [],
+  "outros": [
+    "10022/outro1.png",
+    "10022/outro2.png"
+  ],
+  "pages": [
+    {
+      "title": "A pak",
+      "author": "Tomáš Klus",
+      "image_paths": [
+        "10022/page1.png"
+      ]
+    },
+    {
+      "title": "Aromatické léto",
+      "author": "Pokáč",
+      "image_paths": [
+        "10022/page2.png"
+      ]
+    },
+    {
+      "title": "Barák na vodstřel",
+      "author": "Aleš Brichta",
+      "image_paths": [
+        "10022/page3.png"
+      ]
+    },
+    {
+      "title": "Bůh",
+      "author": "Pekař",
+      "image_paths": [
+        "10022/page4.png"
+      ]
+    },
+    {
+      "title": "Co z tebe bude",
+      "author": "Pokáč",
+      "image_paths": [
+        "10022/page5.png"
+      ]
+    },
+    {
+      "title": "Houby Magický",
+      "author": "Kabát",
+      "image_paths": [
+        "10022/page6.png"
+      ]
+    },
+    {
+      "title": "Cci ti říct",
+      "author": "Mig 21",
+      "image_paths": [
+        "10022/page7.png"
+      ]
+    },
+    {
+      "title": "Klidná jako voda",
+      "author": "Jelen",
+      "image_paths": [
+        "10022/page8.png"
+      ]
+    },
+    {
+      "title": "Nádech",
+      "author": "Voxel",
+      "image_paths": [
+        "10022/page9.png"
+      ]
+    },
+    {
+      "title": "Naviděnou",
+      "author": "Kryštof",
+      "image_paths": [
+        "10022/page10.png"
+      ]
+    },
+    {
+      "title": "Popelka",
+      "author": "Xindl X",
+      "image_paths": [
+        "10022/page11.png"
+      ]
+    },
+    {
+      "title": "Přeju ti",
+      "author": "Tomáš Klus",
+      "image_paths": [
+        "10022/page12.png"
+      ]
+    },
+    {
+      "title": "Tonda",
+      "author": "Tomáš Klus",
+      "image_paths": [
+        "10022/page13.png"
+      ]
+    },
+    {
+      "title": "Trip",
+      "author": "Voxel",
+      "image_paths": [
+        "10022/page14.png"
+      ]
+    },
+    {
+      "title": "Tsunami",
+      "author": "Divokej Bill",
+      "image_paths": [
+        "10022/page15.png"
+      ]
+    },
+    {
+      "title": "Věčně nevěrná",
+      "author": "Xindl X",
+      "image_paths": [
+        "10022/page16.png"
+      ]
+    },
+    {
+      "title": "Vlčí srdce",
+      "author": "Jelen",
+      "image_paths": [
+        "10022/page17.png"
+      ]
+    },
+    {
+      "title": "Vzácnej je nám",
+      "author": "Škvor",
+      "image_paths": [
+        "10022/page18.png"
+      ]
+    },
+    {
+      "title": "Země draků",
+      "author": "Divokej Bill",
+      "image_paths": [
+        "10022/page19.png"
+      ]
+    },
+    {
+      "title": "Ženy",
+      "author": "Rybičky 48",
+      "image_paths": [
+        "10022/page20.png"
+      ]
+    }
+  ]
+}

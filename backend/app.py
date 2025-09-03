@@ -112,11 +112,12 @@ def get_songbook_toc(songbook_id):
     toc = []
     pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(SongbookPage.page_number).all()
     for page in pages:
-        song = page.song
+        song = Song.query.get(page.song_id)
+        image = SongImage.query.filter_by(song_id=song.id).first()
         toc.append({
             "title": song.title,
             "author": song.author.name if song.author else "",
-            "page": f"page{page.page_number}.png"
+            "page": image.image_path if image else ""
         })
     return jsonify({"pages": toc})
 
@@ -137,7 +138,7 @@ def public_songbooks():
     is_guest = (current_user.email == "guest@guest.com")
     return render_template('public_songbooks.html', songbooks=songbooks, guest=is_guest)
 
-@app.route('/songbook/<int:book_id>')
+@app.route('/songbook/<book_id>')
 @login_required
 def songbook_detail(book_id):
     songbook = Songbook.query.get_or_404(book_id)
@@ -152,7 +153,21 @@ def songbook_detail(book_id):
     outros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='outro').order_by(SongbookIntroOutroImage.sort_order).all()
 
     # Query songbook pages ordered by page_number
-    pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
+    seen_images = set()
+    pages = []
+    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
+    for page in raw_pages:
+        song = Song.query.get(page.song_id)
+        if not song:
+            continue
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        if not song_images:
+            pages.append("blank")
+        else:
+            for img in song_images:
+                if img.image_path not in seen_images:
+                    seen_images.add(img.image_path)
+                    pages.append(img.image_path)
 
     def pair_pages(intros, pages, outros, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         list_of_pages = []
@@ -188,20 +203,10 @@ def songbook_detail(book_id):
     intro_images = [img.image_path for img in intros]
     outro_images = [img.image_path for img in outros]
 
-    # Získej obrázky stránek (z tabulky SongImage)
-    page_images = []
-    for page in pages:
-        song = Song.query.get(page.song_id)
-        image = SongImage.query.filter_by(song_id=song.id).first()
-        if image:
-            page_images.append(image.image_path)
-        else:
-            page_images.append("blank")
-
     # Sestav page_files přes pomocnou funkci
     page_files = pair_pages(
         intro_images,
-        page_images,
+        pages,
         outro_images,
         first_page_side,
         getattr(songbook, 'img_path_cover_front_outer', None),
@@ -212,11 +217,11 @@ def songbook_detail(book_id):
     print("page_files:", page_files)
 
     # Pro scroll mód stačí seznam všech obrázků kromě blank
-    scroll_page_files = [img for img in page_images if img != "blank"]
+    scroll_page_files = [img for img in pages if img != "blank"]
 
     # Build toc_entries from songbook pages or other source
     toc_entries = []
-    for page in pages:
+    for page in raw_pages:
         toc_entries.append({
             'page_number': page.page_number,
             'title': getattr(page, 'title', '')

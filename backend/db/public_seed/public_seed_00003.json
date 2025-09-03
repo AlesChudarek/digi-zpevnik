@@ -1,0 +1,209 @@
+{
+  "title": "Můj zpěvník č.3",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10003/coverfrontout.png",
+  "img_path_cover_front_outer": "10003/coverfrontout.png",
+  "img_path_cover_front_inner": "10003/coverfrontin.png",
+  "img_path_cover_back_inner": "10003/coverbackin.png",
+  "img_path_cover_back_outer": "10003/coverbackout.png",
+  "intros": [],
+  "outros": [],
+  "pages": [
+    {
+      "title": "Balada pro banditu",
+      "author": "Balada pro banditu",
+      "image_paths": [
+        "10003/page1.png"
+      ]
+    },
+    {
+      "title": "Banana",
+      "author": "-",
+      "image_paths": [
+        "10003/page2.png"
+      ]
+    },
+    {
+      "title": "Bon soire, mademoiselle, le Paris",
+      "author": "Olympic",
+      "image_paths": [
+        "10003/page3.png"
+      ]
+    },
+    {
+      "title": "Bratříčku, zavírej vrátka",
+      "author": "Karel Kryl",
+      "image_paths": [
+        "10003/page4.png"
+      ]
+    },
+    {
+      "title": "Dáme klukovi školy",
+      "author": "Lotrando a Zubejda",
+      "image_paths": [
+        "10003/page5.png"
+      ]
+    },
+    {
+      "title": "Hučka",
+      "author": "-",
+      "image_paths": [
+        "10003/page6.png"
+      ]
+    },
+    {
+      "title": "Já se svou starou kytarou",
+      "author": "-",
+      "image_paths": [
+        "10003/page7.png"
+      ]
+    },
+    {
+      "title": "Jarošovský pivovar",
+      "author": "Argema",
+      "image_paths": [
+        "10003/page8.png"
+      ]
+    },
+    {
+      "title": "Jasná zpráva",
+      "author": "Olympic",
+      "image_paths": [
+        "10003/page9.png"
+      ]
+    },
+    {
+      "title": "Jdou po mně jdou",
+      "author": "J. Nohavica",
+      "image_paths": [
+        "10003/page10.png"
+      ]
+    },
+    {
+      "title": "Jednou mi fotr povídá",
+      "author": "Ivan Hlas",
+      "image_paths": [
+        "10003/page11.png"
+      ]
+    },
+    {
+      "title": "Kouzlo",
+      "author": "Wanastowi Vjecy",
+      "image_paths": [
+        "10003/page12.png"
+      ]
+    },
+    {
+      "title": "Medvídek",
+      "author": "Lucie",
+      "image_paths": [
+        "10003/page13.png"
+      ]
+    },
+    {
+      "title": "Noc na Karlštejně",
+      "author": "Noc na Karlštejně",
+      "image_paths": [
+        "10003/page14.png"
+      ]
+    },
+    {
+      "title": "Omnia vincit amor",
+      "author": "Klíč",
+      "image_paths": [
+        "10003/page15.png"
+      ]
+    },
+    {
+      "title": "Pod dubem, za dubem",
+      "author": "Lotrando a Zubejda",
+      "image_paths": [
+        "10003/page16.png"
+      ]
+    },
+    {
+      "title": "Pohádka",
+      "author": "Karel Plíhal",
+      "image_paths": [
+        "10003/page17.png"
+      ]
+    },
+    {
+      "title": "Povídej",
+      "author": "Petr Novák",
+      "image_paths": [
+        "10003/page18.png"
+      ]
+    },
+    {
+      "title": "Pramen zdraví",
+      "author": "Ať žijí duchové",
+      "image_paths": [
+        "10003/page19.png"
+      ]
+    },
+    {
+      "title": "Růže z Texasu",
+      "author": "W. Matuška",
+      "image_paths": [
+        "10003/page20.png"
+      ]
+    },
+    {
+      "title": "Snad jsem to zavinil já",
+      "author": "Olympic",
+      "image_paths": [
+        "10003/page21.png"
+      ]
+    },
+    {
+      "title": "Spinkej",
+      "author": "Spirituál kvintet",
+      "image_paths": [
+        "10003/page22.png"
+      ]
+    },
+    {
+      "title": "Statistika",
+      "author": "Princové jsou na draka",
+      "image_paths": [
+        "10003/page23.png"
+      ]
+    },
+    {
+      "title": "Švorcák",
+      "author": "Hop Trop",
+      "image_paths": [
+        "10003/page24.png"
+      ]
+    },
+    {
+      "title": "Vlaštovko leť",
+      "author": "J. Nohavica",
+      "image_paths": [
+        "10003/page25.png"
+      ]
+    },
+    {
+      "title": "Zafúkané",
+      "author": "Fleret",
+      "image_paths": [
+        "10003/page26.png"
+      ]
+    },
+    {
+      "title": "Zachraňte koně",
+      "author": "Kamelot",
+      "image_paths": [
+        "10003/page27.png"
+      ]
+    },
+    {
+      "title": "Zlatokop Tom",
+      "author": "-",
+      "image_paths": [
+        "10003/page28.png"
+      ]
+    }
+  ]
+}
