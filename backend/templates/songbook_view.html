@@ -462,7 +462,7 @@
     document.getElementById('scroll-mode').style.display = 'flex';
     document.getElementById('nav-controls').style.display = 'none';
     document.querySelector('.viewer-container').classList.remove('double-page-mode');
-    zoomLevel = 1.0;
+    // Do not reset zoom; respect per-mode zoom
     applyZoom();
     const wrapper = document.querySelector('.zoom-scroll-wrapper');
     // Try to restore scroll position based on lastDoublePage
@@ -544,8 +544,12 @@ function enableDoublePageMode() {
   document.getElementById('nav-controls').style.display = 'flex';
   document.querySelector('.viewer-container').classList.add('double-page-mode');
   updatePages();
-  zoomLevel = 1.0;
-  applyZoom();
+  // Auto-fit height unless user has manually zoomed in double mode
+  if (!userZoomedDouble) {
+    setTimeout(() => { fitDoublePageToViewport(); }, 0);
+  } else {
+    applyZoom();
+  }
   document.getElementById("jump-up-button").style.display = "none";
   const modal = document.getElementById("toc-modal");
   if (modal.style.display === "flex") {
@@ -652,18 +656,76 @@ function enableDoublePageMode() {
     }
   }
 // --- Zoom functionality ---
-let zoomLevel = 1.0;
+// Maintain independent zoom for double-page and scroll modes
+let zoomDouble = 1.0;
+let zoomScroll = 1.0;
+let userZoomedDouble = false; // becomes true after manual +/- in double mode
+let userZoomedScroll = false; // becomes true after manual +/- in scroll mode
 
 function applyZoom() {
   const doublePage = document.querySelectorAll('#double-page img');
   const scrollPages = document.querySelectorAll('#scroll-mode img');
 
   doublePage.forEach(img => {
-    img.style.width = `${zoomLevel * 600}px`;
+    img.style.width = `${zoomDouble * 600}px`;
   });
   scrollPages.forEach(img => {
-    img.style.width = `${zoomLevel * 1200}px`;
+    img.style.width = `${zoomScroll * 1200}px`;
   });
+}
+
+// Helpers to auto-fit double page to viewport height (with small UI reserves)
+function waitForDoubleImages() {
+  const left = document.getElementById('left-page');
+  const right = document.getElementById('right-page');
+  const waitImg = (img) => new Promise((resolve) => {
+    if (!img) return resolve();
+    if (img.complete && img.naturalWidth > 0) return resolve();
+    const done = () => resolve();
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+  });
+  return Promise.all([waitImg(left), waitImg(right)]);
+}
+
+async function fitDoublePageToViewport() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const pair = document.getElementById('double-page');
+  const nav = document.getElementById('nav-controls');
+  const viewer = document.querySelector('.viewer-container');
+  if (!wrapper || !pair || !viewer) return;
+
+  // Start from baseline to measure
+  zoomDouble = 1.0;
+  applyZoom();
+  await waitForDoubleImages();
+
+  // Compute zoom to fit height: available = wrapper height - measured paddings/margins - nav
+  const wrapperH = wrapper.clientHeight;
+  const vStyles = getComputedStyle(viewer);
+  const pStyles = getComputedStyle(pair);
+  const nStyles = nav ? getComputedStyle(nav) : null;
+
+  const padTop = parseFloat(vStyles.paddingTop) || 0;
+  const padBottom = parseFloat(vStyles.paddingBottom) || 0;
+  const pairMarginTop = parseFloat(pStyles.marginTop) || 0;
+  const pairMarginBottom = parseFloat(pStyles.marginBottom) || 0;
+  const navH = nav && nav.offsetHeight ? nav.offsetHeight : 0;
+  const navMarginTop = nStyles ? (parseFloat(nStyles.marginTop) || 0) : 0;
+  const navMarginBottom = nStyles ? (parseFloat(nStyles.marginBottom) || 0) : 0;
+  const reserve = 12; // small extra space to ensure buttons stay visible
+
+  const extras = padTop + padBottom + pairMarginTop + pairMarginBottom + navMarginTop + navMarginBottom + navH + reserve;
+  const availableH = Math.max(100, wrapperH - extras);
+
+  const currentPairH = pair.offsetHeight || 1; // avoid divide by zero
+  let heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
+
+  // Clamp between 0.25 and 4.0
+  heightZoom = Math.max(0.25, Math.min(4.0, heightZoom));
+
+  zoomDouble = heightZoom;
+  applyZoom();
 }
 
 function zoomIn() {
@@ -673,7 +735,14 @@ function zoomIn() {
   const prevScrollHeight = wrapper.scrollHeight;
   const prevScrollWidth = wrapper.scrollWidth;
 
-  zoomLevel = Math.min(2, zoomLevel + 0.1);
+  const isDouble = document.getElementById('double-page').style.display !== 'none';
+  if (isDouble) {
+    zoomDouble = Math.min(4.0, zoomDouble * 1.1);
+    userZoomedDouble = true;
+  } else {
+    zoomScroll = Math.min(4.0, zoomScroll * 1.1);
+    userZoomedScroll = true;
+  }
   applyZoom();
 
   const newScrollHeight = wrapper.scrollHeight;
@@ -690,7 +759,14 @@ function zoomOut() {
   const prevScrollHeight = wrapper.scrollHeight;
   const prevScrollWidth = wrapper.scrollWidth;
 
-  zoomLevel = Math.max(0.5, zoomLevel - 0.1);
+  const isDouble = document.getElementById('double-page').style.display !== 'none';
+  if (isDouble) {
+    zoomDouble = Math.max(0.25, zoomDouble * 0.9);
+    userZoomedDouble = true;
+  } else {
+    zoomScroll = Math.max(0.25, zoomScroll * 0.9);
+    userZoomedScroll = true;
+  }
   applyZoom();
 
   const newScrollHeight = wrapper.scrollHeight;
@@ -707,7 +783,7 @@ function scrollToTop() {
 
 document.addEventListener('DOMContentLoaded', () => {
   trackScrollPage();
-  applyZoom();
+  // Initial render: double-page mode by default; fit height if user hasn't zoomed
   document.addEventListener('click', (event) => {
     const modal = document.getElementById("toc-modal");
     const content = modal.querySelector(".content");
@@ -717,11 +793,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   updatePages();
+  const isDoubleAtLoad = document.getElementById('double-page').style.display !== 'none';
+  if (isDoubleAtLoad && !userZoomedDouble) {
+    setTimeout(() => { fitDoublePageToViewport(); }, 0);
+  } else {
+    applyZoom();
+  }
   document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowLeft') {
       prevPage();
     } else if (event.key === 'ArrowRight') {
       nextPage();
+    }
+  });
+  // Refit on window resize if in double mode and user hasn't adjusted zoom
+  window.addEventListener('resize', () => {
+    const isDouble = document.getElementById('double-page').style.display !== 'none';
+    if (isDouble && !userZoomedDouble) {
+      fitDoublePageToViewport();
     }
   });
 });

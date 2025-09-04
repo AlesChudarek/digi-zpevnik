@@ -117,7 +117,8 @@ def get_songbook_toc(songbook_id):
         toc.append({
             "title": song.title,
             "author": song.author.name if song.author else "",
-            "page": image.image_path if image else ""
+            "page": image.image_path if image else "",
+            "page_number": page.page_number
         })
     return jsonify({"pages": toc})
 
@@ -158,6 +159,7 @@ def songbook_detail(book_id):
     raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
     for page in raw_pages:
         song = Song.query.get(page.song_id)
+        print(page.song_id, page.song_id[1])
         if not song:
             continue
         song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
@@ -214,17 +216,18 @@ def songbook_detail(book_id):
         getattr(songbook, 'img_path_cover_back_inner', None),
         getattr(songbook, 'img_path_cover_back_outer', None)
     )
-    print("page_files:", page_files)
 
     # Pro scroll mód stačí seznam všech obrázků kromě blank
     scroll_page_files = [img for img in pages if img != "blank"]
 
-    # Build toc_entries from songbook pages or other source
+    # Build toc_entries: one entry per song, use correct page_number from SongbookPage
     toc_entries = []
     for page in raw_pages:
+        song = Song.query.get(page.song_id)
         toc_entries.append({
             'page_number': page.page_number,
-            'title': getattr(page, 'title', '')
+            'title': song.title,
+            'author': song.author.name if song.author else ""
         })
 
     return render_template(

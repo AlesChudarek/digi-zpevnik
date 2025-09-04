@@ -58,7 +58,7 @@ def insert_songbook(cursor, songbook_id, title, is_public=1,
 
 def insert_songbook_page(cursor, songbook_id, song_id, page_number):
     cursor.execute(
-        "INSERT OR IGNORE INTO songbook_pages (songbook_id, song_id, page_number) VALUES (?, ?, ?)",
+        "INSERT INTO songbook_pages (songbook_id, song_id, page_number) VALUES (?, ?, ?)",
         (songbook_id, song_id, page_number)
     )
 
@@ -94,15 +94,31 @@ def seed_from_public_seed_folder(seed_path, db_path):
         )
         total_songbooks += 1
 
+        image_to_page_number = {}
+        current_page_number = 1
+
         for i, entry in enumerate(data.get("pages", [])):
             song_id = f"{songbook_id}_{i+1}"
             title = entry.get("title", f"Untitled {i+1}")
             author = entry.get("author", "Neznámý autor")
-            page_number = i + 1
+            image_paths = entry.get("image_paths", [])
+
+            used_page_number = None
+            for path in image_paths:
+                if path in image_to_page_number:
+                    used_page_number = image_to_page_number[path]
+                    break
+
+            if used_page_number is not None:
+                page_number = used_page_number
+            else:
+                page_number = current_page_number
+                for path in image_paths:
+                    image_to_page_number[path] = page_number
+                current_page_number += 1
 
             author_id = insert_author(cursor, author, author_cache)
             insert_song(cursor, song_id, title, author_id)
-            image_paths = entry.get("image_paths", [])
             if not image_paths or not all(image_paths):
                 print(f"⚠️  Píseň '{title}' ve zpěvníku {songbook_id} nemá definovaný žádný platný obrázek (image_paths): {image_paths}")
             for path in image_paths:

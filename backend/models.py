@@ -65,9 +65,10 @@ class UserSongbookAccess(db.Model):
 class SongbookPage(db.Model):
     __tablename__ = "songbook_pages"
 
-    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)
+    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False)
     song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
-    page_number = db.Column(db.Integer, primary_key=True)
+    page_number = db.Column(db.Integer, nullable=False)
     song = db.relationship("Song", backref="songbook_pages")
 
 
