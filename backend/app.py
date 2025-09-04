@@ -13,7 +13,8 @@ from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songb
 load_dotenv()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY")
+# Robust dev default to avoid broken sessions when FLASK_SECRET_KEY is missing
+app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
 basedir = os.path.abspath(os.path.dirname(__file__))
 db_path = os.path.join(basedir, 'db', 'zpevnik.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
@@ -32,10 +33,7 @@ def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email)
 
 # ---------- MODELY ----------
-class User(db.Model, UserMixin):
-    id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(150), nullable=False)
+# Používej modely pouze z backend/models.py (viz import výše)
 
 # ---------- LOGIN ----------
 @login_manager.user_loader
@@ -86,7 +84,11 @@ def register():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.clear()
+    # Korektní odhlášení přes Flask-Login + uklid session flagu guest
+    try:
+        logout_user()
+    finally:
+        session.pop('guest', None)
     return redirect(url_for('login'))
 
 @app.route('/guest-login')
@@ -159,7 +161,6 @@ def songbook_detail(book_id):
     raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
     for page in raw_pages:
         song = Song.query.get(page.song_id)
-        print(page.song_id, page.song_id[1])
         if not song:
             continue
         song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
@@ -172,32 +173,63 @@ def songbook_detail(book_id):
                     pages.append(img.image_path)
 
     def pair_pages(intros, pages, outros, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
+        """Build double-page spreads according to simplified print-like rules.
+
+        - With any cover provided: auto-complete missing cover parts with 'blank' and render:
+          none|CFO, then CFI|offset(or content), then intros/pages/outros, then ensure CBI on right,
+          then CBO|none.
+        - Without cover: optionally offset start if first page should be right, then content,
+          and if total pages end on left, add a trailing blank to show full last spread.
+        """
         list_of_pages = []
-        if cover_front_outer:
+
+        has_any_cover = any([cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer])
+
+        if has_any_cover:
+            # Auto-complete missing parts with 'blank'
+            cfo = cover_front_outer or "blank"
+            cfi = cover_front_inner or "blank"
+            cbi = cover_back_inner or "blank"
+            cbo = cover_back_outer or "blank"
+
+            # Closed front cover
             list_of_pages.append("none")
-            list_of_pages.append(cover_front_outer)
-            if cover_front_inner: 
-                list_of_pages.append(cover_front_inner)
-            else:
-                list_of_pages.append("blank")
+            list_of_pages.append(cfo)
+
+            # Open inner front
+            list_of_pages.append(cfi)
             if first_side == "left":
-                list_of_pages.append("blank")
-        elif first_side == "right":
-            list_of_pages.append("blank")
-        
-        list_of_pages.extend(intros)
-        list_of_pages.extend(pages)
-        list_of_pages.extend(outros)
-
-        if len(list_of_pages) % 2 != 0:
-            if cover_back_outer and cover_back_inner:
-                list_of_pages.append(cover_back_inner)
-            else:
+                # Offset so first intro starts on left on the next spread
                 list_of_pages.append("blank")
 
-        if cover_back_outer:
-            list_of_pages.append(cover_back_outer)
+            # Main content
+            list_of_pages.extend(intros)
+            list_of_pages.extend(pages)
+            list_of_pages.extend(outros)
+
+            # Ensure back inner cover (CBI) lands on right page
+            if len(list_of_pages) % 2 == 0:
+                # Next slot would be left -> insert blank to shift
+                list_of_pages.append("blank")
+            list_of_pages.append(cbi)
+
+            # Closed back cover
+            list_of_pages.append(cbo)
             list_of_pages.append("none")
+
+        else:
+            # No cover: only offset start if needed and place content
+            if first_side == "right":
+                # Add blank so first content appears on right
+                list_of_pages.append("blank")
+
+            list_of_pages.extend(intros)
+            list_of_pages.extend(pages)
+            list_of_pages.extend(outros)
+
+            # If we end on a single left page (odd count), add a trailing blank
+            if len(list_of_pages) % 2 != 0:
+                list_of_pages.append("blank")
 
         return list(zip(list_of_pages[::2], list_of_pages[1::2]))
 
@@ -245,7 +277,7 @@ def songbook_detail(book_id):
 def inject_user_status():
     return dict(
         guest=session.get('guest', False),
-        logged_in=bool(session.get('user_id'))
+        logged_in=current_user.is_authenticated
     )
 
 # ---------- START ----------

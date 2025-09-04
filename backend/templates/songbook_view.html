@@ -23,6 +23,10 @@
         margin: 0 auto;
         padding: 20px 20px 40px;
     }
+    /* In double-page mode reduce bottom padding to minimize unused gap */
+    .viewer-container.double-page-mode {
+        padding-bottom: 12px;
+    }
     
     body.navbar-hidden #toc-modal #toc-modal-wrapper {
       top: 20px;
@@ -366,6 +370,27 @@
   let lastDoublePage;
   let lastScrollPage;
   const totalPages = {{ page_files | length }};
+  let initialDoubleFitScheduled = false; // prevent duplicate initial fit scheduling
+  let initialFitAttempts = 0; // retry counter for early measurements
+
+  // Identify current book and reset zoom state if switching between books
+  const BOOK_ID = "{{ book_id }}";
+  try {
+    const lastBookId = sessionStorage.getItem('dz_last_book_id');
+    if (lastBookId !== BOOK_ID) {
+      // Fresh book: reset zoom states to defaults
+      zoomDouble = 1.0;
+      zoomScroll = 0.8;
+      userZoomedDouble = false;
+      userZoomedScroll = false;
+      if (typeof initialDoubleFitDone !== 'undefined') {
+        initialDoubleFitDone = false;
+      }
+    }
+    sessionStorage.setItem('dz_last_book_id', BOOK_ID);
+  } catch (e) {
+    // sessionStorage might be unavailable; ignore and rely on defaults
+  }
 
   function updatePages() {
     // Save lastDoublePage for memory
@@ -421,6 +446,13 @@
 
     document.getElementById('page-input').value = display;
     applyZoom();
+    // If in double-page mode, perform auto-fit once on initial render
+    const isDouble = document.getElementById('double-page').style.display !== 'none';
+    if (isDouble && !initialDoubleFitDone && !initialDoubleFitScheduled) {
+      initialDoubleFitScheduled = true;
+      // Defer to allow DOM to paint and image load listeners to attach
+      setTimeout(() => { fitDoublePageToViewport(); }, 0);
+    }
   }
 
   function jumpToPage() {
@@ -544,12 +576,8 @@ function enableDoublePageMode() {
   document.getElementById('nav-controls').style.display = 'flex';
   document.querySelector('.viewer-container').classList.add('double-page-mode');
   updatePages();
-  // Auto-fit height unless user has manually zoomed in double mode
-  if (!userZoomedDouble) {
-    setTimeout(() => { fitDoublePageToViewport(); }, 0);
-  } else {
-    applyZoom();
-  }
+  // Do not auto-fit on mode switch; keep the last double-page zoom
+  applyZoom();
   document.getElementById("jump-up-button").style.display = "none";
   const modal = document.getElementById("toc-modal");
   if (modal.style.display === "flex") {
@@ -658,9 +686,10 @@ function enableDoublePageMode() {
 // --- Zoom functionality ---
 // Maintain independent zoom for double-page and scroll modes
 let zoomDouble = 1.0;
-let zoomScroll = 1.0;
+let zoomScroll = 0.8; // default scroll mode zoom (~two zoom-out steps)
 let userZoomedDouble = false; // becomes true after manual +/- in double mode
 let userZoomedScroll = false; // becomes true after manual +/- in scroll mode
+let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
 
 function applyZoom() {
   const doublePage = document.querySelectorAll('#double-page img');
@@ -678,14 +707,23 @@ function applyZoom() {
 function waitForDoubleImages() {
   const left = document.getElementById('left-page');
   const right = document.getElementById('right-page');
+
+  const isVisible = (img) => img && img.style.display !== 'none' && img.getAttribute('src');
+
+  const candidates = [left, right].filter(isVisible);
+  if (candidates.length === 0) return Promise.resolve();
+
+  const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
   const waitImg = (img) => new Promise((resolve) => {
     if (!img) return resolve();
-    if (img.complete && img.naturalWidth > 0) return resolve();
-    const done = () => resolve();
+    const settle = async () => { await nextFrame(); await nextFrame(); resolve(); };
+    if (img.style.display === 'none' || !img.getAttribute('src')) return resolve();
+    if (img.complete && img.naturalWidth > 0) return settle();
+    const done = () => settle();
     img.addEventListener('load', done, { once: true });
     img.addEventListener('error', done, { once: true });
   });
-  return Promise.all([waitImg(left), waitImg(right)]);
+  return Promise.all(candidates.map(waitImg));
 }
 
 async function fitDoublePageToViewport() {
@@ -701,7 +739,8 @@ async function fitDoublePageToViewport() {
   await waitForDoubleImages();
 
   // Compute zoom to fit height: available = wrapper height - measured paddings/margins - nav
-  const wrapperH = wrapper.clientHeight;
+  // Use actual scroll wrapper height (navbar space is already handled by .navbar-spacer)
+  const wrapperH = Math.max(0, wrapper.clientHeight);
   const vStyles = getComputedStyle(viewer);
   const pStyles = getComputedStyle(pair);
   const nStyles = nav ? getComputedStyle(nav) : null;
@@ -713,12 +752,26 @@ async function fitDoublePageToViewport() {
   const navH = nav && nav.offsetHeight ? nav.offsetHeight : 0;
   const navMarginTop = nStyles ? (parseFloat(nStyles.marginTop) || 0) : 0;
   const navMarginBottom = nStyles ? (parseFloat(nStyles.marginBottom) || 0) : 0;
-  const reserve = 12; // small extra space to ensure buttons stay visible
+  const reserve = 32; // extra space so nav buttons are fully visible
 
   const extras = padTop + padBottom + pairMarginTop + pairMarginBottom + navMarginTop + navMarginBottom + navH + reserve;
   const availableH = Math.max(100, wrapperH - extras);
 
-  const currentPairH = pair.offsetHeight || 1; // avoid divide by zero
+  // Prefer measuring visible image heights directly (handles cases with one hidden side like cover)
+  const leftImg = document.getElementById('left-page');
+  const rightImg = document.getElementById('right-page');
+  const visibleHeights = [];
+  if (leftImg && leftImg.style.display !== 'none' && leftImg.src) visibleHeights.push(leftImg.offsetHeight);
+  if (rightImg && rightImg.style.display !== 'none' && rightImg.src) visibleHeights.push(rightImg.offsetHeight);
+  const measuredVisibleH = Math.max(0, ...visibleHeights);
+  const currentPairH = (measuredVisibleH || pair.offsetHeight || 1); // avoid divide by zero
+
+  // Guard: if measurement is suspiciously small on initial fit, retry a few times
+  if (!initialDoubleFitDone && initialFitAttempts < 3 && currentPairH < 100) {
+    initialFitAttempts += 1;
+    setTimeout(() => { fitDoublePageToViewport(); }, 60);
+    return;
+  }
   let heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
 
   // Clamp between 0.25 and 4.0
@@ -726,6 +779,11 @@ async function fitDoublePageToViewport() {
 
   zoomDouble = heightZoom;
   applyZoom();
+  // Mark initial auto-fit as completed to avoid further automatic changes
+  if (!initialDoubleFitDone) {
+    initialDoubleFitDone = true;
+    initialDoubleFitScheduled = false;
+  }
 }
 
 function zoomIn() {
@@ -793,12 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   updatePages();
-  const isDoubleAtLoad = document.getElementById('double-page').style.display !== 'none';
-  if (isDoubleAtLoad && !userZoomedDouble) {
-    setTimeout(() => { fitDoublePageToViewport(); }, 0);
-  } else {
-    applyZoom();
-  }
+  // Rely on updatePages() to schedule a single robust initial fit; avoid duplicate fits here
+  applyZoom();
   document.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowLeft') {
       prevPage();
