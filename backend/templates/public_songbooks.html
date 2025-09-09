@@ -19,7 +19,7 @@
     transition: transform 0.2s;
     text-align: center;
     text-decoration: none;
-    color: #2E7D32;
+    color: var(--brand-strong, #2E7D32);
     font-weight: bold;
     display: flex;
     flex-direction: column;
@@ -47,7 +47,7 @@
   {% for book in songbooks|sort(attribute='id') %}
     <a href="{{ url_for('songbook_detail', book_id=book.id) }}" class="songbook-card">
       {% if book.img_path_cover_preview %}
-        <img src="{{ url_for('static', filename='songbooks/' + book.img_path_cover_preview) }}">
+        <img src="{{ static_bust('songbooks/' + book.img_path_cover_preview) }}">
       {% else %}
         <div style="width:100%; height:250px; background:#eee; display:flex; align-items:center; justify-content:center;">
           <span style="color: #888;">Bez obalu</span>

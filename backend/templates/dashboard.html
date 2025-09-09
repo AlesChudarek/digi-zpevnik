@@ -9,8 +9,8 @@
       <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#ccc;">Moje zpěvníky</a>
     </span>
   {% else %}
-    <a href="{{ url_for('dashboard') }}">Moje zpěvníky</a>
+    <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
   {% endif %}
-  <a href="{{ url_for('dashboard') }}">Hledat písničku</a>
+  <a href="{{ url_for('search') }}">Hledat písničku</a>
 </div>
 {% endblock %}

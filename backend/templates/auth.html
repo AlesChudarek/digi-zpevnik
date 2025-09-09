@@ -3,13 +3,16 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
+  {% include '_theme.html' %}
   <meta charset="UTF-8">
   <title>Digitální Zpěvník – Přihlášení / Registrace</title>
   <style>
+    :root { --bg-grad-start:#4CAF50; --bg-grad-end:#2E7D32; --brand:#38843B; --brand-strong:#2E7D32; --brand-dark:#1b5e20; --brand-contrast:#ffffff; }
+    body.theme-blue { --bg-grad-start:#64B5F6; --bg-grad-end:#1976D2; --brand:#1E88E5; --brand-strong:#1565C0; --brand-dark:#0D47A1; --brand-contrast:#ffffff; }
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: linear-gradient(135deg, #4CAF50, #2E7D32);
+      background: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
       display: flex;
       justify-content: center;
       align-items: center;
@@ -34,8 +37,8 @@
       border-bottom: 2px solid transparent;
     }
     .tab.active {
-      color: #2E7D32;
-      border-bottom: 2px solid #2E7D32;
+      color: var(--brand-strong);
+      border-bottom: 2px solid var(--brand-strong);
     }
     form {
       display: none;
@@ -50,9 +53,14 @@
       border: 1px solid #ccc;
       border-radius: 4px;
     }
+    input:focus {
+      outline: 2px solid var(--brand-strong);
+      outline-offset: 1px;
+      border-color: var(--brand-strong);
+    }
     button {
-      background-color: #4CAF50;
-      color: white;
+      background-color: var(--brand);
+      color: var(--brand-contrast);
       border: none;
       padding: 12px;
       border-radius: 4px;
@@ -60,17 +68,13 @@
       font-size: 16px;
     }
     button:hover {
-      background-color: #45A049;
+      background-color: var(--brand-strong);
     }
     .guest-link {
       margin-top: 15px;
       text-align: center;
     }
-    .guest-link a {
-      color: #2E7D32;
-      text-decoration: none;
-      font-size: 14px;
-    }
+    .guest-link a { color: var(--brand-strong); text-decoration: none; font-size: 14px; }
     .guest-link a:hover {
       text-decoration: underline;
     }

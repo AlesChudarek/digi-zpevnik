@@ -1,0 +1,303 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Hledat písničku{% endblock %}
+{% block content %}
+<style>
+  .search-container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+  .filters {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 18px 36px; /* more space between left and right column */
+    margin-bottom: 14px;
+    align-items: end;
+    max-width: min(780px, 92%);
+  }
+  .field label { display: block; font-size: 12px; margin-bottom: 6px; opacity: 0.9; }
+  .field input { width: 100%; padding: 10px 12px; border-radius: 10px; border: none; box-shadow: 0 2px 5px rgba(0,0,0,0.25); font-size: 14px; }
+  .field.page input { max-width: 140px; }
+  .types { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+  .types label { background: #ffffff44; padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .results { width: 100%; background: #fff; color: var(--muted-text, #1b5e20); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: visible; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    padding: 12px 16px;
+    background: var(--muted-bg, #e8f5e9);
+    color: var(--muted-text, #1b5e20);
+    font-size: 14px;
+    position: sticky;
+    top: 68px; /* align flush under navbar, avoid 1px gap */
+    z-index: 2;
+    border-bottom: 1px solid var(--muted-border, #dbeadf); /* avoid lower 1px gap */
+    box-shadow: none;
+    transition: top 0.3s ease-in-out; /* move in sync with navbar */
+  }
+  body.navbar-hidden thead th { top: -1px; }
+  tbody td { padding: 12px 16px; border-top: 1px solid var(--muted-border, #e2e8f0); cursor: pointer; color: var(--muted-text, #1b5e20); }
+  tbody tr:hover { background: var(--muted-bg, #e8f5e9); }
+  th.th-sortable { cursor: pointer; user-select: none; }
+  th.th-sortable .hdr { display: inline-flex; align-items: center; gap: 6px; }
+  th.th-sortable .sort-indicator { font-size: 12px; opacity: 0.35; min-width: 12px; display: inline-block; }
+  th.th-sortable.active .sort-indicator { opacity: 1; }
+  .book-type { color: #607d8b; font-weight: normal; margin-left: 6px; font-size: 0.9em; }
+  .actions { display: flex; gap: 10px; align-items: center; }
+  .action-btn { background: none; border: none; padding: 0; cursor: pointer; }
+  .action-btn img { width: 22px; height: 22px; display: block; }
+  .action-btn.add { filter: invert(48%) sepia(65%) saturate(432%) hue-rotate(78deg) brightness(90%) contrast(92%); }
+  .action-btn.remove { filter: invert(27%) sepia(81%) saturate(4041%) hue-rotate(342deg) brightness(102%) contrast(97%); }
+  .disabled { opacity: 0.4; cursor: not-allowed; }
+  .badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 11px; background: var(--muted-bg, #e3f2fd); color: var(--brand-strong, #1565C0); margin-left: 6px; }
+  /* Counter bubble over table header, flush right, outside table */
+  .results { position: relative; }
+  .header-counter { position: absolute; top: 0; right: 0; z-index: 3; display: flex; justify-content: flex-end; transform: translateY(-100%); }
+  .header-counter .bubble {
+    background: var(--muted-bg, #e8f5e9);
+    color: var(--muted-text, #1b5e20);
+    border: none; /* no outline to avoid mismatch in dark */
+    border-radius: 12px 12px 0 0;
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+</style>
+
+<div class="search-container">
+  <h1 style="text-align:center; margin: 10px 0 18px;">Hledat písničku</h1>
+
+  <div class="filters">
+    <div class="field">
+      <label for="f-title">Název písně</label>
+      <input id="f-title" type="text" placeholder="např. Hlídač krav" />
+    </div>
+    <div class="field">
+      <label for="f-book">Zpěvník</label>
+      <input id="f-book" type="text" placeholder="např. Můj zpěvník" />
+    </div>
+    <div class="field">
+      <label for="f-author">Autor</label>
+      <input id="f-author" type="text" placeholder="např. Nohavica" />
+    </div>
+    <div class="field">
+      <label for="f-page">Strana</label>
+      <input id="f-page" type="text" placeholder="např. 12" />
+    </div>
+    <div class="types">
+      <label><input type="checkbox" id="t-public" checked> Veřejné</label>
+      <label><input type="checkbox" id="t-private" checked> Soukromé</label>
+      <label><input type="checkbox" id="t-shared" checked> Sdílené</label>
+    </div>
+  </div>
+
+  <div class="results">
+    <div class="header-counter"><span class="bubble" id="count-books">Zobrazeno písní: 0</span></div>
+    <table id="results-table">
+      <thead>
+        <tr>
+          <th class="th-sortable" data-sort="title"><span class="hdr tooltip" data-tooltip="Řadit podle názvu">Název <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="author"><span class="hdr tooltip" data-tooltip="Řadit podle autora">Autor <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="book"><span class="hdr tooltip" data-tooltip="Řadit podle zpěvníku">Zpěvník <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="page" style="width:90px;"><span class="hdr tooltip" data-tooltip="Řadit podle strany">Strana <span class="sort-indicator"></span></span></th>
+          <th style="width:52px;">Přidat</th>
+          <th style="width:52px;">Odebrat</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+          <tr class="result-row" data-title="{{ r.song_title }}" data-author="{{ r.author_name }}"
+              data-book="{{ r.songbook_title }}" data-page="{{ r.page_number }}"
+              data-songbook-id="{{ r.songbook_id }}" data-page-num="{{ r.page_number }}" data-type="{{ r.book_type }}"
+          >
+            <td>{{ r.song_title }}</td>
+            <td>{{ r.author_name }}</td>
+            <td>
+              {{ r.songbook_title }}
+              {% if r.book_type %}<span class="book-type">({{ r.book_type }})</span>{% endif %}
+            </td>
+            <td>{{ r.page_number }}</td>
+            <td>
+              <span class="tooltip" data-tooltip="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
+                <button class="action-btn add {% if guest %}disabled{% endif %}" onclick="event.stopPropagation();" {% if guest %}disabled{% endif %}>
+                  <img src="{{ static_bust('img/icons/add_song.svg') }}" alt="Přidat" />
+                </button>
+              </span>
+            </td>
+            <td>
+              {% if r.book_type == '' %}
+                <span class="tooltip" data-tooltip="Nelze odstranit z veřejného zpěvníku">
+                  <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
+                    <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
+                  </button>
+                </span>
+              {% elif r.book_type == 'shared' %}
+                <span class="tooltip" data-tooltip="Nelze odstranit ve sdíleném zpěvníku">
+                  <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
+                    <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
+                  </button>
+                </span>
+              {% elif r.book_type == 'private' and not guest and r.owned_by_user %}
+                <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+                  <button class="action-btn remove" onclick="event.stopPropagation(); /* TODO: remove action */">
+                    <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
+                  </button>
+                </span>
+              {% else %}
+                <span class="tooltip" data-tooltip="Nedostatečná oprávnění">
+                  <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
+                    <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
+                  </button>
+                </span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  function normalizeStr(s) {
+    return (s || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  }
+
+  function setupFilters() {
+    const fTitle = document.getElementById('f-title');
+    const fAuthor = document.getElementById('f-author');
+    const fBook = document.getElementById('f-book');
+    const fPage = document.getElementById('f-page');
+    const tPublic = document.getElementById('t-public');
+    const tPrivate = document.getElementById('t-private');
+    const tShared = document.getElementById('t-shared');
+    const rows = Array.from(document.querySelectorAll('#results-table tbody tr'));
+
+    function updateCounts() {
+      const all = Array.from(document.querySelectorAll('#results-table tbody tr'));
+      const visible = all.filter(tr => tr.style.display !== 'none');
+      const count = visible.length; // count songs (rows)
+      const el = document.getElementById('count-books');
+      if (el) el.textContent = `Zobrazeno písní: ${count}`;
+    }
+
+    function apply() {
+      const t = normalizeStr(fTitle.value);
+      const a = normalizeStr(fAuthor.value);
+      const b = normalizeStr(fBook.value);
+      const p = normalizeStr(fPage.value);
+      const showPublic = !!tPublic.checked;
+      const showPrivate = !!tPrivate.checked;
+      const showShared = !!tShared.checked;
+
+      rows.forEach(tr => {
+        const mt = normalizeStr(tr.getAttribute('data-title'));
+        const ma = normalizeStr(tr.getAttribute('data-author'));
+        const mb = normalizeStr(tr.getAttribute('data-book'));
+        const mp = normalizeStr(tr.getAttribute('data-page'));
+        const type = (tr.getAttribute('data-type') || '').trim(); // '' | 'private' | 'shared'
+        const typeOk = (type === '' && showPublic) || (type === 'private' && showPrivate) || (type === 'shared' && showShared);
+        const ok = typeOk && (!t || mt.includes(t)) && (!a || ma.includes(a)) && (!b || mb.includes(b)) && (!p || mp.includes(p));
+        tr.style.display = ok ? '' : 'none';
+      });
+
+      // Apply current sort after filtering to keep order consistent
+      applySort();
+      updateCounts();
+    }
+
+    [fTitle, fAuthor, fBook, fPage].forEach(inp => inp.addEventListener('input', apply));
+    [tPublic, tPrivate, tShared].forEach(cb => cb.addEventListener('change', apply));
+    // Initial pass to apply any default state
+    apply();
+  }
+
+  // --- Sorting ---
+  let currentSort = null; // { key: 'title'|'author'|'book'|'page', dir: 'asc'|'desc' }
+
+  function isPlaceholderValue(raw) {
+    const trimmed = (raw || '').toString().trim();
+    return trimmed === '-' || trimmed === '';
+  }
+
+  function getValueForSort(tr, key) {
+    if (key === 'page') {
+      const n = parseInt(tr.getAttribute('data-page') || '0', 10);
+      return { value: (isNaN(n) ? 0 : n), placeholder: false };
+    }
+    const map = { title: 'data-title', author: 'data-author', book: 'data-book' };
+    const attr = map[key] || 'data-title';
+    const raw = (tr.getAttribute(attr) || '');
+    return { value: normalizeStr(raw), placeholder: isPlaceholderValue(raw) };
+  }
+
+  function applySort() {
+    if (!currentSort) return;
+    const tbody = document.querySelector('#results-table tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const { key, dir } = currentSort;
+    rows.sort((ra, rb) => {
+      const a = getValueForSort(ra, key);
+      const b = getValueForSort(rb, key);
+      // Always put placeholder values ('-' or empty) last regardless of direction
+      if (a.placeholder !== b.placeholder) {
+        return a.placeholder ? 1 : -1;
+      }
+      if (key === 'page') {
+        return dir === 'asc' ? (a.value - b.value) : (b.value - a.value);
+      }
+      const cmp = a.value.localeCompare(b.value);
+      return dir === 'asc' ? cmp : -cmp;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  }
+
+  function updateSortIndicators(activeTh) {
+    // Set all to neutral faded arrow
+    document.querySelectorAll('th.th-sortable').forEach(th => {
+      th.classList.remove('active');
+      const el = th.querySelector('.sort-indicator');
+      if (el) el.textContent = '↕';
+    });
+    if (!activeTh || !currentSort) return;
+    activeTh.classList.add('active');
+    const ind = activeTh.querySelector('.sort-indicator');
+    if (ind) ind.textContent = currentSort.dir === 'asc' ? '▲' : '▼';
+  }
+
+  function setupSorting() {
+    const ths = document.querySelectorAll('th.th-sortable');
+    ths.forEach(th => {
+      th.addEventListener('click', () => {
+        const key = th.getAttribute('data-sort');
+        if (currentSort && currentSort.key === key) {
+          currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSort = { key, dir: 'asc' };
+        }
+        updateSortIndicators(th);
+        applySort();
+      });
+    });
+  }
+
+  function setupRowClicks() {
+    document.querySelectorAll('#results-table tbody tr').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const bookId = tr.getAttribute('data-songbook-id');
+        const page = tr.getAttribute('data-page-num');
+        if (bookId && page) {
+          window.location.href = `/songbook/${bookId}?page=${encodeURIComponent(page)}`;
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    setupFilters();
+    setupSorting();
+    // Set default sort: title ASC
+    currentSort = { key: 'title', dir: 'asc' };
+    const thTitle = document.querySelector('th.th-sortable[data-sort="title"]');
+    updateSortIndicators(thTitle);
+    applySort();
+    setupRowClicks();
+  });
+</script>
+{% endblock %}

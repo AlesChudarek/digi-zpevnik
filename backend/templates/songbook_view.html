@@ -103,6 +103,8 @@
         flex-direction: column;
         gap: 15px;
         z-index: 1000;
+        opacity: 1;
+        transition: opacity 0.25s ease;
     }
 
     .scroll-mode {
@@ -251,6 +253,11 @@
   .zoom-buttons button:hover {
     transform: scale(1.1);
   }
+
+  /* Shared fade behaviour for side UI groups */
+  .zoom-buttons { opacity: 1; transition: opacity 0.25s ease; }
+  .mode-buttons { opacity: 1; transition: opacity 0.25s ease; }
+  .zoom-buttons.fade-hidden, .mode-buttons.fade-hidden { opacity: 0; pointer-events: none; }
 </style>
 
 <style>
@@ -281,7 +288,7 @@
     {% for pair in page_files %}
       {% for page in pair %}
         {% if page and page != 'none' and page != 'blank' %}
-          <img src="{{ url_for('static', filename='songbooks/' ~ page) }}" id="scroll-page-{{ loop.index }}">
+          <img src="{{ static_bust('songbooks/' ~ page) }}" data-file="{{ page }}" id="scroll-page-{{ loop.index }}">
         {% endif %}
       {% endfor %}
     {% endfor %}
@@ -289,7 +296,7 @@
 
   <div id="nav-controls" class="nav-buttons">
     <button onclick="prevPage()" class="tooltip" data-tooltip="Předchozí">
-      <img src="{{ url_for('static', filename='img/icons/arrow_left.svg') }}">
+      <img src="{{ static_bust('img/icons/arrow_left.svg') }}">
     </button>
     
     <input type="text" id="page-input"
@@ -299,7 +306,7 @@
            style="width: 80px; font-size: 1.2em; text-align: center; padding: 6px 10px; border: none; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
 
     <button onclick="nextPage()" class="tooltip" data-tooltip="Další">
-      <img src="{{ url_for('static', filename='img/icons/arrow_right.svg') }}">
+      <img src="{{ static_bust('img/icons/arrow_right.svg') }}">
     </button>
   </div>
 
@@ -315,19 +322,19 @@
   <div class="zoom-buttons">
     <div class="button-container">
       <button onclick="zoomIn()">
-        <img src="{{ url_for('static', filename='img/icons/zoom_in.svg') }}" alt="Zoom In">
+        <img src="{{ static_bust('img/icons/zoom_in.svg') }}" alt="Zoom In">
       </button>
       <div class="tooltip-text">Přiblížit</div>
     </div>
     <div class="button-container">
       <button onclick="zoomOut()">
-        <img src="{{ url_for('static', filename='img/icons/zoom_out.svg') }}" alt="Zoom Out">
+        <img src="{{ static_bust('img/icons/zoom_out.svg') }}" alt="Zoom Out">
       </button>
       <div class="tooltip-text">Oddálit</div>
     </div>
     <div class="button-container" id="jump-up-button" style="display: none;">
       <button onclick="scrollToTop()">
-        <img src="{{ url_for('static', filename='img/icons/jump_up.svg') }}" alt="Scroll to Top">
+        <img src="{{ static_bust('img/icons/jump_up.svg') }}" alt="Scroll to Top">
       </button>
       <div class="tooltip-text">Zpět nahoru</div>
     </div>
@@ -338,19 +345,19 @@
 <div class="mode-buttons">
   <div class="button-container">
     <button onclick="enableDoublePageMode()">
-      <img src="{{ url_for('static', filename='img/icons/open_book.svg') }}" alt="Double Page Mode">
+      <img src="{{ static_bust('img/icons/open_book.svg') }}" alt="Double Page Mode">
     </button>
     <div class="tooltip-text">Zobrazit jako dvojstranu</div>
   </div>
   <div class="button-container">
     <button onclick="enableScrollMode()">
-      <img src="{{ url_for('static', filename='img/icons/scroll.svg') }}" alt="Scroll Mode">
+      <img src="{{ static_bust('img/icons/scroll.svg') }}" alt="Scroll Mode">
     </button>
     <div class="tooltip-text">Zobrazit jako seznam</div>
   </div>
   <div class="button-container">
     <button onclick="toggleToc()">
-      <img src="{{ url_for('static', filename='img/icons/toc.svg') }}" alt="Obsah">
+      <img src="{{ static_bust('img/icons/toc.svg') }}" alt="Obsah">
     </button>
     <div class="tooltip-text">Zobrazit obsah</div>
   </div>
@@ -370,6 +377,7 @@
   let lastDoublePage;
   let lastScrollPage;
   const totalPages = {{ page_files | length }};
+  const SCROLL_CUSHION_PX = 20; // fine-tune scroll offset (pixels)
   let initialDoubleFitScheduled = false; // prevent duplicate initial fit scheduling
   let initialFitAttempts = 0; // retry counter for early measurements
 
@@ -502,10 +510,11 @@
       const pair = pageFiles[lastDoublePage - 1];
       const pageToScroll = pair?.find(p => p && p.file && p.file.includes('page'));
       if (pageToScroll) {
-        const target = document.querySelector(`#scroll-mode img[src$="/${pageToScroll.file}"]`);
+        const target = document.querySelector(`#scroll-mode img[data-file="${pageToScroll.file}"]`);
         if (target) {
-          wrapper.scrollTo({ top: target.offsetTop, behavior: "instant" });
-          if (pageToScroll.page_number) lastScrollPage = pageToScroll.page_number;
+          const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
+          wrapper.scrollTo({ top, behavior: "instant" });
+          if (pageToScroll.file) lastScrollPage = pageToScroll.file;
         }
       }
     } else {
@@ -550,11 +559,7 @@ function enableDoublePageMode() {
   let file = null;
 
   if (visibleImage) {
-    const src = visibleImage.getAttribute("src");
-    const match = src && src.match(/\/songbooks\/(.+)$/);
-    if (match) {
-      file = match[1];
-    }
+    file = visibleImage.getAttribute('data-file');
   }
   console.log(visibleImage, file, lastScrollPage);
 
@@ -618,7 +623,7 @@ function enableDoublePageMode() {
             const addBtn = document.createElement("button");
             addBtn.className = "add-to-songbook-button";
             const icon = document.createElement("img");
-            icon.src = "{{ url_for('static', filename='img/icons/add_song.svg') }}";
+            icon.src = "{{ static_bust('img/icons/add_song.svg') }}";
             icon.alt = "Přidat";
             icon.style.width = "20px";
             icon.style.height = "20px";
@@ -657,13 +662,11 @@ function enableDoublePageMode() {
 
               if (scrollMode) {
                 lastScrollPage = entry.page;
-                const target = document.querySelector(`#scroll-mode img[src$="/${entry.page}"]`);
+                const target = document.querySelector(`#scroll-mode img[data-file="${entry.page}"]`);
                 if (target) {
                   const wrapper = document.querySelector(".zoom-scroll-wrapper");
-                  wrapper.scrollTo({
-                    top: target.offsetTop,
-                    behavior: "smooth"
-                  });
+                  const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
+                  wrapper.scrollTo({ top, behavior: "smooth" });
                 }
               } else {
                 const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
@@ -850,6 +853,17 @@ document.addEventListener('DOMContentLoaded', () => {
       document.body.style.overflow = '';
     }
   });
+  // Support deep-linking to specific page via ?page=NN
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const target = parseInt(params.get('page'));
+    if (!isNaN(target)) {
+      const idx = pageFiles.findIndex(pair => pair && pair.some(p => p && p.page_number === target));
+      if (idx !== -1) {
+        currentPage = idx + 1;
+      }
+    }
+  } catch (e) { /* ignore */ }
   updatePages();
   // Rely on updatePages() to schedule a single robust initial fit; avoid duplicate fits here
   applyZoom();
@@ -867,6 +881,31 @@ document.addEventListener('DOMContentLoaded', () => {
       fitDoublePageToViewport();
     }
   });
+
+  // Side UI auto-hide on inactivity (mouse/touch) with fade in/out
+  const sideZoom = document.querySelector('.zoom-buttons');
+  const sideModes = document.querySelector('.mode-buttons');
+  const sideGroups = [sideZoom, sideModes];
+  let inactivityTimer = null;
+  const HIDE_DELAY = 3000; // ms
+
+  function showSideUI() {
+    sideGroups.forEach(g => g && g.classList.remove('fade-hidden'));
+  }
+  function hideSideUI() {
+    sideGroups.forEach(g => g && g.classList.add('fade-hidden'));
+  }
+  function resetInactivityTimer() {
+    showSideUI();
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      hideSideUI();
+    }, HIDE_DELAY);
+  }
+  // Start the inactivity countdown after initial paint
+  resetInactivityTimer();
+  window.addEventListener('mousemove', resetInactivityTimer, { passive: true });
+  window.addEventListener('touchstart', resetInactivityTimer, { passive: true });
 });
 
 function trackScrollPage() {
@@ -881,13 +920,8 @@ function trackScrollPage() {
       const bottom = top + rect.height;
 
       if (top <= wrapperMiddle && bottom >= wrapperMiddle) {
-        const src = img.getAttribute("src");
-        const match = src && src.match(/\/songbooks\/(.+)$/);
-        if (match) {
-          const file = match[1];  // e.g., "10026/page6.png"
-          lastScrollPage = file; // použijeme název souboru
-          return;
-        }
+        const file = img.getAttribute('data-file');
+        if (file) { lastScrollPage = file; return; }
         break;
       }
     }

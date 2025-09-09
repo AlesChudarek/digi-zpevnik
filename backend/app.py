@@ -6,6 +6,9 @@ from flask_login import LoginManager, login_user, logout_user, login_required, U
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
+import time
+from pathlib import Path
+from sqlalchemy import or_
 
 from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
 
@@ -27,6 +30,17 @@ init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+# --------- STATIC CACHE BUSTING ---------
+def static_bust(filename: str) -> str:
+    try:
+        static_dir = Path(app.static_folder)
+        mtime = int((static_dir / filename).stat().st_mtime)
+    except Exception:
+        mtime = int(time.time())
+    return url_for('static', filename=filename, v=mtime)
+
+app.jinja_env.globals['static_bust'] = static_bust
 
 # ---------- VALIDACE ----------
 def is_valid_email(email):
@@ -131,6 +145,70 @@ def dashboard():
         return render_template('dashboard.html', guest=True)
     return render_template('dashboard.html', guest=False)
 
+@app.route('/search')
+@login_required
+def search():
+    """Global search page listing all songs across accessible songbooks.
+
+    Accessible songbooks include:
+    - Public songbooks (is_public == 1)
+    - Songbooks owned by the current user
+    - Songbooks shared with the current user (UserSongbookAccess)
+    """
+    # Collect shared songbook ids for the current user
+    shared_ids = []
+    if current_user.is_authenticated:
+        shared_ids = [row.songbook_id for row in UserSongbookAccess.query.filter_by(user_id=current_user.id).all()]
+
+    # Build query across pages -> song -> author -> songbook
+    q = db.session.query(
+        SongbookPage.page_number.label('page_number'),
+        Song.title.label('song_title'),
+        Author.name.label('author_name'),
+        Songbook.id.label('songbook_id'),
+        Songbook.title.label('songbook_title'),
+        Songbook.owner_id.label('owner_id'),
+        Songbook.is_public.label('is_public')
+    ).join(Song, SongbookPage.song_id == Song.id
+    ).join(Songbook, SongbookPage.songbook_id == Songbook.id
+    ).join(Author, Song.author_id == Author.id, isouter=True)
+
+    # Filter accessible songbooks
+    filters = [Songbook.is_public == 1]
+    if current_user.is_authenticated:
+        filters.append(Songbook.owner_id == current_user.id)
+        if shared_ids:
+            filters.append(Songbook.id.in_(shared_ids))
+
+    rows = (
+        q.filter(or_(*filters))
+         .order_by(Song.title.asc(), Songbook.title.asc(), SongbookPage.page_number.asc())
+         .all()
+    )
+
+    results = []
+    for r in rows:
+        # Determine book type label: '' for public, 'private' if owned, otherwise 'shared'
+        if r.is_public == 1:
+            book_type = ''
+        elif current_user.is_authenticated and r.owner_id == current_user.id:
+            book_type = 'private'
+        else:
+            book_type = 'shared'
+
+        results.append({
+            'song_title': r.song_title,
+            'author_name': r.author_name or '',
+            'songbook_id': r.songbook_id,
+            'songbook_title': r.songbook_title,
+            'book_type': book_type,
+            'page_number': r.page_number,
+            'owned_by_user': (current_user.is_authenticated and r.owner_id == current_user.id)
+        })
+
+    is_guest = (current_user.email == "guest@guest.com")
+    return render_template('search.html', rows=results, guest=is_guest)
+
 @app.route('/public-songbooks')
 @login_required
 def public_songbooks():
@@ -140,6 +218,15 @@ def public_songbooks():
     ).scalars().all()
     is_guest = (current_user.email == "guest@guest.com")
     return render_template('public_songbooks.html', songbooks=songbooks, guest=is_guest)
+
+@app.route('/my-songbooks')
+@login_required
+def my_songbooks():
+    # Only songbooks owned by the current user
+    books = db.session.execute(
+        db.select(Songbook).where(Songbook.owner_id == current_user.id)
+    ).scalars().all()
+    return render_template('my_songbooks.html', songbooks=books)
 
 @app.route('/songbook/<book_id>')
 @login_required
