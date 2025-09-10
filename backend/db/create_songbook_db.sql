@@ -2,7 +2,8 @@
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL UNIQUE,
-    password TEXT NOT NULL
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'user'
 );
 
 -- AUTHORS
@@ -51,6 +52,7 @@ CREATE TABLE IF NOT EXISTS songbooks (
     img_path_cover_front_inner TEXT,
     img_path_cover_back_inner TEXT,
     img_path_cover_back_outer TEXT,
+    color TEXT DEFAULT '#FFFFFF',
     is_public INTEGER DEFAULT 0,
     FOREIGN KEY (owner_id) REFERENCES users(id)
 );
@@ -69,6 +71,7 @@ CREATE TABLE IF NOT EXISTS songbook_intro_outro_images (
 CREATE TABLE IF NOT EXISTS user_songbook_access (
     user_id INTEGER NOT NULL,
     songbook_id TEXT NOT NULL,
+    permission TEXT DEFAULT 'view',
     PRIMARY KEY (user_id, songbook_id),
     FOREIGN KEY (user_id) REFERENCES users(id),
     FOREIGN KEY (songbook_id) REFERENCES songbooks(id)

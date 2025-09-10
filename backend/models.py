@@ -9,6 +9,7 @@ class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
+    role = db.Column(db.String, default='user')
 
 class Author(db.Model):
     __tablename__ = "authors"
@@ -62,6 +63,7 @@ class UserSongbookAccess(db.Model):
 
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
     songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), primary_key=True)
+    permission = db.Column(db.String, default='view')
 
 class SongbookPage(db.Model):
     __tablename__ = "songbook_pages"

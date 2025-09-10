@@ -12,6 +12,41 @@ from sqlalchemy import or_
 
 from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
 
+# Permission functions
+def can_view_songbook(user, songbook):
+    if not user.is_authenticated:
+        return False
+    # Admin can view all songbooks
+    if user.role == 'admin':
+        return True
+    if songbook.is_public:
+        return True
+    if songbook.owner_id == user.id:
+        return True
+    access = UserSongbookAccess.query.filter_by(user_id=user.id, songbook_id=songbook.id).first()
+    if access:
+        return True
+    return False
+
+def can_edit_songbook(user, songbook):
+    if not user.is_authenticated:
+        return False
+    # Admin can edit all songbooks
+    if user.role == 'admin':
+        return True
+    if songbook.owner_id == user.id:
+        return True
+    access = UserSongbookAccess.query.filter_by(user_id=user.id, songbook_id=songbook.id).first()
+    if access and access.permission in ['edit', 'admin']:
+        return True
+    return False
+
+def is_admin(user):
+    return user.is_authenticated and user.role == 'admin'
+
+def is_guest(user):
+    return user.is_authenticated and user.role == 'guest'
+
 # Načti konfiguraci z .env
 load_dotenv()
 
@@ -30,6 +65,9 @@ init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+
+
+
 
 # --------- STATIC CACHE BUSTING ---------
 def static_bust(filename: str) -> str:
@@ -88,7 +126,7 @@ def register():
             return redirect(url_for('register'))
         else:
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-            new_user = User(email=email, password=hashed_password)
+            new_user = User(email=email, password=hashed_password, role='user')
             db.session.add(new_user)
             db.session.commit()
             flash('Registrace proběhla úspěšně. Přihlas se.', 'success')
@@ -113,7 +151,7 @@ def guest_login():
     user = User.query.filter_by(email=guest_email).first()
     if not user:
         hashed_password = generate_password_hash(guest_password, method='pbkdf2:sha256')
-        user = User(email=guest_email, password=hashed_password)
+        user = User(email=guest_email, password=hashed_password, role='guest')
         db.session.add(user)
         db.session.commit()
 
@@ -127,15 +165,40 @@ def get_songbook_toc(songbook_id):
     # songbook = Songbook.query.filter_by(id=songbook_id).first_or_404()
     toc = []
     pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(SongbookPage.page_number).all()
+
+    # Calculate correct page numbers for TOC
+    seen_images = set()
+    current_page_number = 1
+
     for page in pages:
         song = Song.query.get(page.song_id)
-        image = SongImage.query.filter_by(song_id=song.id).first()
-        toc.append({
-            "title": song.title,
-            "author": song.author.name if song.author else "",
-            "page": image.image_path if image else "",
-            "page_number": page.page_number
-        })
+        if not song:
+            continue
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        if song_images:
+            # Use the first image for TOC entry
+            first_image = song_images[0]
+            if first_image.image_path not in seen_images:
+                toc.append({
+                    "title": song.title,
+                    "author": song.author.name if song.author else "",
+                    "page": first_image.image_path,
+                    "page_number": current_page_number
+                })
+                # Mark all images of this song as seen
+                for img in song_images:
+                    seen_images.add(img.image_path)
+                current_page_number += len(song_images)
+        else:
+            # Handle case with no images
+            toc.append({
+                "title": song.title,
+                "author": song.author.name if song.author else "",
+                "page": "",
+                "page_number": current_page_number
+            })
+            current_page_number += 1
+
     return jsonify({"pages": toc})
 
 @app.route('/dashboard')
@@ -212,7 +275,7 @@ def search():
 @app.route('/public-songbooks')
 @login_required
 def public_songbooks():
-    # Load public songbooks from the database
+    # Show all public songbooks for everyone
     songbooks = db.session.execute(
         db.select(Songbook).where(Songbook.is_public == 1)
     ).scalars().all()
@@ -222,16 +285,32 @@ def public_songbooks():
 @app.route('/my-songbooks')
 @login_required
 def my_songbooks():
-    # Only songbooks owned by the current user
-    books = db.session.execute(
-        db.select(Songbook).where(Songbook.owner_id == current_user.id)
-    ).scalars().all()
+    # Guests cannot access "My Songbooks"
+    if current_user.role == 'guest':
+        return render_template('my_songbooks.html', songbooks=[])
+    # Admin can see all private songbooks
+    if current_user.role == 'admin':
+        books = db.session.execute(
+            db.select(Songbook).where(Songbook.is_public == 0)
+        ).scalars().all()
+    else:
+        # Users see their own and shared private songbooks
+        shared_ids = [row.songbook_id for row in UserSongbookAccess.query.filter_by(user_id=current_user.id).all()]
+        books = db.session.execute(
+            db.select(Songbook).where(
+                (Songbook.owner_id == current_user.id) | (Songbook.id.in_(shared_ids))
+            )
+        ).scalars().all()
     return render_template('my_songbooks.html', songbooks=books)
 
 @app.route('/songbook/<book_id>')
 @login_required
 def songbook_detail(book_id):
     songbook = Songbook.query.get_or_404(book_id)
+
+    # Permission check: can current user view this songbook?
+    if not can_view_songbook(current_user, songbook):
+        return "Access denied", 403
 
     # Determine first_page_side from songbook attribute or default
     first_page_side = getattr(songbook, 'first_page_side', 'left')
@@ -246,18 +325,21 @@ def songbook_detail(book_id):
     seen_images = set()
     pages = []
     raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
+    current_page_number = 1  # Start with page 1
+
     for page in raw_pages:
         song = Song.query.get(page.song_id)
         if not song:
             continue
         song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
         if not song_images:
-            pages.append("blank")
+            pages.append({"file": "blank", "page_number": None})
         else:
             for img in song_images:
                 if img.image_path not in seen_images:
                     seen_images.add(img.image_path)
-                    pages.append(img.image_path)
+                    pages.append({"file": img.image_path, "page_number": current_page_number})
+                    current_page_number += 1
 
     def pair_pages(intros, pages, outros, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
@@ -274,35 +356,35 @@ def songbook_detail(book_id):
 
         if has_any_cover:
             # Auto-complete missing parts with 'blank'
-            cfo = cover_front_outer or "blank"
-            cfi = cover_front_inner or "blank"
-            cbi = cover_back_inner or "blank"
-            cbo = cover_back_outer or "blank"
+            cfo = {"file": cover_front_outer or "blank", "page_number": None}
+            cfi = {"file": cover_front_inner or "blank", "page_number": None}
+            cbi = {"file": cover_back_inner or "blank", "page_number": None}
+            cbo = {"file": cover_back_outer or "blank", "page_number": None}
 
             # Closed front cover
-            list_of_pages.append("none")
+            list_of_pages.append({"file": "none", "page_number": None})
             list_of_pages.append(cfo)
 
             # Open inner front
             list_of_pages.append(cfi)
             if first_side == "left":
                 # Offset so first intro starts on left on the next spread
-                list_of_pages.append("blank")
+                list_of_pages.append({"file": "blank", "page_number": None})
 
             # Main content
-            list_of_pages.extend(intros)
+            list_of_pages.extend([{"file": img, "page_number": None} for img in intros])
             list_of_pages.extend(pages)
-            list_of_pages.extend(outros)
+            list_of_pages.extend([{"file": img, "page_number": None} for img in outros])
 
             # Ensure back inner cover (CBI) lands on right page
             if len(list_of_pages) % 2 == 0:
                 # Next slot would be left -> insert blank to shift
-                list_of_pages.append("blank")
+                list_of_pages.append({"file": "blank", "page_number": None})
             list_of_pages.append(cbi)
 
             # Closed back cover
             list_of_pages.append(cbo)
-            list_of_pages.append("none")
+            list_of_pages.append({"file": "none", "page_number": None})
 
         else:
             # No cover: only offset start if needed and place content
@@ -337,17 +419,46 @@ def songbook_detail(book_id):
     )
 
     # Pro scroll mód stačí seznam všech obrázků kromě blank
-    scroll_page_files = [img for img in pages if img != "blank"]
+    scroll_page_files = [img for img in pages if img["file"] != "blank"]
 
-    # Build toc_entries: one entry per song, use correct page_number from SongbookPage
+    # Build toc_entries: one entry per song with correct page numbering
     toc_entries = []
+    processed_songs = set()
+    seen_images_for_toc = set()
+    current_toc_page = 1
+
     for page in raw_pages:
+        if page.song_id in processed_songs:
+            continue
+
         song = Song.query.get(page.song_id)
+        if not song:
+            continue
+
+        # Get all images for this song
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        if song_images:
+            # Calculate page range for this song
+            start_page = current_toc_page
+            end_page = current_toc_page + len(song_images) - 1
+            page_display = f"{start_page}" if start_page == end_page else f"{start_page}-{end_page}"
+
+            # Mark images as processed
+            for img in song_images:
+                seen_images_for_toc.add(img.image_path)
+            current_toc_page += len(song_images)
+        else:
+            # Handle case with no images
+            page_display = str(current_toc_page)
+            current_toc_page += 1
+
         toc_entries.append({
-            'page_number': page.page_number,
+            'page_number': page_display,
             'title': song.title,
             'author': song.author.name if song.author else ""
         })
+
+        processed_songs.add(page.song_id)
 
     return render_template(
         'songbook_view.html',
@@ -371,4 +482,18 @@ def inject_user_status():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
+
+        # Seed admin user if not exists
+        admin_email = "admin@test.com"
+        admin_password = "admin123"
+        admin_role = "admin"
+
+        admin = User.query.filter_by(email=admin_email).first()
+        if not admin:
+            hashed_password = generate_password_hash(admin_password, method='pbkdf2:sha256', salt_length=16)
+            new_admin = User(email=admin_email, password=hashed_password, role=admin_role)
+            db.session.add(new_admin)
+            db.session.commit()
+            print(f"✅ Admin user created: {admin_email}")
+
     app.run(debug=True)

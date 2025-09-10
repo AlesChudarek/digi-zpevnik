@@ -287,8 +287,15 @@
   <div id="scroll-mode" class="scroll-mode">
     {% for pair in page_files %}
       {% for page in pair %}
-        {% if page and page != 'none' and page != 'blank' %}
-          <img src="{{ static_bust('songbooks/' ~ page) }}" data-file="{{ page }}" id="scroll-page-{{ loop.index }}">
+        {% if page %}
+          {% if page is string %}
+            {% set page_obj = {"file": page, "page_number": None} %}
+          {% else %}
+            {% set page_obj = page %}
+          {% endif %}
+          {% if page_obj.file != 'none' and page_obj.file != 'blank' %}
+            <img src="{{ static_bust('songbooks/' ~ page_obj.file) }}" data-file="{{ page_obj.file }}" id="scroll-page-{{ loop.index }}">
+          {% endif %}
         {% endif %}
       {% endfor %}
     {% endfor %}
@@ -364,14 +371,7 @@
 </div>
 
 <script>
-  const pageFilesRaw = {{ page_files | tojson | safe }};
-  // Map pageFiles into objects with file and page_number
-  const pageFiles = pageFilesRaw.map(pair => pair.map(file => {
-    if (file === 'blank' || file === 'none') return { file, page_number: null };
-    const match = file && file.match(/page(\d+)\.png$/);
-    const page_number = match ? parseInt(match[1]) : null;
-    return { file, page_number };
-  }));
+  const pageFiles = {{ page_files | tojson | safe }};
   let currentPage = 1;
   // Page memory for smooth transitions
   let lastDoublePage;

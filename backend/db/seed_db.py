@@ -2,6 +2,8 @@ import sqlite3
 import json
 import os
 import argparse
+from PIL import Image
+from collections import Counter
 
 def connect_db(db_path):
     return sqlite3.connect(db_path)
@@ -9,6 +11,29 @@ def connect_db(db_path):
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+def get_songbook_color(image_path):
+    try:
+        img = Image.open(image_path)
+        width, height = img.size
+        corners = [
+            img.getpixel((0, 0)),
+            img.getpixel((width - 1, 0)),
+            img.getpixel((0, height - 1)),
+            img.getpixel((width - 1, height - 1))
+        ]
+        # Handle RGBA by taking only RGB
+        corners = [pixel[:3] if len(pixel) == 4 else pixel for pixel in corners]
+        color_counts = Counter(corners)
+        most_common = color_counts.most_common(1)[0]
+        if most_common[1] >= 3:
+            r, g, b = most_common[0]
+            return f"#{r:02x}{g:02x}{b:02x}"
+        else:
+            return "#FFFFFF"
+    except Exception as e:
+        print(f"Chyba při čtení obrázku {image_path}: {e}")
+        return "#FFFFFF"
 
 def insert_author(cursor, name, cache):
     if name in cache:
@@ -31,28 +56,30 @@ def insert_song_image(cursor, song_id, image_path):
         (song_id, image_path)
     )
 
-def insert_songbook(cursor, songbook_id, title, is_public=1,
+def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
                    cover_preview=None, cover_front_out=None, cover_front_in=None,
-                   cover_back_in=None, cover_back_out=None):
+                   cover_back_in=None, cover_back_out=None, color="#FFFFFF"):
     cursor.execute(
         """
         INSERT OR REPLACE INTO songbooks (
-            id, title, is_public,
+            id, title, is_public, owner_id,
             img_path_cover_preview,
             img_path_cover_front_outer,
             img_path_cover_front_inner,
             img_path_cover_back_inner,
-            img_path_cover_back_outer
+            img_path_cover_back_outer,
+            color
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            songbook_id, title, is_public,
+            songbook_id, title, is_public, owner_id,
             cover_preview,
             cover_front_out,
             cover_front_in,
             cover_back_in,
-            cover_back_out
+            cover_back_out,
+            color
         )
     )
 
@@ -66,6 +93,11 @@ def seed_from_public_seed_folder(seed_path, db_path):
     conn = connect_db(db_path)
     cursor = conn.cursor()
     author_cache = {}
+
+    # Get user ID for user@test.com to make one songbook private
+    cursor.execute("SELECT id FROM users WHERE email = ?", ("user@test.com",))
+    user_result = cursor.fetchone()
+    user_id = user_result[0] if user_result else None
 
     total_songbooks = 0
     total_songs = 0
@@ -81,16 +113,28 @@ def seed_from_public_seed_folder(seed_path, db_path):
         raw_id = os.path.splitext(filename)[0]
         songbook_id = data.get("id", raw_id[-5:] if raw_id[-5:].isdigit() else raw_id)
         title = data.get("title", songbook_id)
+
+        # Make songbook 10101 private and owned by user@test.com
+        is_public = 0 if songbook_id == "00101" and user_id else 1
+        owner_id = user_id if songbook_id == "00101" and user_id else None
+
+        color = "#FFFFFF"
+        if data.get("img_path_cover_front_inner"):
+            image_path = os.path.join("backend/static/songbooks", data.get("img_path_cover_front_inner"))
+            if os.path.exists(image_path):
+                color = get_songbook_color(image_path)
         insert_songbook(
             cursor,
             songbook_id,
             title,
-            is_public=1,
+            is_public=is_public,
+            owner_id=owner_id,
             cover_preview=data.get("img_path_cover_preview"),
             cover_front_out=data.get("img_path_cover_front_outer"),
             cover_front_in=data.get("img_path_cover_front_inner"),
             cover_back_in=data.get("img_path_cover_back_inner"),
             cover_back_out=data.get("img_path_cover_back_outer"),
+            color=color
         )
         total_songbooks += 1
 
@@ -103,19 +147,25 @@ def seed_from_public_seed_folder(seed_path, db_path):
             author = entry.get("author", "Neznámý autor")
             image_paths = entry.get("image_paths", [])
 
-            used_page_number = None
+            # Check if any images are already used
+            existing_page_numbers = []
             for path in image_paths:
                 if path in image_to_page_number:
-                    used_page_number = image_to_page_number[path]
-                    break
+                    existing_page_numbers.append(image_to_page_number[path])
 
-            if used_page_number is not None:
-                page_number = used_page_number
+            if existing_page_numbers:
+                # Use the first existing page number for this song
+                page_number = min(existing_page_numbers)
             else:
+                # Assign new page numbers for new images
                 page_number = current_page_number
-                for path in image_paths:
-                    image_to_page_number[path] = page_number
-                current_page_number += 1
+                for j, path in enumerate(image_paths):
+                    if path not in image_to_page_number:
+                        image_to_page_number[path] = current_page_number + j
+
+                # Increment current_page_number by the number of new images
+                new_images_count = len([p for p in image_paths if p not in image_to_page_number])
+                current_page_number += new_images_count
 
             author_id = insert_author(cursor, author, author_cache)
             insert_song(cursor, song_id, title, author_id)
