@@ -138,56 +138,72 @@ def seed_from_public_seed_folder(seed_path, db_path):
         )
         total_songbooks += 1
 
-        image_to_page_number = {}
-        current_page_number = 1
-
-        for i, entry in enumerate(data.get("pages", [])):
-            song_id = f"{songbook_id}_{i+1}"
-            title = entry.get("title", f"Untitled {i+1}")
-            author = entry.get("author", "Neznámý autor")
-            image_paths = entry.get("image_paths", [])
-
-            # Check if any images are already used
-            existing_page_numbers = []
-            for path in image_paths:
-                if path in image_to_page_number:
-                    existing_page_numbers.append(image_to_page_number[path])
-
-            if existing_page_numbers:
-                # Use the first existing page number for this song
-                page_number = min(existing_page_numbers)
-            else:
-                # Assign new page numbers for new images
-                page_number = current_page_number
-                for j, path in enumerate(image_paths):
-                    if path not in image_to_page_number:
-                        image_to_page_number[path] = current_page_number + j
-
-                # Increment current_page_number by the number of new images
-                new_images_count = len([p for p in image_paths if p not in image_to_page_number])
-                current_page_number += new_images_count
+        # First, process songs
+        song_data = {}
+        for song_entry in data.get("songs", []):
+            song_id = f"{songbook_id}_{song_entry['song_id']}"
+            title = song_entry.get("title", f"Untitled {song_entry['song_id']}")
+            author = song_entry.get("author", "Neznámý autor")
 
             author_id = insert_author(cursor, author, author_cache)
             insert_song(cursor, song_id, title, author_id)
-            if not image_paths or not all(image_paths):
-                print(f"⚠️  Píseň '{title}' ve zpěvníku {songbook_id} nemá definovaný žádný platný obrázek (image_paths): {image_paths}")
-            for path in image_paths:
-                insert_song_image(cursor, song_id, path)
-            insert_songbook_page(cursor, songbook_id, song_id, page_number)
+            song_data[song_entry['song_id']] = song_id
 
-        for i, image_path in enumerate(data.get("intros", [])):
-            cursor.execute(
-                "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'intro', ?, ?)",
-                (songbook_id, image_path, i)
-            )
+        # Then, process pages
+        for page_entry in data.get("pages", []):
+            page_number = page_entry.get("page_number")
+            image_path = page_entry.get("image_path")
+            song_ids = page_entry.get("song_ids", [])
+            page_type = page_entry.get("type", "song")
 
-        for i, image_path in enumerate(data.get("outros", [])):
-            cursor.execute(
-                "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'outro', ?, ?)",
-                (songbook_id, image_path, i)
-            )
+            if not image_path:
+                print(f"⚠️  Strana {page_number} ve zpěvníku {songbook_id} nemá definovaný obrázek")
+                continue
 
-        total_songs += len(data.get("pages", []))
+            # Handle pages with no songs (non-song pages)
+            if not song_ids:
+                # Skip intro/outro pages as they are handled separately from the "intros"/"outros" arrays
+                if page_type in ["intro", "outro"]:
+                    continue
+                else:
+                    dummy_song_id = f"{songbook_id}_page_{page_number or 'none'}"
+                    dummy_title = f"Non-song page {page_number or 'none'}"
+                    dummy_author_id = insert_author(cursor, "System", author_cache)
+                    insert_song(cursor, dummy_song_id, dummy_title, dummy_author_id)
+                    insert_songbook_page(cursor, songbook_id, dummy_song_id, page_number)
+                    insert_song_image(cursor, dummy_song_id, image_path)
+            else:
+                # Insert songbook_page entries for each song on this page
+                for song_id_num in song_ids:
+                    song_id = song_data.get(song_id_num)
+                    if song_id:
+                        insert_songbook_page(cursor, songbook_id, song_id, page_number)
+                        # Insert song_image entry
+                        insert_song_image(cursor, song_id, image_path)
+                    else:
+                        print(f"⚠️  Song ID {song_id_num} not found in songs data for songbook {songbook_id}")
+
+        # Collect intros and outros from the songbook folder
+        import re
+        songbook_folder = os.path.join("backend", "static", "songbooks", f"1{int(songbook_id):04d}")
+        if os.path.exists(songbook_folder):
+            images = os.listdir(songbook_folder)
+            intros = sorted([f for f in images if re.match(r"intro\d+\.png", f)], key=lambda x: int(re.search(r'\d+', x).group()))
+            outros = sorted([f for f in images if re.match(r"outro\d+\.png", f)], key=lambda x: int(re.search(r'\d+', x).group()))
+
+            for i, image_path in enumerate(intros):
+                cursor.execute(
+                    "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'intro', ?, ?)",
+                    (songbook_id, f"1{int(songbook_id):04d}/{image_path}", i)
+                )
+
+            for i, image_path in enumerate(outros):
+                cursor.execute(
+                    "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'outro', ?, ?)",
+                    (songbook_id, f"1{int(songbook_id):04d}/{image_path}", i)
+                )
+
+        total_songs += len(data.get("songs", []))
 
     conn.commit()
     print(f"✅ Databáze byla naplněna daty.")

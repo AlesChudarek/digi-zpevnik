@@ -1,158 +1,279 @@
 {
   "title": "Můj zpěvník č.27",
   "first_page_side": "right",
-  "img_path_cover_preview": "10027/coverfrontout.png",
-  "img_path_cover_front_outer": "10027/coverfrontout.png",
-  "img_path_cover_front_inner": "10027/coverfrontin.png",
-  "img_path_cover_back_inner": "10027/coverbackin.png",
-  "img_path_cover_back_outer": "10027/coverbackout.png",
-  "intros": [],
-  "outros": [
-    "10027/outro1.png",
-    "10027/outro2.png"
-  ],
+  "img_path_cover_preview": "00027/coverfrontout.png",
+  "img_path_cover_front_outer": "00027/coverfrontout.png",
+  "img_path_cover_front_inner": "00027/coverfrontin.png",
+  "img_path_cover_back_inner": "00027/coverbackin.png",
+  "img_path_cover_back_outer": "00027/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00027/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00027/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00027/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00027/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00027/page5.png",
+      "song_ids": [
+        5
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00027/page6.png",
+      "song_ids": [
+        6
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00027/page7.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00027/page8.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00027/page9.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00027/page10.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00027/page11.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00027/page12.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00027/page13.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00027/page14.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00027/page15.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00027/page16.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00027/page17.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00027/page18.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00027/page19.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00027/page20.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 21,
+      "image_path": "00027/page21.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 22,
+      "image_path": "00027/page22.png",
+      "song_ids": [
+        20
+      ]
+    },
+    {
+      "page_number": null,
+      "image_path": "00027/outro1.png",
+      "song_ids": [],
+      "type": "outro"
+    },
+    {
+      "page_number": null,
+      "image_path": "00027/outro2.png",
+      "song_ids": [],
+      "type": "outro"
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Andělská",
-      "author": "Zuzana Navarová",
-      "image_paths": [
-        "10027/page1.png"
-      ]
+      "author": "Zuzana Navarová"
     },
     {
+      "song_id": 2,
       "title": "Bude mi lehká Zem",
-      "author": "Jana Kirschner",
-      "image_paths": [
-        "10027/page2.png"
-      ]
+      "author": "Jana Kirschner"
     },
     {
+      "song_id": 3,
       "title": "Do posledniho dechu",
-      "author": "Nerez",
-      "image_paths": [
-        "10027/page3.png"
-      ]
+      "author": "Nerez"
     },
     {
+      "song_id": 4,
       "title": "Dobrý lidi",
-      "author": "Radůza, Křesťan",
-      "image_paths": [
-        "10027/page4.png"
-      ]
+      "author": "Radůza, Křesťan"
     },
     {
+      "song_id": 5,
       "title": "Hořely, padaly hvězdy",
-      "author": "Michal ŠIndelář",
-      "image_paths": [
-        "10027/page5.png"
-      ]
+      "author": "Michal ŠIndelář"
     },
     {
+      "song_id": 6,
       "title": "Kopce u pramenů řeky",
-      "author": "Asonance",
-      "image_paths": [
-        "10027/page6.png"
-      ]
+      "author": "Asonance"
     },
     {
+      "song_id": 7,
       "title": "Lalalalalala",
-      "author": "Tomáš Klus",
-      "image_paths": [
-        "10027/page7.png"
-      ]
+      "author": "Tomáš Klus"
     },
     {
+      "song_id": 8,
       "title": "Lokomotiva",
-      "author": "Poletíme?",
-      "image_paths": [
-        "10027/page8.png"
-      ]
+      "author": "Poletíme?"
     },
     {
+      "song_id": 9,
       "title": "Mariím",
-      "author": "Tomáš Klus",
-      "image_paths": [
-        "10027/page9.png"
-      ]
+      "author": "Tomáš Klus"
     },
     {
+      "song_id": 10,
       "title": "Něco o lásce",
-      "author": "Pavel Dobeš",
-      "image_paths": [
-        "10027/page10.png",
-        "10027/page11.png"
-      ]
+      "author": "Pavel Dobeš"
     },
     {
+      "song_id": 11,
       "title": "Nebreč",
-      "author": "David Stypka",
-      "image_paths": [
-        "10027/page12.png"
-      ]
+      "author": "David Stypka"
     },
     {
+      "song_id": 12,
       "title": "Rande",
-      "author": "Michal Horák",
-      "image_paths": [
-        "10027/page13.png"
-      ]
+      "author": "Michal Horák"
     },
     {
+      "song_id": 13,
       "title": "Plány Jdou",
-      "author": "Michal Horák",
-      "image_paths": [
-        "10027/page14.png",
-        "10027/page15.png"
-      ]
+      "author": "Michal Horák"
     },
     {
+      "song_id": 14,
       "title": "Ročník 47",
-      "author": "Wabi Daněk",
-      "image_paths": [
-        "10027/page16.png"
-      ]
+      "author": "Wabi Daněk"
     },
     {
+      "song_id": 15,
       "title": "Růže",
-      "author": "David Stypka",
-      "image_paths": [
-        "10027/page17.png"
-      ]
+      "author": "David Stypka"
     },
     {
+      "song_id": 16,
       "title": "Řeka zapomnění",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10027/page18.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 17,
       "title": "Středověká",
-      "author": "Olga Lounová",
-      "image_paths": [
-        "10027/page19.png"
-      ]
+      "author": "Olga Lounová"
     },
     {
+      "song_id": 18,
       "title": "Variace na renesanční téma",
-      "author": "Vladimír Mišík",
-      "image_paths": [
-        "10027/page20.png"
-      ]
+      "author": "Vladimír Mišík"
     },
     {
+      "song_id": 19,
       "title": "Víno",
-      "author": "Klíč",
-      "image_paths": [
-        "10027/page21.png"
-      ]
+      "author": "Klíč"
     },
     {
+      "song_id": 20,
       "title": "Zničená zem",
-      "author": "Kateřina Marie Tichá",
-      "image_paths": [
-        "10027/page22.png"
-      ]
+      "author": "Kateřina Marie Tichá"
     }
   ]
 }

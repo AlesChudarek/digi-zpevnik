@@ -76,37 +76,94 @@ def generate_songbook_json(songbook_id, records, covers, intros, outros, pages):
     missing_pages = []
     missing_authors = []
 
-    for rec in songbook_records:
-        image_paths = []
-        for n in rec["pages"]:
-            filename = pages_by_number.get(n)
-            if filename:
-                image_paths.append(f"1{songbook_id:04d}/{filename}")
-                used_pages.add(n)
-            else:
-                missing_pages.append((rec["title"], n))
+    # New structure: pages array with each page having image_path, optional page_number, and song_ids list
+    pages_array = []
+    songs_dict = {}
+    song_id_counter = 1
 
-        if not image_paths:
+    # Build songs dictionary with unique song_id
+    for rec in songbook_records:
+        song_key = (rec["title"], rec["author"])
+        if song_key not in songs_dict:
+            songs_dict[song_key] = song_id_counter
+            song_id_counter += 1
+
+    # Map songbook_records by song_key for quick access
+    song_records_by_key = { (r["title"], r["author"]): r for r in songbook_records }
+
+    # Collect all page numbers used by songs
+    all_song_pages = set()
+    for rec in songbook_records:
+        all_song_pages.update(rec["pages"])
+
+    # Collect all page numbers from images
+    all_image_pages = set(pages_by_number.keys())
+
+    # Determine all pages including non-song pages (pages in images but not in songs)
+    all_pages = sorted(all_image_pages)
+
+    for page_num in all_pages:
+        filename = pages_by_number.get(page_num)
+        if not filename:
             continue
 
-        if rec["author"] == "-":
-            missing_authors.append(rec["title"])
+        # Find songs on this page
+        song_ids_on_page = []
+        for song_key, song_id in songs_dict.items():
+            rec = song_records_by_key[song_key]
+            if page_num in rec["pages"]:
+                song_ids_on_page.append(song_id)
 
-        song_entries.append({
-            "title": rec["title"],
-            "author": rec["author"],
-            "image_paths": image_paths
+        pages_array.append({
+            "page_number": page_num,
+            "image_path": f"{songbook_id:05d}/{filename}",
+            "song_ids": song_ids_on_page
+        })
+        used_pages.add(page_num)
+
+    # Add intros as non-song pages with empty page_number and song_ids
+    for intro_img in intros:
+        pages_array.append({
+            "page_number": None,
+            "image_path": f"{songbook_id:05d}/{intro_img}",
+            "song_ids": [],
+            "type": "intro"
         })
 
+    # Add outros as non-song pages with empty page_number and song_ids
+    for outro_img in outros:
+        pages_array.append({
+            "page_number": None,
+            "image_path": f"{songbook_id:05d}/{outro_img}",
+            "song_ids": [],
+            "type": "outro"
+        })
+
+    # Add any images not assigned to pages (non-numbered pages)
     unused_pages = [f for n, f in pages_by_number.items() if n not in used_pages]
+    for filename in unused_pages:
+        pages_array.append({
+            "page_number": None,
+            "image_path": f"{songbook_id:05d}/{filename}",
+            "song_ids": [],
+            "type": "non-song"
+        })
+
+    # Build songs array
+    songs_array = []
+    for (title, author), song_id in songs_dict.items():
+        songs_array.append({
+            "song_id": song_id,
+            "title": title,
+            "author": author
+        })
 
     result = {
         "title": f"Můj zpěvník č.{songbook_id}",
         "first_page_side": "right",
         **covers,
-        "intros": [f"1{songbook_id:04d}/{f}" for f in intros],
-        "outros": [f"1{songbook_id:04d}/{f}" for f in outros],
-        "pages": song_entries
+        "pages": pages_array,
+        "songs": songs_array
     }
 
     return result, missing_pages, missing_authors, unused_pages
@@ -119,7 +176,7 @@ def main():
     total_unused = []
 
     for sid in range(1, 30):
-        folder = os.path.join(SONGBOOKS_PATH, f"1{sid:04d}")
+        folder = os.path.join(SONGBOOKS_PATH, f"{sid:05d}")
         if not os.path.isdir(folder):
             print(f"❌ Složka {folder} neexistuje.")
             continue

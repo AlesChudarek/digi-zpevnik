@@ -119,31 +119,34 @@
   .cover-enable label { color: var(--brand-dark, #1b5e20); font-weight: 600; }
   .cover-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 20px; }
   .field-file { display: flex; flex-direction: column; gap: 6px; }
-  .dropzone { 
-    border: 2px dashed #c8c8c8; 
-    border-radius: 10px; 
-    padding: 12px; 
-    text-align: center; 
-    color: #666; 
-    background: #fafafa; 
-    cursor: pointer; 
-    transition: background 0.2s, border-color 0.2s; 
-    max-width: 100%;
+  .dropzone {
+    border: 2px dashed #c8c8c8;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    color: #666;
+    background: #fafafa;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    width: 100%;
+    max-width: 300px;
+    min-height: 60px;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
+    box-sizing: border-box;
   }
   .dropzone:hover { background: #f1f1f1; border-color: #a8a8a8; }
   .dropzone.filled { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #dbeadf); color: var(--brand-dark, #1b5e20); }
   .field-file input[type="file"] { display: none; }
-  .dz-label { 
-    font-size: 13px; 
-    opacity: 0.9; 
-    max-width: 400px; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-    white-space: nowrap; 
+  .dz-label {
+    font-size: 13px;
+    opacity: 0.9;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     display: block;
     word-break: break-word;
   }

@@ -1,216 +1,355 @@
 {
   "title": "Můj zpěvník č.4",
   "first_page_side": "right",
-  "img_path_cover_preview": "10004/coverfrontout.png",
-  "img_path_cover_front_outer": "10004/coverfrontout.png",
-  "img_path_cover_front_inner": "10004/coverfrontin.png",
-  "img_path_cover_back_inner": "10004/coverbackin.png",
-  "img_path_cover_back_outer": "10004/coverbackout.png",
-  "intros": [],
-  "outros": [],
+  "img_path_cover_preview": "00004/coverfrontout.png",
+  "img_path_cover_front_outer": "00004/coverfrontout.png",
+  "img_path_cover_front_inner": "00004/coverfrontin.png",
+  "img_path_cover_back_inner": "00004/coverbackin.png",
+  "img_path_cover_back_outer": "00004/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00004/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00004/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00004/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00004/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00004/page5.png",
+      "song_ids": [
+        5,
+        6
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00004/page6.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00004/page7.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00004/page8.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00004/page9.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00004/page10.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00004/page11.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00004/page12.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00004/page13.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00004/page14.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00004/page15.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00004/page16.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00004/page17.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00004/page18.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00004/page19.png",
+      "song_ids": [
+        20
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00004/page20.png",
+      "song_ids": [
+        21
+      ]
+    },
+    {
+      "page_number": 21,
+      "image_path": "00004/page21.png",
+      "song_ids": [
+        22
+      ]
+    },
+    {
+      "page_number": 22,
+      "image_path": "00004/page22.png",
+      "song_ids": [
+        23
+      ]
+    },
+    {
+      "page_number": 23,
+      "image_path": "00004/page23.png",
+      "song_ids": [
+        24
+      ]
+    },
+    {
+      "page_number": 24,
+      "image_path": "00004/page24.png",
+      "song_ids": [
+        25
+      ]
+    },
+    {
+      "page_number": 25,
+      "image_path": "00004/page25.png",
+      "song_ids": [
+        26
+      ]
+    },
+    {
+      "page_number": 26,
+      "image_path": "00004/page26.png",
+      "song_ids": [
+        27
+      ]
+    },
+    {
+      "page_number": 27,
+      "image_path": "00004/page27.png",
+      "song_ids": [
+        28
+      ]
+    },
+    {
+      "page_number": 28,
+      "image_path": "00004/page28.png",
+      "song_ids": [
+        29
+      ]
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Až se k nám právo vrátí",
-      "author": "Spirituál kvintet",
-      "image_paths": [
-        "10004/page1.png"
-      ]
+      "author": "Spirituál kvintet"
     },
     {
+      "song_id": 2,
       "title": "Carpe diem",
-      "author": "Vlasta Redl",
-      "image_paths": [
-        "10004/page2.png"
-      ]
+      "author": "Vlasta Redl"
     },
     {
+      "song_id": 3,
       "title": "Eště som sa neoženil",
-      "author": "lidová",
-      "image_paths": [
-        "10004/page3.png"
-      ]
+      "author": "lidová"
     },
     {
+      "song_id": 4,
       "title": "Jasse james",
-      "author": "-",
-      "image_paths": [
-        "10004/page4.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 5,
       "title": "Když jsi kamarád",
-      "author": "-",
-      "image_paths": [
-        "10004/page5.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 6,
       "title": "Když máš radost",
-      "author": "-",
-      "image_paths": [
-        "10004/page5.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 7,
       "title": "Mávej",
-      "author": "-",
-      "image_paths": [
-        "10004/page6.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 8,
       "title": "Mlékař",
-      "author": "-",
-      "image_paths": [
-        "10004/page7.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 9,
       "title": "Muchomůrky bílé",
-      "author": "-",
-      "image_paths": [
-        "10004/page8.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 10,
       "title": "Nad stádem koní",
-      "author": "Buty",
-      "image_paths": [
-        "10004/page9.png"
-      ]
+      "author": "Buty"
     },
     {
+      "song_id": 11,
       "title": "Oči a oka",
-      "author": "Uhlíř & Svěrák",
-      "image_paths": [
-        "10004/page10.png"
-      ]
+      "author": "Uhlíř & Svěrák"
     },
     {
+      "song_id": 12,
       "title": "Okno mé lásky",
-      "author": "Olympic",
-      "image_paths": [
-        "10004/page11.png"
-      ]
+      "author": "Olympic"
     },
     {
+      "song_id": 13,
       "title": "Opilý námořník",
-      "author": "Camerata",
-      "image_paths": [
-        "10004/page12.png"
-      ]
+      "author": "Camerata"
     },
     {
+      "song_id": 14,
       "title": "Oranžový expres",
-      "author": "Greenhorns",
-      "image_paths": [
-        "10004/page13.png"
-      ]
+      "author": "Greenhorns"
     },
     {
+      "song_id": 15,
       "title": "Píseň pro Lenku",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10004/page14.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 16,
       "title": "Pohár a kalich",
-      "author": "Klíč",
-      "image_paths": [
-        "10004/page15.png"
-      ]
+      "author": "Klíč"
     },
     {
+      "song_id": 17,
       "title": "Songus horoskopus",
-      "author": "Radiátor",
-      "image_paths": [
-        "10004/page16.png"
-      ]
+      "author": "Radiátor"
     },
     {
+      "song_id": 18,
       "title": "Světlušky",
-      "author": "Příbuzní",
-      "image_paths": [
-        "10004/page17.png"
-      ]
+      "author": "Příbuzní"
     },
     {
+      "song_id": 19,
       "title": "Šlapej dál",
-      "author": "Greenhorns",
-      "image_paths": [
-        "10004/page18.png"
-      ]
+      "author": "Greenhorns"
     },
     {
+      "song_id": 20,
       "title": "Toulám se klínem skal",
-      "author": "Brontosauři",
-      "image_paths": [
-        "10004/page19.png"
-      ]
+      "author": "Brontosauři"
     },
     {
+      "song_id": 21,
       "title": "Tři tambuři",
-      "author": "Camerata",
-      "image_paths": [
-        "10004/page20.png"
-      ]
+      "author": "Camerata"
     },
     {
+      "song_id": 22,
       "title": "U tří louží",
-      "author": "-",
-      "image_paths": [
-        "10004/page21.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 23,
       "title": "Větře, větříčku",
-      "author": "S čerty nejsou žerty",
-      "image_paths": [
-        "10004/page22.png"
-      ]
+      "author": "S čerty nejsou žerty"
     },
     {
+      "song_id": 24,
       "title": "Voda, čo ma drží nad vodou",
-      "author": "Elán",
-      "image_paths": [
-        "10004/page23.png"
-      ]
+      "author": "Elán"
     },
     {
+      "song_id": 25,
       "title": "Zahrada ticha",
-      "author": "-",
-      "image_paths": [
-        "10004/page24.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 26,
       "title": "Znám jednu starou zahradu",
-      "author": "Šíleně smutná princezna",
-      "image_paths": [
-        "10004/page25.png"
-      ]
+      "author": "Šíleně smutná princezna"
     },
     {
+      "song_id": 27,
       "title": "Zrození hvězd",
-      "author": "Kamelot",
-      "image_paths": [
-        "10004/page26.png"
-      ]
+      "author": "Kamelot"
     },
     {
+      "song_id": 28,
       "title": "Zuzana",
-      "author": "-",
-      "image_paths": [
-        "10004/page27.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 29,
       "title": "Žízeň",
-      "author": "Spirituál kvintet",
-      "image_paths": [
-        "10004/page28.png"
-      ]
+      "author": "Spirituál kvintet"
     }
   ]
 }

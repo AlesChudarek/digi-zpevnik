@@ -1,0 +1,181 @@
+{
+  "title": "Můj zpěvník č.17",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10017/coverfrontout.png",
+  "img_path_cover_front_outer": "10017/coverfrontout.png",
+  "img_path_cover_front_inner": "10017/coverfrontin.png",
+  "img_path_cover_back_inner": "10017/coverbackin.png",
+  "img_path_cover_back_outer": "10017/coverbackout.png",
+  "intros": [],
+  "outros": [],
+  "pages": [
+    {
+      "title": "Cesta",
+      "author": "Tomáš Klus, Kryštof",
+      "image_paths": [
+        "10017/page1.png"
+      ]
+    },
+    {
+      "title": "Datel",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10017/page2.png"
+      ]
+    },
+    {
+      "title": "Do posledního dechu",
+      "author": "Nerez",
+      "image_paths": [
+        "10017/page3.png"
+      ]
+    },
+    {
+      "title": "Generační",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10017/page4.png"
+      ]
+    },
+    {
+      "title": "Hej hou",
+      "author": "Sněhurka a 7 trpaslíků",
+      "image_paths": [
+        "10017/page5.png"
+      ]
+    },
+    {
+      "title": "Hlavně že jsme na vzduchu",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10017/page6.png"
+      ]
+    },
+    {
+      "title": "Holka od koní",
+      "author": "Devítka",
+      "image_paths": [
+        "10017/page7.png"
+      ]
+    },
+    {
+      "title": "Houbová",
+      "author": "Yellow Sisters",
+      "image_paths": [
+        "10017/page8.png"
+      ]
+    },
+    {
+      "title": "Jahody mražený",
+      "author": "J. Schelinger",
+      "image_paths": [
+        "10017/page9.png"
+      ]
+    },
+    {
+      "title": "Jarní tání",
+      "author": "Brontosauři",
+      "image_paths": [
+        "10017/page10.png"
+      ]
+    },
+    {
+      "title": "Klouzky",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10017/page11.png"
+      ]
+    },
+    {
+      "title": "Kohout",
+      "author": "Nedvěd",
+      "image_paths": [
+        "10017/page12.png"
+      ]
+    },
+    {
+      "title": "Neopatrný křeček",
+      "author": "I. Mládek Maxim Turbulenc",
+      "image_paths": [
+        "10017/page13.png"
+      ]
+    },
+    {
+      "title": "Nestůj a pojď",
+      "author": "Václav Neckář",
+      "image_paths": [
+        "10017/page14.png"
+      ]
+    },
+    {
+      "title": "Ovádi",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10017/page15.png"
+      ]
+    },
+    {
+      "title": "Pasáček hvězd",
+      "author": "Nedvěd",
+      "image_paths": [
+        "10017/page16.png"
+      ]
+    },
+    {
+      "title": "Slib",
+      "author": "Kamelot",
+      "image_paths": [
+        "10017/page17.png"
+      ]
+    },
+    {
+      "title": "Brannej den",
+      "author": "Šmoulové",
+      "image_paths": [
+        "10017/page18.png"
+      ]
+    },
+    {
+      "title": "Makarona",
+      "author": "Šmoulové",
+      "image_paths": [
+        "10017/page19.png"
+      ]
+    },
+    {
+      "title": "Přijde vhod",
+      "author": "Šmoulové",
+      "image_paths": [
+        "10017/page20.png"
+      ]
+    },
+    {
+      "title": "Svátek zvířat",
+      "author": "Uhlíř & Svěrák",
+      "image_paths": [
+        "10017/page21.png"
+      ]
+    },
+    {
+      "title": "Svítí slunce nad hlavou",
+      "author": "Honza málem králem",
+      "image_paths": [
+        "10017/page22.png"
+      ]
+    },
+    {
+      "title": "Švihák lázeňský",
+      "author": "J. Schelinger",
+      "image_paths": [
+        "10017/page23.png"
+      ]
+    },
+    {
+      "title": "Zajíci",
+      "author": "J. Nohavica",
+      "image_paths": [
+        "10017/page24.png"
+      ]
+    }
+  ]
+}

@@ -1,270 +1,469 @@
 {
   "title": "Můj zpěvník č.18",
   "first_page_side": "right",
-  "img_path_cover_preview": "10018/coverfrontout.png",
-  "img_path_cover_front_outer": "10018/coverfrontout.png",
-  "img_path_cover_front_inner": "10018/coverfrontin.png",
-  "img_path_cover_back_inner": "10018/coverbackin.png",
-  "img_path_cover_back_outer": "10018/coverbackout.png",
-  "intros": [],
-  "outros": [
-    "10018/outro1.png",
-    "10018/outro2.png",
-    "10018/outro3.png",
-    "10018/outro4.png"
-  ],
+  "img_path_cover_preview": "00018/coverfrontout.png",
+  "img_path_cover_front_outer": "00018/coverfrontout.png",
+  "img_path_cover_front_inner": "00018/coverfrontin.png",
+  "img_path_cover_back_inner": "00018/coverbackin.png",
+  "img_path_cover_back_outer": "00018/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00018/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00018/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00018/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00018/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00018/page5.png",
+      "song_ids": [
+        5
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00018/page6.png",
+      "song_ids": [
+        6
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00018/page7.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00018/page8.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00018/page9.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00018/page10.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00018/page11.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00018/page12.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00018/page13.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00018/page14.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00018/page15.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00018/page16.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00018/page17.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00018/page18.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00018/page19.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00018/page20.png",
+      "song_ids": [
+        20
+      ]
+    },
+    {
+      "page_number": 21,
+      "image_path": "00018/page21.png",
+      "song_ids": [
+        21
+      ]
+    },
+    {
+      "page_number": 22,
+      "image_path": "00018/page22.png",
+      "song_ids": [
+        22
+      ]
+    },
+    {
+      "page_number": 23,
+      "image_path": "00018/page23.png",
+      "song_ids": [
+        23
+      ]
+    },
+    {
+      "page_number": 24,
+      "image_path": "00018/page24.png",
+      "song_ids": [
+        24
+      ]
+    },
+    {
+      "page_number": 25,
+      "image_path": "00018/page25.png",
+      "song_ids": [
+        25
+      ]
+    },
+    {
+      "page_number": 26,
+      "image_path": "00018/page26.png",
+      "song_ids": [
+        26
+      ]
+    },
+    {
+      "page_number": 27,
+      "image_path": "00018/page27.png",
+      "song_ids": [
+        27
+      ]
+    },
+    {
+      "page_number": 28,
+      "image_path": "00018/page28.png",
+      "song_ids": [
+        28
+      ]
+    },
+    {
+      "page_number": 29,
+      "image_path": "00018/page29.png",
+      "song_ids": [
+        29
+      ]
+    },
+    {
+      "page_number": 30,
+      "image_path": "00018/page30.png",
+      "song_ids": [
+        30
+      ]
+    },
+    {
+      "page_number": 31,
+      "image_path": "00018/page31.png",
+      "song_ids": [
+        31
+      ]
+    },
+    {
+      "page_number": 32,
+      "image_path": "00018/page32.png",
+      "song_ids": [
+        32
+      ]
+    },
+    {
+      "page_number": 33,
+      "image_path": "00018/page33.png",
+      "song_ids": [
+        33
+      ]
+    },
+    {
+      "page_number": 34,
+      "image_path": "00018/page34.png",
+      "song_ids": [
+        34
+      ]
+    },
+    {
+      "page_number": 35,
+      "image_path": "00018/page35.png",
+      "song_ids": [
+        35
+      ]
+    },
+    {
+      "page_number": 36,
+      "image_path": "00018/page36.png",
+      "song_ids": [
+        36
+      ]
+    },
+    {
+      "page_number": null,
+      "image_path": "00018/outro1.png",
+      "song_ids": [],
+      "type": "outro"
+    },
+    {
+      "page_number": null,
+      "image_path": "00018/outro2.png",
+      "song_ids": [],
+      "type": "outro"
+    },
+    {
+      "page_number": null,
+      "image_path": "00018/outro3.png",
+      "song_ids": [],
+      "type": "outro"
+    },
+    {
+      "page_number": null,
+      "image_path": "00018/outro4.png",
+      "song_ids": [],
+      "type": "outro"
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Bedna od whisky",
-      "author": "Miky Rivola",
-      "image_paths": [
-        "10018/page1.png"
-      ]
+      "author": "Miky Rivola"
     },
     {
+      "song_id": 2,
       "title": "Blues Folsomské věznice",
-      "author": "Greenhorns",
-      "image_paths": [
-        "10018/page2.png"
-      ]
+      "author": "Greenhorns"
     },
     {
+      "song_id": 3,
       "title": "Duše z gumy",
-      "author": "Chinaski",
-      "image_paths": [
-        "10018/page3.png"
-      ]
+      "author": "Chinaski"
     },
     {
+      "song_id": 4,
       "title": "Gorale",
-      "author": "Čechomor",
-      "image_paths": [
-        "10018/page4.png"
-      ]
+      "author": "Čechomor"
     },
     {
+      "song_id": 5,
       "title": "Hledá se žena",
-      "author": "Mandrage",
-      "image_paths": [
-        "10018/page5.png"
-      ]
+      "author": "Mandrage"
     },
     {
+      "song_id": 6,
       "title": "Chválím tě země má",
-      "author": "Svěrák & Uhlíř",
-      "image_paths": [
-        "10018/page6.png"
-      ]
+      "author": "Svěrák & Uhlíř"
     },
     {
+      "song_id": 7,
       "title": "Já jsem muzikant",
-      "author": "lidová",
-      "image_paths": [
-        "10018/page7.png"
-      ]
+      "author": "lidová"
     },
     {
+      "song_id": 8,
       "title": "Kamínky",
-      "author": "Brontosauři",
-      "image_paths": [
-        "10018/page8.png"
-      ]
+      "author": "Brontosauři"
     },
     {
+      "song_id": 9,
       "title": "Kdyby tady byla taková panenka",
-      "author": "Žalman",
-      "image_paths": [
-        "10018/page9.png"
-      ]
+      "author": "Žalman"
     },
     {
+      "song_id": 10,
       "title": "Když jsem já sloužil",
-      "author": "lidová",
-      "image_paths": [
-        "10018/page10.png"
-      ]
+      "author": "lidová"
     },
     {
+      "song_id": 11,
       "title": "Kluci kluci s klukama",
-      "author": "Svěrák & Uhlíř",
-      "image_paths": [
-        "10018/page11.png"
-      ]
+      "author": "Svěrák & Uhlíř"
     },
     {
+      "song_id": 12,
       "title": "Marie",
-      "author": "Tomáš Klus",
-      "image_paths": [
-        "10018/page12.png"
-      ]
+      "author": "Tomáš Klus"
     },
     {
+      "song_id": 13,
       "title": "Mléčný bar",
-      "author": "Svěrák & Uhlíř",
-      "image_paths": [
-        "10018/page13.png"
-      ]
+      "author": "Svěrák & Uhlíř"
     },
     {
+      "song_id": 14,
       "title": "Mlýny",
-      "author": "Spirituál kvintet",
-      "image_paths": [
-        "10018/page14.png"
-      ]
+      "author": "Spirituál kvintet"
     },
     {
+      "song_id": 15,
       "title": "Napojen",
-      "author": "Tomáš Klus",
-      "image_paths": [
-        "10018/page15.png"
-      ]
+      "author": "Tomáš Klus"
     },
     {
+      "song_id": 16,
       "title": "Naštěstí",
-      "author": "Pavel Callta",
-      "image_paths": [
-        "10018/page16.png"
-      ]
+      "author": "Pavel Callta"
     },
     {
+      "song_id": 17,
       "title": "Noe",
-      "author": "Tomáš Klus",
-      "image_paths": [
-        "10018/page17.png"
-      ]
+      "author": "Tomáš Klus"
     },
     {
+      "song_id": 18,
       "title": "Nosorožec",
-      "author": "Karel Plíhal",
-      "image_paths": [
-        "10018/page18.png"
-      ]
+      "author": "Karel Plíhal"
     },
     {
+      "song_id": 19,
       "title": "O bláznech",
-      "author": "Michal Penk",
-      "image_paths": [
-        "10018/page19.png"
-      ]
+      "author": "Michal Penk"
     },
     {
+      "song_id": 20,
       "title": "O čem se zdá medvědům",
-      "author": "-",
-      "image_paths": [
-        "10018/page20.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 21,
       "title": "Ořech v medu",
-      "author": "Svěrák & Uhlíř",
-      "image_paths": [
-        "10018/page21.png"
-      ]
+      "author": "Svěrák & Uhlíř"
     },
     {
+      "song_id": 22,
       "title": "Podběl",
-      "author": "Hop Trop",
-      "image_paths": [
-        "10018/page22.png"
-      ]
+      "author": "Hop Trop"
     },
     {
+      "song_id": 23,
       "title": "Proužek",
-      "author": "Nedvěd",
-      "image_paths": [
-        "10018/page23.png"
-      ]
+      "author": "Nedvěd"
     },
     {
+      "song_id": 24,
       "title": "Sametová",
-      "author": "Žlutý pes",
-      "image_paths": [
-        "10018/page24.png"
-      ]
+      "author": "Žlutý pes"
     },
     {
+      "song_id": 25,
       "title": "Schody z nebe",
-      "author": "Tereza Kerndlová",
-      "image_paths": [
-        "10018/page25.png"
-      ]
+      "author": "Tereza Kerndlová"
     },
     {
+      "song_id": 26,
       "title": "Šenkýřka Jarda",
-      "author": "Hypochondr",
-      "image_paths": [
-        "10018/page26.png"
-      ]
+      "author": "Hypochondr"
     },
     {
+      "song_id": 27,
       "title": "Šrouby a matice",
-      "author": "Mandrage",
-      "image_paths": [
-        "10018/page27.png"
-      ]
+      "author": "Mandrage"
     },
     {
+      "song_id": 28,
       "title": "Tancuj tancuj",
-      "author": "lidová",
-      "image_paths": [
-        "10018/page28.png"
-      ]
+      "author": "lidová"
     },
     {
+      "song_id": 29,
       "title": "To máme mládež",
-      "author": "P. Janů",
-      "image_paths": [
-        "10018/page29.png"
-      ]
+      "author": "P. Janů"
     },
     {
+      "song_id": 30,
       "title": "Toulavej",
-      "author": "Kiďák",
-      "image_paths": [
-        "10018/page30.png"
-      ]
+      "author": "Kiďák"
     },
     {
+      "song_id": 31,
       "title": "V moři je místa dost",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10018/page31.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 32,
       "title": "Valčíček",
-      "author": "Brontosauři",
-      "image_paths": [
-        "10018/page32.png"
-      ]
+      "author": "Brontosauři"
     },
     {
+      "song_id": 33,
       "title": "Ve dvou se to táhne líp",
-      "author": "Čechomor + Divokej Bill",
-      "image_paths": [
-        "10018/page33.png"
-      ]
+      "author": "Čechomor + Divokej Bill"
     },
     {
+      "song_id": 34,
       "title": "Vosa",
-      "author": "Karel Plíhal",
-      "image_paths": [
-        "10018/page34.png"
-      ]
+      "author": "Karel Plíhal"
     },
     {
+      "song_id": 35,
       "title": "Všechno bude fajn",
-      "author": "Žentour",
-      "image_paths": [
-        "10018/page35.png"
-      ]
+      "author": "Žentour"
     },
     {
+      "song_id": 36,
       "title": "Za tebou",
-      "author": "Peha",
-      "image_paths": [
-        "10018/page36.png"
-      ]
+      "author": "Peha"
     }
   ]
 }

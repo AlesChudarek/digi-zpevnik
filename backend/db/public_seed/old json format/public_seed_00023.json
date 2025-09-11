@@ -1,0 +1,158 @@
+{
+  "title": "Můj zpěvník č.23",
+  "first_page_side": "right",
+  "img_path_cover_preview": "10023/coverfrontout.png",
+  "img_path_cover_front_outer": "10023/coverfrontout.png",
+  "img_path_cover_front_inner": "10023/coverfrontin.png",
+  "img_path_cover_back_inner": "10023/coverbackin.png",
+  "img_path_cover_back_outer": "10023/coverbackout.png",
+  "intros": [],
+  "outros": [
+    "10023/outro1.png",
+    "10023/outro2.png",
+    "10023/outro3.png",
+    "10023/outro4.png"
+  ],
+  "pages": [
+    {
+      "title": "Anděl",
+      "author": "Mirai",
+      "image_paths": [
+        "10023/page1.png"
+      ]
+    },
+    {
+      "title": "Atomy",
+      "author": "UDG",
+      "image_paths": [
+        "10023/page2.png"
+      ]
+    },
+    {
+      "title": "Blbej den",
+      "author": "Pokáč",
+      "image_paths": [
+        "10023/page3.png"
+      ]
+    },
+    {
+      "title": "Cizí zeď",
+      "author": "One Man Show Foundation",
+      "image_paths": [
+        "10023/page4.png"
+      ]
+    },
+    {
+      "title": "Ďábel a syn",
+      "author": "Kabát",
+      "image_paths": [
+        "10023/page5.png"
+      ]
+    },
+    {
+      "title": "Hudsonské šífy",
+      "author": "Walda Gang",
+      "image_paths": [
+        "10023/page6.png"
+      ]
+    },
+    {
+      "title": "Když je hokej",
+      "author": "Pokáč",
+      "image_paths": [
+        "10023/page7.png"
+      ]
+    },
+    {
+      "title": "Léto 95",
+      "author": "Marek Ztracený",
+      "image_paths": [
+        "10023/page8.png"
+      ]
+    },
+    {
+      "title": "Mám doma kočku",
+      "author": "Pokáč",
+      "image_paths": [
+        "10023/page9.png"
+      ]
+    },
+    {
+      "title": "Matfyzák na discu",
+      "author": "Pokáč",
+      "image_paths": [
+        "10023/page10.png"
+      ]
+    },
+    {
+      "title": "Na širém moři",
+      "author": "Traband",
+      "image_paths": [
+        "10023/page11.png"
+      ]
+    },
+    {
+      "title": "Nebude to ľahké",
+      "author": "Richard Müller",
+      "image_paths": [
+        "10023/page12.png"
+      ]
+    },
+    {
+      "title": "ØTCHI",
+      "author": "Mirai",
+      "image_paths": [
+        "10023/page13.png"
+      ]
+    },
+    {
+      "title": "Smutný pocit",
+      "author": "Jelen",
+      "image_paths": [
+        "10023/page14.png"
+      ]
+    },
+    {
+      "title": "Ta naše",
+      "author": "Voxel",
+      "image_paths": [
+        "10023/page15.png"
+      ]
+    },
+    {
+      "title": "Tančím",
+      "author": "Pekař",
+      "image_paths": [
+        "10023/page16.png"
+      ]
+    },
+    {
+      "title": "Těhotná",
+      "author": "Voxel",
+      "image_paths": [
+        "10023/page17.png"
+      ]
+    },
+    {
+      "title": "Terapeut",
+      "author": "Pavel Callta",
+      "image_paths": [
+        "10023/page18.png"
+      ]
+    },
+    {
+      "title": "V lese",
+      "author": "Pokáč",
+      "image_paths": [
+        "10023/page19.png"
+      ]
+    },
+    {
+      "title": "7:25",
+      "author": "Michal Horák",
+      "image_paths": [
+        "10023/page20.png"
+      ]
+    }
+  ]
+}

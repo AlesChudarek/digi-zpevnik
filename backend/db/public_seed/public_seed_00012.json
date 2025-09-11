@@ -1,181 +1,301 @@
 {
   "title": "Můj zpěvník č.12",
   "first_page_side": "right",
-  "img_path_cover_preview": "10012/coverfrontout.png",
-  "img_path_cover_front_outer": "10012/coverfrontout.png",
-  "img_path_cover_front_inner": "10012/coverfrontin.png",
-  "img_path_cover_back_inner": "10012/coverbackin.png",
-  "img_path_cover_back_outer": "10012/coverbackout.png",
-  "intros": [],
-  "outros": [],
+  "img_path_cover_preview": "00012/coverfrontout.png",
+  "img_path_cover_front_outer": "00012/coverfrontout.png",
+  "img_path_cover_front_inner": "00012/coverfrontin.png",
+  "img_path_cover_back_inner": "00012/coverbackin.png",
+  "img_path_cover_back_outer": "00012/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00012/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00012/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00012/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00012/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00012/page5.png",
+      "song_ids": [
+        5
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00012/page6.png",
+      "song_ids": [
+        6
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00012/page7.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00012/page8.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00012/page9.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00012/page10.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00012/page11.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00012/page12.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00012/page13.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00012/page14.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00012/page15.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00012/page16.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00012/page17.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00012/page18.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00012/page19.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00012/page20.png",
+      "song_ids": [
+        20
+      ]
+    },
+    {
+      "page_number": 21,
+      "image_path": "00012/page21.png",
+      "song_ids": [
+        21
+      ]
+    },
+    {
+      "page_number": 22,
+      "image_path": "00012/page22.png",
+      "song_ids": [
+        22
+      ]
+    },
+    {
+      "page_number": 23,
+      "image_path": "00012/page23.png",
+      "song_ids": [
+        23
+      ]
+    },
+    {
+      "page_number": 24,
+      "image_path": "00012/page24.png",
+      "song_ids": [
+        24
+      ]
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Den je slunečný",
-      "author": "Ať žijí duchové",
-      "image_paths": [
-        "10012/page1.png"
-      ]
+      "author": "Ať žijí duchové"
     },
     {
+      "song_id": 2,
       "title": "Divokej horskej tymián",
-      "author": "Žalman",
-      "image_paths": [
-        "10012/page2.png"
-      ]
+      "author": "Žalman"
     },
     {
+      "song_id": 3,
       "title": "Hoja hoj!",
-      "author": "Noc na Karlštejně",
-      "image_paths": [
-        "10012/page3.png"
-      ]
+      "author": "Noc na Karlštejně"
     },
     {
+      "song_id": 4,
       "title": "Hvězdičko blýskavá",
-      "author": "Petr Novák",
-      "image_paths": [
-        "10012/page4.png"
-      ]
+      "author": "Petr Novák"
     },
     {
+      "song_id": 5,
       "title": "Ještě mi scházíš",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10012/page5.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 6,
       "title": "Káča našla ptáče",
-      "author": "Uhlíř & Svěrák",
-      "image_paths": [
-        "10012/page6.png"
-      ]
+      "author": "Uhlíř & Svěrák"
     },
     {
+      "song_id": 7,
       "title": "Kdyby prase mělo křídla",
-      "author": "Petr Skoumal",
-      "image_paths": [
-        "10012/page7.png"
-      ]
+      "author": "Petr Skoumal"
     },
     {
+      "song_id": 8,
       "title": "Když jde malý bobr spát",
-      "author": "Petr Skoumal",
-      "image_paths": [
-        "10012/page8.png"
-      ]
+      "author": "Petr Skoumal"
     },
     {
+      "song_id": 9,
       "title": "Když se zamiluje kůň",
-      "author": "Uhlíř & Svěrák",
-      "image_paths": [
-        "10012/page9.png"
-      ]
+      "author": "Uhlíř & Svěrák"
     },
     {
+      "song_id": 10,
       "title": "Kolik je na světě",
-      "author": "Petr Skoumal",
-      "image_paths": [
-        "10012/page10.png"
-      ]
+      "author": "Petr Skoumal"
     },
     {
+      "song_id": 11,
       "title": "Lady Carneval",
-      "author": "Karel Gott",
-      "image_paths": [
-        "10012/page11.png"
-      ]
+      "author": "Karel Gott"
     },
     {
+      "song_id": 12,
       "title": "Lojza a Líza",
-      "author": "Michal Tučný",
-      "image_paths": [
-        "10012/page12.png"
-      ]
+      "author": "Michal Tučný"
     },
     {
+      "song_id": 13,
       "title": "Malé kotě",
-      "author": "Jiří Šlitr   Jiří Suchý",
-      "image_paths": [
-        "10012/page13.png"
-      ]
+      "author": "Jiří Šlitr   Jiří Suchý"
     },
     {
+      "song_id": 14,
       "title": "Máme doma obludu",
-      "author": "Jak se krotí krokodýli",
-      "image_paths": [
-        "10012/page14.png"
-      ]
+      "author": "Jak se krotí krokodýli"
     },
     {
+      "song_id": 15,
       "title": "Moje milá plaví koně",
-      "author": "Uhlíř & Svěrák",
-      "image_paths": [
-        "10012/page15.png"
-      ]
+      "author": "Uhlíř & Svěrák"
     },
     {
+      "song_id": 16,
       "title": "Muzikantova písnička",
-      "author": "Obušku z pytle ven",
-      "image_paths": [
-        "10012/page16.png"
-      ]
+      "author": "Obušku z pytle ven"
     },
     {
+      "song_id": 17,
       "title": "Naschville",
-      "author": "Pavel Dobeš",
-      "image_paths": [
-        "10012/page17.png"
-      ]
+      "author": "Pavel Dobeš"
     },
     {
+      "song_id": 18,
       "title": "Někdy stačí dát jen dech",
-      "author": "Miro Žbirka",
-      "image_paths": [
-        "10012/page18.png"
-      ]
+      "author": "Miro Žbirka"
     },
     {
+      "song_id": 19,
       "title": "Pár přátel stačí mít",
-      "author": "Michal David",
-      "image_paths": [
-        "10012/page19.png"
-      ]
+      "author": "Michal David"
     },
     {
+      "song_id": 20,
       "title": "Píseň malých pěšáků",
-      "author": "Žalman",
-      "image_paths": [
-        "10012/page20.png"
-      ]
+      "author": "Žalman"
     },
     {
+      "song_id": 21,
       "title": "Prachovské skály",
-      "author": "Ivan Mládek",
-      "image_paths": [
-        "10012/page21.png"
-      ]
+      "author": "Ivan Mládek"
     },
     {
+      "song_id": 22,
       "title": "Štěrbinou ve dveřích",
-      "author": "Vlasta Redl",
-      "image_paths": [
-        "10012/page22.png"
-      ]
+      "author": "Vlasta Redl"
     },
     {
+      "song_id": 23,
       "title": "Tygr",
-      "author": "Petr Skoumal",
-      "image_paths": [
-        "10012/page23.png"
-      ]
+      "author": "Petr Skoumal"
     },
     {
+      "song_id": 24,
       "title": "Ukolébavka pro Kubu a Lenku",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10012/page24.png"
-      ]
+      "author": "J. Nohavica"
     }
   ]
 }

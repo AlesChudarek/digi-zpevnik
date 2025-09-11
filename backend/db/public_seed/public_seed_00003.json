@@ -1,209 +1,349 @@
 {
   "title": "Můj zpěvník č.3",
   "first_page_side": "right",
-  "img_path_cover_preview": "10003/coverfrontout.png",
-  "img_path_cover_front_outer": "10003/coverfrontout.png",
-  "img_path_cover_front_inner": "10003/coverfrontin.png",
-  "img_path_cover_back_inner": "10003/coverbackin.png",
-  "img_path_cover_back_outer": "10003/coverbackout.png",
-  "intros": [],
-  "outros": [],
+  "img_path_cover_preview": "00003/coverfrontout.png",
+  "img_path_cover_front_outer": "00003/coverfrontout.png",
+  "img_path_cover_front_inner": "00003/coverfrontin.png",
+  "img_path_cover_back_inner": "00003/coverbackin.png",
+  "img_path_cover_back_outer": "00003/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00003/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00003/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00003/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00003/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00003/page5.png",
+      "song_ids": [
+        5
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00003/page6.png",
+      "song_ids": [
+        6
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00003/page7.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00003/page8.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00003/page9.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00003/page10.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00003/page11.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00003/page12.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00003/page13.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00003/page14.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00003/page15.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00003/page16.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00003/page17.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00003/page18.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00003/page19.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00003/page20.png",
+      "song_ids": [
+        20
+      ]
+    },
+    {
+      "page_number": 21,
+      "image_path": "00003/page21.png",
+      "song_ids": [
+        21
+      ]
+    },
+    {
+      "page_number": 22,
+      "image_path": "00003/page22.png",
+      "song_ids": [
+        22
+      ]
+    },
+    {
+      "page_number": 23,
+      "image_path": "00003/page23.png",
+      "song_ids": [
+        23
+      ]
+    },
+    {
+      "page_number": 24,
+      "image_path": "00003/page24.png",
+      "song_ids": [
+        24
+      ]
+    },
+    {
+      "page_number": 25,
+      "image_path": "00003/page25.png",
+      "song_ids": [
+        25
+      ]
+    },
+    {
+      "page_number": 26,
+      "image_path": "00003/page26.png",
+      "song_ids": [
+        26
+      ]
+    },
+    {
+      "page_number": 27,
+      "image_path": "00003/page27.png",
+      "song_ids": [
+        27
+      ]
+    },
+    {
+      "page_number": 28,
+      "image_path": "00003/page28.png",
+      "song_ids": [
+        28
+      ]
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Balada pro banditu",
-      "author": "Balada pro banditu",
-      "image_paths": [
-        "10003/page1.png"
-      ]
+      "author": "Balada pro banditu"
     },
     {
+      "song_id": 2,
       "title": "Banana",
-      "author": "-",
-      "image_paths": [
-        "10003/page2.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 3,
       "title": "Bon soire, mademoiselle, le Paris",
-      "author": "Olympic",
-      "image_paths": [
-        "10003/page3.png"
-      ]
+      "author": "Olympic"
     },
     {
+      "song_id": 4,
       "title": "Bratříčku, zavírej vrátka",
-      "author": "Karel Kryl",
-      "image_paths": [
-        "10003/page4.png"
-      ]
+      "author": "Karel Kryl"
     },
     {
+      "song_id": 5,
       "title": "Dáme klukovi školy",
-      "author": "Lotrando a Zubejda",
-      "image_paths": [
-        "10003/page5.png"
-      ]
+      "author": "Lotrando a Zubejda"
     },
     {
+      "song_id": 6,
       "title": "Hučka",
-      "author": "-",
-      "image_paths": [
-        "10003/page6.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 7,
       "title": "Já se svou starou kytarou",
-      "author": "-",
-      "image_paths": [
-        "10003/page7.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 8,
       "title": "Jarošovský pivovar",
-      "author": "Argema",
-      "image_paths": [
-        "10003/page8.png"
-      ]
+      "author": "Argema"
     },
     {
+      "song_id": 9,
       "title": "Jasná zpráva",
-      "author": "Olympic",
-      "image_paths": [
-        "10003/page9.png"
-      ]
+      "author": "Olympic"
     },
     {
+      "song_id": 10,
       "title": "Jdou po mně jdou",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10003/page10.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 11,
       "title": "Jednou mi fotr povídá",
-      "author": "Ivan Hlas",
-      "image_paths": [
-        "10003/page11.png"
-      ]
+      "author": "Ivan Hlas"
     },
     {
+      "song_id": 12,
       "title": "Kouzlo",
-      "author": "Wanastowi Vjecy",
-      "image_paths": [
-        "10003/page12.png"
-      ]
+      "author": "Wanastowi Vjecy"
     },
     {
+      "song_id": 13,
       "title": "Medvídek",
-      "author": "Lucie",
-      "image_paths": [
-        "10003/page13.png"
-      ]
+      "author": "Lucie"
     },
     {
+      "song_id": 14,
       "title": "Noc na Karlštejně",
-      "author": "Noc na Karlštejně",
-      "image_paths": [
-        "10003/page14.png"
-      ]
+      "author": "Noc na Karlštejně"
     },
     {
+      "song_id": 15,
       "title": "Omnia vincit amor",
-      "author": "Klíč",
-      "image_paths": [
-        "10003/page15.png"
-      ]
+      "author": "Klíč"
     },
     {
+      "song_id": 16,
       "title": "Pod dubem, za dubem",
-      "author": "Lotrando a Zubejda",
-      "image_paths": [
-        "10003/page16.png"
-      ]
+      "author": "Lotrando a Zubejda"
     },
     {
+      "song_id": 17,
       "title": "Pohádka",
-      "author": "Karel Plíhal",
-      "image_paths": [
-        "10003/page17.png"
-      ]
+      "author": "Karel Plíhal"
     },
     {
+      "song_id": 18,
       "title": "Povídej",
-      "author": "Petr Novák",
-      "image_paths": [
-        "10003/page18.png"
-      ]
+      "author": "Petr Novák"
     },
     {
+      "song_id": 19,
       "title": "Pramen zdraví",
-      "author": "Ať žijí duchové",
-      "image_paths": [
-        "10003/page19.png"
-      ]
+      "author": "Ať žijí duchové"
     },
     {
+      "song_id": 20,
       "title": "Růže z Texasu",
-      "author": "W. Matuška",
-      "image_paths": [
-        "10003/page20.png"
-      ]
+      "author": "W. Matuška"
     },
     {
+      "song_id": 21,
       "title": "Snad jsem to zavinil já",
-      "author": "Olympic",
-      "image_paths": [
-        "10003/page21.png"
-      ]
+      "author": "Olympic"
     },
     {
+      "song_id": 22,
       "title": "Spinkej",
-      "author": "Spirituál kvintet",
-      "image_paths": [
-        "10003/page22.png"
-      ]
+      "author": "Spirituál kvintet"
     },
     {
+      "song_id": 23,
       "title": "Statistika",
-      "author": "Princové jsou na draka",
-      "image_paths": [
-        "10003/page23.png"
-      ]
+      "author": "Princové jsou na draka"
     },
     {
+      "song_id": 24,
       "title": "Švorcák",
-      "author": "Hop Trop",
-      "image_paths": [
-        "10003/page24.png"
-      ]
+      "author": "Hop Trop"
     },
     {
+      "song_id": 25,
       "title": "Vlaštovko leť",
-      "author": "J. Nohavica",
-      "image_paths": [
-        "10003/page25.png"
-      ]
+      "author": "J. Nohavica"
     },
     {
+      "song_id": 26,
       "title": "Zafúkané",
-      "author": "Fleret",
-      "image_paths": [
-        "10003/page26.png"
-      ]
+      "author": "Fleret"
     },
     {
+      "song_id": 27,
       "title": "Zachraňte koně",
-      "author": "Kamelot",
-      "image_paths": [
-        "10003/page27.png"
-      ]
+      "author": "Kamelot"
     },
     {
+      "song_id": 28,
       "title": "Zlatokop Tom",
-      "author": "-",
-      "image_paths": [
-        "10003/page28.png"
-      ]
+      "author": "-"
     }
   ]
 }

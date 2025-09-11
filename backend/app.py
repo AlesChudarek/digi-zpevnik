@@ -174,6 +174,14 @@ def get_songbook_toc(songbook_id):
         song = Song.query.get(page.song_id)
         if not song:
             continue
+
+        # Skip system-generated dummy songs for non-song pages
+        if song.title.startswith("Non-song page"):
+            # Still count the page in the numbering
+            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+            current_page_number += len(song_images) if song_images else 1
+            continue
+
         song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
         if song_images:
             # Use the first image for TOC entry
@@ -341,7 +349,7 @@ def songbook_detail(book_id):
                     pages.append({"file": img.image_path, "page_number": current_page_number})
                     current_page_number += 1
 
-    def pair_pages(intros, pages, outros, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
+    def pair_pages(intro_images, pages, outro_images, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
 
         - With any cover provided: auto-complete missing cover parts with 'blank' and render:
@@ -372,9 +380,9 @@ def songbook_detail(book_id):
                 list_of_pages.append({"file": "blank", "page_number": None})
 
             # Main content
-            list_of_pages.extend([{"file": img, "page_number": None} for img in intros])
+            list_of_pages.extend([{"file": img, "page_number": None} for img in intro_images])
             list_of_pages.extend(pages)
-            list_of_pages.extend([{"file": img, "page_number": None} for img in outros])
+            list_of_pages.extend([{"file": img, "page_number": None} for img in outro_images])
 
             # Ensure back inner cover (CBI) lands on right page
             if len(list_of_pages) % 2 == 0:
@@ -390,15 +398,15 @@ def songbook_detail(book_id):
             # No cover: only offset start if needed and place content
             if first_side == "right":
                 # Add blank so first content appears on right
-                list_of_pages.append("blank")
+                list_of_pages.append({"file": "blank", "page_number": None})
 
-            list_of_pages.extend(intros)
+            list_of_pages.extend([{"file": img, "page_number": None} for img in intro_images])
             list_of_pages.extend(pages)
-            list_of_pages.extend(outros)
+            list_of_pages.extend([{"file": img, "page_number": None} for img in outro_images])
 
             # If we end on a single left page (odd count), add a trailing blank
             if len(list_of_pages) % 2 != 0:
-                list_of_pages.append("blank")
+                list_of_pages.append({"file": "blank", "page_number": None})
 
         return list(zip(list_of_pages[::2], list_of_pages[1::2]))
 
@@ -435,6 +443,14 @@ def songbook_detail(book_id):
         if not song:
             continue
 
+        # Skip system-generated dummy songs for non-song pages
+        if song.title.startswith("Non-song page"):
+            # Still count the page in the numbering
+            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+            current_toc_page += len(song_images) if song_images else 1
+            processed_songs.add(page.song_id)
+            continue
+
         # Get all images for this song
         song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
         if song_images:
@@ -452,11 +468,13 @@ def songbook_detail(book_id):
             page_display = str(current_toc_page)
             current_toc_page += 1
 
-        toc_entries.append({
-            'page_number': page_display,
-            'title': song.title,
-            'author': song.author.name if song.author else ""
-        })
+        # Only add to TOC if not a dummy non-song page
+        if not song.title.startswith("Non-song page"):
+            toc_entries.append({
+                'page_number': page_display,
+                'title': song.title,
+                'author': song.author.name if song.author else ""
+            })
 
         processed_songs.add(page.song_id)
 

@@ -1,153 +1,253 @@
 {
   "title": "Můj zpěvník č.26",
   "first_page_side": "right",
-  "img_path_cover_preview": "10026/coverfrontout.png",
-  "img_path_cover_front_outer": "10026/coverfrontout.png",
+  "img_path_cover_preview": "00026/coverfrontout.png",
+  "img_path_cover_front_outer": "00026/coverfrontout.png",
   "img_path_cover_front_inner": null,
   "img_path_cover_back_inner": null,
-  "img_path_cover_back_outer": "10026/coverbackout.png",
-  "intros": [],
-  "outros": [],
+  "img_path_cover_back_outer": "00026/coverbackout.png",
   "pages": [
     {
+      "page_number": 1,
+      "image_path": "00026/page1.png",
+      "song_ids": [
+        1
+      ]
+    },
+    {
+      "page_number": 2,
+      "image_path": "00026/page2.png",
+      "song_ids": [
+        2
+      ]
+    },
+    {
+      "page_number": 3,
+      "image_path": "00026/page3.png",
+      "song_ids": [
+        3
+      ]
+    },
+    {
+      "page_number": 4,
+      "image_path": "00026/page4.png",
+      "song_ids": [
+        4
+      ]
+    },
+    {
+      "page_number": 5,
+      "image_path": "00026/page5.png",
+      "song_ids": [
+        5
+      ]
+    },
+    {
+      "page_number": 6,
+      "image_path": "00026/page6.png",
+      "song_ids": [
+        6
+      ]
+    },
+    {
+      "page_number": 7,
+      "image_path": "00026/page7.png",
+      "song_ids": [
+        7
+      ]
+    },
+    {
+      "page_number": 8,
+      "image_path": "00026/page8.png",
+      "song_ids": [
+        8
+      ]
+    },
+    {
+      "page_number": 9,
+      "image_path": "00026/page9.png",
+      "song_ids": [
+        9
+      ]
+    },
+    {
+      "page_number": 10,
+      "image_path": "00026/page10.png",
+      "song_ids": [
+        10
+      ]
+    },
+    {
+      "page_number": 11,
+      "image_path": "00026/page11.png",
+      "song_ids": [
+        11
+      ]
+    },
+    {
+      "page_number": 12,
+      "image_path": "00026/page12.png",
+      "song_ids": [
+        12
+      ]
+    },
+    {
+      "page_number": 13,
+      "image_path": "00026/page13.png",
+      "song_ids": [
+        13
+      ]
+    },
+    {
+      "page_number": 14,
+      "image_path": "00026/page14.png",
+      "song_ids": [
+        14
+      ]
+    },
+    {
+      "page_number": 15,
+      "image_path": "00026/page15.png",
+      "song_ids": [
+        15
+      ]
+    },
+    {
+      "page_number": 16,
+      "image_path": "00026/page16.png",
+      "song_ids": [
+        16
+      ]
+    },
+    {
+      "page_number": 17,
+      "image_path": "00026/page17.png",
+      "song_ids": [
+        17
+      ]
+    },
+    {
+      "page_number": 18,
+      "image_path": "00026/page18.png",
+      "song_ids": [
+        18
+      ]
+    },
+    {
+      "page_number": 19,
+      "image_path": "00026/page19.png",
+      "song_ids": [
+        19
+      ]
+    },
+    {
+      "page_number": 20,
+      "image_path": "00026/page20.png",
+      "song_ids": [
+        20
+      ]
+    }
+  ],
+  "songs": [
+    {
+      "song_id": 1,
       "title": "Čarodějnice z Amesbury",
-      "author": "Asonance",
-      "image_paths": [
-        "10026/page1.png"
-      ]
+      "author": "Asonance"
     },
     {
+      "song_id": 2,
       "title": "Dávej, ber",
-      "author": "Sagvan Tofi",
-      "image_paths": [
-        "10026/page2.png"
-      ]
+      "author": "Sagvan Tofi"
     },
     {
+      "song_id": 3,
       "title": "Holka nebo Kluk",
-      "author": "-",
-      "image_paths": [
-        "10026/page3.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 4,
       "title": "Já nemám zámek",
-      "author": "Pohádky",
-      "image_paths": [
-        "10026/page4.png"
-      ]
+      "author": "Pohádky"
     },
     {
+      "song_id": 5,
       "title": "Julie",
-      "author": "Wanastowi Vjecy",
-      "image_paths": [
-        "10026/page5.png"
-      ]
+      "author": "Wanastowi Vjecy"
     },
     {
+      "song_id": 6,
       "title": "Karavan Mraků",
-      "author": "-",
-      "image_paths": [
-        "10026/page6.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 7,
       "title": "Krůček po krůčku",
-      "author": "-",
-      "image_paths": [
-        "10026/page7.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 8,
       "title": "Láska a pravda",
-      "author": "-",
-      "image_paths": [
-        "10026/page8.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 9,
       "title": "Mám jizvu na rtu",
-      "author": "-",
-      "image_paths": [
-        "10026/page9.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 10,
       "title": "Máme jen sebe",
-      "author": "-",
-      "image_paths": [
-        "10026/page10.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 11,
       "title": "Minulost",
-      "author": "-",
-      "image_paths": [
-        "10026/page11.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 12,
       "title": "Protože to nevzdám",
-      "author": "-",
-      "image_paths": [
-        "10026/page12.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 13,
       "title": "Přítel",
-      "author": "-",
-      "image_paths": [
-        "10026/page13.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 14,
       "title": "Rozárka",
-      "author": "Divokej Bill",
-      "image_paths": [
-        "10026/page14.png"
-      ]
+      "author": "Divokej Bill"
     },
     {
+      "song_id": 15,
       "title": "Řekni, kde ty kytky jsou",
-      "author": "-",
-      "image_paths": [
-        "10026/page15.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 16,
       "title": "Ty jsi jako já",
-      "author": "-",
-      "image_paths": [
-        "10026/page16.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 17,
       "title": "Vedle tebe usínám",
-      "author": "Mirai",
-      "image_paths": [
-        "10026/page17.png"
-      ]
+      "author": "Mirai"
     },
     {
+      "song_id": 18,
       "title": "Zamilovaný Princ",
-      "author": "-",
-      "image_paths": [
-        "10026/page18.png"
-      ]
+      "author": "-"
     },
     {
+      "song_id": 19,
       "title": "Znala panna pána",
-      "author": "Václav Neckář",
-      "image_paths": [
-        "10026/page19.png"
-      ]
+      "author": "Václav Neckář"
     },
     {
+      "song_id": 20,
       "title": "Žili, byli bratři tři",
-      "author": "-",
-      "image_paths": [
-        "10026/page20.png"
-      ]
+      "author": "-"
     }
   ]
 }
