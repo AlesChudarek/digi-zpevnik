@@ -2,7 +2,7 @@
 <html lang="cs">
 <head>
   <link rel="icon" type="image/x-icon" href="{{ static_bust('img/icons/favicon.ico') }}">
-  <link rel="preload" as="image" href="{{ static_bust('img/logo/handicap_zlin.png') }}">
+  <link rel="preload" as="image" href="{{ static_bust('img/logo/handicao_zlin.svg') }}">
   <meta charset="UTF-8">
   <title>{% block title %}DigiZpěvník{% endblock %}</title>
   {% include '_theme.html' %}
@@ -238,7 +238,7 @@
 <body>
   <div class="navbar">
     <div class="left-group">
-      <img class="brand-logo" src="{{ static_bust('img/logo/handicap_zlin.png') }}" alt="Handicap Zlín" onclick="window.location.href='{{ url_for('dashboard') }}'" />
+      <img class="brand-logo" src="{{ static_bust('img/logo/handicao_zlin.svg') }}" alt="Handicap Zlín" onclick="window.location.href='{{ url_for('dashboard') }}'" />
       <a href="{{ url_for('public_songbooks') }}" class="highlight">Naše zpěvníky</a>
       {% if guest is defined and guest %}
         <span class="tooltip" data-tooltip="Pouze pro přihlášené uživatele">
