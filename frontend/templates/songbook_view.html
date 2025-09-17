@@ -1,0 +1,1084 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Zpěvník{% endblock %}
+
+{% block content %}
+<style>
+  .zoom-scroll-wrapper {
+    width: 100%;
+    max-width: 100%;
+    height: 100vh;
+    overflow: auto;
+    position: relative;
+    isolation: isolate;
+    z-index: 0;
+  }
+</style>
+
+<style>
+  /* Songbook picker (theme-aware) */
+  .sb-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 4000; display: flex; align-items: center; justify-content: center; }
+  .sb-picker-panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 16px; width: min(440px, 92vw); }
+  .sb-picker-panel h3 { margin: 0 0 8px; color: var(--brand-dark, #1b5e20); font-size: 18px; }
+  .sb-picker-list { max-height: 50vh; overflow: auto; margin: 6px 0 10px; }
+  .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
+  .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
+  .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
+  .sb-picker-create .plus { width: 22px; height: 22px; filter: invert(28%) sepia(80%) saturate(1200%) hue-rotate(88deg) brightness(92%) contrast(95%); }
+  .sb-picker-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  .sb-color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 14px; }
+  .sb-picker-item.disabled { opacity: 0.5; cursor: not-allowed; position: relative; }
+  .sb-picker-item.disabled::after { content: attr(data-tooltip); position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.9); color: #fff; padding: 4px 6px; border-radius: 6px; font-size: 12px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s ease-in-out; }
+  .sb-picker-item.disabled:hover::after { opacity: 1; }
+</style>
+
+<style>
+    .viewer-container {
+        display: block;
+        min-width: fit-content;
+        min-height: fit-content;
+        width: max-content;
+        margin: 0 auto;
+        padding: 20px 20px 40px;
+    }
+    /* In double-page mode reduce bottom padding to minimize unused gap */
+    .viewer-container.double-page-mode {
+        padding-bottom: 12px;
+    }
+    
+    body.navbar-hidden #toc-modal #toc-modal-wrapper {
+      top: 20px;
+    }
+
+    .page-pair {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin-bottom: 20px;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .page-pair img {
+        width: auto;
+        max-width: none;
+        height: auto;
+        background-color: transparent;
+        border-radius: 10px;
+        background-clip: border-box;
+        border: 0;
+        outline: none;
+        box-shadow: none;
+    }
+
+    /* Pure color canvas used for blank cover pages (no <img> src to avoid UA borders) */
+    .page-blank {
+        display: none;
+        border-radius: 10px;
+        background-clip: border-box;
+        border: 0;
+        outline: none;
+        box-shadow: none;
+    }
+
+    .scroll-mode img {
+        width: auto;
+        max-width: none;
+        height: auto;
+        background-color: transparent;
+        border-radius: 10px;
+        background-clip: border-box;
+        border: 0;
+        outline: none;
+        box-shadow: none;
+        z-index: 1;
+        position: relative; 
+    }
+
+    .nav-buttons {
+        margin-top: 10px;
+        display: flex;
+        justify-content: center;
+        gap: 40px;
+        align-items: center;
+    }
+
+    .nav-buttons button,
+    .mode-buttons button {
+        background: white;
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        cursor: pointer;
+        transition: transform 0.2s;
+        z-index: 0;
+    }
+
+    .nav-buttons button:hover,
+    .mode-buttons button:hover {
+        transform: scale(1.1);
+    }
+
+    .nav-buttons img,
+    .mode-buttons img {
+        width: 30px;
+        height: 30px;
+        display: block;
+        margin: auto;
+    }
+
+    .mode-buttons {
+        position: fixed;
+        top: 90px;
+        right: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        z-index: 1000;
+        opacity: 1;
+        transition: opacity 0.25s ease;
+    }
+
+    .scroll-mode {
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        overflow: auto;
+    }
+
+
+    .button-container {
+        position: relative;
+    }
+
+    .tooltip-text {
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        font-size: 0.75em;
+        padding: 6px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+        pointer-events: none;
+        z-index: 9999;
+    }
+
+    .button-container:hover .tooltip-text {
+        opacity: 1;
+    }
+
+    #toc-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: none;
+        justify-content: center;
+        align-items: flex-start;
+        overflow: hidden;
+        z-index: 2000;
+    }
+    .add-to-songbook-button {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .add-to-songbook-button img {
+      width: 24px;
+      height: 24px;
+      filter: invert(48%) sepia(65%) saturate(432%) hue-rotate(78deg) brightness(90%) contrast(92%);
+      pointer-events: none;
+    }
+
+    .add-to-songbook-button:hover {
+      transform: scale(1.1);
+    }
+
+    .add-to-songbook-button.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    #toc-modal-wrapper {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 90px;
+    }
+
+    .navbar.hidden ~ #toc-modal #toc-modal-wrapper {
+      top: 20px;
+    }
+
+    #toc-modal .content {
+      background: white;
+      color: black;
+      padding: 30px;
+      border-radius: 10px;
+      max-height: 80vh;
+      overflow-y: auto;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    #toc-modal .content h3 {
+      margin-top: 0;
+    }
+
+    #toc-modal table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    #toc-modal td {
+        padding: 10px 20px;
+        border-bottom: 1px solid #ccc;
+    }
+
+    #toc-modal tr {
+        cursor: pointer;
+    }
+
+    #toc-modal tr:hover {
+        background: #f5f5f5;
+    }
+</style>
+
+<style>
+  .zoom-buttons {
+    position: fixed;
+    top: 90px;
+    left: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 100;
+  }
+  .zoom-buttons .button-container {
+    position: relative;
+  }
+
+  .zoom-buttons button {
+    background: white;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    cursor: pointer;
+    transition: transform 0.2s;
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 1000;
+  }
+
+  .zoom-buttons button:hover {
+    transform: scale(1.1);
+  }
+
+  /* Shared fade behaviour for side UI groups */
+  .zoom-buttons { opacity: 1; transition: opacity 0.25s ease; }
+  .mode-buttons { opacity: 1; transition: opacity 0.25s ease; }
+  .zoom-buttons.fade-hidden, .mode-buttons.fade-hidden { opacity: 0; pointer-events: none; }
+</style>
+
+<style>
+    /* Make tooltip text visible on hover for mode-buttons */
+    .mode-buttons button:hover + .tooltip-text,
+    .mode-buttons button:hover .tooltip-text {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .zoom-buttons img {
+      width: 30px;
+      height: 30px;
+      object-fit: contain;
+      pointer-events: none;
+      display: block;
+      margin: auto;
+    }
+</style>
+
+<div class="zoom-scroll-wrapper">
+  <div class="viewer-container">
+  <div id="double-page" class="page-pair">
+  <img id="left-page" src="">
+  <img id="right-page" src="">
+</div>
+
+  <div id="scroll-mode" class="scroll-mode">
+    {% for pair in page_files %}
+      {% for page in pair %}
+        {% if page %}
+          {% if page is string %}
+            {% set page_obj = {"file": page, "page_number": None} %}
+          {% else %}
+            {% set page_obj = page %}
+          {% endif %}
+          {% if page_obj.file != 'none' and page_obj.file != 'blank' %}
+            <img src="/songbooks/{{ page_obj.file }}" data-file="{{ page_obj.file }}" data-kind="{{ page_obj.kind or 'content' }}" id="scroll-page-{{ loop.index }}">
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+    {% endfor %}
+  </div>
+
+  <div id="nav-controls" class="nav-buttons">
+    <button onclick="prevPage()" class="tooltip" data-tooltip="Předchozí">
+      <img src="{{ static_bust('img/icons/arrow_left.svg') }}">
+    </button>
+    
+    <input type="text" id="page-input"
+           onclick="this.select()"
+           onfocus="this.select()"
+           onchange="jumpToPage()"
+           style="width: 80px; font-size: 1.2em; text-align: center; padding: 6px 10px; border: none; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+
+    <button onclick="nextPage()" class="tooltip" data-tooltip="Další">
+      <img src="{{ static_bust('img/icons/arrow_right.svg') }}">
+    </button>
+  </div>
+
+  <div id="toc-modal">
+    <div id="toc-modal-wrapper">
+      <div class="content">
+        <h3>Obsah</h3>
+        <table id="toc-table"></table>
+      </div>
+    </div>
+  </div>
+
+  <div class="zoom-buttons">
+    <div class="button-container">
+      <button onclick="zoomIn()">
+        <img src="{{ static_bust('img/icons/zoom_in.svg') }}" alt="Zoom In">
+      </button>
+      <div class="tooltip-text">Přiblížit</div>
+    </div>
+    <div class="button-container">
+      <button onclick="zoomOut()">
+        <img src="{{ static_bust('img/icons/zoom_out.svg') }}" alt="Zoom Out">
+      </button>
+      <div class="tooltip-text">Oddálit</div>
+    </div>
+    <div class="button-container" id="jump-up-button" style="display: none;">
+      <button onclick="scrollToTop()">
+        <img src="{{ static_bust('img/icons/jump_up.svg') }}" alt="Scroll to Top">
+      </button>
+      <div class="tooltip-text">Zpět nahoru</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="mode-buttons">
+  <div class="button-container">
+    <button onclick="enableDoublePageMode()">
+      <img src="{{ static_bust('img/icons/open_book.svg') }}" alt="Double Page Mode">
+    </button>
+    <div class="tooltip-text">Zobrazit jako dvojstranu</div>
+  </div>
+  <div class="button-container">
+    <button onclick="enableScrollMode()">
+      <img src="{{ static_bust('img/icons/scroll.svg') }}" alt="Scroll Mode">
+    </button>
+    <div class="tooltip-text">Zobrazit jako seznam</div>
+  </div>
+  <div class="button-container">
+    <button onclick="toggleToc()">
+      <img src="{{ static_bust('img/icons/toc.svg') }}" alt="Obsah">
+    </button>
+    <div class="tooltip-text">Zobrazit obsah</div>
+  </div>
+</div>
+
+<script>
+  const pageFiles = {{ page_files | tojson | safe }};
+  const BOOK_COLOR = {{ (book_color or '#FFFFFF') | tojson | safe }};
+  let currentPage = 1;
+  // Page memory for smooth transitions
+  let lastDoublePage;
+  let lastScrollPage;
+  const totalPages = {{ page_files | length }};
+  const SCROLL_CUSHION_PX = 20; // fine-tune scroll offset (pixels)
+  let initialDoubleFitScheduled = false; // prevent duplicate initial fit scheduling
+  let initialFitAttempts = 0; // retry counter for early measurements
+
+  // Identify current book and reset zoom state if switching between books
+  const BOOK_ID = "{{ book_id }}";
+  try {
+    const lastBookId = sessionStorage.getItem('dz_last_book_id');
+    if (lastBookId !== BOOK_ID) {
+      // Fresh book: reset zoom states to defaults
+      zoomDouble = 1.0;
+      zoomScroll = 0.8;
+      userZoomedDouble = false;
+      userZoomedScroll = false;
+      if (typeof initialDoubleFitDone !== 'undefined') {
+        initialDoubleFitDone = false;
+      }
+    }
+    sessionStorage.setItem('dz_last_book_id', BOOK_ID);
+  } catch (e) {
+    // sessionStorage might be unavailable; ignore and rely on defaults
+  }
+
+  function updatePages() {
+    // Save lastDoublePage for memory
+    lastDoublePage = currentPage;
+    const pair = pageFiles[currentPage - 1];
+    const leftPageFile = pair?.[0] || { file: '', page_number: null };
+    const rightPageFile = pair?.[1] || { file: '', page_number: null };
+
+    const leftPage = document.getElementById('left-page');
+    const rightPage = document.getElementById('right-page');
+
+    function getOrCreateBlank(which) {
+      const id = which === 'left' ? 'left-page-blank' : 'right-page-blank';
+      let el = document.getElementById(id);
+      if (!el) {
+        el = document.createElement('div');
+        el.id = id;
+        el.className = 'page-blank';
+        // Insert after corresponding image element to preserve layout
+        const ref = which === 'left' ? leftPage : rightPage;
+        ref.parentNode.insertBefore(el, ref.nextSibling);
+      }
+      return el;
+    }
+
+    // Updated logic to handle "blank" pages as white rectangles
+    // Helper: apply aspect-fit box and background by kind
+    function stylePageImg(imgEl, pageObj) {
+      const ar = 2480/1748; // height / width
+      // Width is controlled by zoom; compute height accordingly
+      const w = parseFloat(imgEl.style.width || '0');
+      if (w > 0) imgEl.style.height = (w * ar) + 'px';
+      imgEl.style.objectFit = 'contain';
+      const kind = (pageObj && pageObj.kind) || 'content';
+      if (pageObj.file === 'blank') {
+        // Blank background: use book color for cover blanks, white otherwise
+        imgEl.style.background = (kind === 'cover') ? BOOK_COLOR : 'white';
+      } else {
+        // Image present: cover gets book color behind; others always white
+        imgEl.style.background = (kind === 'cover') ? BOOK_COLOR : 'white';
+      }
+      imgEl.style.borderRadius = '10px';
+      imgEl.style.backgroundClip = 'border-box';
+      imgEl.style.border = '0';
+      imgEl.style.outline = 'none';
+      imgEl.style.boxShadow = 'none';
+    }
+
+    if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
+      leftPage.style.display = 'block';
+      leftPage.src = `/songbooks/${leftPageFile.file}`;
+      stylePageImg(leftPage, leftPageFile);
+      // Hide blank canvas if present
+      const blank = document.getElementById('left-page-blank');
+      if (blank) blank.style.display = 'none';
+    } else if (leftPageFile.file === 'blank') {
+      // Hide IMG entirely to avoid UA borders
+      leftPage.style.display = 'none';
+      leftPage.removeAttribute('src');
+      // Show color canvas instead
+      const blank = getOrCreateBlank('left');
+      blank.style.display = 'block';
+      blank.style.background = (leftPageFile.kind === 'cover') ? BOOK_COLOR : 'white';
+    } else {
+      leftPage.style.display = 'none';
+      leftPage.src = '';
+      const blank = document.getElementById('left-page-blank');
+      if (blank) blank.style.display = 'none';
+    }
+
+    if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
+      rightPage.style.display = 'block';
+      rightPage.src = `/songbooks/${rightPageFile.file}`;
+      stylePageImg(rightPage, rightPageFile);
+      const blank = document.getElementById('right-page-blank');
+      if (blank) blank.style.display = 'none';
+    } else if (rightPageFile.file === 'blank') {
+      rightPage.style.display = 'none';
+      rightPage.removeAttribute('src');
+      const blank = getOrCreateBlank('right');
+      blank.style.display = 'block';
+      blank.style.background = (rightPageFile.kind === 'cover') ? BOOK_COLOR : 'white';
+    } else {
+      rightPage.style.display = 'none';
+      rightPage.src = '';
+      const blank = document.getElementById('right-page-blank');
+      if (blank) blank.style.display = 'none';
+    }
+
+    // Use page_number directly
+    let leftNumber = leftPageFile.page_number;
+    let rightNumber = rightPageFile.page_number;
+
+    let display = "";
+    if (leftNumber && rightNumber && leftNumber !== rightNumber) {
+      display = `${leftNumber}–${rightNumber}`;
+    } else if (leftNumber) {
+      display = `${leftNumber}`;
+    } else if (rightNumber) {
+      display = `${rightNumber}`;
+    } else {
+      display = "";
+    }
+
+    document.getElementById('page-input').value = display;
+    applyZoom();
+    // If in double-page mode, perform auto-fit once on initial render
+    const isDouble = document.getElementById('double-page').style.display !== 'none';
+    if (isDouble && !initialDoubleFitDone && !initialDoubleFitScheduled) {
+      initialDoubleFitScheduled = true;
+      // Defer to allow DOM to paint and image load listeners to attach
+      setTimeout(() => { fitDoublePageToViewport(); }, 0);
+    }
+  }
+
+  function jumpToPage() {
+    const input = document.getElementById('page-input');
+    let val = input.value.trim().split(/[–-]/)[0];  // get first number before dash
+    let pageNumber = parseInt(val);
+    if (isNaN(pageNumber)) return;
+
+    // Najdi dvojici, která obsahuje page_number == pageNumber
+    const targetIndex = pageFiles.findIndex(pair =>
+      pair.some(file => file && file.page_number === pageNumber)
+    );
+
+    if (targetIndex !== -1) {
+      enableDoublePageMode();  // přepni do double mode pokud už tam nejsme
+      currentPage = targetIndex + 1;
+      updatePages();
+    }
+  }
+
+  function nextPage() {
+    if (currentPage < totalPages) {
+      currentPage += 1;
+      updatePages();
+    }
+  }
+
+  function prevPage() {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      updatePages();
+    }
+  }
+
+  function enableScrollMode() {
+    // Store last double page before switching
+    lastDoublePage = currentPage;
+    document.getElementById('double-page').style.display = 'none';
+    document.getElementById('scroll-mode').style.display = 'flex';
+    document.getElementById('nav-controls').style.display = 'none';
+    document.querySelector('.viewer-container').classList.remove('double-page-mode');
+    // Do not reset zoom; respect per-mode zoom
+    applyZoom();
+    const wrapper = document.querySelector('.zoom-scroll-wrapper');
+    // Try to restore scroll position based on lastDoublePage
+    if (typeof lastDoublePage !== 'undefined') {
+      const pair = pageFiles[lastDoublePage - 1];
+      const pageToScroll = pair?.find(p => p && p.file && p.file.includes('page'));
+      if (pageToScroll) {
+        const target = document.querySelector(`#scroll-mode img[data-file="${pageToScroll.file}"]`);
+        if (target) {
+          const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
+          wrapper.scrollTo({ top, behavior: "instant" });
+          if (pageToScroll.file) lastScrollPage = pageToScroll.file;
+        }
+      }
+    } else {
+      wrapper.scrollTop = 0;
+      wrapper.scrollLeft = 0;
+    }
+    document.getElementById("jump-up-button").style.display = "block";
+    // Hide TOC modal if open
+    const modal = document.getElementById("toc-modal");
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+      document.body.style.overflow = '';
+    }
+  }
+
+function enableDoublePageMode() {
+  // Try to determine the current scroll image file
+  let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
+    const rect = img.getBoundingClientRect();
+    return rect.top >= 0 && rect.bottom <= window.innerHeight;
+  });
+
+  // Fallback if no image is fully visible: use the image closest to center
+  if (!visibleImage) {
+    const wrapperMiddle = window.innerHeight / 2;
+    let closestImage = null;
+    let smallestDistance = Infinity;
+
+    for (let img of document.querySelectorAll('#scroll-mode img')) {
+      const rect = img.getBoundingClientRect();
+      const imgMiddle = rect.top + rect.height / 2;
+      const distance = Math.abs(imgMiddle - wrapperMiddle);
+      if (distance < smallestDistance) {
+        smallestDistance = distance;
+        closestImage = img;
+      }
+    }
+
+    visibleImage = closestImage;
+  }
+
+  let file = null;
+
+  if (visibleImage) {
+    file = visibleImage.getAttribute('data-file');
+  }
+  console.log(visibleImage, file, lastScrollPage);
+
+  if (!file && lastScrollPage) {
+    file = lastScrollPage;
+  }
+
+  if (file) {
+    const pageIndex = pageFiles.findIndex(pair =>
+      pair.some(entry => entry?.file === file)
+    );
+    if (pageIndex !== -1) {
+      currentPage = pageIndex + 1;
+    }
+  }
+
+  document.getElementById('scroll-mode').style.display = 'none';
+  document.getElementById('double-page').style.display = 'flex';
+  document.getElementById('nav-controls').style.display = 'flex';
+  document.querySelector('.viewer-container').classList.add('double-page-mode');
+  updatePages();
+  // Do not auto-fit on mode switch; keep the last double-page zoom
+  applyZoom();
+  document.getElementById("jump-up-button").style.display = "none";
+  const modal = document.getElementById("toc-modal");
+  if (modal.style.display === "flex") {
+    modal.style.display = "none";
+    document.body.style.overflow = '';
+  }
+}
+
+  // Helper function to format page label by stripping known image extensions and "page" prefix
+  function formatPageLabel(filename) {
+    const match = filename.match(/^page(\d+)\.(png|jpg|jpeg|webp)$/i);
+    return match ? match[1] : filename;
+  }
+
+  function toggleToc() {
+    const modal = document.getElementById("toc-modal");
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+      document.body.style.overflow = '';
+    } else {
+      modal.style.display = "flex";
+      document.body.style.overflow = 'hidden';
+      fetch(`/api/songbook/{{ book_id }}/toc`)
+        .then(response => response.json())
+        .then(data => {
+          const table = document.getElementById("toc-table");
+          table.innerHTML = "";
+          (data.pages || []).forEach(entry => {
+            const row = document.createElement("tr");
+            const cell1 = document.createElement("td");
+            cell1.textContent = entry.title;
+            const cell2 = document.createElement("td");
+            cell2.textContent = entry.author || '';
+            const cell3 = document.createElement("td");
+            cell3.textContent = entry.page_number || formatPageLabel(entry.page);
+
+            const cell4 = document.createElement("td");
+            const addBtn = document.createElement("button");
+            addBtn.className = "add-to-songbook-button";
+            const icon = document.createElement("img");
+            icon.src = "{{ static_bust('img/icons/add_song.svg') }}";
+            icon.alt = "Přidat";
+            icon.style.width = "20px";
+            icon.style.height = "20px";
+            icon.style.pointerEvents = "none";
+            addBtn.appendChild(icon);
+
+            const container = document.createElement("div");
+            container.className = "button-container";
+            container.appendChild(addBtn);
+
+            {% if guest %}
+            addBtn.classList.add("disabled");
+            addBtn.addEventListener("click", function(e) {
+              e.preventDefault();
+              e.stopPropagation();
+            });
+            const tooltip = document.createElement("div");
+            tooltip.className = "tooltip-text";
+            tooltip.textContent = "Pouze pro přihlášené uživatele";
+            container.appendChild(tooltip);
+            {% else %}
+            addBtn.onclick = async (e) => {
+              e.stopPropagation();
+              const songId = entry.song_id;
+              if (!songId) return;
+              // Fetch user's private songbooks
+              let items = [];
+              try {
+                const resp = await fetch(`/api/my-songbooks/options?song_id=${encodeURIComponent(songId)}`);
+                if (resp.ok) {
+                  const data = await resp.json();
+                  items = (data && data.items) || [];
+                }
+              } catch (_) {}
+
+              // Theme-aware picker
+              const overlay = document.createElement('div'); overlay.className = 'sb-picker-overlay';
+              const panel = document.createElement('div'); panel.className = 'sb-picker-panel';
+              const h = document.createElement('h3'); h.textContent = 'Vyber zpěvník'; panel.appendChild(h);
+              const list = document.createElement('div'); list.className = 'sb-picker-list'; panel.appendChild(list);
+              // Helper to lighten hex color by mixing with white (pct 0-100)
+              function lightenHex(hex, pct) {
+                try { let h=(hex||'').trim(); if(!h) return '#ffffff'; if(h[0]==='#') h=h.slice(1); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const r=parseInt(h.slice(0,2),16), g=parseInt(h.slice(2,4),16), b=parseInt(h.slice(4,6),16); const p=Math.max(0,Math.min(100,+pct||0))/100; const mix=(c)=>Math.round(c+(255-c)*p); const to2=(n)=>n.toString(16).padStart(2,'0'); return `#${to2(mix(r))}${to2(mix(g))}${to2(mix(b))}`; } catch(_) { return '#ffffff'; }
+              }
+
+              items.forEach(it => {
+                const b = document.createElement('button'); b.className = 'sb-picker-item';
+                const dot = document.createElement('span'); dot.className = 'sb-color-dot'; dot.style.background = it.color || '#ffffff';
+                const label = document.createElement('span'); label.textContent = it.title;
+                b.appendChild(dot); b.appendChild(label);
+                const bg = lightenHex(it.color || '#ffffff', 88); b.style.background = bg;
+                if (it.has_song) { b.classList.add('disabled'); b.setAttribute('aria-disabled','true'); b.setAttribute('data-tooltip','Písnička je již ve zpěvníku'); }
+                b.addEventListener('click', async () => {
+                  if (it.has_song) return;
+                  try {
+                    const fd = new FormData(); fd.append('song_id', songId);
+                    const res = await fetch(`/api/songbooks/${encodeURIComponent(it.id)}/add-song`, { method: 'POST', body: fd });
+                    if (!res.ok) { const t = await res.text(); alert('Přidání selhalo: ' + (t || res.status)); } else { overlay.remove(); }
+                  } catch(_) { alert('Chyba při komunikaci se serverem'); }
+                });
+                list.appendChild(b);
+              });
+              const create = document.createElement('button'); create.className = 'sb-picker-item sb-picker-create'; create.innerHTML = `<img class="plus" src="${"{{ static_bust('img/icons/plus_circle.svg') }}"}" alt="+"> <span>Nový zpěvník</span>`; create.addEventListener('click', () => { window.location.href = '/my-songbooks?create=1'; }); panel.appendChild(create);
+              // No explicit close button; click outside overlay closes the picker
+              overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); }); overlay.appendChild(panel); document.body.appendChild(overlay);
+            };
+            {% endif %}
+
+            cell4.appendChild(container);
+
+            row.appendChild(cell1);
+            row.appendChild(cell2);
+            row.appendChild(cell3);
+            row.appendChild(cell4);
+
+            row.onclick = () => {
+              const scrollMode = document.getElementById("scroll-mode").style.display === "flex";
+
+              if (scrollMode) {
+                lastScrollPage = entry.page;
+                const target = document.querySelector(`#scroll-mode img[data-file="${entry.page}"]`);
+                if (target) {
+                  const wrapper = document.querySelector(".zoom-scroll-wrapper");
+                  const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
+                  wrapper.scrollTo({ top, behavior: "smooth" });
+                }
+              } else {
+                const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
+                enableDoublePageMode();
+                if (pageIndex !== -1 && !pageFiles[pageIndex].some(f => f.file === "none")) {
+                  currentPage = pageIndex + 1;
+                  updatePages();
+                }
+              }
+
+              modal.style.display = "none";
+              document.body.style.overflow = '';
+            };
+
+            table.appendChild(row);
+          });
+        });
+    }
+  }
+// --- Zoom functionality ---
+// Maintain independent zoom for double-page and scroll modes
+let zoomDouble = 1.0;
+let zoomScroll = 0.8; // default scroll mode zoom (~two zoom-out steps)
+let userZoomedDouble = false; // becomes true after manual +/- in double mode
+let userZoomedScroll = false; // becomes true after manual +/- in scroll mode
+let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
+
+  function applyZoom() {
+    const doublePage = document.querySelectorAll('#double-page img');
+    const scrollPages = document.querySelectorAll('#scroll-mode img');
+    const blankLeft = document.getElementById('left-page-blank');
+    const blankRight = document.getElementById('right-page-blank');
+
+  doublePage.forEach(img => {
+    img.style.width = `${zoomDouble * 600}px`;
+    const ar = 2480/1748;
+    const w = parseFloat(img.style.width || '0');
+    if (w > 0) img.style.height = (w * ar) + 'px';
+    img.style.objectFit = 'contain';
+  });
+  // Size blank canvases to match images
+  [blankLeft, blankRight].forEach(el => {
+    if (!el) return;
+    el.style.width = `${zoomDouble * 600}px`;
+    const ar = 2480/1748;
+    const w = parseFloat(el.style.width || '0');
+    if (w > 0) el.style.height = (w * ar) + 'px';
+  });
+  scrollPages.forEach(img => {
+    img.style.width = `${zoomScroll * 1200}px`;
+    // Approximate aspect box for scroll images as well
+    const ar = 2480/1748;
+    const w = parseFloat(img.style.width || '0');
+    if (w > 0) img.style.height = (w * ar) + 'px';
+    img.style.objectFit = 'contain';
+    // Scroll images: if cover kind, paint book color; else white
+    const kind = (img.dataset && img.dataset.kind) || 'content';
+    img.style.background = (kind === 'cover') ? BOOK_COLOR : 'white';
+  });
+}
+
+// Helpers to auto-fit double page to viewport height (with small UI reserves)
+function waitForDoubleImages() {
+  const left = document.getElementById('left-page');
+  const right = document.getElementById('right-page');
+
+  const isVisible = (img) => img && img.style.display !== 'none' && img.getAttribute('src');
+
+  const candidates = [left, right].filter(isVisible);
+  if (candidates.length === 0) return Promise.resolve();
+
+  const nextFrame = () => new Promise(r => requestAnimationFrame(() => r()));
+  const waitImg = (img) => new Promise((resolve) => {
+    if (!img) return resolve();
+    const settle = async () => { await nextFrame(); await nextFrame(); resolve(); };
+    if (img.style.display === 'none' || !img.getAttribute('src')) return resolve();
+    if (img.complete && img.naturalWidth > 0) return settle();
+    const done = () => settle();
+    img.addEventListener('load', done, { once: true });
+    img.addEventListener('error', done, { once: true });
+  });
+  return Promise.all(candidates.map(waitImg));
+}
+
+async function fitDoublePageToViewport() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const pair = document.getElementById('double-page');
+  const nav = document.getElementById('nav-controls');
+  const viewer = document.querySelector('.viewer-container');
+  if (!wrapper || !pair || !viewer) return;
+
+  // Start from baseline to measure
+  zoomDouble = 1.0;
+  applyZoom();
+  await waitForDoubleImages();
+
+  // Compute zoom to fit height: available = wrapper height - measured paddings/margins - nav
+  // Use actual scroll wrapper height (navbar space is already handled by .navbar-spacer)
+  const wrapperH = Math.max(0, wrapper.clientHeight);
+  const vStyles = getComputedStyle(viewer);
+  const pStyles = getComputedStyle(pair);
+  const nStyles = nav ? getComputedStyle(nav) : null;
+
+  const padTop = parseFloat(vStyles.paddingTop) || 0;
+  const padBottom = parseFloat(vStyles.paddingBottom) || 0;
+  const pairMarginTop = parseFloat(pStyles.marginTop) || 0;
+  const pairMarginBottom = parseFloat(pStyles.marginBottom) || 0;
+  const navH = nav && nav.offsetHeight ? nav.offsetHeight : 0;
+  const navMarginTop = nStyles ? (parseFloat(nStyles.marginTop) || 0) : 0;
+  const navMarginBottom = nStyles ? (parseFloat(nStyles.marginBottom) || 0) : 0;
+  const reserve = 32; // extra space so nav buttons are fully visible
+
+  const extras = padTop + padBottom + pairMarginTop + pairMarginBottom + navMarginTop + navMarginBottom + navH + reserve;
+  const availableH = Math.max(100, wrapperH - extras);
+
+  // Prefer measuring visible image heights directly (handles cases with one hidden side like cover)
+  const leftImg = document.getElementById('left-page');
+  const rightImg = document.getElementById('right-page');
+  const visibleHeights = [];
+  if (leftImg && leftImg.style.display !== 'none' && leftImg.src) visibleHeights.push(leftImg.offsetHeight);
+  if (rightImg && rightImg.style.display !== 'none' && rightImg.src) visibleHeights.push(rightImg.offsetHeight);
+  const measuredVisibleH = Math.max(0, ...visibleHeights);
+  const currentPairH = (measuredVisibleH || pair.offsetHeight || 1); // avoid divide by zero
+
+  // Guard: if measurement is suspiciously small on initial fit, retry a few times
+  if (!initialDoubleFitDone && initialFitAttempts < 3 && currentPairH < 100) {
+    initialFitAttempts += 1;
+    setTimeout(() => { fitDoublePageToViewport(); }, 60);
+    return;
+  }
+  let heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
+
+  // Clamp between 0.25 and 4.0
+  heightZoom = Math.max(0.25, Math.min(4.0, heightZoom));
+
+  zoomDouble = heightZoom;
+  applyZoom();
+  // Mark initial auto-fit as completed to avoid further automatic changes
+  if (!initialDoubleFitDone) {
+    initialDoubleFitDone = true;
+    initialDoubleFitScheduled = false;
+  }
+}
+
+function zoomIn() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const prevScrollY = wrapper.scrollTop;
+  const prevScrollX = wrapper.scrollLeft;
+  const prevScrollHeight = wrapper.scrollHeight;
+  const prevScrollWidth = wrapper.scrollWidth;
+
+  const isDouble = document.getElementById('double-page').style.display !== 'none';
+  if (isDouble) {
+    zoomDouble = Math.min(4.0, zoomDouble * 1.1);
+    userZoomedDouble = true;
+  } else {
+    zoomScroll = Math.min(4.0, zoomScroll * 1.1);
+    userZoomedScroll = true;
+  }
+  applyZoom();
+
+  const newScrollHeight = wrapper.scrollHeight;
+  const newScrollWidth = wrapper.scrollWidth;
+
+  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
+  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+}
+
+function zoomOut() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const prevScrollY = wrapper.scrollTop;
+  const prevScrollX = wrapper.scrollLeft;
+  const prevScrollHeight = wrapper.scrollHeight;
+  const prevScrollWidth = wrapper.scrollWidth;
+
+  const isDouble = document.getElementById('double-page').style.display !== 'none';
+  if (isDouble) {
+    zoomDouble = Math.max(0.25, zoomDouble * 0.9);
+    userZoomedDouble = true;
+  } else {
+    zoomScroll = Math.max(0.25, zoomScroll * 0.9);
+    userZoomedScroll = true;
+  }
+  applyZoom();
+
+  const newScrollHeight = wrapper.scrollHeight;
+  const newScrollWidth = wrapper.scrollWidth;
+
+  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
+  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+}
+
+function scrollToTop() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  wrapper.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+  document.addEventListener('DOMContentLoaded', () => {
+    trackScrollPage();
+    // Initial render: double-page mode by default; fit height if user hasn't zoomed
+    document.addEventListener('click', (event) => {
+      const modal = document.getElementById("toc-modal");
+      const content = modal.querySelector(".content");
+      // Don't close TOC if a top-level picker overlay is open and was clicked
+      const picker = document.querySelector('.sb-picker-overlay');
+      const clickedInPicker = !!(event.target && event.target.closest('.sb-picker-overlay'));
+      if (clickedInPicker) return;
+      if (modal.style.display === "flex" && !content.contains(event.target) && !event.target.closest('.mode-buttons')) {
+        modal.style.display = "none";
+        document.body.style.overflow = '';
+      }
+    });
+  // Support deep-linking to specific page via ?page=NN
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const target = parseInt(params.get('page'));
+    if (!isNaN(target)) {
+      const idx = pageFiles.findIndex(pair => pair && pair.some(p => p && p.page_number === target));
+      if (idx !== -1) {
+        currentPage = idx + 1;
+      }
+    }
+  } catch (e) { /* ignore */ }
+  updatePages();
+  // Rely on updatePages() to schedule a single robust initial fit; avoid duplicate fits here
+  applyZoom();
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') {
+      prevPage();
+    } else if (event.key === 'ArrowRight') {
+      nextPage();
+    }
+  });
+  // Refit on window resize if in double mode and user hasn't adjusted zoom
+  window.addEventListener('resize', () => {
+    const isDouble = document.getElementById('double-page').style.display !== 'none';
+    if (isDouble && !userZoomedDouble) {
+      fitDoublePageToViewport();
+    }
+  });
+
+  // Side UI auto-hide on inactivity (mouse/touch) with fade in/out
+  const sideZoom = document.querySelector('.zoom-buttons');
+  const sideModes = document.querySelector('.mode-buttons');
+  const sideGroups = [sideZoom, sideModes];
+  let inactivityTimer = null;
+  const HIDE_DELAY = 3000; // ms
+
+  function showSideUI() {
+    sideGroups.forEach(g => g && g.classList.remove('fade-hidden'));
+  }
+  function hideSideUI() {
+    sideGroups.forEach(g => g && g.classList.add('fade-hidden'));
+  }
+  function resetInactivityTimer() {
+    showSideUI();
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      hideSideUI();
+    }, HIDE_DELAY);
+  }
+  // Start the inactivity countdown after initial paint
+  resetInactivityTimer();
+  window.addEventListener('mousemove', resetInactivityTimer, { passive: true });
+  window.addEventListener('touchstart', resetInactivityTimer, { passive: true });
+});
+
+function trackScrollPage() {
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const scrollImages = Array.from(document.querySelectorAll('#scroll-mode img'));
+
+  wrapper.addEventListener('scroll', () => {
+    const wrapperMiddle = wrapper.scrollTop + wrapper.clientHeight / 2;
+    for (let img of scrollImages) {
+      const rect = img.getBoundingClientRect();
+      const top = rect.top + window.scrollY - wrapper.offsetTop;
+      const bottom = top + rect.height;
+
+      if (top <= wrapperMiddle && bottom >= wrapperMiddle) {
+        const file = img.getAttribute('data-file');
+        if (file) { lastScrollPage = file; return; }
+        break;
+      }
+    }
+  });
+}
+</script>
+{% endblock %}
