@@ -40,6 +40,7 @@ class Songbook(db.Model):
     title = db.Column(db.String, nullable=False)
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     first_page_side = db.Column(db.String, default="right")
+    color = db.Column(db.String, default="#FFFFFF")
     img_path_cover_preview = db.Column(db.String, nullable=True)
     img_path_cover_front_outer = db.Column(db.String, nullable=True)
     img_path_cover_front_inner = db.Column(db.String, nullable=True)

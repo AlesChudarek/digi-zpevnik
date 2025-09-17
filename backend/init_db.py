@@ -1,9 +1,15 @@
 
 import sqlite3
 
+import os
+import sqlite3
+
 def initialize_database(db_path: str, sql_file_path: str):
     with open(sql_file_path, 'r', encoding='utf-8') as f:
         sql_script = f.read()
+
+    # Ensure directory exists
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
 
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -14,4 +20,4 @@ def initialize_database(db_path: str, sql_file_path: str):
 
 # Příklad použití
 if __name__ == "__main__":
-    initialize_database("backend/db/zpevnik.db", "backend/db/create_songbook_db.sql")
+    initialize_database("instance/zpevnik.db", "backend/scripts/create_songbook_db.sql")
