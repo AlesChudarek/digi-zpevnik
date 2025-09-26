@@ -1,9 +1,11 @@
-import sqlite3
+import argparse
 import json
 import os
-import argparse
-from PIL import Image
+import re
+import sqlite3
 from collections import Counter
+
+from PIL import Image
 
 def connect_db(db_path):
     return sqlite3.connect(db_path)
@@ -57,12 +59,14 @@ def insert_song_image(cursor, song_id, image_path):
     )
 
 def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
-                   cover_preview=None, cover_front_out=None, cover_front_in=None,
-                   cover_back_in=None, cover_back_out=None, color="#FFFFFF"):
+                   first_page_side="right", cover_preview=None, cover_front_out=None,
+                   cover_front_in=None, cover_back_in=None, cover_back_out=None,
+                   color="#FFFFFF"):
     cursor.execute(
         """
         INSERT OR REPLACE INTO songbooks (
             id, title, is_public, owner_id,
+            first_page_side,
             img_path_cover_preview,
             img_path_cover_front_outer,
             img_path_cover_front_inner,
@@ -70,10 +74,11 @@ def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
             img_path_cover_back_outer,
             color
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             songbook_id, title, is_public, owner_id,
+            first_page_side,
             cover_preview,
             cover_front_out,
             cover_front_in,
@@ -89,7 +94,33 @@ def insert_songbook_page(cursor, songbook_id, song_id, page_number):
         (songbook_id, song_id, page_number)
     )
 
-import os
+HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def is_valid_hex_color(value: str) -> bool:
+    return bool(isinstance(value, str) and HEX_COLOR_RE.match(value.strip()))
+
+
+def resolve_color(data, default_color: str, image_base_path: str) -> str:
+    color = data.get("color")
+    if is_valid_hex_color(color):
+        return color.strip()
+
+    front_inner = data.get("img_path_cover_front_inner")
+    if front_inner:
+        image_path = os.path.join(image_base_path, front_inner)
+        if os.path.exists(image_path):
+            return get_songbook_color(image_path)
+    return default_color
+
+
+def reset_songbook(cursor, songbook_id: str):
+    cursor.execute("DELETE FROM songbook_pages WHERE songbook_id = ?", (songbook_id,))
+    cursor.execute("DELETE FROM song_images WHERE song_id LIKE ?", (f"{songbook_id}_%",))
+    cursor.execute("DELETE FROM songs WHERE id LIKE ?", (f"{songbook_id}_%",))
+    cursor.execute("DELETE FROM songbook_intro_outro_images WHERE songbook_id = ?", (songbook_id,))
+    cursor.execute("DELETE FROM songbooks WHERE id = ?", (songbook_id,))
+
 
 def seed_from_public_seed_folder(seed_path, db_path):
     # Ensure directory exists
@@ -109,7 +140,7 @@ def seed_from_public_seed_folder(seed_path, db_path):
 
     print(f"📂 Načítám data ze složky: {seed_path}")
 
-    for filename in os.listdir(seed_path):
+    for filename in sorted(os.listdir(seed_path)):
         if not filename.endswith(".json"):
             continue
         filepath = os.path.join(seed_path, filename)
@@ -123,25 +154,16 @@ def seed_from_public_seed_folder(seed_path, db_path):
         is_public = 0 if songbook_id == "00101" and user_id else 1
         owner_id = user_id if songbook_id == "00101" and user_id else None
 
-        def is_valid_hex_color(s: str) -> bool:
-            if not isinstance(s, str):
-                return False
-            s = s.strip()
-            import re as _re
-            return bool(_re.match(r"^#[0-9a-fA-F]{6}$", s))
-
-        # Prefer color from JSON if present and valid; otherwise compute from front inner cover
-        color = data.get("color") if is_valid_hex_color(data.get("color", "")) else "#FFFFFF"
-        if color == "#FFFFFF" and data.get("img_path_cover_front_inner"):
-            image_path = os.path.join("../data/public/images/songbooks", data.get("img_path_cover_front_inner"))
-            if os.path.exists(image_path):
-                color = get_songbook_color(image_path)
+        image_base_path = os.path.join(script_dir, "../../data/public/images/songbooks")
+        color = resolve_color(data, "#FFFFFF", image_base_path)
+        reset_songbook(cursor, songbook_id)
         insert_songbook(
             cursor,
             songbook_id,
             title,
             is_public=is_public,
             owner_id=owner_id,
+            first_page_side=data.get("first_page_side", "right"),
             cover_preview=data.get("img_path_cover_preview"),
             cover_front_out=data.get("img_path_cover_front_outer"),
             cover_front_in=data.get("img_path_cover_front_inner"),
@@ -207,8 +229,7 @@ def seed_from_public_seed_folder(seed_path, db_path):
                         print(f"⚠️  Song ID {song_id_num} not found in songs data for songbook {songbook_id}")
 
         # Collect intros and outros from the songbook folder
-        import re
-        songbook_folder = os.path.join(script_dir, "../../data/public/images/songbooks", f"{int(songbook_id):05d}")
+        songbook_folder = os.path.join(image_base_path, f"{int(songbook_id):05d}")
         if os.path.exists(songbook_folder):
             images = os.listdir(songbook_folder)
             intros = sorted([f for f in images if re.match(r"intro\d+\.png", f)], key=lambda x: int(re.search(r'\d+', x).group()))
@@ -258,6 +279,137 @@ def reset_public_data(conn):
     cursor.execute("DELETE FROM songbook_intro_outro_images") 
     conn.commit()
 
+
+def seed_from_private_seed_folder(seed_root, db_path):
+    if not os.path.isdir(seed_root):
+        print(f"ℹ️  Složka s privátními seedy neexistuje: {seed_root}")
+        return
+
+    conn = connect_db(db_path)
+    cursor = conn.cursor()
+    author_cache = {}
+
+    total_songbooks = 0
+    total_songs = 0
+
+    seed_directories = [d for d in sorted(os.listdir(seed_root)) if os.path.isdir(os.path.join(seed_root, d))]
+
+    for directory in seed_directories:
+        seed_dir = os.path.join(seed_root, directory)
+        seed_file = os.path.join(seed_dir, "seed.json")
+        if not os.path.isfile(seed_file):
+            print(f"⚠️  Přeskakuji {directory}: soubor seed.json nenalezen")
+            continue
+
+        data = load_json(seed_file)
+        songbook_id = data.get("id", directory)
+        owner_email = data.get("owner")
+
+        if not owner_email:
+            print(f"⚠️  Přeskakuji {songbook_id}: chybí pole owner")
+            continue
+
+        cursor.execute("SELECT id FROM users WHERE email = ?", (owner_email,))
+        owner_row = cursor.fetchone()
+        if not owner_row:
+            print(f"⚠️  Přeskakuji {songbook_id}: uživatel {owner_email} neexistuje")
+            continue
+
+        owner_id = owner_row[0]
+
+        image_base_path = seed_root
+        color = resolve_color(data, "#FFFFFF", image_base_path)
+
+        reset_songbook(cursor, songbook_id)
+        insert_songbook(
+            cursor,
+            songbook_id,
+            data.get("title", songbook_id),
+            is_public=0,
+            owner_id=owner_id,
+            first_page_side=data.get("first_page_side", "right"),
+            cover_preview=data.get("img_path_cover_preview"),
+            cover_front_out=data.get("img_path_cover_front_outer"),
+            cover_front_in=data.get("img_path_cover_front_inner"),
+            cover_back_in=data.get("img_path_cover_back_inner"),
+            cover_back_out=data.get("img_path_cover_back_outer"),
+            color=color
+        )
+
+        song_data = {}
+        for song_entry in data.get("songs", []):
+            raw_song_id = song_entry.get("song_id")
+            if raw_song_id is None:
+                print(f"⚠️  Přeskakuji píseň bez song_id ve zpěvníku {songbook_id}")
+                continue
+
+            song_id = f"{songbook_id}_{raw_song_id}"
+            title = song_entry.get("title", f"Untitled {raw_song_id}")
+            author = song_entry.get("author", "Neznámý autor")
+
+            author_id = insert_author(cursor, author, author_cache)
+            insert_song(cursor, song_id, title, author_id)
+            song_data[raw_song_id] = song_id
+            total_songs += 1
+
+        for page_entry in data.get("pages", []):
+            page_number = page_entry.get("page_number")
+            image_path = page_entry.get("image_path")
+            song_ids = page_entry.get("song_ids", [])
+            page_type = page_entry.get("type", "song")
+
+            if not image_path:
+                print(f"⚠️  Strana {page_number} ve zpěvníku {songbook_id} nemá definovaný obrázek")
+                continue
+
+            if not song_ids:
+                if page_type in ["intro", "outro"]:
+                    cursor.execute(
+                        "SELECT COUNT(*) FROM songbook_intro_outro_images WHERE songbook_id=? AND type=? AND image_path=?",
+                        (songbook_id, page_type, image_path)
+                    )
+                    count = cursor.fetchone()[0]
+                    if count == 0:
+                        cursor.execute(
+                            "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, ?, ?, ?)",
+                            (songbook_id, page_type, image_path, 0)
+                        )
+                else:
+                    dummy_song_id = f"{songbook_id}_page_{page_number or 'none'}"
+                    dummy_title = f"Non-song page {page_number or 'none'}"
+                    dummy_author_id = insert_author(cursor, "System", author_cache)
+                    insert_song(cursor, dummy_song_id, dummy_title, dummy_author_id)
+                    insert_songbook_page(cursor, songbook_id, dummy_song_id, page_number)
+                    insert_song_image(cursor, dummy_song_id, image_path)
+            else:
+                for song_id_num in song_ids:
+                    song_id = song_data.get(song_id_num)
+                    if song_id:
+                        insert_songbook_page(cursor, songbook_id, song_id, page_number)
+                        insert_song_image(cursor, song_id, image_path)
+                    else:
+                        print(f"⚠️  Song ID {song_id_num} not found in songs data for songbook {songbook_id}")
+
+        shared_emails = data.get("shared", []) or []
+        for email in shared_emails:
+            if not email or email == owner_email:
+                continue
+            cursor.execute("SELECT id FROM users WHERE email = ?", (email,))
+            shared_row = cursor.fetchone()
+            if not shared_row:
+                print(f"⚠️  Nelze sdílet {songbook_id} s {email}: uživatel neexistuje")
+                continue
+            cursor.execute(
+                "INSERT OR IGNORE INTO user_songbook_access (user_id, songbook_id, permission) VALUES (?, ?, 'view')",
+                (shared_row[0], songbook_id)
+            )
+
+        total_songbooks += 1
+
+    conn.commit()
+    conn.close()
+    print(f"✅ Privátní seedy: {total_songbooks} zpěvníků zpracováno.")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Seed public data into the database.")
     parser.add_argument("--reset", action="store_true", help="Reset public data tables before seeding")
@@ -266,6 +418,7 @@ if __name__ == "__main__":
     script_dir = os.path.dirname(os.path.abspath(__file__))
     db_path = os.path.join(script_dir, "../instance/zpevnik.db")
     seed_path = os.path.join(script_dir, "../../data/public/seeds/")
+    private_seed_path = os.path.join(script_dir, "../../data/private/seeds/")
 
     if args.reset:
         print("⚠️  POZOR: Tato operace vymaže všechny veřejné tabulky: songbook_pages, song_images, songs, songbooks, authors.")
@@ -280,3 +433,4 @@ if __name__ == "__main__":
             exit(0)
 
     seed_from_public_seed_folder(seed_path, db_path)
+    seed_from_private_seed_folder(private_seed_path, db_path)

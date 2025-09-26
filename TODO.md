@@ -1,43 +1,22 @@
-# Repository Reorganization Plan
+V       "odstranit píseň" do TOC u private pisně
+V       "odstranit píseň" do editoru zpěvníku
+V       v editoru cislo strany na stred
+V       v editoru pozice tlacitka ulozit
+V       přidávání blank page (non-song) mezi vlastní písničky
+V       přidávání vlastní písně v edit songbook kajo "+ přidat píseň" s dalším vyskakovacím oknem
+V       funkcionalita tlačítek odstranit ze zpěvníku
+nasadit na Oracle
+V       odstranovat obrazky po zmene coveru
+V       opravit novy zpevnik = edit zpevnik
 
-## Overview
-Reorganize the digital songbook project to separate frontend and backend, and add support for private songbooks data storage.
+X       Tlacitko ulozit pri editaci se rozsviti kdyz se udela uprava
 
-## Steps to Complete
+sjenotit tlacitka na odstranovani a pridavani pisnicek
 
-### 1. Create New Directory Structure
-- [ ] Create `data/` folder at root
-- [ ] Create `data/public/` and `data/private/`
-- [ ] Create `data/private/users/` for user-specific private data
-- [ ] Create `backend/scripts/` for database scripts
+V       divne jmena pridane blak page
 
-### 2. Move Frontend Assets
-- [ ] Move `backend/templates/` → `frontend/templates/`
-- [ ] Move `backend/static/` → `frontend/static/`
+V       odebrat moznost "Přidat obálku" - bude vždy
 
-### 3. Move Public Data
-- [ ] Move `backend/db/public_seed/` → `data/public/seeds/`
-- [ ] Move `backend/static/songbooks/` → `data/public/images/`
+V       Pri vytvoreni nove pisnicky tlacitko ulozit pisen zavre cele editacni okno
 
-### 4. Move Database Scripts
-- [ ] Move DB scripts from `backend/db/` to `backend/scripts/`
-- [ ] Update script paths in any references
-
-### 5. Update Flask Configuration
-- [ ] Update `app.py` template_folder and static_folder paths
-- [ ] Update any hardcoded paths in models/seeds
-
-### 6. Update Path References
-- [ ] Update image paths in database seeds
-- [ ] Update static file serving in routes
-- [ ] Ensure uploads folder is accessible
-
-### 7. Test Application
-- [ ] Run the Flask app to verify functionality
-- [ ] Check template rendering
-- [ ] Check static file serving
-- [ ] Test songbook viewing
-
-### 8. Prepare for Private Songbooks
-- [ ] Update models if needed for new path structure
-- [ ] Plan user folder creation logic for private songbooks
+V       Pri Zrusit v toc - odstranit pisen zavre cele TOC
