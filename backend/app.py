@@ -101,6 +101,84 @@ def serve_songbook_image(filename):
         return ("Not Found", 404)
 
 
+# ---------- Helpers for song file ownership/migration ----------
+def _base_rel_for_book(book: Songbook) -> str:
+    """Return base relative path users/<user>/<book> for a songbook's private dir."""
+    try:
+        p = book.img_path_cover_preview or book.img_path_cover_front_outer or book.img_path_cover_front_inner
+        if p and isinstance(p, str) and p.startswith('users/'):
+            parts = Path(p).parts
+            if len(parts) >= 4:
+                return str(Path(*parts[: -1]))
+    except Exception:
+        pass
+    owner = User.query.get(book.owner_id) if getattr(book, 'owner_id', None) else None
+    owner_email = getattr(owner, 'email', '') if owner else ''
+    user_dir = f"{book.owner_id}_{slugify(owner_email, 50)}"
+    book_dir = f"{book.id}_{slugify(book.title, 50) if book.title else 'untitled'}"
+    return str(Path('users') / user_dir / book_dir)
+
+
+def _handle_song_delete_for_book(sb: Songbook, song: Song):
+    """Apply origin/reference deletion logic for a song in a given songbook.
+
+    - If song has no private images -> detach only from this book
+    - If this book is not the origin (files live elsewhere) -> detach only
+    - If origin and there are other books -> move files to first other book and detach here
+    - If origin and no other books -> delete song and files entirely
+
+    Returns a dict with details; does not commit.
+    """
+    imgs = SongImage.query.filter_by(song_id=song.id).all()
+    if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
+        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+        return {'detached_only': True}
+
+    this_base_rel = _base_rel_for_book(sb)
+    origin_dir_rel = str(Path(this_base_rel) / 'songs' / song.id)
+    is_origin_here = all((img.image_path or '').startswith(origin_dir_rel + '/') for img in imgs)
+
+    other_ids = [sid for (sid,) in db.session.query(SongbookPage.songbook_id).filter(
+        (SongbookPage.song_id == song.id) & (SongbookPage.songbook_id != sb.id)
+    ).distinct().all()]
+
+    if not is_origin_here:
+        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+        return {'detached_only': True}
+
+    if other_ids:
+        new_sb = Songbook.query.get(other_ids[0])
+        new_base_rel = _base_rel_for_book(new_sb)
+        src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
+        dst_abs = PRIVATE_USER_IMAGES_DIR / Path(new_base_rel).relative_to('users') / 'songs' / song.id
+        dst_abs.mkdir(parents=True, exist_ok=True)
+        for img in imgs:
+            try:
+                fname = Path(img.image_path).name
+                src_file = src_abs / fname
+                dst_file = dst_abs / fname
+                if src_file.exists():
+                    shutil.move(str(src_file), str(dst_file))
+                img.image_path = str(Path('users') / dst_file.relative_to(PRIVATE_USER_IMAGES_DIR))
+            except Exception:
+                pass
+        try:
+            shutil.rmtree(src_abs, ignore_errors=True)
+        except Exception:
+            pass
+        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+        return {'moved_origin_to': new_sb.id}
+    else:
+        try:
+            src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
+            shutil.rmtree(src_abs, ignore_errors=True)
+        except Exception:
+            pass
+        db.session.query(SongbookPage).filter_by(song_id=song.id).delete()
+        db.session.query(SongImage).filter_by(song_id=song.id).delete()
+        db.session.delete(song)
+        return {'deleted_song': True}
+
 def slugify(value: str, maxlen: int = 60) -> str:
     """Create filesystem-friendly slug from arbitrary string.
 
@@ -236,18 +314,22 @@ def get_songbook_toc(songbook_id):
         # Skip system-generated dummy songs for non-song pages
         if song.title.startswith("Non-song page"):
             # Still count the page in the numbering
-            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
             current_page_number += len(song_images) if song_images else 1
             continue
 
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
+        author_name = song.author.name if song.author else ""
+        author_display = author_name if author_name else "-"
+        if song.title == '<Prázdná strana>' or author_name.strip().lower() == 'system':
+            author_display = '-'
         if song_images:
             # Use the first image for TOC entry
             first_image = song_images[0]
             if first_image.image_path not in seen_images:
                 toc.append({
                     "title": song.title,
-                    "author": song.author.name if song.author else "",
+                    "author": author_display,
                     "page": first_image.image_path,
                     "page_number": current_page_number,
                     "song_id": song.id
@@ -260,7 +342,7 @@ def get_songbook_toc(songbook_id):
             # Handle case with no images
             toc.append({
                 "title": song.title,
-                "author": song.author.name if song.author else "",
+                "author": author_display,
                 "page": "",
                 "page_number": current_page_number,
                 "song_id": song.id
@@ -427,7 +509,7 @@ def add_song_to_songbook(songbook_id):
     next_page = (max_page or 0) + 1
 
     # Append entries for all images of the song, in order
-    song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+    song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
     added = 0
     for img in song_images:
         db.session.add(SongbookPage(songbook_id=sb.id, song_id=song.id, page_number=next_page))
@@ -1023,6 +1105,19 @@ def update_songbook_structure(songbook_id):
 
             next_page = start + page_count if not auto_numbering else (next_page + page_count)
 
+    # Handle explicit delete requests with full origin/reference logic (staged deletes)
+    delete_raw = request.form.get('delete_songs')
+    if delete_raw:
+        try:
+            to_delete = _json.loads(delete_raw)
+        except Exception:
+            to_delete = []
+        if isinstance(to_delete, list):
+            for sid in to_delete:
+                s = Song.query.get(sid)
+                if s:
+                    _handle_song_delete_for_book(sb, s)
+
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -1054,7 +1149,7 @@ def songbook_detail(book_id):
         song = Song.query.get(page.song_id)
         if not song:
             continue
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
         if not song_images:
             # Non-song page: represent as a single blank content page and advance numbering
             pages.append({"file": "blank", "page_number": current_page_number, "kind": "content"})
@@ -1171,7 +1266,7 @@ def songbook_detail(book_id):
             continue
 
         # Get all images for this song
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
         if song_images:
             # Calculate page range for this song
             start_page = current_toc_page
@@ -1200,6 +1295,12 @@ def songbook_detail(book_id):
     # Default color fallback
     book_color = getattr(songbook, 'color', '#FFFFFF') or '#FFFFFF'
 
+    # Derive songbook type and edit capabilities for the viewer
+    is_public = bool(getattr(songbook, 'is_public', 0))
+    is_owner = current_user.is_authenticated and songbook.owner_id == current_user.id
+    book_type = 'public' if is_public else ('private' if is_owner else 'shared')
+    can_manage = can_edit_songbook(current_user, songbook)
+
     return render_template(
         'songbook_view.html',
         book_id=book_id,
@@ -1209,7 +1310,10 @@ def songbook_detail(book_id):
         first_page_side=first_page_side,
         intros=intros,
         outros=outros,
-        book_color=book_color
+        book_color=book_color,
+        songbook_type=book_type,
+        songbook_is_private=(not is_public),
+        can_manage_songbook=can_manage
     )
 
 @app.context_processor

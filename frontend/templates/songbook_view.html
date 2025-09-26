@@ -210,6 +210,24 @@
       cursor: not-allowed;
     }
 
+    .remove-from-songbook-button {
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .remove-from-songbook-button img {
+      width: 24px;
+      height: 24px;
+      filter: invert(27%) sepia(81%) saturate(4041%) hue-rotate(342deg) brightness(102%) contrast(97%);
+      pointer-events: none;
+    }
+
+    .remove-from-songbook-button:hover {
+      transform: scale(1.1);
+    }
+
     #toc-modal-wrapper {
       position: absolute;
       left: 50%;
@@ -253,6 +271,57 @@
     #toc-modal tr:hover {
         background: #f5f5f5;
     }
+</style>
+
+<style>
+  #app-confirm-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 4000;
+  }
+
+  #app-confirm-overlay .panel {
+    background: var(--muted-bg, #fff);
+    color: var(--brand-dark, #1b5e20);
+    border-radius: 12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    padding: 16px;
+    width: min(420px, 92vw);
+  }
+
+  #app-confirm-overlay .panel h3 {
+    margin: 0 0 8px;
+    font-size: 18px;
+  }
+
+  #app-confirm-overlay .panel p {
+    margin: 0 0 12px;
+  }
+
+  #app-confirm-overlay .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  #app-confirm-overlay .btn {
+    background: white;
+    color: var(--brand-dark, #1b5e20);
+    border: 1px solid var(--muted-border, #cfe6d3);
+    padding: 8px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+
+  #app-confirm-overlay .btn.primary {
+    background: var(--muted-bg, #e8f5e9);
+    border-color: var(--muted-border, #a7d7b0);
+  }
 </style>
 
 <style>
@@ -327,7 +396,11 @@
             {% set page_obj = page %}
           {% endif %}
           {% if page_obj.file != 'none' and page_obj.file != 'blank' %}
-            <img src="/songbooks/{{ page_obj.file }}" data-file="{{ page_obj.file }}" data-kind="{{ page_obj.kind or 'content' }}" id="scroll-page-{{ loop.index }}">
+            <img src="/songbooks/{{ page_obj.file }}"
+                 data-file="{{ page_obj.file }}"
+                 data-kind="{{ page_obj.kind or 'content' }}"
+                 {% if page_obj.page_number %}data-page-number="{{ page_obj.page_number }}"{% endif %}
+                 id="scroll-page-{{ loop.index }}">
           {% endif %}
         {% endif %}
       {% endfor %}
@@ -377,9 +450,21 @@
         <img src="{{ static_bust('img/icons/jump_up.svg') }}" alt="Scroll to Top">
       </button>
       <div class="tooltip-text">Zpět nahoru</div>
+</div>
+</div>
+</div>
+</div>
+
+<div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="panel">
+    <h3>Potvrzení</h3>
+    <p id="app-confirm-message">Opravdu provést akci?</p>
+    <div class="actions">
+      <button class="btn" id="app-confirm-cancel">Zrušit</button>
+      <button class="btn primary" id="app-confirm-ok">Pokračovat</button>
+      <button class="btn" id="app-confirm-save" style="display:none;">Uložit</button>
     </div>
   </div>
-</div>
 </div>
 
 <div class="mode-buttons">
@@ -406,6 +491,12 @@
 <script>
   const pageFiles = {{ page_files | tojson | safe }};
   const BOOK_COLOR = {{ (book_color or '#FFFFFF') | tojson | safe }};
+  const IS_GUEST = {{ guest | tojson }};
+  const TOC_ADD_TOOLTIP = {{ ('Pouze pro přihlášené uživatele' if guest else 'Přidat do vlastního zpěvníku') | tojson }};
+  const TOC_CAN_REMOVE = {{ (not guest and songbook_is_private and can_manage_songbook) | tojson }};
+  const TOC_REMOVE_TOOLTIP = "Odstranit ze zpěvníku";
+  const TOC_REMOVE_CONFIRM_MESSAGE = "Opravdu chcete odstranit písničku ze zpěvníku?";
+  const TOC_REMOVE_CONFIRM_OK = "Odstranit";
   let currentPage = 1;
   // Page memory for smooth transitions
   let lastDoublePage;
@@ -432,6 +523,51 @@
     sessionStorage.setItem('dz_last_book_id', BOOK_ID);
   } catch (e) {
     // sessionStorage might be unavailable; ignore and rely on defaults
+  }
+
+  if (typeof window.showConfirm !== 'function') {
+    window.showConfirm = function(message, okText) {
+      return new Promise((resolve) => {
+        const overlay = document.getElementById('app-confirm-overlay');
+        const msgEl = document.getElementById('app-confirm-message');
+        const btnOk = document.getElementById('app-confirm-ok');
+        const btnCancel = document.getElementById('app-confirm-cancel');
+        const btnSave = document.getElementById('app-confirm-save');
+        if (!overlay || !msgEl || !btnOk || !btnCancel) {
+          resolve(window.confirm(message || 'Potvrdit akci?'));
+          return;
+        }
+        msgEl.textContent = message || 'Potvrdit akci?';
+        btnOk.textContent = okText || 'Pokračovat';
+        if (btnSave) btnSave.style.display = 'none';
+        btnOk.classList.remove('primary');
+        btnCancel.classList.add('primary');
+        overlay.style.display = 'flex';
+        overlay.setAttribute('aria-hidden', 'false');
+
+        const cleanup = () => {
+          overlay.style.display = 'none';
+          overlay.setAttribute('aria-hidden', 'true');
+          btnOk.removeEventListener('click', onOk);
+          btnCancel.removeEventListener('click', onCancel);
+          overlay.removeEventListener('click', onOverlay);
+          document.removeEventListener('keydown', onKey);
+        };
+
+        const onOk = () => { cleanup(); resolve(true); };
+        const onCancel = () => { cleanup(); resolve(false); };
+        const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
+        const onKey = (e) => {
+          if (e.key === 'Escape') onCancel();
+          if (e.key === 'Enter') onOk();
+        };
+
+        btnOk.addEventListener('click', onOk);
+        btnCancel.addEventListener('click', onCancel);
+        overlay.addEventListener('click', onOverlay);
+        document.addEventListener('keydown', onKey);
+      });
+    };
   }
 
   function updatePages() {
@@ -682,6 +818,52 @@ function enableDoublePageMode() {
     return match ? match[1] : filename;
   }
 
+  function parseFirstPageNumber(pageNumber) {
+    if (pageNumber === undefined || pageNumber === null) return null;
+    const firstPart = String(pageNumber).split('-')[0].trim();
+    if (!firstPart) return null;
+    const num = parseInt(firstPart, 10);
+    return Number.isNaN(num) ? null : num;
+  }
+
+  function findPagePairIndex(entry) {
+    if (!entry) return -1;
+    let idx = -1;
+    if (entry.page) {
+      idx = pageFiles.findIndex(pair =>
+        pair.some(file => file && file.file && file.file === entry.page)
+      );
+      if (idx === -1) {
+        idx = pageFiles.findIndex(pair =>
+          pair.some(file => file && file.file && file.file.includes(entry.page))
+        );
+      }
+    }
+    if (idx === -1) {
+      const targetNumber = parseFirstPageNumber(entry.page_number);
+      if (targetNumber !== null) {
+        idx = pageFiles.findIndex(pair =>
+          pair.some(file => file && Number(file.page_number) === targetNumber)
+        );
+      }
+    }
+    return idx;
+  }
+
+  function findScrollImage(entry) {
+    if (!entry) return null;
+    if (entry.page) {
+      const img = document.querySelector(`#scroll-mode img[data-file="${entry.page}"]`);
+      if (img) return img;
+    }
+    const firstNumber = parseFirstPageNumber(entry.page_number);
+    if (firstNumber !== null) {
+      const byNumber = document.querySelector(`#scroll-mode img[data-page-number="${firstNumber}"]`);
+      if (byNumber) return byNumber;
+    }
+    return null;
+  }
+
   function toggleToc() {
     const modal = document.getElementById("toc-modal");
     if (modal.style.display === "flex") {
@@ -705,8 +887,14 @@ function enableDoublePageMode() {
             cell3.textContent = entry.page_number || formatPageLabel(entry.page);
 
             const cell4 = document.createElement("td");
+            const addWrapper = document.createElement("span");
+            addWrapper.className = "tooltip button-container";
+            addWrapper.dataset.tooltip = TOC_ADD_TOOLTIP;
+
             const addBtn = document.createElement("button");
+            addBtn.type = "button";
             addBtn.className = "add-to-songbook-button";
+            addBtn.setAttribute("aria-label", TOC_ADD_TOOLTIP);
             const icon = document.createElement("img");
             icon.src = "{{ static_bust('img/icons/add_song.svg') }}";
             icon.alt = "Přidat";
@@ -714,21 +902,15 @@ function enableDoublePageMode() {
             icon.style.height = "20px";
             icon.style.pointerEvents = "none";
             addBtn.appendChild(icon);
-
-            const container = document.createElement("div");
-            container.className = "button-container";
-            container.appendChild(addBtn);
+            addWrapper.appendChild(addBtn);
 
             {% if guest %}
             addBtn.classList.add("disabled");
+            addBtn.disabled = true;
             addBtn.addEventListener("click", function(e) {
               e.preventDefault();
               e.stopPropagation();
             });
-            const tooltip = document.createElement("div");
-            tooltip.className = "tooltip-text";
-            tooltip.textContent = "Pouze pro přihlášené uživatele";
-            container.appendChild(tooltip);
             {% else %}
             addBtn.onclick = async (e) => {
               e.stopPropagation();
@@ -777,26 +959,75 @@ function enableDoublePageMode() {
             };
             {% endif %}
 
-            cell4.appendChild(container);
+            cell4.appendChild(addWrapper);
 
             row.appendChild(cell1);
             row.appendChild(cell2);
             row.appendChild(cell3);
             row.appendChild(cell4);
 
+            if (TOC_CAN_REMOVE && entry.song_id) {
+              const cell5 = document.createElement("td");
+              const removeWrapper = document.createElement("span");
+              removeWrapper.className = "tooltip button-container";
+              removeWrapper.dataset.tooltip = TOC_REMOVE_TOOLTIP;
+
+              const removeBtn = document.createElement("button");
+              removeBtn.type = "button";
+              removeBtn.className = "remove-from-songbook-button";
+              removeBtn.setAttribute("aria-label", TOC_REMOVE_TOOLTIP);
+              const removeIcon = document.createElement("img");
+              removeIcon.src = "{{ static_bust('img/icons/remove-song.svg') }}";
+              removeIcon.alt = "Odebrat";
+              removeBtn.appendChild(removeIcon);
+
+              removeBtn.addEventListener("click", async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const confirmed = typeof window.showConfirm === 'function'
+                  ? await window.showConfirm(TOC_REMOVE_CONFIRM_MESSAGE, TOC_REMOVE_CONFIRM_OK)
+                  : window.confirm(TOC_REMOVE_CONFIRM_MESSAGE);
+                if (!confirmed) return;
+                try {
+                  const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(BOOK_ID)}/songs/${encodeURIComponent(entry.song_id)}`, { method: 'DELETE' });
+                  if (!resp.ok) {
+                    const text = await resp.text();
+                    alert('Mazání písničky selhalo: ' + (text || resp.status));
+                    return;
+                  }
+                  window.location.reload();
+                } catch (err) {
+                  console.error(err);
+                  alert('Chyba při mazání písničky.');
+                }
+              });
+
+              removeWrapper.appendChild(removeBtn);
+              cell5.appendChild(removeWrapper);
+              row.appendChild(cell5);
+            }
+
             row.onclick = () => {
               const scrollMode = document.getElementById("scroll-mode").style.display === "flex";
+              const pageIndex = findPagePairIndex(entry);
 
               if (scrollMode) {
-                lastScrollPage = entry.page;
-                const target = document.querySelector(`#scroll-mode img[data-file="${entry.page}"]`);
+                const target = findScrollImage(entry);
                 if (target) {
                   const wrapper = document.querySelector(".zoom-scroll-wrapper");
-                  const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
-                  wrapper.scrollTo({ top, behavior: "smooth" });
+                  if (wrapper) {
+                    const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
+                    wrapper.scrollTo({ top, behavior: "smooth" });
+                  }
+                  lastScrollPage = target.getAttribute("data-file") || entry.page || null;
+                } else if (pageIndex !== -1) {
+                  enableDoublePageMode();
+                  if (!pageFiles[pageIndex].some(f => f.file === "none")) {
+                    currentPage = pageIndex + 1;
+                    updatePages();
+                  }
                 }
               } else {
-                const pageIndex = pageFiles.findIndex(pair => pair.some(file => file && file.file && file.file.includes(entry.page)));
                 enableDoublePageMode();
                 if (pageIndex !== -1 && !pageFiles[pageIndex].some(f => f.file === "none")) {
                   currentPage = pageIndex + 1;
@@ -1000,7 +1231,10 @@ function scrollToTop() {
       // Don't close TOC if a top-level picker overlay is open and was clicked
       const picker = document.querySelector('.sb-picker-overlay');
       const clickedInPicker = !!(event.target && event.target.closest('.sb-picker-overlay'));
+      const confirmOverlay = document.getElementById('app-confirm-overlay');
+      const clickedInConfirm = !!(event.target && event.target.closest('#app-confirm-overlay'));
       if (clickedInPicker) return;
+      if (clickedInConfirm) return;
       if (modal.style.display === "flex" && !content.contains(event.target) && !event.target.closest('.mode-buttons')) {
         modal.style.display = "none";
         document.body.style.overflow = '';
