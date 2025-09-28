@@ -752,6 +752,15 @@
   }
 
 function enableDoublePageMode() {
+  const doublePageEl = document.getElementById('double-page');
+  const scrollModeEl = document.getElementById('scroll-mode');
+  const isDoubleVisible = doublePageEl ? getComputedStyle(doublePageEl).display !== 'none' : false;
+  const isScrollVisible = scrollModeEl ? getComputedStyle(scrollModeEl).display !== 'none' : false;
+
+  if (isDoubleVisible && !isScrollVisible) {
+    return;
+  }
+
   // Try to determine the current scroll image file
   let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
     const rect = img.getBoundingClientRect();

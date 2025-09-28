@@ -20,3 +20,7 @@ V       odebrat moznost "Přidat obálku" - bude vždy
 V       Pri vytvoreni nove pisnicky tlacitko ulozit pisen zavre cele editacni okno
 
 V       Pri Zrusit v toc - odstranit pisen zavre cele TOC
+
+Ulozit novou pisen, pak ji zmazat, pak pridat dalsi, problem
+zobrazit dvoustranu z pisnicky od hledat = skoc na titulku
+zvyraznit mod, ve kterem jsem nebo jedna ikona co se menio

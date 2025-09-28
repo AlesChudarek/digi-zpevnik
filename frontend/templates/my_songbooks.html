@@ -100,6 +100,21 @@
   #app-confirm-overlay .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
 </style>
 
+<style>
+  #share-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4050; }
+  #share-modal .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 18px 20px; width: min(420px, 92vw); display: flex; flex-direction: column; gap: 10px; }
+  #share-modal .panel h3 { margin: 0; font-size: 18px; }
+  #share-modal label { font-weight: 600; font-size: 14px; }
+  #share-modal input[type="email"] { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); font-size: 15px; }
+  #share-modal input[type="email"]:focus { outline: 2px solid rgba(46,125,50,0.25); outline-offset: 1px; }
+  #share-modal .share-note { margin: 0; font-size: 13px; color: #8a6116; display: flex; align-items: center; gap: 8px; }
+  #share-modal .share-note img { width: 18px; height: 18px; }
+  #share-modal .feedback { min-height: 20px; font-size: 14px; }
+  #share-modal .feedback.error { color: #b00020; }
+  #share-modal .feedback.success { color: var(--brand-strong, #2E7D32); }
+  #share-modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+</style>
+
 <div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="panel">
     <h3>Potvrzení</h3>
@@ -111,6 +126,21 @@
     </div>
   </div>
   
+</div>
+
+<div id="share-modal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="panel" role="document">
+    <h3>Sdílet zpěvník</h3>
+    <p>Zadej e-mail uživatele, se kterým chceš sdílet <strong id="share-modal-book-title"></strong>.</p>
+    <p class="share-note"><img src="{{ static_bust('img/icons/warning.svg') }}" alt="Varování">Uživatel získá právo zpěvník upravovat i mazat.</p>
+    <label for="share-email-input">E-mail uživatele</label>
+    <input type="email" id="share-email-input" placeholder="uzivatel@example.com" autocomplete="email">
+    <div id="share-feedback" class="feedback" role="alert" aria-live="polite"></div>
+    <div class="actions">
+      <button class="btn" id="share-cancel-btn">Zrušit</button>
+      <button class="btn primary" id="share-submit-btn">Sdílet</button>
+    </div>
+  </div>
 </div>
 
 <h1 style="text-align:center; margin-top: 30px;">Moje zpěvníky</h1>
@@ -132,6 +162,11 @@
         <span class="tooltip" data-tooltip="Upravit zpěvník">
           <button class="icon-btn btn-edit" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation(); window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
             <img src="{{ static_bust('img/icons/edit.svg') }}" alt="Upravit">
+          </button>
+        </span>
+        <span class="tooltip" data-tooltip="Sdílet zpěvník">
+          <button class="icon-btn btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
+            <img src="{{ static_bust('img/icons/share.svg') }}" alt="Sdílet">
           </button>
         </span>
         <span class="tooltip" data-tooltip="Smazat zpěvník">
@@ -1096,7 +1131,7 @@ function openCreateModal() {
       btn.addEventListener('click', async (e) => {
         const id = btn.getAttribute('data-book-id');
         if (!id) return;
-        const ok = await window.showConfirm('Opravdu smazat tento zpěvník?', 'Odstranit');
+        const ok = await window.showConfirm('Opravdu chcete smazat tento zpěvník?', 'Odstranit');
         if (!ok) return;
         try {
           const res = await fetch(`/api/my-songbooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -1111,6 +1146,140 @@ function openCreateModal() {
         }
       });
     });
+
+    const shareModal = document.getElementById('share-modal');
+    const shareEmailInput = document.getElementById('share-email-input');
+    const shareTitleEl = document.getElementById('share-modal-book-title');
+    const shareFeedback = document.getElementById('share-feedback');
+    const shareSubmitBtn = document.getElementById('share-submit-btn');
+    const shareCancelBtn = document.getElementById('share-cancel-btn');
+
+    function setShareFeedback(message, type) {
+      if (!shareFeedback) return;
+      shareFeedback.textContent = message || '';
+      shareFeedback.classList.remove('error', 'success');
+      if (type) shareFeedback.classList.add(type);
+    }
+
+    function openShareModalFor(button) {
+      if (!shareModal) return;
+      const id = button.getAttribute('data-book-id');
+      if (!id) return;
+      const title = button.getAttribute('data-book-title') || '';
+      shareModal.dataset.bookId = id;
+      shareModal.style.display = 'flex';
+      shareModal.setAttribute('aria-hidden', 'false');
+      if (shareTitleEl) shareTitleEl.textContent = title || 'tento zpěvník';
+      if (shareEmailInput) {
+        shareEmailInput.value = '';
+        try { shareEmailInput.focus(); } catch (_) {}
+      }
+      if (shareSubmitBtn) {
+        shareSubmitBtn.disabled = false;
+        shareSubmitBtn.textContent = 'Sdílet';
+      }
+      setShareFeedback('', null);
+    }
+
+    function closeShareModal() {
+      if (!shareModal) return;
+      shareModal.style.display = 'none';
+      shareModal.setAttribute('aria-hidden', 'true');
+      delete shareModal.dataset.bookId;
+      setShareFeedback('', null);
+    }
+
+    document.querySelectorAll('.btn-share').forEach(btn => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openShareModalFor(btn);
+      });
+    });
+
+    if (shareCancelBtn) {
+      shareCancelBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        closeShareModal();
+      });
+    }
+
+    if (shareModal) {
+      shareModal.addEventListener('click', (event) => {
+        if (event.target === shareModal) {
+          closeShareModal();
+        }
+      });
+      shareModal.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') {
+          closeShareModal();
+        }
+      });
+    }
+
+    async function submitShareRequest() {
+      if (!shareModal || !shareSubmitBtn || !shareEmailInput) return;
+      const id = shareModal.dataset.bookId;
+      if (!id) return;
+      const email = (shareEmailInput.value || '').trim();
+      if (!email) {
+        setShareFeedback('Zadej e-mail uživatele.', 'error');
+        shareEmailInput.focus();
+        return;
+      }
+
+      const restoreText = shareSubmitBtn.textContent;
+      shareSubmitBtn.disabled = true;
+      shareSubmitBtn.textContent = 'Sdílím…';
+      setShareFeedback('', null);
+
+      try {
+        const res = await fetch(`/api/my-songbooks/${encodeURIComponent(id)}/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email })
+        });
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {
+          data = null;
+        }
+
+        if (!res.ok || !data || data.ok !== true) {
+          const msg = (data && (data.error || data.message)) || 'Sdílení se nezdařilo.';
+          setShareFeedback(msg, 'error');
+          return;
+        }
+
+        const message = (data && data.message) || 'Zpěvník byl úspěšně sdílen.';
+        setShareFeedback(message, 'success');
+        shareEmailInput.value = '';
+        shareEmailInput.focus();
+      } catch (err) {
+        setShareFeedback('Sdílení se nezdařilo. Zkus to prosím znovu.', 'error');
+      } finally {
+        shareSubmitBtn.disabled = false;
+        shareSubmitBtn.textContent = restoreText;
+      }
+    }
+
+    if (shareSubmitBtn) {
+      shareSubmitBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        submitShareRequest();
+      });
+    }
+
+    if (shareEmailInput) {
+      shareEmailInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          submitShareRequest();
+        }
+      });
+    }
 
     // ------- Edit mode reusing create modal -------
     window.__editMode = false;

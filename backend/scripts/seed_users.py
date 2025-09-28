@@ -18,6 +18,26 @@ def seed_test_users(db_path):
             'role': 'user'
         },
         {
+            'email': 'user2@test.com',
+            'password': 'user123',
+            'role': 'user'
+        },
+        {
+            'email': 'user3@test.com',
+            'password': 'user123',
+            'role': 'user'
+        },
+        {
+            'email': 'user4@test.com',
+            'password': 'user123',
+            'role': 'user'
+        },
+        {
+            'email': 'user5@test.com',
+            'password': 'user123',
+            'role': 'user'
+        },
+        {
             'email': 'guest@guest.com',
             'password': 'guest',
             'role': 'guest'
