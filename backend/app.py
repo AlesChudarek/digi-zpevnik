@@ -370,8 +370,12 @@ def search():
     """
     # Collect shared songbook ids for the current user
     shared_ids = []
+    shared_access = {}
     if current_user.is_authenticated:
-        shared_ids = [row.songbook_id for row in UserSongbookAccess.query.filter_by(user_id=current_user.id).all()]
+        access_rows = UserSongbookAccess.query.filter_by(user_id=current_user.id).all()
+        shared_ids = [row.songbook_id for row in access_rows]
+        for row in access_rows:
+            shared_access[row.songbook_id] = (row.permission or 'view')
 
     # Subquery to get the first (minimum) page for each song within a songbook
     first_pages_subq = (
@@ -441,6 +445,17 @@ def search():
         else:
             book_type = 'shared'
 
+        can_edit = False
+        if current_user.is_authenticated:
+            if current_user.role == 'admin':
+                can_edit = True
+            elif r.owner_id == current_user.id:
+                can_edit = True
+            else:
+                perm = (shared_access.get(r.songbook_id) or '').lower()
+                if perm in ('edit', 'admin'):
+                    can_edit = True
+
         base_color = (r.songbook_color or '#FFFFFF')
         # Compute lighter tints for row background and accents
         bg = _lighten_hex(base_color, 85)
@@ -464,7 +479,8 @@ def search():
             'tint_divider': divider,
             'book_type': book_type,
             'page_number': r.page_number,
-            'owned_by_user': (current_user.is_authenticated and r.owner_id == current_user.id)
+            'owned_by_user': (current_user.is_authenticated and r.owner_id == current_user.id),
+            'can_edit': can_edit
         })
 
     is_guest = (current_user.email == "guest@guest.com")
