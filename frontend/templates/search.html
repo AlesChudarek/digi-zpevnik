@@ -79,7 +79,29 @@
   .sb-color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 14px; }
 </style>
 
+<style>
+  #search-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4100; }
+  #search-confirm-overlay .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 18px 20px; width: min(420px, 92vw); }
+  #search-confirm-overlay .panel h3 { margin: 0 0 8px; font-size: 18px; }
+  #search-confirm-overlay .panel p { margin: 0 0 12px; }
+  #search-confirm-overlay .actions { display: flex; justify-content: flex-end; gap: 10px; }
+  #search-confirm-overlay .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+  #search-confirm-overlay .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); color: var(--brand-dark, #1b5e20); }
+  #search-confirm-overlay .btn.danger { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); }
+</style>
+
 <div class="search-container">
+  <div id="search-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="panel">
+      <h3>Potvrzení</h3>
+      <p id="search-confirm-message">Opravdu chcete tuto písničku odstranit ze zpěvníku?</p>
+      <div class="actions">
+        <button class="btn primary" id="search-confirm-cancel">Zrušit</button>
+        <button class="btn danger" id="search-confirm-ok">Odstranit</button>
+      </div>
+    </div>
+  </div>
+
   <h1 style="text-align:center; margin: 10px 0 18px;">Hledat písničku</h1>
 
   <div class="filters">
@@ -125,6 +147,7 @@
               data-book="{{ r.songbook_title }}" data-page="{{ r.page_number }}"
               data-song-id="{{ r.song_id }}"
               data-songbook-id="{{ r.songbook_id }}" data-page-num="{{ r.page_number }}" data-type="{{ r.book_type }}"
+              data-can-edit="{{ '1' if r.can_edit else '0' }}"
               data-color="{{ r.songbook_color or '#ffffff' }}"
               style="background-color: {{ r.tint_bg }}; box-shadow: inset 8px 0 0 0 {{ r.tint_accent }};"
           >
@@ -149,15 +172,9 @@
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
                 </span>
-              {% elif r.book_type == 'shared' %}
-                <span class="tooltip" data-tooltip="Nelze odstranit ve sdíleném zpěvníku">
-                  <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
-                    <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
-                  </button>
-                </span>
-              {% elif r.book_type == 'private' and not guest and r.owned_by_user %}
+              {% elif r.book_type in ['private', 'shared'] and not guest and r.can_edit %}
                 <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
-                  <button class="action-btn remove" onclick="event.stopPropagation(); /* TODO: remove action */">
+                  <button class="action-btn remove" onclick="event.stopPropagation();">
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
                 </span>
@@ -189,8 +206,6 @@
     const tPublic = document.getElementById('t-public');
     const tPrivate = document.getElementById('t-private');
     const tShared = document.getElementById('t-shared');
-    const rows = Array.from(document.querySelectorAll('#results-table tbody tr'));
-
     function updateCounts() {
       const all = Array.from(document.querySelectorAll('#results-table tbody tr'));
       const visible = all.filter(tr => tr.style.display !== 'none');
@@ -200,6 +215,7 @@
     }
 
     function apply() {
+      const rows = Array.from(document.querySelectorAll('#results-table tbody tr'));
       const t = normalizeStr(fTitle.value);
       const a = normalizeStr(fAuthor.value);
       const b = normalizeStr(fBook.value);
@@ -223,6 +239,8 @@
       applySort();
       updateCounts();
     }
+
+    window.__searchApply = apply;
 
     [fTitle, fAuthor, fBook, fPage].forEach(inp => inp.addEventListener('input', apply));
     [tPublic, tPrivate, tShared].forEach(cb => cb.addEventListener('change', apply));
@@ -307,6 +325,76 @@
         const page = tr.getAttribute('data-page-num');
         if (bookId && page) {
           window.location.href = `/songbook/${bookId}?page=${encodeURIComponent(page)}`;
+        }
+      });
+    });
+  }
+
+  function confirmDelete(message) {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('search-confirm-overlay');
+      const msgEl = document.getElementById('search-confirm-message');
+      const btnOk = document.getElementById('search-confirm-ok');
+      const btnCancel = document.getElementById('search-confirm-cancel');
+      if (!overlay || !msgEl || !btnOk || !btnCancel) {
+        // eslint-disable-next-line no-alert
+        return resolve(window.confirm(message || 'Opravdu odstranit?'));
+      }
+      msgEl.textContent = message || 'Opravdu odstranit?';
+      overlay.style.display = 'flex';
+      overlay.setAttribute('aria-hidden', 'false');
+
+      const cleanup = () => {
+        overlay.style.display = 'none';
+        overlay.setAttribute('aria-hidden', 'true');
+        btnOk.removeEventListener('click', onOk);
+        btnCancel.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlay);
+        document.removeEventListener('keydown', onKey);
+      };
+      const onOk = () => { cleanup(); resolve(true); };
+      const onCancel = () => { cleanup(); resolve(false); };
+      const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
+      const onKey = (e) => { if (e.key === 'Escape') onCancel(); if (e.key === 'Enter') onOk(); };
+      btnOk.addEventListener('click', onOk);
+      btnCancel.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlay);
+      document.addEventListener('keydown', onKey);
+    });
+  }
+
+  function bindRemoveButtons() {
+    document.querySelectorAll('.action-btn.remove').forEach(btn => {
+      if (btn.dataset.bound === '1') return;
+      if (btn.classList.contains('disabled')) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const tr = btn.closest('tr');
+        if (!tr) return;
+        const canEdit = tr.getAttribute('data-can-edit') === '1';
+        if (!canEdit) return;
+        const songId = tr.getAttribute('data-song-id');
+        const bookId = tr.getAttribute('data-songbook-id');
+        if (!songId || !bookId) return;
+
+        const ok = await confirmDelete('Opravdu chcete tuto písničku odstranit ze zpěvníku?');
+        if (!ok) return;
+
+        try {
+          const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/songs/${encodeURIComponent(songId)}`, { method: 'DELETE' });
+          if (!resp.ok) {
+            const text = await resp.text();
+            alert('Odstranění selhalo: ' + (text || resp.status));
+            return;
+          }
+          tr.remove();
+          if (window.__searchApply) {
+            window.__searchApply();
+          }
+          bindRemoveButtons();
+        } catch (_) {
+          alert('Chyba při komunikaci se serverem');
         }
       });
     });
@@ -421,6 +509,7 @@
         tr.addEventListener('mouseleave', () => { tr.style.background = base; });
       });
     }
+    bindRemoveButtons();
     applyRowColors();
   });
 </script>

@@ -384,6 +384,15 @@ def search():
         .subquery()
     )
 
+    shared_counts_subq = (
+        db.session.query(
+            UserSongbookAccess.songbook_id.label('songbook_id'),
+            func.count(UserSongbookAccess.user_id).label('shared_count')
+        )
+        .group_by(UserSongbookAccess.songbook_id)
+        .subquery()
+    )
+
     # Build query across first-pages -> song -> author -> songbook
     q = db.session.query(
         first_pages_subq.c.first_page_number.label('page_number'),
@@ -394,9 +403,11 @@ def search():
         Songbook.title.label('songbook_title'),
         Songbook.color.label('songbook_color'),
         Songbook.owner_id.label('owner_id'),
-        Songbook.is_public.label('is_public')
+        Songbook.is_public.label('is_public'),
+        shared_counts_subq.c.shared_count.label('shared_count')
     ).join(Song, Song.id == first_pages_subq.c.song_id
     ).join(Songbook, Songbook.id == first_pages_subq.c.songbook_id
+    ).outerjoin(shared_counts_subq, shared_counts_subq.c.songbook_id == Songbook.id
     ).join(Author, Song.author_id == Author.id, isouter=True)
 
     # Exclude system-generated dummy entries for non-song pages
@@ -417,9 +428,14 @@ def search():
 
     results = []
     for r in rows:
-        # Determine book type label: '' for public, 'private' if owned, otherwise 'shared'
+        shared_count = r.shared_count or 0
+
+        # Determine book type label: '' for public, 'shared' if the songbook has any shares,
+        # otherwise 'private' when owned solely by the current user.
         if r.is_public == 1:
             book_type = ''
+        elif shared_count > 0:
+            book_type = 'shared'
         elif current_user.is_authenticated and r.owner_id == current_user.id:
             book_type = 'private'
         else:
@@ -487,8 +503,8 @@ def list_my_songbooks_options():
 @login_required
 def add_song_to_songbook(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    # Only owner or admin can modify
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    # Require edit permission (owner, admin, or shared with edit)
+    if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     song_id = request.form.get('song_id') or (request.json.get('song_id') if request.is_json else None)
@@ -524,7 +540,7 @@ def add_song_to_songbook(songbook_id):
 @login_required
 def create_custom_song(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     title = (request.form.get('title') or 'Moje písnička').strip() or 'Moje písnička'
@@ -603,7 +619,7 @@ def create_custom_song(songbook_id):
 @login_required
 def delete_song_from_songbook(songbook_id, song_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     song = Song.query.get_or_404(song_id)
@@ -799,9 +815,88 @@ def api_create_songbook():
 @login_required
 def api_delete_songbook(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    # Only owner or admin can delete
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    access = UserSongbookAccess.query.filter_by(user_id=current_user.id, songbook_id=sb.id).first()
+    has_edit_share = bool(access and access.permission in ('edit', 'admin'))
+    is_owner = bool(sb.owner_id and sb.owner_id == current_user.id)
+    is_admin = current_user.role == 'admin'
+
+    if not (is_admin or is_owner or has_edit_share):
         return jsonify({"ok": False, "error": "Forbidden"}), 403
+
+    # Shared user removing the songbook from their list simply revokes access
+    if has_edit_share and not is_owner and not is_admin:
+        db.session.delete(access)
+        db.session.commit()
+        return jsonify({"ok": True, "unshared": True})
+
+    # If owner removes songbook but it is still shared, transfer ownership to the first valid shared user
+    if current_user.role != 'admin' and is_owner:
+        shared_entries = UserSongbookAccess.query.filter_by(songbook_id=sb.id).all()
+        valid_shared = []
+
+        for entry in shared_entries:
+            if entry.user_id == current_user.id:
+                db.session.delete(entry)
+                continue
+            user = User.query.get(entry.user_id)
+            if not user or user.role in ('admin', 'guest'):
+                db.session.delete(entry)
+                continue
+            valid_shared.append((entry, user))
+
+        if valid_shared:
+            valid_shared.sort(key=lambda item: item[1].email.lower())
+            chosen_entry, new_owner = valid_shared[0]
+
+            old_rel = _base_rel_for_book(sb)
+            old_rel_str = old_rel if isinstance(old_rel, str) else str(old_rel or '')
+
+            new_user_dir = f"{new_owner.id}_{slugify(new_owner.email, 50)}"
+            book_dir = f"{sb.id}_{slugify(sb.title, 50) if sb.title else 'untitled'}"
+            new_rel_path = Path('users') / new_user_dir / book_dir
+            new_rel_str = str(new_rel_path)
+
+            if old_rel_str.startswith('users/'):
+                old_rel_path = Path(old_rel_str)
+                if len(old_rel_path.parts) > 1:
+                    old_abs = PRIVATE_USER_IMAGES_DIR / Path(*old_rel_path.parts[1:])
+                    new_abs = PRIVATE_USER_IMAGES_DIR / Path(new_user_dir) / book_dir
+                    try:
+                        new_abs.parent.mkdir(parents=True, exist_ok=True)
+                        if old_abs.exists():
+                            if new_abs.exists():
+                                shutil.rmtree(new_abs, ignore_errors=True)
+                            shutil.move(str(old_abs), str(new_abs))
+                    except Exception:
+                        pass
+
+            def rewrite_path(value: str) -> str:
+                if not value or not old_rel_str or not isinstance(value, str):
+                    return value
+                if not value.startswith(old_rel_str):
+                    return value
+                suffix = value[len(old_rel_str):].lstrip('/')
+                return new_rel_str if not suffix else f"{new_rel_str}/{suffix}"
+
+            sb.img_path_cover_preview = rewrite_path(sb.img_path_cover_preview)
+            sb.img_path_cover_front_outer = rewrite_path(sb.img_path_cover_front_outer)
+            sb.img_path_cover_front_inner = rewrite_path(sb.img_path_cover_front_inner)
+            sb.img_path_cover_back_inner = rewrite_path(sb.img_path_cover_back_inner)
+            sb.img_path_cover_back_outer = rewrite_path(sb.img_path_cover_back_outer)
+
+            for intro_outro in sb.intros_outros:
+                intro_outro.image_path = rewrite_path(intro_outro.image_path)
+
+            song_ids = {row.song_id for row in SongbookPage.query.filter_by(songbook_id=sb.id).all()}
+            if song_ids:
+                for img in SongImage.query.filter(SongImage.song_id.in_(list(song_ids))).all():
+                    img.image_path = rewrite_path(img.image_path)
+
+            sb.owner_id = new_owner.id
+            db.session.delete(chosen_entry)
+            db.session.commit()
+
+            return jsonify({"ok": True})
 
     # Remove private cover directory if present
     try:
@@ -831,12 +926,50 @@ def api_delete_songbook(songbook_id):
 
     return jsonify({"ok": True})
 
+
+# API: Share a private songbook with another user
+@app.route('/api/my-songbooks/<songbook_id>/share', methods=['POST'])
+@login_required
+def api_share_songbook(songbook_id):
+    sb = Songbook.query.get_or_404(songbook_id)
+    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+        return jsonify({"ok": False, "error": "Forbidden"}), 403
+
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get('email') or request.form.get('email') or '').strip()
+
+    if not email:
+        return jsonify({"ok": False, "error": "Zadej e-mail uživatele."}), 400
+
+    normalized = email.lower()
+    target = User.query.filter(func.lower(User.email) == normalized).first()
+
+    if not target or target.role in ('admin', 'guest'):
+        return jsonify({"ok": False, "error": "Uživatel s tímto e-mailem neexistuje."}), 404
+
+    if target.id == sb.owner_id:
+        return jsonify({"ok": False, "error": "Tento uživatel již zpěvník sdílí."}), 400
+
+    existing = UserSongbookAccess.query.filter_by(user_id=target.id, songbook_id=sb.id).first()
+    if existing:
+        if existing.permission != 'edit':
+            existing.permission = 'edit'
+            db.session.commit()
+            return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Oprávnění bylo aktualizováno na úpravy a mazání."})
+        return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Uživatel má právo upravovat i mazat."})
+
+    access = UserSongbookAccess(user_id=target.id, songbook_id=sb.id, permission='edit')
+    db.session.add(access)
+    db.session.commit()
+
+    return jsonify({"ok": True, "message": f"Zpěvník byl sdílen s {target.email}."}), 200
+
 # API: Get songbook structure for editing (owner only)
 @app.route('/api/my-songbooks/<songbook_id>/structure')
 @login_required
 def get_songbook_structure(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     # Distinct songs in this songbook with start page and page count (count rows in this book)
@@ -913,7 +1046,7 @@ def get_songbook_structure(songbook_id):
 @login_required
 def update_songbook_structure(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     title = (request.form.get('title') or sb.title).strip()
