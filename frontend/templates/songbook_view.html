@@ -115,8 +115,51 @@
         z-index: 0;
     }
 
+    .mode-toggle-button {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent !important;
+        box-shadow: none !important;
+        border: none;
+    }
+
+    .mode-toggle-button::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        background: white;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        transition: transform 0.5s ease;
+        transform-origin: center;
+        pointer-events: none;
+    }
+
+    .mode-toggle-button.is-collapsing::before {
+        transform: scaleX(0);
+    }
+
+    .mode-toggle-visual {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        transition: transform 0.5s ease;
+        transform-origin: center;
+        position: relative;
+        z-index: 1;
+        pointer-events: none;
+    }
+
+    .mode-toggle-button.is-collapsing .mode-toggle-visual {
+        transform: scaleX(0);
+    }
+
     .nav-buttons button:hover,
-    .mode-buttons button:hover {
+    .mode-buttons button:not(.mode-toggle-button):hover {
         transform: scale(1.1);
     }
 
@@ -469,16 +512,12 @@
 
 <div class="mode-buttons">
   <div class="button-container">
-    <button onclick="enableDoublePageMode()">
-      <img src="{{ static_bust('img/icons/open_book.svg') }}" alt="Double Page Mode">
+    <button id="mode-toggle-button" class="mode-toggle-button" onclick="toggleReadingMode()">
+      <span class="mode-toggle-visual" aria-hidden="true">
+        <img id="mode-toggle-icon" src="{{ static_bust('img/icons/open_book.svg') }}" alt="">
+      </span>
     </button>
-    <div class="tooltip-text">Zobrazit jako dvojstranu</div>
-  </div>
-  <div class="button-container">
-    <button onclick="enableScrollMode()">
-      <img src="{{ static_bust('img/icons/scroll.svg') }}" alt="Scroll Mode">
-    </button>
-    <div class="tooltip-text">Zobrazit jako seznam</div>
+    <div class="tooltip-text" id="mode-toggle-tooltip">Zobrazit jako seznam</div>
   </div>
   <div class="button-container">
     <button onclick="toggleToc()">
@@ -497,7 +536,23 @@
   const TOC_REMOVE_TOOLTIP = "Odstranit ze zpěvníku";
   const TOC_REMOVE_CONFIRM_MESSAGE = "Opravdu chcete odstranit písničku ze zpěvníku?";
   const TOC_REMOVE_CONFIRM_OK = "Odstranit";
+  const MODE_ICON_BY_MODE = {
+    double: {{ static_bust('img/icons/open_book.svg') | tojson }},
+    scroll: {{ static_bust('img/icons/scroll.svg') | tojson }}
+  };
+  const MODE_ACTION_TOOLTIP = {
+    double: "Zobrazit jako dvojstranu",
+    scroll: "Zobrazit jako seznam"
+  };
+  let currentMode = 'double';
   let currentPage = 1;
+  // Unified mode-toggle preview state (no legacy state machine)
+  let modeToggleHoverActive = false; // true while the button is hovered/focused/touched
+  let modeToggleAnimating = false;   // true while the collapse/expand transition runs
+  let modeToggleShowingTarget = false; // if true, the icon shows target mode (preview), else current mode
+  let modeTogglePendingTarget = false; // queued target for next animation step
+  let suppressNextToggleUI = false; // when true, enable*Mode() must not touch the toggle button UI
+  let modeToggleClickEpoch = 0; // increments on each click to invalidate old listeners
   // Page memory for smooth transitions
   let lastDoublePage;
   let lastScrollPage;
@@ -717,6 +772,11 @@
   }
 
   function enableScrollMode() {
+    const scrollModeElement = document.getElementById('scroll-mode');
+    if (currentMode === 'scroll' && scrollModeElement && getComputedStyle(scrollModeElement).display !== 'none') {
+      scheduleModeToggleState();
+      return;
+    }
     // Store last double page before switching
     lastDoublePage = currentPage;
     document.getElementById('double-page').style.display = 'none';
@@ -749,77 +809,240 @@
       modal.style.display = "none";
       document.body.style.overflow = '';
     }
+    currentMode = 'scroll';
+    if (!suppressNextToggleUI) {
+      modeToggleAnimating = false;
+      const toggleButton = document.getElementById('mode-toggle-button');
+      if (toggleButton) {
+        toggleButton.classList.remove('is-collapsing');
+      }
+      updateModeToggleButton(modeToggleShowingTarget);
+      scheduleModeToggleState(true);
+    }
   }
 
-function enableDoublePageMode() {
-  const doublePageEl = document.getElementById('double-page');
-  const scrollModeEl = document.getElementById('scroll-mode');
-  const isDoubleVisible = doublePageEl ? getComputedStyle(doublePageEl).display !== 'none' : false;
-  const isScrollVisible = scrollModeEl ? getComputedStyle(scrollModeEl).display !== 'none' : false;
+  function enableDoublePageMode() {
+    const doublePageEl = document.getElementById('double-page');
+    const scrollModeEl = document.getElementById('scroll-mode');
+    const isDoubleVisible = doublePageEl ? getComputedStyle(doublePageEl).display !== 'none' : false;
+    const isScrollVisible = scrollModeEl ? getComputedStyle(scrollModeEl).display !== 'none' : false;
 
-  if (isDoubleVisible && !isScrollVisible) {
-    return;
-  }
+    if (isDoubleVisible && !isScrollVisible) {
+      currentMode = 'double';
+      scheduleModeToggleState();
+      return;
+    }
 
-  // Try to determine the current scroll image file
-  let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
-    const rect = img.getBoundingClientRect();
-    return rect.top >= 0 && rect.bottom <= window.innerHeight;
-  });
-
-  // Fallback if no image is fully visible: use the image closest to center
-  if (!visibleImage) {
-    const wrapperMiddle = window.innerHeight / 2;
-    let closestImage = null;
-    let smallestDistance = Infinity;
-
-    for (let img of document.querySelectorAll('#scroll-mode img')) {
+    // Try to determine the current scroll image file
+    let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
       const rect = img.getBoundingClientRect();
-      const imgMiddle = rect.top + rect.height / 2;
-      const distance = Math.abs(imgMiddle - wrapperMiddle);
-      if (distance < smallestDistance) {
-        smallestDistance = distance;
-        closestImage = img;
+      return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    });
+
+    // Fallback if no image is fully visible: use the image closest to center
+    if (!visibleImage) {
+      const wrapperMiddle = window.innerHeight / 2;
+      let closestImage = null;
+      let smallestDistance = Infinity;
+
+      for (let img of document.querySelectorAll('#scroll-mode img')) {
+        const rect = img.getBoundingClientRect();
+        const imgMiddle = rect.top + rect.height / 2;
+        const distance = Math.abs(imgMiddle - wrapperMiddle);
+        if (distance < smallestDistance) {
+          smallestDistance = distance;
+          closestImage = img;
+        }
+      }
+
+      visibleImage = closestImage;
+    }
+
+    let file = null;
+
+    if (visibleImage) {
+      file = visibleImage.getAttribute('data-file');
+    }
+    console.log(visibleImage, file, lastScrollPage);
+
+    if (!file && lastScrollPage) {
+      file = lastScrollPage;
+    }
+
+    if (file) {
+      const pageIndex = pageFiles.findIndex(pair =>
+        pair.some(entry => entry?.file === file)
+      );
+      if (pageIndex !== -1) {
+        currentPage = pageIndex + 1;
       }
     }
 
-    visibleImage = closestImage;
-  }
-
-  let file = null;
-
-  if (visibleImage) {
-    file = visibleImage.getAttribute('data-file');
-  }
-  console.log(visibleImage, file, lastScrollPage);
-
-  if (!file && lastScrollPage) {
-    file = lastScrollPage;
-  }
-
-  if (file) {
-    const pageIndex = pageFiles.findIndex(pair =>
-      pair.some(entry => entry?.file === file)
-    );
-    if (pageIndex !== -1) {
-      currentPage = pageIndex + 1;
+    document.getElementById('scroll-mode').style.display = 'none';
+    document.getElementById('double-page').style.display = 'flex';
+    document.getElementById('nav-controls').style.display = 'flex';
+    document.querySelector('.viewer-container').classList.add('double-page-mode');
+    updatePages();
+    // Do not auto-fit on mode switch; keep the last double-page zoom
+    applyZoom();
+    document.getElementById("jump-up-button").style.display = "none";
+    const modal = document.getElementById("toc-modal");
+    if (modal.style.display === "flex") {
+      modal.style.display = "none";
+      document.body.style.overflow = '';
+    }
+    currentMode = 'double';
+    if (!suppressNextToggleUI) {
+      modeToggleAnimating = false;
+      const toggleButton = document.getElementById('mode-toggle-button');
+      if (toggleButton) {
+        toggleButton.classList.remove('is-collapsing');
+      }
+      updateModeToggleButton(modeToggleShowingTarget);
+      scheduleModeToggleState(true);
     }
   }
 
-  document.getElementById('scroll-mode').style.display = 'none';
-  document.getElementById('double-page').style.display = 'flex';
-  document.getElementById('nav-controls').style.display = 'flex';
-  document.querySelector('.viewer-container').classList.add('double-page-mode');
-  updatePages();
-  // Do not auto-fit on mode switch; keep the last double-page zoom
-  applyZoom();
-  document.getElementById("jump-up-button").style.display = "none";
-  const modal = document.getElementById("toc-modal");
-  if (modal.style.display === "flex") {
-    modal.style.display = "none";
-    document.body.style.overflow = '';
+  function updateModeToggleButton(showingTarget, targetModeOverride = null) {
+    const button = document.getElementById('mode-toggle-button');
+    const icon = document.getElementById('mode-toggle-icon');
+    const tooltip = document.getElementById('mode-toggle-tooltip');
+    if (!button || !icon || !tooltip) return;
+    const targetMode = targetModeOverride || (currentMode === 'double' ? 'scroll' : 'double');
+    const visibleMode = showingTarget ? targetMode : currentMode;
+
+    icon.src = MODE_ICON_BY_MODE[visibleMode];
+    icon.alt = '';
+    tooltip.textContent = MODE_ACTION_TOOLTIP[targetMode];
+    button.setAttribute('aria-label', MODE_ACTION_TOOLTIP[targetMode]);
   }
+
+
+function desiredModeToggleTarget() {
+  return !!modeToggleHoverActive;
 }
+
+function scheduleModeToggleState(force = false) {
+  const desired = desiredModeToggleTarget();
+  modeTogglePendingTarget = desired;
+  if (modeToggleAnimating) return;
+  if (!force && modeToggleShowingTarget === desired) {
+    return;
+  }
+  animateModeTogglePreview(desired, force);
+}
+
+function animateModeTogglePreview(showTarget, force = false) {
+  const button = document.getElementById('mode-toggle-button');
+  if (!button) return;
+  if (!force && modeToggleShowingTarget === showTarget && !modeToggleAnimating) {
+    modeTogglePendingTarget = modeToggleShowingTarget;
+    return;
+  }
+  modeTogglePendingTarget = showTarget;
+  if (modeToggleAnimating) return;
+
+  modeToggleAnimating = true;
+  button.classList.add('is-collapsing');
+
+  const handleCollapseEnd = (event) => {
+    if (event.propertyName !== 'transform') return;
+    button.removeEventListener('transitionend', handleCollapseEnd);
+    const desiredState = modeTogglePendingTarget;
+    modeToggleShowingTarget = desiredState;
+    modeTogglePendingTarget = desiredState;
+    updateModeToggleButton(desiredState, currentMode === 'double' ? 'scroll' : 'double');
+    void button.offsetWidth;
+    requestAnimationFrame(() => {
+      button.classList.remove('is-collapsing');
+
+      const handleExpandEnd = (event2) => {
+        // Rewritten to check if the target changed during expand
+        if (event2.propertyName !== 'transform') return;
+        button.removeEventListener('transitionend', handleExpandEnd);
+        modeToggleAnimating = false;
+        const desiredNow = modeTogglePendingTarget;
+        if (desiredNow !== modeToggleShowingTarget) {
+          // If the user moved on/off during expansion, animate the new target immediately
+          requestAnimationFrame(() => animateModeTogglePreview(desiredNow, true));
+        } else {
+          // No change needed; remain in this visual state
+          // (No schedule call to avoid spurious immediate icon flips)
+        }
+      };
+
+      button.addEventListener('transitionend', handleExpandEnd);
+    });
+  };
+
+  button.addEventListener('transitionend', handleCollapseEnd);
+}
+
+  function toggleReadingMode() {
+    const targetMode = currentMode === 'double' ? 'scroll' : 'double';
+    const button = document.getElementById('mode-toggle-button');
+
+    // 1) Switch MODE immediately (layout change must not wait for animation)
+    suppressNextToggleUI = true; // prevent enable*Mode from touching the toggle UI mid-cycle
+    if (targetMode === 'scroll') {
+      enableScrollMode();
+    } else {
+      enableDoublePageMode();
+    }
+    suppressNextToggleUI = false;
+
+    // 2) Start a fresh animation cycle for the button visual, cancelling any prior one
+    const epoch = ++modeToggleClickEpoch;
+    modeToggleAnimating = true;
+    if (!button) {
+      // If no button, just ensure tooltip/icon reflect new state
+      updateModeToggleButton(!!modeToggleHoverActive);
+      modeToggleAnimating = false;
+      return;
+    }
+
+    // Reset to a known state and trigger contracting
+    button.classList.remove('is-collapsing');
+    void button.offsetWidth; // force reflow so the next class toggle restarts transition
+    button.classList.add('is-collapsing');
+
+    const onContractEnd = (ev) => {
+      if (ev.propertyName !== 'transform') return;
+      // Ignore stale listeners from older clicks/animations
+      if (epoch !== modeToggleClickEpoch) { button.removeEventListener('transitionend', onContractEnd); return; }
+      button.removeEventListener('transitionend', onContractEnd);
+
+      // While collapsed, set the icon for the expand phase: preview if hovered, else current
+      modeToggleShowingTarget = !!modeToggleHoverActive;
+      updateModeToggleButton(modeToggleShowingTarget);
+
+      // Expand
+      void button.offsetWidth; // ensure transition applies
+      requestAnimationFrame(() => {
+        if (epoch !== modeToggleClickEpoch) return; // another click happened
+        button.classList.remove('is-collapsing');
+        // --- PATCHED onExpandEnd ---
+        const onExpandEnd = (ev2) => {
+          // Rewritten to check if the target changed during expand
+          if (ev2.propertyName !== 'transform') return;
+          if (epoch !== modeToggleClickEpoch) { button.removeEventListener('transitionend', onExpandEnd); return; }
+          button.removeEventListener('transitionend', onExpandEnd);
+          modeToggleAnimating = false;
+          // If hover state changed during expand, run a secondary collapse→expand now
+          const desiredNow = desiredModeToggleTarget();
+          if (desiredNow !== modeToggleShowingTarget) {
+            requestAnimationFrame(() => animateModeTogglePreview(desiredNow, true));
+          } else {
+            // Otherwise align with current state (no forced reschedule)
+            // Keep as-is to avoid instantaneous icon flips without animation
+          }
+        };
+        button.addEventListener('transitionend', onExpandEnd);
+      });
+    };
+
+    button.addEventListener('transitionend', onContractEnd);
+  }
 
   // Helper function to format page label by stripping known image extensions and "page" prefix
   function formatPageLabel(filename) {
@@ -1232,6 +1455,26 @@ function scrollToTop() {
 }
 
   document.addEventListener('DOMContentLoaded', () => {
+    modeToggleShowingTarget = desiredModeToggleTarget();
+    modeTogglePendingTarget = modeToggleShowingTarget;
+    updateModeToggleButton(modeToggleShowingTarget);
+    const modeToggleButton = document.getElementById('mode-toggle-button');
+    if (modeToggleButton) {
+      const setHoverState = (state) => {
+        modeToggleHoverActive = state;
+        if (modeToggleAnimating) {
+          modeTogglePendingTarget = state;
+          return;
+        }
+        scheduleModeToggleState();
+      };
+      modeToggleButton.addEventListener('mouseenter', () => setHoverState(true));
+      modeToggleButton.addEventListener('mouseleave', () => setHoverState(false));
+      // modeToggleButton.addEventListener('focusin', () => setHoverState(true));
+      // modeToggleButton.addEventListener('focusout', () => setHoverState(false));
+      modeToggleButton.addEventListener('touchstart', () => setHoverState(true), { passive: true });
+      modeToggleButton.addEventListener('touchend', () => setHoverState(false), { passive: true });
+    }
     trackScrollPage();
     // Initial render: double-page mode by default; fit height if user hasn't zoomed
     document.addEventListener('click', (event) => {
@@ -1283,6 +1526,7 @@ function scrollToTop() {
   const sideModes = document.querySelector('.mode-buttons');
   const sideGroups = [sideZoom, sideModes];
   let inactivityTimer = null;
+  let inactivityPaused = false;
   const HIDE_DELAY = 3000; // ms
 
   function showSideUI() {
@@ -1292,16 +1536,57 @@ function scrollToTop() {
     sideGroups.forEach(g => g && g.classList.add('fade-hidden'));
   }
   function resetInactivityTimer() {
+    if (inactivityPaused) return;
     showSideUI();
     if (inactivityTimer) clearTimeout(inactivityTimer);
     inactivityTimer = setTimeout(() => {
       hideSideUI();
     }, HIDE_DELAY);
   }
+  function pauseInactivityTimer() {
+    inactivityPaused = true;
+    showSideUI();
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      inactivityTimer = null;
+    }
+  }
+  function resumeInactivityTimer() {
+    if (!inactivityPaused) {
+      resetInactivityTimer();
+      return;
+    }
+    inactivityPaused = false;
+    resetInactivityTimer();
+  }
+  const sideButtons = Array.from(document.querySelectorAll('.zoom-buttons button, .mode-buttons button'));
+  const resumeIfNoSideFocus = () => {
+    setTimeout(() => {
+      const active = document.activeElement;
+      if (!sideButtons.some(btn => btn === active || (active && btn.contains(active)))) {
+        resumeInactivityTimer();
+      }
+    }, 0);
+  };
+  sideButtons.forEach(btn => {
+    btn.addEventListener('mouseenter', pauseInactivityTimer);
+    btn.addEventListener('mouseleave', resumeInactivityTimer);
+    btn.addEventListener('focusin', pauseInactivityTimer);
+    btn.addEventListener('focusout', resumeIfNoSideFocus);
+    btn.addEventListener('touchstart', pauseInactivityTimer, { passive: true });
+    btn.addEventListener('touchend', resumeInactivityTimer, { passive: true });
+  });
   // Start the inactivity countdown after initial paint
   resetInactivityTimer();
   window.addEventListener('mousemove', resetInactivityTimer, { passive: true });
-  window.addEventListener('touchstart', resetInactivityTimer, { passive: true });
+  window.addEventListener('touchstart', (event) => {
+    const target = event.target;
+    if (target && target.closest('.zoom-buttons button, .mode-buttons button')) {
+      pauseInactivityTimer();
+    } else {
+      resumeInactivityTimer();
+    }
+  }, { passive: true });
 });
 
 function trackScrollPage() {
