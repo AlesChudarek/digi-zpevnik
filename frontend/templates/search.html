@@ -65,17 +65,16 @@
   .sb-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 4000; display: flex; align-items: center; justify-content: center; }
   .sb-picker-panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 16px; width: min(440px, 92vw); }
   .sb-picker-panel h3 { margin: 0 0 8px; color: var(--brand-dark, #1b5e20); font-size: 18px; }
-  .sb-picker-list { max-height: 50vh; overflow: auto; margin: 6px 0 10px; }
+    .sb-picker-list { max-height: 50vh; overflow-y: auto; overflow-x: hidden; margin: 6px 0 10px; padding: 0; }
+  .sb-picker-option { display: block; width: 100%; }
+    .sb-picker-option.tooltip { position: relative; display: block; z-index: 5; }
   .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
   .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
-  .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
+    .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); position: relative; z-index: 0; }
   .sb-picker-create .plus { width: 22px; height: 22px; filter: invert(28%) sepia(80%) saturate(1200%) hue-rotate(88deg) brightness(92%) contrast(95%); }
   .sb-picker-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .sb-color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 14px; }
-  /* Disabled item tooltip */
-  .sb-picker-item.disabled { opacity: 0.5; cursor: not-allowed; position: relative; }
-  .sb-picker-item.disabled::after { content: attr(data-tooltip); position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.9); color: #fff; padding: 4px 6px; border-radius: 6px; font-size: 12px; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity 0.15s ease-in-out; }
-  .sb-picker-item.disabled:hover::after { opacity: 1; }
+  .sb-picker-item.disabled { opacity: 0.5; cursor: not-allowed; }
   .sb-color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 14px; }
 </style>
 
@@ -400,6 +399,24 @@
     });
   }
 
+  function guardDisabledActionButtons() {
+    const guardEvents = ['click', 'mousedown', 'mouseup', 'touchstart', 'touchend'];
+    const guardHandler = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    document.querySelectorAll('.results .action-btn.disabled').forEach(btn => {
+      if (btn.dataset.guardDisabled === '1') return;
+      btn.dataset.guardDisabled = '1';
+      guardEvents.forEach(evt => btn.addEventListener(evt, guardHandler));
+      const wrapper = btn.closest('.tooltip');
+      if (wrapper && !wrapper.dataset.guardDisabled) {
+        wrapper.dataset.guardDisabled = '1';
+        guardEvents.forEach(evt => wrapper.addEventListener(evt, guardHandler, true));
+      }
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     setupFilters();
     setupSorting();
@@ -450,6 +467,8 @@
         }
 
         items.forEach(it => {
+          const wrapper = document.createElement('span'); wrapper.className = 'sb-picker-option tooltip';
+          wrapper.style.zIndex = it.has_song ? '15' : '12';
           const b = document.createElement('button'); b.className = 'sb-picker-item';
           const dot = document.createElement('span'); dot.className = 'sb-color-dot'; dot.style.background = it.color || '#ffffff';
           const label = document.createElement('span'); label.textContent = it.title;
@@ -458,10 +477,13 @@
           // Apply muted background tint
           const bg = lightenHex(it.color || '#ffffff', 88);
           b.style.background = bg;
+          const addTooltip = 'Přidat písničku do tohoto zpěvníku';
+          const alreadyTooltip = 'Zpěvník již písničku obsahuje';
+          wrapper.setAttribute('data-tooltip', addTooltip);
           if (it.has_song) {
             b.classList.add('disabled');
             b.setAttribute('aria-disabled', 'true');
-            b.setAttribute('data-tooltip', 'Písnička je již ve zpěvníku');
+            wrapper.setAttribute('data-tooltip', alreadyTooltip);
           }
           b.addEventListener('click', async () => {
             if (it.has_song) return;
@@ -480,7 +502,8 @@
               alert('Chyba při komunikaci se serverem');
             }
           });
-          list.appendChild(b);
+          wrapper.appendChild(b);
+          list.appendChild(wrapper);
         });
 
         const create = document.createElement('button');
@@ -511,6 +534,7 @@
     }
     bindRemoveButtons();
     applyRowColors();
+    guardDisabledActionButtons();
   });
 </script>
 {% endblock %}

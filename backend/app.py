@@ -948,7 +948,7 @@ def api_delete_songbook(songbook_id):
 @login_required
 def api_share_songbook(songbook_id):
     sb = Songbook.query.get_or_404(songbook_id)
-    if not (current_user.role == 'admin' or (sb.owner_id and sb.owner_id == current_user.id)):
+    if not can_edit_songbook(current_user, sb):
         return jsonify({"ok": False, "error": "Forbidden"}), 403
 
     payload = request.get_json(silent=True) or {}
