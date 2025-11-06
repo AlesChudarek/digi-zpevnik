@@ -22,7 +22,7 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      color: white;
+      color: var(--brand-contrast);
       min-height: 100vh;
     }
 
@@ -66,7 +66,7 @@
       right: 10px;
       z-index: 1001;
       background: var(--brand-dark);
-      color: var(--brand-contrast);
+      color: white;
       border: none;
       padding: 6px 12px;
       cursor: pointer;
@@ -260,7 +260,7 @@
         <a href="{{ url_for('login') }}" style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block;">Přihlásit</a>
       {% else %}
         <a href="#" onclick="document.getElementById('logout-form').submit(); return false;"
-          style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block; background: none; color: white; font-weight: bold; cursor: pointer;">
+          style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block; background: none; color: var(--brand-contrast); font-weight: bold; cursor: pointer;">
           Odhlásit
         </a>
         <form id="logout-form" action="{{ url_for('logout') }}" method="post" style="display: none;"></form>
@@ -298,18 +298,18 @@
       if (!btn || !panel) return;
       // Reordered to neigbor less similar hues (row-wise in 4 columns)
       const THEMES = [
-        { key:'blue',   name:'Blue',   color:'#00B0D5' },
-        { key:'green',  name:'Green',  color:'#2E7D32' },
-        { key:'rose',   name:'Rose',   color:'#F43F5E' },
-        { key:'slate',  name:'Slate',  color:'#334155' },
+        { key:'blue',   name:'Ta Naše',   color:'#00B0D5' },
+        { key:'green',  name:'Mechová',  color:'#2E7D32' },
+        { key:'rose',   name:'Růže',   color:'#F43F5E' },
+        { key:'slate',  name:'Void',  color:'#334155' },
         { key:'indigo', name:'Indigo', color:'#6366F1' },
-        { key:'amber',  name:'Amber',  color:'#F59E0B' },
-        { key:'teal',   name:'Teal',   color:'#14B8A6' },
-        { key:'purple', name:'Purple', color:'#7C3AED' },
-        { key:'emerald',name:'Emerald',color:'#10B981' },
-        { key:'cyan',   name:'Cyan',   color:'#06B6D4' },
-        { key:'dark',   name:'Dark',   color:'#2563EB' },
-        { key:'pink',   name:'Pink',   color:'#EC4899' }
+        { key:'amber',  name:'Jantar',  color:'#F59E0B' },
+        { key:'teal',   name:'Laguna',   color:'#14B8A6' },
+        { key:'purple', name:'Purpur', color:'#7C3AED' },
+        { key:'emerald',name:'Mentol',color:'#10B981' },
+        { key:'cyan',   name:'Azur',   color:'#06B6D4' },
+        { key:'dark',   name:'Půlnoc',   color:'#2563EB' },
+        { key:'pink',   name:'Bonbón',   color:'#EC4899' }
       ];
       panel.innerHTML = THEMES.map(t => `<span class="tooltip" data-tooltip="${t.name}"><button class="theme-swatch" style="background:${t.color}" data-theme="${t.key}" aria-label="${t.name}"></button></span>`).join('');
       function openPanel(){ panel.classList.add('visible'); btn.setAttribute('aria-expanded','true'); }

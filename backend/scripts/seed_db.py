@@ -2,8 +2,11 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
+import unicodedata
 from collections import Counter
+from pathlib import Path
 
 from PIL import Image
 
@@ -120,6 +123,16 @@ def reset_songbook(cursor, songbook_id: str):
     cursor.execute("DELETE FROM songs WHERE id LIKE ?", (f"{songbook_id}_%",))
     cursor.execute("DELETE FROM songbook_intro_outro_images WHERE songbook_id = ?", (songbook_id,))
     cursor.execute("DELETE FROM songbooks WHERE id = ?", (songbook_id,))
+
+
+def slugify(value: str, maxlen: int = 60) -> str:
+    if not value:
+        return ""
+    value = unicodedata.normalize('NFKD', str(value)).encode('ascii', 'ignore').decode('ascii')
+    value = value.lower().replace('@', '-')
+    value = re.sub(r"[^a-z0-9._-]+", "-", value)
+    value = re.sub(r"[-_.]{2,}", lambda m: m.group(0)[0], value).strip("-._")
+    return value[:maxlen] or "_"
 
 
 def seed_from_public_seed_folder(seed_path, db_path):
@@ -281,9 +294,13 @@ def reset_public_data(conn):
 
 
 def seed_from_private_seed_folder(seed_root, db_path):
-    if not os.path.isdir(seed_root):
+    seed_root_path = Path(seed_root)
+    if not seed_root_path.is_dir():
         print(f"ℹ️  Složka s privátními seedy neexistuje: {seed_root}")
         return
+
+    private_root = seed_root_path.parent / 'users'
+    private_root.mkdir(parents=True, exist_ok=True)
 
     conn = connect_db(db_path)
     cursor = conn.cursor()
@@ -292,17 +309,16 @@ def seed_from_private_seed_folder(seed_root, db_path):
     total_songbooks = 0
     total_songs = 0
 
-    seed_directories = [d for d in sorted(os.listdir(seed_root)) if os.path.isdir(os.path.join(seed_root, d))]
+    seed_directories = [p for p in sorted(seed_root_path.iterdir()) if p.is_dir()]
 
-    for directory in seed_directories:
-        seed_dir = os.path.join(seed_root, directory)
-        seed_file = os.path.join(seed_dir, "seed.json")
-        if not os.path.isfile(seed_file):
-            print(f"⚠️  Přeskakuji {directory}: soubor seed.json nenalezen")
+    for directory_path in seed_directories:
+        seed_file = directory_path / "seed.json"
+        if not seed_file.is_file():
+            print(f"⚠️  Přeskakuji {directory_path.name}: soubor seed.json nenalezen")
             continue
 
         data = load_json(seed_file)
-        songbook_id = data.get("id", directory)
+        songbook_id = data.get("id", directory_path.name)
         owner_email = data.get("owner")
 
         if not owner_email:
@@ -317,22 +333,76 @@ def seed_from_private_seed_folder(seed_root, db_path):
 
         owner_id = owner_row[0]
 
-        image_base_path = seed_root
+        image_base_path = str(seed_root_path)
         color = resolve_color(data, "#FFFFFF", image_base_path)
+
+        owner_slug = slugify(owner_email, 50)
+        if not owner_slug:
+            owner_slug = "_"
+        title_value = data.get("title", songbook_id)
+        book_slug = slugify(title_value, 50) or "untitled"
+        owner_dir = f"{owner_id}_{owner_slug}"
+        book_dir = f"{songbook_id}_{book_slug or 'untitled'}"
+        book_rel_dir = Path('users') / owner_dir / book_dir
+        book_abs_dir = private_root / owner_dir / book_dir
+
+        if book_abs_dir.exists():
+            shutil.rmtree(book_abs_dir, ignore_errors=True)
+        book_abs_dir.mkdir(parents=True, exist_ok=True)
+
+        asset_cache = {}
+
+        def copy_asset(rel_path, dest_name=None):
+            if not rel_path:
+                return None
+            if isinstance(rel_path, str) and rel_path.startswith('users/'):
+                return rel_path
+
+            key = (rel_path, dest_name)
+            if key in asset_cache:
+                return asset_cache[key]
+
+            rel_path_str = str(rel_path)
+            src_path = seed_root_path / rel_path_str
+            if not src_path.exists():
+                candidate = directory_path / Path(rel_path_str).name
+                if candidate.exists():
+                    src_path = candidate
+                else:
+                    print(f"⚠️  Nenalezen obrázek {rel_path_str} pro zpěvník {songbook_id}")
+                    return None
+
+            dest_filename = dest_name or Path(rel_path_str).name
+            dest_path = book_abs_dir / dest_filename
+            dest_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(src_path, dest_path)
+            except Exception as exc:
+                print(f"⚠️  Kopírování obrázku {src_path} selhalo: {exc}")
+
+            rel_result = str(book_rel_dir / dest_filename)
+            asset_cache[key] = rel_result
+            return rel_result
+
+        cover_preview = copy_asset(data.get("img_path_cover_preview"))
+        cover_front_out = copy_asset(data.get("img_path_cover_front_outer"))
+        cover_front_in = copy_asset(data.get("img_path_cover_front_inner"))
+        cover_back_in = copy_asset(data.get("img_path_cover_back_inner"))
+        cover_back_out = copy_asset(data.get("img_path_cover_back_outer"))
 
         reset_songbook(cursor, songbook_id)
         insert_songbook(
             cursor,
             songbook_id,
-            data.get("title", songbook_id),
+            title_value,
             is_public=0,
             owner_id=owner_id,
             first_page_side=data.get("first_page_side", "right"),
-            cover_preview=data.get("img_path_cover_preview"),
-            cover_front_out=data.get("img_path_cover_front_outer"),
-            cover_front_in=data.get("img_path_cover_front_inner"),
-            cover_back_in=data.get("img_path_cover_back_inner"),
-            cover_back_out=data.get("img_path_cover_back_outer"),
+            cover_preview=cover_preview,
+            cover_front_out=cover_front_out,
+            cover_front_in=cover_front_in,
+            cover_back_in=cover_back_in,
+            cover_back_out=cover_back_out,
             color=color
         )
 
@@ -351,6 +421,11 @@ def seed_from_private_seed_folder(seed_root, db_path):
             insert_song(cursor, song_id, title, author_id)
             song_data[raw_song_id] = song_id
             total_songs += 1
+
+        for page_entry in data.get("pages", []):
+            image_path = page_entry.get("image_path")
+            new_image_path = copy_asset(image_path)
+            page_entry["image_path"] = new_image_path
 
         for page_entry in data.get("pages", []):
             page_number = page_entry.get("page_number")
@@ -391,6 +466,7 @@ def seed_from_private_seed_folder(seed_root, db_path):
                         print(f"⚠️  Song ID {song_id_num} not found in songs data for songbook {songbook_id}")
 
         shared_emails = data.get("shared", []) or []
+        desired_permission = 'edit'
         for email in shared_emails:
             if not email or email == owner_email:
                 continue
@@ -399,10 +475,24 @@ def seed_from_private_seed_folder(seed_root, db_path):
             if not shared_row:
                 print(f"⚠️  Nelze sdílet {songbook_id} s {email}: uživatel neexistuje")
                 continue
+
+            shared_user_id = shared_row[0]
             cursor.execute(
-                "INSERT OR IGNORE INTO user_songbook_access (user_id, songbook_id, permission) VALUES (?, ?, 'view')",
-                (shared_row[0], songbook_id)
+                "SELECT permission FROM user_songbook_access WHERE user_id = ? AND songbook_id = ?",
+                (shared_user_id, songbook_id)
             )
+            existing_perm = cursor.fetchone()
+            if existing_perm:
+                if existing_perm[0] != desired_permission:
+                    cursor.execute(
+                        "UPDATE user_songbook_access SET permission = ? WHERE user_id = ? AND songbook_id = ?",
+                        (desired_permission, shared_user_id, songbook_id)
+                    )
+            else:
+                cursor.execute(
+                    "INSERT INTO user_songbook_access (user_id, songbook_id, permission) VALUES (?, ?, ?)",
+                    (shared_user_id, songbook_id, desired_permission)
+                )
 
         total_songbooks += 1
 

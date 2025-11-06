@@ -196,6 +196,20 @@
         position: relative;
     }
 
+    #toc-fly-tooltip {
+        position: fixed;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        font-size: 0.75em;
+        padding: 6px 10px;
+        border-radius: 6px;
+        white-space: nowrap;
+        pointer-events: none;
+        z-index: 6000;
+        display: none;
+        box-shadow: 0 0 6px rgba(0, 0, 0, 0.35);
+    }
+
     .tooltip-text {
         position: absolute;
         top: 100%;
@@ -238,8 +252,8 @@
     }
 
     .add-to-songbook-button img {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       filter: invert(48%) sepia(65%) saturate(432%) hue-rotate(78deg) brightness(90%) contrast(92%);
       pointer-events: none;
     }
@@ -261,8 +275,8 @@
     }
 
     .remove-from-songbook-button img {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       filter: invert(27%) sepia(81%) saturate(4041%) hue-rotate(342deg) brightness(102%) contrast(97%);
       pointer-events: none;
     }
@@ -289,7 +303,7 @@
       border-radius: 10px;
       max-height: 80vh;
       overflow-y: auto;
-      overflow-x: hidden;
+      overflow-x: visible;
       position: relative;
     }
 
@@ -527,6 +541,8 @@
   </div>
 </div>
 
+<div id="toc-fly-tooltip" style="display:none;"></div>
+
 <script>
   const pageFiles = {{ page_files | tojson | safe }};
   const BOOK_COLOR = {{ (book_color or '#FFFFFF') | tojson | safe }};
@@ -560,6 +576,79 @@
   const SCROLL_CUSHION_PX = 20; // fine-tune scroll offset (pixels)
   let initialDoubleFitScheduled = false; // prevent duplicate initial fit scheduling
   let initialFitAttempts = 0; // retry counter for early measurements
+
+  let tocTooltipEl = null;
+  function ensureTocTooltip() {
+    if (!tocTooltipEl) {
+      tocTooltipEl = document.getElementById('toc-fly-tooltip');
+      if (!tocTooltipEl) {
+        tocTooltipEl = document.createElement('div');
+        tocTooltipEl.id = 'toc-fly-tooltip';
+        document.body.appendChild(tocTooltipEl);
+      }
+    }
+    return tocTooltipEl;
+  }
+
+  function hideTocTooltip() {
+    if (tocTooltipEl) {
+      tocTooltipEl.style.display = 'none';
+    }
+  }
+
+  function positionTocTooltip(target) {
+    if (!tocTooltipEl || tocTooltipEl.style.display !== 'block') {
+      return;
+    }
+    try {
+      const rect = target.getBoundingClientRect();
+      const tipRect = tocTooltipEl.getBoundingClientRect();
+      let left = rect.left + rect.width / 2 - tipRect.width / 2;
+      left = Math.max(8, Math.min(left, window.innerWidth - tipRect.width - 8));
+      const gap = 10;
+      let top = rect.bottom + gap;
+      if (top + tipRect.height > window.innerHeight - 8) {
+        top = rect.top - tipRect.height - gap;
+      }
+      tocTooltipEl.style.left = `${left}px`;
+      tocTooltipEl.style.top = `${top}px`;
+    } catch (_) {
+      hideTocTooltip();
+    }
+  }
+
+  function showTocTooltip(target, text) {
+    if (!target || !text) {
+      hideTocTooltip();
+      return;
+    }
+    const el = ensureTocTooltip();
+    el.textContent = text;
+    el.style.display = 'block';
+    requestAnimationFrame(() => positionTocTooltip(target));
+  }
+
+  function attachTocTooltip(wrapper, textOrFn) {
+    if (!wrapper) return;
+    const getter = (typeof textOrFn === 'function') ? textOrFn : () => textOrFn;
+    const handleShow = () => showTocTooltip(wrapper, getter());
+    const handleMove = () => positionTocTooltip(wrapper);
+    wrapper.addEventListener('mouseenter', handleShow);
+    wrapper.addEventListener('mousemove', handleMove);
+    wrapper.addEventListener('mouseleave', hideTocTooltip);
+    wrapper.addEventListener('focusin', handleShow);
+    wrapper.addEventListener('focusout', hideTocTooltip);
+  }
+
+  window.addEventListener('resize', hideTocTooltip);
+  window.addEventListener('scroll', hideTocTooltip, true);
+
+  (function bindTocScrollHandler() {
+    const tocContent = document.querySelector('#toc-modal .content');
+    if (tocContent) {
+      tocContent.addEventListener('scroll', hideTocTooltip, { passive: true });
+    }
+  })();
 
   // Identify current book and reset zoom state if switching between books
   const BOOK_ID = "{{ book_id }}";
@@ -1101,12 +1190,14 @@ function animateModeTogglePreview(showTarget, force = false) {
     if (modal.style.display === "flex") {
       modal.style.display = "none";
       document.body.style.overflow = '';
+      hideTocTooltip();
     } else {
       modal.style.display = "flex";
       document.body.style.overflow = 'hidden';
       fetch(`/api/songbook/{{ book_id }}/toc`)
         .then(response => response.json())
         .then(data => {
+          hideTocTooltip();
           const table = document.getElementById("toc-table");
           table.innerHTML = "";
           (data.pages || []).forEach(entry => {
@@ -1120,8 +1211,8 @@ function animateModeTogglePreview(showTarget, force = false) {
 
             const cell4 = document.createElement("td");
             const addWrapper = document.createElement("span");
-            addWrapper.className = "tooltip button-container";
-            addWrapper.dataset.tooltip = TOC_ADD_TOOLTIP;
+            addWrapper.className = "button-container";
+            attachTocTooltip(addWrapper, () => TOC_ADD_TOOLTIP);
 
             const addBtn = document.createElement("button");
             addBtn.type = "button";
@@ -1146,6 +1237,7 @@ function animateModeTogglePreview(showTarget, force = false) {
             {% else %}
             addBtn.onclick = async (e) => {
               e.stopPropagation();
+              hideTocTooltip();
               const songId = entry.song_id;
               if (!songId) return;
               // Fetch user's private songbooks
@@ -1201,8 +1293,8 @@ function animateModeTogglePreview(showTarget, force = false) {
             if (TOC_CAN_REMOVE && entry.song_id) {
               const cell5 = document.createElement("td");
               const removeWrapper = document.createElement("span");
-              removeWrapper.className = "tooltip button-container";
-              removeWrapper.dataset.tooltip = TOC_REMOVE_TOOLTIP;
+              removeWrapper.className = "button-container";
+              attachTocTooltip(removeWrapper, () => TOC_REMOVE_TOOLTIP);
 
               const removeBtn = document.createElement("button");
               removeBtn.type = "button";
@@ -1216,6 +1308,7 @@ function animateModeTogglePreview(showTarget, force = false) {
               removeBtn.addEventListener("click", async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                hideTocTooltip();
                 const confirmed = typeof window.showConfirm === 'function'
                   ? await window.showConfirm(TOC_REMOVE_CONFIRM_MESSAGE, TOC_REMOVE_CONFIRM_OK)
                   : window.confirm(TOC_REMOVE_CONFIRM_MESSAGE);
