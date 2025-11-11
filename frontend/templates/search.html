@@ -58,6 +58,8 @@
     font-size: 13px;
     font-weight: 600;
   }
+  #results-table th.center, #results-table td.center { text-align: center; }
+  #results-table td.icon-cell { text-align: center; }
 </style>
 
 <style>
@@ -65,12 +67,12 @@
   .sb-picker-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 4000; display: flex; align-items: center; justify-content: center; }
   .sb-picker-panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 16px; width: min(440px, 92vw); }
   .sb-picker-panel h3 { margin: 0 0 8px; color: var(--brand-dark, #1b5e20); font-size: 18px; }
-    .sb-picker-list { max-height: 50vh; overflow-y: auto; overflow-x: hidden; margin: 6px 0 10px; padding: 0; }
+  .sb-picker-list { max-height: 50vh; overflow: auto; margin: 6px 0 10px; }
   .sb-picker-option { display: block; width: 100%; }
-    .sb-picker-option.tooltip { position: relative; display: block; z-index: 5; }
+  .sb-picker-option.tooltip { position: relative; display: block; }
   .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
   .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
-    .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); position: relative; z-index: 0; }
+  .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
   .sb-picker-create .plus { width: 22px; height: 22px; filter: invert(28%) sepia(80%) saturate(1200%) hue-rotate(88deg) brightness(92%) contrast(95%); }
   .sb-picker-actions { display: flex; justify-content: flex-end; gap: 10px; }
   .sb-color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.15); flex: 0 0 14px; }
@@ -135,9 +137,9 @@
           <th class="th-sortable" data-sort="title"><span class="hdr tooltip" data-tooltip="Řadit podle názvu">Název <span class="sort-indicator"></span></span></th>
           <th class="th-sortable" data-sort="author"><span class="hdr tooltip" data-tooltip="Řadit podle autora">Autor <span class="sort-indicator"></span></span></th>
           <th class="th-sortable" data-sort="book"><span class="hdr tooltip" data-tooltip="Řadit podle zpěvníku">Zpěvník <span class="sort-indicator"></span></span></th>
-          <th class="th-sortable" data-sort="page" style="width:90px;"><span class="hdr tooltip" data-tooltip="Řadit podle strany">Strana <span class="sort-indicator"></span></span></th>
-          <th style="width:52px;">Přidat</th>
-          <th style="width:52px;">Odebrat</th>
+          <th class="th-sortable center" data-sort="page" style="width:90px;"><span class="hdr tooltip" data-tooltip="Řadit podle strany">Strana <span class="sort-indicator"></span></span></th>
+          <th class="center" style="width:52px;">Přidat</th>
+          <th class="center" style="width:52px;">Odebrat</th>
         </tr>
       </thead>
       <tbody>
@@ -156,15 +158,15 @@
               {{ r.songbook_title }}
               {% if r.book_type %}<span class="book-type">({{ r.book_type }})</span>{% endif %}
             </td>
-            <td>{{ r.page_number }}</td>
-            <td>
+            <td class="center">{{ r.page_number }}</td>
+            <td class="icon-cell">
               <span class="tooltip" data-tooltip="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
                 <button class="action-btn add {% if guest %}disabled{% endif %}" onclick="event.stopPropagation();" {% if guest %}disabled{% endif %}>
                   <img src="{{ static_bust('img/icons/add_song.svg') }}" alt="Přidat" />
                 </button>
               </span>
             </td>
-            <td>
+            <td class="icon-cell">
               {% if r.book_type == '' %}
                 <span class="tooltip" data-tooltip="Nelze odstranit z veřejného zpěvníku">
                   <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
@@ -468,10 +470,10 @@
 
         items.forEach(it => {
           const wrapper = document.createElement('span'); wrapper.className = 'sb-picker-option tooltip';
-          wrapper.style.zIndex = it.has_song ? '15' : '12';
           const b = document.createElement('button'); b.className = 'sb-picker-item';
           const dot = document.createElement('span'); dot.className = 'sb-color-dot'; dot.style.background = it.color || '#ffffff';
-          const label = document.createElement('span'); label.textContent = it.title;
+          const label = document.createElement('span');
+          label.textContent = it.title + (it.owned ? '' : ' (sdílený)');
           b.appendChild(dot);
           b.appendChild(label);
           // Apply muted background tint

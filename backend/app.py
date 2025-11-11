@@ -1,8 +1,10 @@
 import os
 import json
+import click
 from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
+from flask.cli import with_appcontext
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
@@ -13,12 +15,122 @@ from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func
 import shutil
 from uuid import uuid4
+from io import BytesIO
+
+from PIL import Image, ImageOps
 
 # Cesty k obrázkům zpěvníků
 SONGBOOK_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'public' / 'images' / 'songbooks'
 PRIVATE_USER_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'private' / 'users'
 
-from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
+try:
+    MAX_IMAGE_UPLOAD_MB = max(0.5, float(os.getenv("MAX_IMAGE_UPLOAD_MB", "2.0")))
+except Exception:
+    MAX_IMAGE_UPLOAD_MB = 2.0
+MAX_IMAGE_UPLOAD_BYTES = int(MAX_IMAGE_UPLOAD_MB * 1024 * 1024)
+MIN_RESIZE_DIMENSION = max(320, int(os.getenv("MIN_RESIZE_DIMENSION", "640")))
+RESIZE_SCALE_FACTOR = 0.85
+RESIZE_MAX_STEPS = 8
+ALLOWED_RESIZE_FORMATS = {'JPEG', 'PNG', 'WEBP'}
+
+
+def _ext_to_format(ext_hint, detected):
+    ext = (ext_hint or '').lower()
+    mapping = {
+        '.jpg': 'JPEG',
+        '.jpeg': 'JPEG',
+        '.png': 'PNG',
+        '.webp': 'WEBP',
+    }
+    if ext in mapping:
+        fmt = mapping[ext]
+    else:
+        fmt = (detected or '').upper()
+    if fmt in ALLOWED_RESIZE_FORMATS:
+        return fmt
+    return None
+
+
+def _prepare_image_bytes(file_storage, ext_hint=None, max_bytes=None):
+    if not file_storage:
+        return b''
+    max_bytes = max_bytes or MAX_IMAGE_UPLOAD_BYTES
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
+    data = file_storage.read()
+    try:
+        file_storage.stream.seek(0)
+    except Exception:
+        pass
+    if not data or len(data) <= max_bytes:
+        return data
+    try:
+        with Image.open(BytesIO(data)) as pil_image:
+            if getattr(pil_image, "is_animated", False):
+                return data  # skip GIFs/animated formats to avoid breaking them
+            pil_image = ImageOps.exif_transpose(pil_image)
+            fmt = _ext_to_format(ext_hint, pil_image.format)
+            if not fmt:
+                return data
+            if fmt == 'JPEG':
+                current = pil_image.convert('RGB')
+            elif fmt == 'PNG':
+                current = pil_image.convert('RGBA') if 'A' in pil_image.getbands() else pil_image.convert('RGB')
+            else:  # WEBP
+                current = pil_image.convert('RGBA') if 'A' in pil_image.getbands() else pil_image.convert('RGB')
+    except Exception:
+        return data
+
+    quality = 95
+    result = data
+    for _ in range(RESIZE_MAX_STEPS):
+        buf = BytesIO()
+        save_kwargs = {}
+        if fmt == 'JPEG':
+            save_kwargs = {'quality': quality, 'optimize': True, 'progressive': True}
+        elif fmt == 'WEBP':
+            save_kwargs = {'quality': quality, 'method': 5}
+        else:  # PNG
+            save_kwargs = {'optimize': True}
+        current.save(buf, format=fmt, **save_kwargs)
+        result = buf.getvalue()
+        if len(result) <= max_bytes:
+            break
+        if current.width <= MIN_RESIZE_DIMENSION and current.height <= MIN_RESIZE_DIMENSION:
+            break
+        new_w = max(1, int(current.width * RESIZE_SCALE_FACTOR))
+        new_h = max(1, int(current.height * RESIZE_SCALE_FACTOR))
+        if new_w == current.width and new_h == current.height:
+            break
+        current = current.resize((new_w, new_h), Image.LANCZOS)
+        if fmt in {'JPEG', 'WEBP'}:
+            quality = max(60, int(quality * RESIZE_SCALE_FACTOR))
+    return result
+
+
+def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
+    data = _prepare_image_bytes(file_storage, ext_hint=ext_hint)
+    with open(dest_path, 'wb') as fh:
+        fh.write(data)
+
+try:
+    # Prefer balíčkové importy pro nasazení (backend.app jako modul)
+    from .models import (
+        Song,
+        SongImage,
+        SongbookPage,
+        SongbookIntroOutroImage,
+        Songbook,
+        Author,
+        User,
+        UserSongbookAccess,
+        db,
+        init_app,
+    )
+except ImportError:  # fallback pro přímé spuštění skriptu
+    from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -58,13 +170,48 @@ def is_guest(user):
 # Načti konfiguraci z .env
 load_dotenv()
 
+def _str_to_bool(value, default=False):
+    if value is None:
+        return default
+    return str(value).strip().lower() in {'1', 'true', 't', 'yes', 'on'}
+
+
 app = Flask(__name__, template_folder='../frontend/templates', static_folder='../frontend/static')
-# Robust dev default to avoid broken sessions when FLASK_SECRET_KEY is missing
+
+# Nastavení tajného klíče a databáze z prostředí s bezpečným fallbackem pro vývoj
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
 basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'instance', 'zpevnik.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+project_root = Path(basedir).parent
+default_sqlite_path = Path(os.getenv("SQLITE_PATH", project_root / 'instance' / 'zpevnik.db'))
+legacy_sqlite_path = Path(basedir) / 'instance' / 'zpevnik.db'
+database_url = os.getenv("DATABASE_URL")
+
+def _normalize_sqlite_url(url: str) -> str:
+    raw_path = url.replace("sqlite:///", "", 1)
+    if not raw_path or raw_path == ":memory:":
+        return url
+    sqlite_path = Path(raw_path)
+    if not sqlite_path.is_absolute():
+        sqlite_path = (project_root / sqlite_path).resolve()
+    else:
+        sqlite_path = sqlite_path.resolve()
+    sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite:///{sqlite_path.as_posix()}"
+
+if database_url:
+    if database_url.startswith("sqlite:///"):
+        database_url = _normalize_sqlite_url(database_url)
+else:
+    target_path = default_sqlite_path
+    if not target_path.exists() and legacy_sqlite_path.exists():
+        target_path = legacy_sqlite_path
+    target_path = target_path.resolve()
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    database_url = f"sqlite:///{target_path.as_posix()}"
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['DEBUG'] = _str_to_bool(os.getenv("FLASK_DEBUG"), False)
 
 # Inicializace databáze
 init_app(app)
@@ -490,9 +637,42 @@ def search():
 @app.route('/api/my-songbooks/options')
 @login_required
 def list_my_songbooks_options():
-    books = db.session.execute(
-        db.select(Songbook).where((Songbook.is_public == 0) & (Songbook.owner_id == current_user.id))
-    ).scalars().all()
+    if current_user.role == 'guest':
+        return jsonify({'ok': True, 'items': []})
+
+    books_by_id = {}
+
+    def add_books(rows):
+        for book in rows:
+            if book and book.id not in books_by_id:
+                books_by_id[book.id] = book
+
+    if current_user.role == 'admin':
+        add_books(
+            db.session.execute(
+                db.select(Songbook).where(Songbook.is_public == 0)
+            ).scalars().all()
+        )
+    else:
+        owned_books = db.session.execute(
+            db.select(Songbook).where(
+                (Songbook.is_public == 0) & (Songbook.owner_id == current_user.id)
+            )
+        ).scalars().all()
+        add_books(owned_books)
+
+        shared_books = db.session.execute(
+            db.select(Songbook)
+            .join(UserSongbookAccess, UserSongbookAccess.songbook_id == Songbook.id)
+            .where(
+                (Songbook.is_public == 0)
+                & (UserSongbookAccess.user_id == current_user.id)
+                & (UserSongbookAccess.permission.in_(('edit', 'admin')))
+            )
+        ).scalars().all()
+        add_books(shared_books)
+
+    books = list(books_by_id.values())
     song_id = request.args.get('song_id')
     present_ids = set()
     if song_id:
@@ -509,8 +689,9 @@ def list_my_songbooks_options():
                 'id': b.id,
                 'title': b.title,
                 'color': getattr(b, 'color', '#FFFFFF') or '#FFFFFF',
-                'has_song': (b.id in present_ids)
-            } for b in books
+                'has_song': (b.id in present_ids),
+                'owned': (b.owner_id == current_user.id)
+            } for b in sorted(books, key=lambda sb: (sb.title or '').lower())
         ]
     })
 
@@ -610,7 +791,8 @@ def create_custom_song(songbook_id):
     for idx, file_storage in files:
         orig = secure_filename(Path(file_storage.filename).name) or f"page_{idx}.png"
         abs_path = abs_dir / orig
-        file_storage.save(str(abs_path))
+        ext_hint = Path(orig).suffix.lower() or None
+        _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
         rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
         rel_path = str(Path('users') / rel_parts)
         db.session.add(SongImage(song_id=new_song_id, image_path=rel_path))
@@ -736,7 +918,13 @@ def public_songbooks():
 def my_songbooks():
     # Guests cannot access "My Songbooks"
     if current_user.role == 'guest':
-        return render_template('my_songbooks.html', songbooks=[])
+        return render_template(
+            'my_songbooks.html',
+            songbooks=[],
+            shared_users_map={},
+            max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
+            max_upload_mb=MAX_IMAGE_UPLOAD_MB,
+        )
     # Admin can see all private songbooks
     if current_user.role == 'admin':
         books = db.session.execute(
@@ -750,7 +938,48 @@ def my_songbooks():
                 (Songbook.owner_id == current_user.id) | (Songbook.id.in_(shared_ids))
             )
         ).scalars().all()
-    return render_template('my_songbooks.html', songbooks=books)
+    book_ids = [book.id for book in books]
+    user_map_by_book = {bid: {} for bid in book_ids}
+    if book_ids:
+        shared_rows = db.session.execute(
+            db.select(UserSongbookAccess.songbook_id, User.email)
+            .join(User, UserSongbookAccess.user_id == User.id)
+            .where(UserSongbookAccess.songbook_id.in_(book_ids))
+            .where(User.role != 'admin')
+        ).all()
+        for songbook_id, email in shared_rows:
+            if email:
+                per_book = user_map_by_book.setdefault(songbook_id, {})
+                per_book[email] = {"email": email, "is_owner": False}
+        owner_rows = db.session.execute(
+            db.select(Songbook.id, User.email)
+            .join(User, Songbook.owner_id == User.id)
+            .where(Songbook.id.in_(book_ids))
+            .where(User.role != 'admin')
+        ).all()
+        for songbook_id, owner_email in owner_rows:
+            if owner_email:
+                per_book = user_map_by_book.setdefault(songbook_id, {})
+                info = per_book.get(owner_email, {"email": owner_email, "is_owner": False})
+                info["is_owner"] = True
+                per_book[owner_email] = info
+
+    shared_users_map = {}
+    current_email = getattr(current_user, "email", None)
+    for book_id, entries in user_map_by_book.items():
+        filtered = [
+            info for email, info in entries.items()
+            if email and (not current_email or email != current_email)
+        ]
+        filtered.sort(key=lambda info: (0 if info.get("is_owner") else 1, info.get("email", "").lower()))
+        shared_users_map[book_id] = filtered
+    return render_template(
+        'my_songbooks.html',
+        songbooks=books,
+        shared_users_map=shared_users_map,
+        max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
+        max_upload_mb=MAX_IMAGE_UPLOAD_MB,
+    )
 
 # API: Create a new private songbook for current user
 @app.route('/api/my-songbooks', methods=['POST'])
@@ -781,7 +1010,7 @@ def api_create_songbook():
         abs_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{name_hint}{ext}"
         abs_path = abs_dir / filename
-        file_storage.save(str(abs_path))
+        _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
         # Return path relative to the /songbooks route root
         return str(rel_dir / filename)
 
@@ -1097,7 +1326,8 @@ def update_songbook_structure(songbook_id):
         abs_dir = resolve_private_dir()
         abs_dir.mkdir(parents=True, exist_ok=True)
         abs_path = abs_dir / orig_name
-        file_storage.save(str(abs_path))
+        ext_hint = Path(orig_name).suffix.lower() or None
+        _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
         # Return relative path
         rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
         return str(Path('users') / rel_parts)
@@ -1179,6 +1409,94 @@ def update_songbook_structure(songbook_id):
         except Exception:
             song_entries = []
 
+    new_songs_raw = request.form.get('new_songs')
+    new_songs_list = []
+    if new_songs_raw:
+        try:
+            parsed_new = _json.loads(new_songs_raw)
+            if isinstance(parsed_new, list):
+                new_songs_list = parsed_new
+        except Exception:
+            new_songs_list = []
+    new_songs_map = {s.get('temp_id'): s for s in new_songs_list if isinstance(s, dict) and s.get('temp_id')}
+
+    # Create new songs (with uploaded pages) referenced in order, assign real IDs
+    referenced_new_ids = []
+    for entry in song_entries:
+        if not isinstance(entry, dict):
+            continue
+        sid = entry.get('song_id')
+        if sid and sid in new_songs_map and sid not in referenced_new_ids:
+            referenced_new_ids.append(sid)
+
+    created_new_songs = {}
+    if referenced_new_ids:
+        base_dir = resolve_private_dir()
+        base_dir.mkdir(parents=True, exist_ok=True)
+        next_page_number = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=songbook_id).scalar() or 0
+        payloads = []
+        for temp_id in referenced_new_ids:
+            meta = new_songs_map.get(temp_id) or {}
+            title = (meta.get('title') or 'Moje písnička').strip() or 'Moje písnička'
+            author_name = (meta.get('author') or '-').strip() or '-'
+            try:
+                requested_pages = int(meta.get('page_count') or 1)
+            except Exception:
+                requested_pages = 1
+            requested_pages = max(1, min(20, requested_pages))
+            files = []
+            for idx in range(1, requested_pages + 1):
+                field = f'new_song_{temp_id}_page_{idx}'
+                file_obj = request.files.get(field)
+                if file_obj:
+                    files.append(file_obj)
+            if not files:
+                return jsonify({'ok': False, 'error': f'Chybí soubory pro novou písničku: {title}'}), 400
+            payloads.append((temp_id, title, author_name, files))
+
+        for temp_id, title, author_name, files in payloads:
+            author = Author.query.filter_by(name=author_name).first()
+            if not author:
+                author = Author(name=author_name)
+                db.session.add(author)
+                db.session.flush()
+
+            new_song_id = f"custom_{uuid4().hex[:12]}"
+            song = Song(id=new_song_id, title=title, author_id=author.id)
+            db.session.add(song)
+            db.session.flush()
+
+            song_dir = base_dir / 'songs' / new_song_id
+            song_dir.mkdir(parents=True, exist_ok=True)
+
+            saved = 0
+            for offset, file_storage in enumerate(files, start=1):
+                orig_name = secure_filename(Path(file_storage.filename).name) or f"page_{offset}.png"
+                abs_path = song_dir / orig_name
+                ext_hint = Path(orig_name).suffix.lower() or None
+                _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
+                rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
+                rel_path = str(Path('users') / rel_parts)
+                db.session.add(SongImage(song_id=new_song_id, image_path=rel_path))
+                saved += 1
+
+            if saved == 0:
+                return jsonify({'ok': False, 'error': f'Nepodařilo se uložit soubory nové písničky: {title}'}), 400
+
+            for _ in range(saved):
+                next_page_number += 1
+                db.session.add(SongbookPage(songbook_id=songbook_id, song_id=new_song_id, page_number=next_page_number))
+
+            created_new_songs[temp_id] = {'song_id': new_song_id, 'page_count': saved}
+
+        # Replace placeholder IDs in order entries with real song IDs
+        for entry in song_entries:
+            if not isinstance(entry, dict):
+                continue
+            sid = entry.get('song_id')
+            if sid and sid in created_new_songs:
+                entry['song_id'] = created_new_songs[sid]['song_id']
+
     # Build mapping for updates
     # song_entries: list of {song_id, start_page?}
     # Apply deletions of songs removed from the order, then renumber remaining
@@ -1217,8 +1535,6 @@ def update_songbook_structure(songbook_id):
                 db.session.add(sys)
                 db.session.flush()
             return sys.id
-
-        from uuid import uuid4
 
         for entry in song_entries:
             sid = entry.get('song_id')
@@ -1472,22 +1788,48 @@ def inject_user_status():
         logged_in=current_user.is_authenticated
     )
 
+# ---------- CLI PŘÍKAZY ----------
+
+@app.cli.command("init-db")
+@with_appcontext
+def init_db_command():
+    """Vytvoří tabulky podle aktuálních SQLAlchemy modelů."""
+    db.create_all()
+    click.echo("✅ Databáze inicializována.")
+
+
+@app.cli.command("create-admin")
+@click.option("--email", prompt=True, help="E-mail účtu, který bude vytvořen nebo povýšen na admina.")
+@click.option(
+    "--password",
+    prompt=True,
+    hide_input=True,
+    confirmation_prompt=True,
+    help="Heslo nového admina.",
+)
+@click.option(
+    "--role",
+    default="admin",
+    show_default=True,
+    help="Role přiřazená uživateli (typicky admin).",
+)
+@with_appcontext
+def create_admin_command(email, password, role):
+    """Vytvoří nového uživatele s admin právy."""
+    user = User.query.filter_by(email=email).first()
+    if user:
+        click.echo(f"❌ Uživatel {email} už existuje, nic se nezměnilo.")
+        return
+
+    hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
+    new_admin = User(email=email, password=hashed_password, role=role)
+    db.session.add(new_admin)
+    db.session.commit()
+    click.echo(f"✅ Admin účet vytvořen: {email} (role: {role})")
+
 # ---------- START ----------
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
 
-        # Seed admin user if not exists
-        admin_email = "admin@test.com"
-        admin_password = "admin123"
-        admin_role = "admin"
-
-        admin = User.query.filter_by(email=admin_email).first()
-        if not admin:
-            hashed_password = generate_password_hash(admin_password, method='pbkdf2:sha256', salt_length=16)
-            new_admin = User(email=admin_email, password=hashed_password, role=admin_role)
-            db.session.add(new_admin)
-            db.session.commit()
-            print(f"✅ Admin user created: {admin_email}")
-
-    app.run(debug=True)
+    app.run(debug=app.config.get('DEBUG', False))
