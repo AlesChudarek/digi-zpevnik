@@ -18,3 +18,4 @@ backend/static/uploads/
 .DS_Store
 Thumbs.db
 backend/.env
+.env
