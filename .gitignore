@@ -8,7 +8,8 @@ env/
 venv/
 
 # Databáze a nahrávky
-backend/db/*.db
+backend/instance/*.db
+data/private/users/
 backend/static/uploads/
 
 # VS Code nastavení
@@ -19,3 +20,11 @@ backend/static/uploads/
 Thumbs.db
 backend/.env
 .env
+
+
+# Soubory jen pro me
+data/private/seeds/00102/obsah.txt
+data/public/images/songbooks/00101/
+data/public/images/songbooks/00102/
+ssh-key-*.key
+data/public/seeds/*.xlsx

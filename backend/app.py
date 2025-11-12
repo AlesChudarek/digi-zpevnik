@@ -182,8 +182,9 @@ app = Flask(__name__, template_folder='../frontend/templates', static_folder='..
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
 basedir = os.path.abspath(os.path.dirname(__file__))
 project_root = Path(basedir).parent
-default_sqlite_path = Path(os.getenv("SQLITE_PATH", project_root / 'instance' / 'zpevnik.db'))
-legacy_sqlite_path = Path(basedir) / 'instance' / 'zpevnik.db'
+backend_instance_dir = Path(basedir) / 'instance'
+default_sqlite_path = Path(os.getenv("SQLITE_PATH", backend_instance_dir / 'zpevnik.db'))
+legacy_sqlite_path = project_root / 'instance' / 'zpevnik.db'
 database_url = os.getenv("DATABASE_URL")
 
 def _normalize_sqlite_url(url: str) -> str:

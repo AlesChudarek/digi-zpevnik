@@ -10,8 +10,16 @@ from pathlib import Path
 
 from PIL import Image
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+BACKEND_DIR = SCRIPT_DIR.parent
+PROJECT_ROOT = BACKEND_DIR.parent
+DEFAULT_DB_PATH = BACKEND_DIR / "instance" / "zpevnik.db"
+PUBLIC_SEED_PATH = PROJECT_ROOT / "data" / "public" / "seeds"
+PUBLIC_IMAGES_PATH = PROJECT_ROOT / "data" / "public" / "images" / "songbooks"
+PRIVATE_SEED_PATH = PROJECT_ROOT / "data" / "private" / "seeds"
+
 def connect_db(db_path):
-    return sqlite3.connect(db_path)
+    return sqlite3.connect(str(db_path))
 
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -135,9 +143,16 @@ def slugify(value: str, maxlen: int = 60) -> str:
     return value[:maxlen] or "_"
 
 
-def seed_from_public_seed_folder(seed_path, db_path):
-    # Ensure directory exists
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+def seed_from_public_seed_folder(seed_path, db_path, image_base_path):
+    seed_path = Path(seed_path)
+    db_path = Path(db_path)
+    image_base_path = os.fspath(image_base_path)
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not seed_path.is_dir():
+        print(f"ℹ️  Složka s veřejnými seedy neexistuje: {seed_path}")
+        return
 
     conn = connect_db(db_path)
     cursor = conn.cursor()
@@ -153,13 +168,12 @@ def seed_from_public_seed_folder(seed_path, db_path):
 
     print(f"📂 Načítám data ze složky: {seed_path}")
 
-    for filename in sorted(os.listdir(seed_path)):
-        if not filename.endswith(".json"):
-            continue
-        filepath = os.path.join(seed_path, filename)
-        data = load_json(filepath)
+    json_files = sorted(p for p in seed_path.iterdir() if p.is_file() and p.suffix == ".json")
 
-        raw_id = os.path.splitext(filename)[0]
+    for json_file in json_files:
+        data = load_json(json_file)
+
+        raw_id = json_file.stem
         songbook_id = data.get("id", raw_id[-5:] if raw_id[-5:].isdigit() else raw_id)
         title = data.get("title", songbook_id)
 
@@ -167,7 +181,6 @@ def seed_from_public_seed_folder(seed_path, db_path):
         is_public = 0 if songbook_id == "00101" and user_id else 1
         owner_id = user_id if songbook_id == "00101" and user_id else None
 
-        image_base_path = os.path.join(script_dir, "../../data/public/images/songbooks")
         color = resolve_color(data, "#FFFFFF", image_base_path)
         reset_songbook(cursor, songbook_id)
         insert_songbook(
@@ -500,27 +513,47 @@ def seed_from_private_seed_folder(seed_root, db_path):
     conn.close()
     print(f"✅ Privátní seedy: {total_songbooks} zpěvníků zpracováno.")
 
+
+def seed_database(
+    db_path=DEFAULT_DB_PATH,
+    public_seed_path=PUBLIC_SEED_PATH,
+    private_seed_path=PRIVATE_SEED_PATH,
+    public_image_path=PUBLIC_IMAGES_PATH,
+    reset_public=False,
+):
+    db_path = Path(db_path)
+    public_seed_path = Path(public_seed_path)
+    private_seed_path = Path(private_seed_path)
+
+    if reset_public and db_path.exists():
+        conn = connect_db(db_path)
+        reset_public_data(conn)
+        conn.close()
+
+    seed_from_public_seed_folder(public_seed_path, db_path, public_image_path)
+    seed_from_private_seed_folder(private_seed_path, db_path)
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Seed public data into the database.")
-    parser.add_argument("--reset", action="store_true", help="Reset public data tables before seeding")
+    parser = argparse.ArgumentParser(description="Seed public and private data into the database.")
+    parser.add_argument("--db", default=str(DEFAULT_DB_PATH), help="Cesta k SQLite databázi.")
+    parser.add_argument("--public-seed", default=str(PUBLIC_SEED_PATH), help="Složka s veřejnými JSON seedy.")
+    parser.add_argument("--private-seed", default=str(PRIVATE_SEED_PATH), help="Složka s privátními seedy.")
+    parser.add_argument("--public-images", default=str(PUBLIC_IMAGES_PATH), help="Složka s obrázky veřejných obálek.")
+    parser.add_argument("--reset", action="store_true", help="Resetuje veřejné tabulky před naplněním.")
+    parser.add_argument("--yes", action="store_true", help="Přeskočí potvrzení při použití --reset.")
     args = parser.parse_args()
 
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    db_path = os.path.join(script_dir, "../instance/zpevnik.db")
-    seed_path = os.path.join(script_dir, "../../data/public/seeds/")
-    private_seed_path = os.path.join(script_dir, "../../data/private/seeds/")
-
-    if args.reset:
+    if args.reset and not args.yes:
         print("⚠️  POZOR: Tato operace vymaže všechny veřejné tabulky: songbook_pages, song_images, songs, songbooks, authors.")
         confirm = input('Pro potvrzení napiš "YES": ')
-        if confirm == "YES":
-            conn = connect_db(db_path)
-            reset_public_data(conn)
-            conn.close()
-            print("Veřejná data byla smazána.")
-        else:
+        if confirm != "YES":
             print("Mazání zrušeno.")
             exit(0)
 
-    seed_from_public_seed_folder(seed_path, db_path)
-    seed_from_private_seed_folder(private_seed_path, db_path)
+    seed_database(
+        db_path=args.db,
+        public_seed_path=args.public_seed,
+        private_seed_path=args.private_seed,
+        public_image_path=args.public_images,
+        reset_public=args.reset,
+    )
