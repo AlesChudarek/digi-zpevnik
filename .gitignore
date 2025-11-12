@@ -23,9 +23,11 @@ backend/.env
 
 
 # Soubory jen pro me
+data_backup/
 TODO.md
 data/private/seeds/00102/obsah.txt
 data/public/images/songbooks/00101/
 data/public/images/songbooks/00102/
 ssh-key-*.key
 data/public/seeds/*.xlsx
+backend/scripts/downsize_images.py
