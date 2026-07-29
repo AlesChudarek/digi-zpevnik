@@ -341,7 +341,7 @@
           <label for="ns-title-input">Název</label>
           <input type="text" id="ns-title-input" placeholder="Moje písnička">
         </div>
-        <div>
+        <div id="ns-author-wrap">
           <label for="ns-author-input">Autor</label>
           <input type="text" id="ns-author-input" placeholder="-">
         </div>
@@ -699,6 +699,7 @@
         <h3 class="section-title" style="margin: 0;">Písničky</h3>
         <div class="right-actions" style="display:flex; align-items:center; gap:8px;">
           <button class="btn" id="btn-add-blank-page-eb">Přidat prázdnou stránku</button>
+          <button class="btn" id="btn-add-nonsong-page-eb">Přidat nepísničkovou stránku</button>
           <button class="btn primary" id="btn-add-custom-song-eb">Přidat svou písničku</button>
         </div>
       </div>
@@ -1663,7 +1664,7 @@ function openCreateModal() {
       const section = document.createElement('div');
       section.id = 'edit-songs-section';
       section.innerHTML = `
-        <div class=\"section-head\" style=\"display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top: 6px;\">\n          <h3 class=\"section-title\" style=\"margin: 0;\">Písničky</h3>\n          <div class=\"right-actions\" style=\"display:flex; align-items:center; gap:8px;\">\n            <button class=\"btn\" id=\"btn-add-blank-page-nb\">Přidat prázdnou stránku</button>\n            <button class=\"btn primary\" id=\"btn-add-custom-song-nb\">Přidat svou písničku</button>\n          </div>\n        </div>
+        <div class=\"section-head\" style=\"display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top: 6px;\">\n          <h3 class=\"section-title\" style=\"margin: 0;\">Písničky</h3>\n          <div class=\"right-actions\" style=\"display:flex; align-items:center; gap:8px;\">\n            <button class=\"btn\" id=\"btn-add-blank-page-nb\">Přidat prázdnou stránku</button>\n            <button class=\"btn\" id=\"btn-add-nonsong-page-nb\">Přidat nepísničkovou stránku</button>\n            <button class=\"btn primary\" id=\"btn-add-custom-song-nb\">Přidat svou písničku</button>\n          </div>\n        </div>
         <div class="songs-list" style="margin-top:12px; border:1px solid var(--muted-border, #dbeadf); border-radius:10px; overflow:visible;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
@@ -1678,75 +1679,8 @@ function openCreateModal() {
             <tbody id=\"eb-songs\"></tbody>
           </table>
         </div>
-        <div class=\"section-head\" style=\"display:flex; align-items:center; gap:12px; margin-top:18px;\">
-          <h3 class=\"section-title\" style=\"margin:0;\">Extra stránky</h3>
-        </div>
-        <p style=\"margin:4px 0 10px; color:#666; font-size:13px;\">
-          Stránky bez písničky &ndash; třeba úvod, věnování nebo rejstřík. Nemají číslo strany
-          a nejsou v obsahu. Vykreslí se před písničkami, nebo za nimi.
-        </p>
-        <div style=\"display:grid; grid-template-columns:1fr 1fr; gap:16px;\">
-          <div class=\"extra-col\" data-kind=\"intro\">
-            <strong style=\"font-size:13px;\">Před písničkami</strong>
-            <div class=\"extra-list\" id=\"extra-intro-list\" style=\"margin:6px 0;\"></div>
-            <input type=\"file\" accept=\"image/*\" multiple id=\"efile-extra-intro\" style=\"font-size:12px;\">
-          </div>
-          <div class=\"extra-col\" data-kind=\"outro\">
-            <strong style=\"font-size:13px;\">Za písničkami</strong>
-            <div class=\"extra-list\" id=\"extra-outro-list\" style=\"margin:6px 0;\"></div>
-            <input type=\"file\" accept=\"image/*\" multiple id=\"efile-extra-outro\" style=\"font-size:12px;\">
-          </div>
         </div>`;
       modalContent.appendChild(section);
-    }
-
-    // Extra (non-song) pages: ids staged for deletion until the modal is saved
-    window.__extraPageDeletes = window.__extraPageDeletes || new Set();
-
-    function renderExtraPages(extra) {
-      window.__extraPageDeletes = new Set();
-      ['intro', 'outro'].forEach(kind => {
-        const list = document.getElementById(`extra-${kind}-list`);
-        if (!list) return;
-        const items = (extra && extra[kind]) || [];
-        list.innerHTML = '';
-        if (!items.length) {
-          list.innerHTML = '<span style="color:#999; font-size:12px;">žádné</span>';
-          return;
-        }
-        items.forEach(item => {
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex; align-items:center; gap:8px; margin:4px 0; font-size:12px;';
-          row.innerHTML = `
-            <img src="/songbooks/${item.image_path}" alt=""
-                 style="width:28px; height:40px; object-fit:cover; border:1px solid #ddd; border-radius:3px;">
-            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name || ''}</span>
-            <button type="button" class="btn" data-extra-id="${item.id}"
-                    style="padding:2px 8px; font-size:11px;">Odebrat</button>`;
-          row.querySelector('button').addEventListener('click', () => {
-            window.__extraPageDeletes.add(item.id);
-            row.remove();
-            if (!list.querySelector('div')) {
-              list.innerHTML = '<span style="color:#999; font-size:12px;">žádné</span>';
-            }
-            try { createDirty = true; } catch (_) {}
-          });
-          list.appendChild(row);
-        });
-      });
-    }
-
-    function appendExtraPagesToForm(fd) {
-      if (window.__extraPageDeletes && window.__extraPageDeletes.size) {
-        fd.append('delete_extra_pages', JSON.stringify(Array.from(window.__extraPageDeletes)));
-      }
-      ['intro', 'outro'].forEach(kind => {
-        const input = document.getElementById(`efile-extra-${kind}`);
-        if (!input || !input.files) return;
-        Array.from(input.files).forEach((file, idx) => {
-          fd.append(`extra_${kind}_${idx + 1}`, file);
-        });
-      });
     }
 
     function renderEditRow(s) {
@@ -1756,7 +1690,13 @@ function openCreateModal() {
       tr.setAttribute('data-page-count', String(s.page_count || 1));
       tr.setAttribute('draggable', 'true');
       if (s.pending) tr.setAttribute('data-new-song', '1');
-      const titleHtml = `${s.title || ''}${s.pending ? ' <span class="pending-pill">Nová</span>' : ''}`;
+      // Marker only, for styling. Deliberately NOT 'data-non-song', which the order
+      // builder reads as "create an empty page" for rows that carry no song id.
+      if (s.is_non_song) tr.setAttribute('data-nonsong-page', '1');
+      const nonSongPill = s.is_non_song
+        ? ' <span class="pending-pill" style="background:#eceff1; color:#546e7a;">Bez písničky</span>'
+        : '';
+      const titleHtml = `${s.title || ''}${nonSongPill}${s.pending ? ' <span class="pending-pill">Nová</span>' : ''}`;
       tr.innerHTML = `
         <td class="drag-handle" title="Přetáhnout">≡</td>
         <td>${titleHtml}</td>
@@ -1967,9 +1907,25 @@ function openCreateModal() {
       checkNsValidity();
     }
 
-    function openNewSongModal() {
+    // Non-song mode reuses this modal: a page with images but no song, so it has
+    // no author and its title is optional (used only to recognise it in the editor).
+    function applyNonSongMode(isNonSong) {
+      window.__nsNonSong = !!isNonSong;
+      const head = document.getElementById('ns-title');
+      const authorWrap = document.getElementById('ns-author-wrap');
+      const pagesLabel = document.querySelector('label[for="ns-pages"]');
+      const titleLabel = document.querySelector('label[for="ns-title-input"]');
+      if (head) head.textContent = isNonSong ? 'Nová nepísničková stránka' : 'Nová písnička';
+      if (authorWrap) authorWrap.style.display = isNonSong ? 'none' : '';
+      if (titleLabel) titleLabel.textContent = isNonSong ? 'Název (nepovinný)' : 'Název';
+      if (pagesLabel) pagesLabel.textContent = isNonSong ? 'Počet stran' : 'Počet stran písničky';
+      if (nsTitle) nsTitle.placeholder = isNonSong ? 'např. Rejstřík' : 'Moje písnička';
+    }
+
+    function openNewSongModal(isNonSong = false) {
       if (!nsModal) return;
       resetNewSongForm();
+      applyNonSongMode(isNonSong);
       nsModal.style.display = 'flex';
     }
 
@@ -2004,7 +1960,10 @@ function openCreateModal() {
     document.addEventListener('click', (e) => {
       const id = e.target && e.target.id;
       if (id === 'btn-add-custom-song-eb' || id === 'btn-add-custom-song-nb') {
-        e.preventDefault(); openNewSongModal();
+        e.preventDefault(); openNewSongModal(false);
+      }
+      if (id === 'btn-add-nonsong-page-eb' || id === 'btn-add-nonsong-page-nb') {
+        e.preventDefault(); openNewSongModal(true);
       }
     });
 
@@ -2048,8 +2007,11 @@ function openCreateModal() {
         await new Promise((resolve) => requestAnimationFrame(resolve));
         const tbody = document.getElementById('eb-songs');
         if (!tbody) { alert('Chybí seznam písniček'); toggleButtonLoading(nsSaveBtn, nsSaveSpinner, false); return; }
-        const titleRaw = (nsTitle.value || '').trim() || 'Moje písnička';
-        const authorRaw = (nsAuthor.value || '').trim() || '-';
+        const isNonSong = !!window.__nsNonSong;
+        const titleRaw = isNonSong
+          ? ((nsTitle.value || '').trim() || '<Prázdná strana>')
+          : ((nsTitle.value || '').trim() || 'Moje písnička');
+        const authorRaw = isNonSong ? '' : ((nsAuthor.value || '').trim() || '-');
         const n = Math.max(1, Math.min(20, parseInt(nsPages.value || '1', 10) || 1));
         const files = [];
         for (let i = 1; i <= n; i++) {
@@ -2067,6 +2029,7 @@ function openCreateModal() {
           title: titleRaw,
           author: authorRaw,
           page_count: files.length,
+          non_song: isNonSong,
           files
         });
         const displayTitle = escapeHtmlLite(titleRaw);
@@ -2077,6 +2040,7 @@ function openCreateModal() {
           author: displayAuthor,
           page_count: files.length,
           is_private: true,
+          is_non_song: isNonSong,
           pending: true
         });
         tbody.appendChild(row);
@@ -2154,7 +2118,6 @@ function openCreateModal() {
           updateDisplayPages();
           wireEditRowActions();
         }
-        renderExtraPages(sb.extra_pages);
         // Ensure create/edit dirty flag remains clean after initial populate
         try { createDirty = false; } catch(_) {}
         // Capture initial state for dirty checks on close
@@ -2193,6 +2156,7 @@ function openCreateModal() {
               temp_id: tempId,
               title: meta.title || '',
               author: meta.author || '',
+              non_song: !!meta.non_song,
               page_count: meta.page_count || (meta.files ? meta.files.length : 0)
             });
           });
@@ -2211,7 +2175,6 @@ function openCreateModal() {
           });
         } catch(_) {}
         fd.append('order', JSON.stringify(order));
-        appendExtraPagesToForm(fd);
         const files = {
           front_outer: document.getElementById('file-front-outer'),
           front_inner: document.getElementById('file-front-inner'),
