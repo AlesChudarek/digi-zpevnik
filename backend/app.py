@@ -532,9 +532,10 @@ def get_songbook_toc(songbook_id):
     toc = []
     listed = set()
 
-    # A multi-page song already has one songbook_pages row per page, so the running
-    # number is simply the position of the page among all pages of the songbook.
-    for current_page_number, page_number in enumerate(sorted(songs_by_page), start=1):
+    # Use the stored page number rather than the page's position. Some songbooks were
+    # numbered starting from the title page, so their first song sits on page 3 and
+    # that is what is printed on the scan; counting positions would show 1 instead.
+    for page_number in sorted(songs_by_page):
         for song_id in songs_by_page[page_number]:
             song = songs.get(song_id)
             if not song:
@@ -551,7 +552,7 @@ def get_songbook_toc(songbook_id):
                 "title": song.title,
                 "author": author_display,
                 "page": song_images[0].image_path if song_images else "",
-                "page_number": current_page_number,
+                "page_number": page_number,
                 "song_id": song.id,
             })
 
@@ -1369,6 +1370,9 @@ def get_songbook_structure(songbook_id):
             'id': sb.id,
             'title': sb.title,
             'color': getattr(sb, 'color', '#FFFFFF') or '#FFFFFF',
+            # Printed number of the first page; not always 1 (title page counted in)
+            'first_page_number': (db.session.query(func.min(SongbookPage.page_number))
+                                  .filter_by(songbook_id=songbook_id).scalar() or 1),
             'covers': {
                 'front_outer': sb.img_path_cover_front_outer,
                 'front_inner': sb.img_path_cover_front_inner,
@@ -1413,6 +1417,18 @@ def update_songbook_structure(songbook_id):
     title = (request.form.get('title') or sb.title).strip()
     color = (request.form.get('color') or getattr(sb, 'color', '#FFFFFF') or '#FFFFFF').strip()
     auto_numbering = (request.form.get('auto_numbering', '1') in ('1', 'true', 'True', 'on'))
+
+    # Where the printed numbering starts. Some songbooks count the title page as 1,
+    # so their first song is page 3; renumbering from a hardcoded 1 would lose that.
+    # Read before any deletion, so dropping the first song does not shift the book.
+    try:
+        first_page_number = int(request.form.get('first_page_number'))
+    except (TypeError, ValueError):
+        first_page_number = None
+    if first_page_number is None:
+        first_page_number = db.session.query(func.min(SongbookPage.page_number)).filter_by(
+            songbook_id=songbook_id).scalar()
+    first_page_number = max(1, int(first_page_number or 1))
 
     # Save optional cover files into the book's existing image folder
     def resolve_book_dir() -> Path:
@@ -1665,7 +1681,7 @@ def update_songbook_structure(songbook_id):
             .all()
         )
 
-        next_page = 1
+        next_page = first_page_number
         # Helper: ensure 'System' author exists for non-song pages
         def get_system_author_id():
             sys = Author.query.filter_by(name='System').first()
