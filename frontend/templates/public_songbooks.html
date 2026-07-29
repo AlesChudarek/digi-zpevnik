@@ -33,6 +33,12 @@
   .songbook-card img {
     width: 100%;
     height: auto;
+    display: block;
+  }
+
+  .cover-preview {
+    width: 100%;
+    line-height: 0;
   }
 
   .songbook-card p {
@@ -83,7 +89,11 @@
   {% for book in songbooks|sort(attribute='id') %}
     <a href="{{ url_for('songbook_detail', book_id=book.id) }}" class="songbook-card">
       {% if book.img_path_cover_preview %}
-        <img src="/songbooks/{{ book.img_path_cover_preview }}">
+        {# Paint the songbook colour behind the cover so transparent covers show it,
+           the same way songbook_view.html and my_songbooks.html already do. #}
+        <div class="cover-preview" style="background: {{ book.color or '#ffffff' }};">
+          <img src="/songbooks/{{ book.img_path_cover_preview }}">
+        </div>
       {% else %}
         <div style="width:100%; height:250px; background:#eee; display:flex; align-items:center; justify-content:center;">
           <span style="color: #888;">Bez obalu</span>

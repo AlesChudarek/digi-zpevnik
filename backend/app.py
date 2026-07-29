@@ -1314,12 +1314,30 @@ def get_songbook_structure(songbook_id):
         except Exception:
             return None
 
+    # Extra (non-song) pages: intro pages come before the songs, outro pages after
+    extra_rows = (SongbookIntroOutroImage.query
+                  .filter_by(songbook_id=songbook_id)
+                  .order_by(SongbookIntroOutroImage.sort_order.asc(), SongbookIntroOutroImage.id.asc())
+                  .all())
+    extra_pages = {'intro': [], 'outro': []}
+    for row in extra_rows:
+        bucket = extra_pages.get(row.type)
+        if bucket is None:
+            continue
+        bucket.append({
+            'id': row.id,
+            'image_path': row.image_path,
+            'name': filename_or_none(row.image_path),
+            'sort_order': row.sort_order or 0,
+        })
+
     return jsonify({
         'ok': True,
         'songbook': {
             'id': sb.id,
             'title': sb.title,
             'color': getattr(sb, 'color', '#FFFFFF') or '#FFFFFF',
+            'extra_pages': extra_pages,
             'covers': {
                 'front_outer': sb.img_path_cover_front_outer,
                 'front_inner': sb.img_path_cover_front_inner,
@@ -1619,6 +1637,71 @@ def update_songbook_structure(songbook_id):
                 s = Song.query.get(sid)
                 if s:
                     _handle_song_delete_for_book(sb, s)
+
+    # Extra (non-song) pages: 'intro' pages render before the songs, 'outro' after them.
+    # The viewer already lays these out (see pair_pages); this is the write side.
+    delete_extra_raw = request.form.get('delete_extra_pages')
+    if delete_extra_raw:
+        try:
+            extra_ids = _json.loads(delete_extra_raw)
+        except Exception:
+            extra_ids = []
+        extra_ids = [i for i in extra_ids if isinstance(i, int)] if isinstance(extra_ids, list) else []
+        if extra_ids:
+            doomed = SongbookIntroOutroImage.query.filter(
+                SongbookIntroOutroImage.songbook_id == songbook_id,
+                SongbookIntroOutroImage.id.in_(extra_ids),
+            ).all()
+            for row in doomed:
+                abs_path = _abs_image_path(row.image_path)
+                if abs_path and abs_path.exists():
+                    try:
+                        abs_path.unlink()
+                    except Exception:
+                        pass  # best-effort cleanup
+                db.session.delete(row)
+            db.session.flush()
+
+    for kind in ('intro', 'outro'):
+        prefix = f'extra_{kind}_'
+
+        def upload_index(key):
+            try:
+                return int(key.rsplit('_', 1)[1])
+            except Exception:
+                return 0
+
+        keys = sorted((k for k in request.files.keys() if k.startswith(prefix)), key=upload_index)
+        new_files = [request.files[k] for k in keys if request.files[k] and request.files[k].filename]
+        if not new_files:
+            continue
+
+        abs_dir = resolve_book_dir()
+        abs_dir.mkdir(parents=True, exist_ok=True)
+        next_sort = (db.session.query(func.max(SongbookIntroOutroImage.sort_order))
+                     .filter_by(songbook_id=songbook_id, type=kind).scalar() or 0)
+        taken = {Path(p).name for (p,) in db.session.query(SongbookIntroOutroImage.image_path)
+                 .filter_by(songbook_id=songbook_id).all() if p}
+
+        n = 1
+        for file_storage in new_files:
+            ext = (Path(file_storage.filename).suffix or '.png').lower()
+            if ext not in ('.png', '.jpg', '.jpeg', '.webp'):
+                ext = '.png'
+            # Follow the seeded naming convention: intro1.png, outro1.png, ...
+            while f'{kind}{n}{ext}' in taken:
+                n += 1
+            filename = f'{kind}{n}{ext}'
+            taken.add(filename)
+            abs_path = abs_dir / filename
+            _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
+            next_sort += 1
+            db.session.add(SongbookIntroOutroImage(
+                songbook_id=songbook_id,
+                type=kind,
+                image_path=_rel_for_stored_file(abs_path, sb),
+                sort_order=next_sort,
+            ))
 
     db.session.commit()
     return jsonify({'ok': True})
