@@ -233,7 +233,18 @@
   </div>
 </div>
 
-<h1 style="text-align:center; margin-top: 30px;">Moje zpěvníky</h1>
+{% set manage_public = manage_public|default(false) %}
+
+<h1 style="text-align:center; margin-top: 30px;">
+  {{ 'Správa našich zpěvníků' if manage_public else 'Moje zpěvníky' }}
+</h1>
+
+{% if manage_public %}
+  <p style="text-align:center; margin-top:-10px; color:#666;">
+    Zpěvníky přidané tady se zobrazí všem v sekci
+    <a href="{{ url_for('public_songbooks') }}">Naše zpěvníky</a>.
+  </p>
+{% endif %}
 
 <div class="grid-container">
   {% for book in songbooks|sort(attribute='id') %}
@@ -268,11 +279,14 @@
             <img src="{{ static_bust('img/icons/edit.svg') }}" alt="Upravit">
           </button>
         </span>
-        <span class="tooltip" data-tooltip="Sdílet zpěvník">
-          <button class="icon-btn btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
-            <img src="{{ static_bust('img/icons/share.svg') }}" alt="Sdílet">
-          </button>
-        </span>
+        {% if not manage_public %}
+          {# Public songbooks are visible to everyone, so sharing is meaningless #}
+          <span class="tooltip" data-tooltip="Sdílet zpěvník">
+            <button class="icon-btn btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
+              <img src="{{ static_bust('img/icons/share.svg') }}" alt="Sdílet">
+            </button>
+          </span>
+        {% endif %}
         <span class="tooltip" data-tooltip="Smazat zpěvník">
           <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
@@ -809,6 +823,8 @@
     };
 
     const IMAGE_SIZE_LIMIT_BYTES = {{ upload_limit_bytes|int }};
+    // Admin mode: this page manages the public "Naše zpěvníky" section
+    const MANAGE_PUBLIC = {{ manage_public|tojson }};
     const RESIZE_NOTICE_STORAGE_KEY = 'dz_hide_resize_notice';
     const resizeNoticeOverlay = document.getElementById('image-resize-notice');
     const resizeNoticeOk = document.getElementById('resize-notice-ok');
@@ -1288,6 +1304,7 @@ function openCreateModal() {
         const fd = new FormData();
         fd.append('title', (nameEl?.value || '').trim());
         fd.append('use_cover', '1');
+        if (MANAGE_PUBLIC) fd.append('is_public', '1');
         if (hexInput && hexInput.value) fd.append('color', hexInput.value);
         Object.entries(files).forEach(([k,v]) => { if (v) fd.append(k, v); });
 

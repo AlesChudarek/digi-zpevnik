@@ -249,22 +249,64 @@ def serve_songbook_image(filename):
         return ("Not Found", 404)
 
 
-# ---------- Helpers for song file ownership/migration ----------
-def _base_rel_for_book(book: Songbook) -> str:
-    """Return base relative path users/<user>/<book> for a songbook's private dir."""
+# ---------- Storage layout helpers (public vs private songbooks) ----------
+def _book_storage_base(book: Songbook):
+    """Return (abs_dir, rel_prefix) of the directory holding this songbook's images.
+
+    Public songbooks live in data/public/images/songbooks/<id> and store paths
+    relative to that root ("00030/page1.png"), matching the seeded songbooks.
+    Private songbooks live in data/private/users/<user_dir>/<book_dir> and store
+    paths prefixed with "users/". The prefix is what serve_songbook_image()
+    dispatches on, so both roots stay servable without extra routing.
+    """
+    if getattr(book, 'is_public', 0):
+        return SONGBOOK_IMAGES_DIR / book.id, book.id
     try:
         p = book.img_path_cover_preview or book.img_path_cover_front_outer or book.img_path_cover_front_inner
         if p and isinstance(p, str) and p.startswith('users/'):
             parts = Path(p).parts
             if len(parts) >= 4:
-                return str(Path(*parts[: -1]))
+                return PRIVATE_USER_IMAGES_DIR / Path(*parts[1:-1]), str(Path(*parts[:-1]))
     except Exception:
         pass
     owner = User.query.get(book.owner_id) if getattr(book, 'owner_id', None) else None
     owner_email = getattr(owner, 'email', '') if owner else ''
     user_dir = f"{book.owner_id}_{slugify(owner_email, 50)}"
     book_dir = f"{book.id}_{slugify(book.title, 50) if book.title else 'untitled'}"
-    return str(Path('users') / user_dir / book_dir)
+    return PRIVATE_USER_IMAGES_DIR / user_dir / book_dir, str(Path('users') / user_dir / book_dir)
+
+
+def _rel_for_stored_file(abs_path: Path, book: Songbook) -> str:
+    """DB path for a file already written somewhere under the book's base dir."""
+    base_abs, rel_prefix = _book_storage_base(book)
+    return str(Path(rel_prefix) / abs_path.relative_to(base_abs))
+
+
+def _abs_image_path(rel_path: str):
+    """Resolve a stored image path to an absolute file, for either storage root."""
+    try:
+        if not rel_path or not isinstance(rel_path, str):
+            return None
+        if rel_path.startswith('users/'):
+            return PRIVATE_USER_IMAGES_DIR / Path(rel_path).relative_to('users')
+        return SONGBOOK_IMAGES_DIR / rel_path
+    except Exception:
+        return None
+
+
+def _next_public_songbook_id() -> str:
+    """Lowest free 5-digit id, so admin-created books keep the 00001.. numbering."""
+    taken = {sid for (sid,) in db.session.query(Songbook.id).all()}
+    n = 1
+    while f"{n:05d}" in taken:
+        n += 1
+    return f"{n:05d}"
+
+
+# ---------- Helpers for song file ownership/migration ----------
+def _base_rel_for_book(book: Songbook) -> str:
+    """Return the base relative path for a songbook's image directory."""
+    return _book_storage_base(book)[1]
 
 
 def _handle_song_delete_for_book(sb: Songbook, song: Song):
@@ -565,16 +607,18 @@ def search():
     # Exclude system-generated dummy entries for non-song pages
     q = q.filter(~or_(Song.title.like('Non-song page%'), Song.title == '<Prázdná strana>'))
 
-    # Filter accessible songbooks
-    filters = [Songbook.is_public == 1]
-    if current_user.is_authenticated:
-        filters.append(Songbook.owner_id == current_user.id)
-        if shared_ids:
-            filters.append(Songbook.id.in_(shared_ids))
+    # Filter accessible songbooks. Admins search across every songbook, matching
+    # can_view_songbook() and the admin branch of /my-songbooks.
+    if not is_admin(current_user):
+        filters = [Songbook.is_public == 1]
+        if current_user.is_authenticated:
+            filters.append(Songbook.owner_id == current_user.id)
+            if shared_ids:
+                filters.append(Songbook.id.in_(shared_ids))
+        q = q.filter(or_(*filters))
 
     rows = (
-        q.filter(or_(*filters))
-         .order_by(Song.title.asc(), Songbook.title.asc(), first_pages_subq.c.first_page_number.asc())
+        q.order_by(Song.title.asc(), Songbook.title.asc(), first_pages_subq.c.first_page_number.asc())
          .all()
     )
 
@@ -772,20 +816,8 @@ def create_custom_song(songbook_id):
     db.session.add(song)
     db.session.flush()
 
-    # Save images under the user's private dir, in a song-specific subfolder
-    def resolve_private_dir() -> Path:
-        p = sb.img_path_cover_preview or sb.img_path_cover_front_outer or sb.img_path_cover_front_inner
-        if p and isinstance(p, str) and p.startswith('users/'):
-            parts = Path(p).parts
-            if len(parts) >= 4:
-                return PRIVATE_USER_IMAGES_DIR / Path(*parts[1:-1]) / 'songs' / new_song_id
-        owner = User.query.get(sb.owner_id) if sb.owner_id else None
-        owner_email = getattr(owner, 'email', '')
-        user_dir = f"{sb.owner_id}_{slugify(owner_email, 50)}"
-        book_dir = f"{sb.id}_{slugify(sb.title, 50) if sb.title else 'untitled'}"
-        return PRIVATE_USER_IMAGES_DIR / user_dir / book_dir / 'songs' / new_song_id
-
-    abs_dir = resolve_private_dir()
+    # Save images in a song-specific subfolder of this book's image directory
+    abs_dir = _book_storage_base(sb)[0] / 'songs' / new_song_id
     abs_dir.mkdir(parents=True, exist_ok=True)
 
     saved = 0
@@ -794,9 +826,7 @@ def create_custom_song(songbook_id):
         abs_path = abs_dir / orig
         ext_hint = Path(orig).suffix.lower() or None
         _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-        rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
-        rel_path = str(Path('users') / rel_parts)
-        db.session.add(SongImage(song_id=new_song_id, image_path=rel_path))
+        db.session.add(SongImage(song_id=new_song_id, image_path=_rel_for_stored_file(abs_path, sb)))
         saved += 1
 
     if saved == 0:
@@ -912,7 +942,37 @@ def public_songbooks():
         db.select(Songbook).where(Songbook.is_public == 1)
     ).scalars().all()
     is_guest = (current_user.email == "guest@guest.com")
-    return render_template('public_songbooks.html', songbooks=songbooks, guest=is_guest)
+    return render_template(
+        'public_songbooks.html',
+        songbooks=songbooks,
+        guest=is_guest,
+        can_manage=is_admin(current_user),
+    )
+
+
+@app.route('/public-songbooks/manage')
+@login_required
+def manage_public_songbooks():
+    """Admin-only management of the public "Naše zpěvníky" section.
+
+    Reuses the private songbook editor: public and private books share the
+    songbooks table, and can_edit_songbook() already grants admins access, so
+    the only difference is which books are listed and where images are stored.
+    """
+    if not is_admin(current_user):
+        flash("Na správu veřejných zpěvníků nemáš právo.", "error")
+        return redirect(url_for('public_songbooks'))
+    books = db.session.execute(
+        db.select(Songbook).where(Songbook.is_public == 1)
+    ).scalars().all()
+    return render_template(
+        'my_songbooks.html',
+        songbooks=books,
+        shared_users_map={},
+        max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
+        max_upload_mb=MAX_IMAGE_UPLOAD_MB,
+        manage_public=True,
+    )
 
 @app.route('/my-songbooks')
 @login_required
@@ -982,21 +1042,32 @@ def my_songbooks():
         max_upload_mb=MAX_IMAGE_UPLOAD_MB,
     )
 
-# API: Create a new private songbook for current user
+# API: Create a new songbook — private for the current user, or public for an admin
 @app.route('/api/my-songbooks', methods=['POST'])
 @login_required
 def api_create_songbook():
     if current_user.role == 'guest':
         return jsonify({"ok": False, "error": "Guests cannot create songbooks"}), 403
 
-    title = (request.form.get('title') or '').strip() or 'Můj zpěvník'
+    want_public = request.form.get('is_public') in ('1', 'true', 'True', 'on')
+    if want_public and not is_admin(current_user):
+        return jsonify({"ok": False, "error": "Veřejný zpěvník může vytvořit jen admin."}), 403
+
+    title = (request.form.get('title') or '').strip() or ('Nový zpěvník' if want_public else 'Můj zpěvník')
     use_cover = request.form.get('use_cover', '1') in ('1', 'true', 'True', 'on')
 
-    # Generate a simple unique ID scoped by user and timestamp
-    sid = f"u{current_user.id}-{int(time.time())}"
-
-    user_dir = f"{current_user.id}_{slugify(current_user.email, 50)}"
-    book_dir = f"{sid}_{slugify(title, 50) if title else 'untitled'}"
+    if want_public:
+        # Keep the seeded 00001.. numbering so public books stay consistent
+        sid = _next_public_songbook_id()
+        rel_dir = Path(sid)
+        abs_dir = SONGBOOK_IMAGES_DIR / sid
+    else:
+        # Generate a simple unique ID scoped by user and timestamp
+        sid = f"u{current_user.id}-{int(time.time())}"
+        user_dir = f"{current_user.id}_{slugify(current_user.email, 50)}"
+        book_dir = f"{sid}_{slugify(title, 50) if title else 'untitled'}"
+        rel_dir = Path('users') / user_dir / book_dir
+        abs_dir = PRIVATE_USER_IMAGES_DIR / user_dir / book_dir
 
     # Prepare file save helper
     def save_cover(file_storage, name_hint):
@@ -1006,8 +1077,6 @@ def api_create_songbook():
         ext = (Path(file_storage.filename).suffix or '.png').lower()
         if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
             ext = '.png'
-        rel_dir = Path('users') / user_dir / book_dir
-        abs_dir = PRIVATE_USER_IMAGES_DIR / user_dir / book_dir
         abs_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{name_hint}{ext}"
         abs_path = abs_dir / filename
@@ -1028,12 +1097,12 @@ def api_create_songbook():
         img_back_inner = save_cover(request.files.get('back_inner'), 'coverbackin')
         img_back_outer = save_cover(request.files.get('back_outer'), 'coverbackout')
 
-    # Create songbook ORM entry
+    # Create songbook ORM entry. Public books are owner-less, like the seeded ones.
     sb = Songbook(
         id=sid,
         title=title,
-        owner_id=current_user.id,
-        is_public=0,
+        owner_id=None if want_public else current_user.id,
+        is_public=1 if want_public else 0,
         first_page_side='right',
         color=color,
         img_path_cover_preview=img_front_outer,
@@ -1144,24 +1213,13 @@ def api_delete_songbook(songbook_id):
 
             return jsonify({"ok": True})
 
-    # Remove private cover directory if present
+    # Remove the songbook's image directory (private user dir, or public 000NN dir)
     try:
-        target_dir = None
-        # Prefer deriving from stored preview path if present
-        p = sb.img_path_cover_preview
-        if p and isinstance(p, str) and p.startswith('users/'):
-            parts = Path(p).parts
-            # users/<user_dir>/<book_dir>/<file>
-            if len(parts) >= 4:
-                target_dir = PRIVATE_USER_IMAGES_DIR / Path(*parts[1:-1])
-        if target_dir is None:
-            # Fallback to expected directory name pattern
-            owner = User.query.get(sb.owner_id) if sb.owner_id else None
-            owner_email = getattr(owner, 'email', None) or ''
-            user_dir = f"{sb.owner_id}_{slugify(owner_email, 50)}"
-            book_dir = f"{sb.id}_{slugify(sb.title, 50) if sb.title else 'untitled'}"
-            target_dir = PRIVATE_USER_IMAGES_DIR / user_dir / book_dir
-        if target_dir.exists():
+        target_dir = _book_storage_base(sb)[0]
+        # Never let a bad path resolution take out a whole storage root
+        if target_dir.exists() and target_dir.resolve() not in (
+            PRIVATE_USER_IMAGES_DIR.resolve(), SONGBOOK_IMAGES_DIR.resolve()
+        ):
             shutil.rmtree(target_dir, ignore_errors=True)
     except Exception:
         pass  # ignore file removal errors
@@ -1299,19 +1357,9 @@ def update_songbook_structure(songbook_id):
     color = (request.form.get('color') or getattr(sb, 'color', '#FFFFFF') or '#FFFFFF').strip()
     auto_numbering = (request.form.get('auto_numbering', '1') in ('1', 'true', 'True', 'on'))
 
-    # Save optional cover files into existing private folder if possible
-    def resolve_private_dir() -> Path:
-        p = sb.img_path_cover_preview or sb.img_path_cover_front_outer or sb.img_path_cover_front_inner
-        if p and isinstance(p, str) and p.startswith('users/'):
-            parts = Path(p).parts
-            if len(parts) >= 4:
-                return PRIVATE_USER_IMAGES_DIR / Path(*parts[1:-1])
-        # Fallback to computed path (do not rename based on new title)
-        owner = User.query.get(sb.owner_id) if sb.owner_id else None
-        owner_email = getattr(owner, 'email', '')
-        user_dir = f"{sb.owner_id}_{slugify(owner_email, 50)}"
-        book_dir = f"{sb.id}_{slugify(sb.title, 50) if sb.title else 'untitled'}"
-        return PRIVATE_USER_IMAGES_DIR / user_dir / book_dir
+    # Save optional cover files into the book's existing image folder
+    def resolve_book_dir() -> Path:
+        return _book_storage_base(sb)[0]
 
     def save_cover(file_storage, name_hint):
         if not file_storage:
@@ -1324,14 +1372,12 @@ def update_songbook_structure(songbook_id):
             if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
                 ext = '.png'
             orig_name = f"{name_hint}{ext}"
-        abs_dir = resolve_private_dir()
+        abs_dir = resolve_book_dir()
         abs_dir.mkdir(parents=True, exist_ok=True)
         abs_path = abs_dir / orig_name
         ext_hint = Path(orig_name).suffix.lower() or None
         _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-        # Return relative path
-        rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
-        return str(Path('users') / rel_parts)
+        return _rel_for_stored_file(abs_path, sb)
 
     # Keep originals to allow cleanup when new files are uploaded (avoid storage bloat)
     old_front_outer = sb.img_path_cover_front_outer
@@ -1344,18 +1390,10 @@ def update_songbook_structure(songbook_id):
     f_back_inner = request.files.get('back_inner')
     f_back_outer = request.files.get('back_outer')
 
-    def abs_from_rel(rel_path: str) -> Path:
-        try:
-            if not rel_path or not isinstance(rel_path, str) or not rel_path.startswith('users/'):
-                return None
-            return PRIVATE_USER_IMAGES_DIR / Path(rel_path).relative_to('users')
-        except Exception:
-            return None
-
     def cleanup_old(old_rel: str, new_rel: str):
         try:
             if old_rel and old_rel != new_rel:
-                p = abs_from_rel(old_rel)
+                p = _abs_image_path(old_rel)
                 if p and p.exists():
                     p.unlink()
         except Exception:
@@ -1432,7 +1470,7 @@ def update_songbook_structure(songbook_id):
 
     created_new_songs = {}
     if referenced_new_ids:
-        base_dir = resolve_private_dir()
+        base_dir = resolve_book_dir()
         base_dir.mkdir(parents=True, exist_ok=True)
         next_page_number = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=songbook_id).scalar() or 0
         payloads = []
@@ -1476,9 +1514,7 @@ def update_songbook_structure(songbook_id):
                 abs_path = song_dir / orig_name
                 ext_hint = Path(orig_name).suffix.lower() or None
                 _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-                rel_parts = abs_path.relative_to(PRIVATE_USER_IMAGES_DIR)
-                rel_path = str(Path('users') / rel_parts)
-                db.session.add(SongImage(song_id=new_song_id, image_path=rel_path))
+                db.session.add(SongImage(song_id=new_song_id, image_path=_rel_for_stored_file(abs_path, sb)))
                 saved += 1
 
             if saved == 0:
