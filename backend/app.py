@@ -504,55 +504,56 @@ def guest_login():
 
 @app.route('/api/songbook/<songbook_id>/toc')
 def get_songbook_toc(songbook_id):
-    # songbook = Songbook.query.filter_by(id=songbook_id).first_or_404()
-    toc = []
-    pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(SongbookPage.page_number).all()
+    """Table of contents: one entry per song, in page order.
 
-    # Calculate correct page numbers for TOC
-    seen_images = set()
-    current_page_number = 1
+    A page can hold several short songs, so entries are counted per page rather
+    than per song image. Deduplicating by image used to drop every song after the
+    first on a shared page.
+    """
+    pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(
+        SongbookPage.page_number.asc(), SongbookPage.id.asc()
+    ).all()
+    if not pages:
+        return jsonify({"pages": []})
 
+    song_ids = {p.song_id for p in pages}
+    songs = {s.id: s for s in Song.query.filter(Song.id.in_(song_ids)).all()}
+    images_by_song = {}
+    for img in (SongImage.query.filter(SongImage.song_id.in_(song_ids))
+                .order_by(SongImage.id.asc()).all()):
+        images_by_song.setdefault(img.song_id, []).append(img)
+
+    # Songs sharing a page_number sit on the same physical page, so that page
+    # advances the running number once, no matter how many songs it carries.
+    songs_by_page = {}
     for page in pages:
-        song = Song.query.get(page.song_id)
-        if not song:
-            continue
+        songs_by_page.setdefault(page.page_number, []).append(page.song_id)
 
-        # Non-song pages stay out of the TOC, but still take up page numbers
-        if _is_non_song(song):
-            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
-            current_page_number += len(song_images) if song_images else 1
-            continue
+    toc = []
+    listed = set()
 
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
-        author_name = song.author.name if song.author else ""
-        author_display = author_name if author_name else "-"
-        if song.title == '<Prázdná strana>' or author_name.strip().lower() == 'system':
-            author_display = '-'
-        if song_images:
-            # Use the first image for TOC entry
-            first_image = song_images[0]
-            if first_image.image_path not in seen_images:
-                toc.append({
-                    "title": song.title,
-                    "author": author_display,
-                    "page": first_image.image_path,
-                    "page_number": current_page_number,
-                    "song_id": song.id
-                })
-                # Mark all images of this song as seen
-                for img in song_images:
-                    seen_images.add(img.image_path)
-                current_page_number += len(song_images)
-        else:
-            # Handle case with no images
+    # A multi-page song already has one songbook_pages row per page, so the running
+    # number is simply the position of the page among all pages of the songbook.
+    for current_page_number, page_number in enumerate(sorted(songs_by_page), start=1):
+        for song_id in songs_by_page[page_number]:
+            song = songs.get(song_id)
+            if not song:
+                continue
+            if _is_non_song(song) or song_id in listed:
+                continue
+            listed.add(song_id)
+            song_images = images_by_song.get(song_id, [])
+            author_name = song.author.name if song.author else ""
+            author_display = author_name or "-"
+            if song.title == NON_SONG_TITLE or author_name.strip().lower() == 'system':
+                author_display = '-'
             toc.append({
                 "title": song.title,
                 "author": author_display,
-                "page": "",
+                "page": song_images[0].image_path if song_images else "",
                 "page_number": current_page_number,
-                "song_id": song.id
+                "song_id": song.id,
             })
-            current_page_number += 1
 
     return jsonify({"pages": toc})
 
@@ -1346,6 +1347,22 @@ def get_songbook_structure(songbook_id):
         title = row[1] or ''
         return title == NON_SONG_TITLE or str(title).startswith('Non-song page')
 
+    # Several short songs can share one physical page. Group them so the editor
+    # shows one row per page and keeps them together when saving.
+    page_rows = (db.session.query(SongbookPage.song_id, SongbookPage.page_number)
+                 .filter(SongbookPage.songbook_id == songbook_id).all())
+    songs_on_page = {}
+    for song_id, page_number in page_rows:
+        songs_on_page.setdefault(page_number, set()).add(song_id)
+    group_of = {}
+    for page_number in sorted(songs_on_page):
+        sharing = songs_on_page[page_number]
+        # Reuse a group id if any song on this page already belongs to one
+        existing = next((group_of[s] for s in sharing if s in group_of), None)
+        group_id = existing if existing is not None else len(set(group_of.values()))
+        for song_id in sharing:
+            group_of[song_id] = group_id
+
     return jsonify({
         'ok': True,
         'songbook': {
@@ -1377,6 +1394,8 @@ def get_songbook_structure(songbook_id):
                     'page_count': r[4],
                     'is_private': (r[0] in private_set),
                     'is_non_song': bool(_row_is_non_song(r)),
+                    # Songs with the same page_group sit on the same page(s)
+                    'page_group': group_of.get(r[0]),
                 }
                 for r in rows
             ]
@@ -1515,12 +1534,29 @@ def update_songbook_structure(songbook_id):
         for temp_id in referenced_new_ids:
             meta = new_songs_map.get(temp_id) or {}
             non_song = bool(meta.get('non_song'))
-            if non_song:
-                title = (meta.get('title') or '').strip() or NON_SONG_TITLE
-                author_name = NON_SONG_AUTHOR
+            # Short songs can share one page: 'songs' carries a title/author per song
+            # and they all end up on the same uploaded page images.
+            members_raw = meta.get('songs')
+            if isinstance(members_raw, list) and members_raw:
+                members = []
+                for m in members_raw:
+                    if not isinstance(m, dict):
+                        continue
+                    if non_song:
+                        members.append(((m.get('title') or '').strip() or NON_SONG_TITLE, NON_SONG_AUTHOR))
+                    else:
+                        members.append(((m.get('title') or 'Moje písnička').strip() or 'Moje písnička',
+                                        (m.get('author') or '-').strip() or '-'))
+                members = members or None
             else:
-                title = (meta.get('title') or 'Moje písnička').strip() or 'Moje písnička'
-                author_name = (meta.get('author') or '-').strip() or '-'
+                members = None
+            if members is None:
+                if non_song:
+                    members = [((meta.get('title') or '').strip() or NON_SONG_TITLE, NON_SONG_AUTHOR)]
+                else:
+                    members = [((meta.get('title') or 'Moje písnička').strip() or 'Moje písnička',
+                                (meta.get('author') or '-').strip() or '-')]
+            title = members[0][0]
             try:
                 requested_pages = int(meta.get('page_count') or 1)
             except Exception:
@@ -1535,41 +1571,54 @@ def update_songbook_structure(songbook_id):
             if not files:
                 label = 'nové stránky' if non_song else f'novou písničku: {title}'
                 return jsonify({'ok': False, 'error': f'Chybí soubory pro {label}'}), 400
-            payloads.append((temp_id, title, author_name, files, non_song))
+            payloads.append((temp_id, members, files, non_song))
 
-        for temp_id, title, author_name, files, non_song in payloads:
-            author = Author.query.filter_by(name=author_name).first()
-            if not author:
-                author = Author(name=author_name)
-                db.session.add(author)
-                db.session.flush()
+        for temp_id, members, files, non_song in payloads:
+            shared = len(members) > 1
+            member_ids = [f"custom_{uuid4().hex[:12]}" for _ in members]
 
-            new_song_id = f"custom_{uuid4().hex[:12]}"
-            song = Song(id=new_song_id, title=title, author_id=author.id,
-                        is_non_song=1 if non_song else 0)
-            db.session.add(song)
-            db.session.flush()
+            # Files are stored once. A shared page lives under pages/<id> rather than
+            # songs/<id> so no single song of the group owns the images.
+            if shared:
+                store_dir = base_dir / 'pages' / uuid4().hex[:12]
+            else:
+                store_dir = base_dir / 'songs' / member_ids[0]
+            store_dir.mkdir(parents=True, exist_ok=True)
 
-            song_dir = base_dir / 'songs' / new_song_id
-            song_dir.mkdir(parents=True, exist_ok=True)
-
-            saved = 0
+            saved_paths = []
             for offset, file_storage in enumerate(files, start=1):
                 orig_name = secure_filename(Path(file_storage.filename).name) or f"page_{offset}.png"
-                abs_path = song_dir / orig_name
+                abs_path = store_dir / orig_name
                 ext_hint = Path(orig_name).suffix.lower() or None
                 _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-                db.session.add(SongImage(song_id=new_song_id, image_path=_rel_for_stored_file(abs_path, sb)))
-                saved += 1
+                saved_paths.append(_rel_for_stored_file(abs_path, sb))
 
-            if saved == 0:
-                return jsonify({'ok': False, 'error': f'Nepodařilo se uložit soubory nové písničky: {title}'}), 400
+            if not saved_paths:
+                return jsonify({'ok': False, 'error': f'Nepodařilo se uložit soubory nové písničky: {members[0][0]}'}), 400
 
-            for _ in range(saved):
+            # Every song of the group points at the same images and the same pages
+            page_numbers = []
+            for _ in saved_paths:
                 next_page_number += 1
-                db.session.add(SongbookPage(songbook_id=songbook_id, song_id=new_song_id, page_number=next_page_number))
+                page_numbers.append(next_page_number)
 
-            created_new_songs[temp_id] = {'song_id': new_song_id, 'page_count': saved}
+            for song_id, (title, author_name) in zip(member_ids, members):
+                author = Author.query.filter_by(name=author_name).first()
+                if not author:
+                    author = Author(name=author_name)
+                    db.session.add(author)
+                    db.session.flush()
+                db.session.add(Song(id=song_id, title=title, author_id=author.id,
+                                    is_non_song=1 if non_song else 0))
+                db.session.flush()
+                for rel_path in saved_paths:
+                    db.session.add(SongImage(song_id=song_id, image_path=rel_path))
+                for page_number in page_numbers:
+                    db.session.add(SongbookPage(songbook_id=songbook_id, song_id=song_id,
+                                                page_number=page_number))
+
+            created_new_songs[temp_id] = {'song_id': member_ids[0], 'song_ids': member_ids,
+                                          'page_count': len(saved_paths)}
 
         # Replace placeholder IDs in order entries with real song IDs
         for entry in song_entries:
@@ -1578,6 +1627,7 @@ def update_songbook_structure(songbook_id):
             sid = entry.get('song_id')
             if sid and sid in created_new_songs:
                 entry['song_id'] = created_new_songs[sid]['song_id']
+                entry['song_ids'] = list(created_new_songs[sid]['song_ids'])
 
     # Build mapping for updates
     # song_entries: list of {song_id, start_page?}
@@ -1591,8 +1641,15 @@ def update_songbook_structure(songbook_id):
             .distinct()
             .all()
         )]
-        incoming_ids = [e.get('song_id') for e in song_entries if e.get('song_id')]
-        to_delete = set(existing_ids) - set(incoming_ids)
+        # Count every member of a shared page as submitted, not just the entry's
+        # primary song, or the others would look removed and get deleted.
+        incoming_ids = set()
+        for e in song_entries:
+            if e.get('song_id'):
+                incoming_ids.add(e.get('song_id'))
+            for member in (e.get('song_ids') or []):
+                incoming_ids.add(member)
+        to_delete = set(existing_ids) - incoming_ids
 
         if to_delete:
             # Delete all pages for songs that are no longer present in the submitted order
@@ -1634,21 +1691,29 @@ def update_songbook_structure(songbook_id):
                     db.session.add(SongbookPage(songbook_id=songbook_id, song_id=ns_song_id, page_number=start))
                     next_page = start + page_count if not auto_numbering else (next_page + page_count)
                 continue
-            page_count = int(counts.get(sid, 0))
-            if page_count <= 0:
+            # Several short songs can share one page. Such a group is renumbered as
+            # a single unit: every member gets the same page numbers and the page
+            # counter advances only once, otherwise saving would split the page.
+            group_ids = entry.get('song_ids')
+            if not isinstance(group_ids, list) or not group_ids:
+                group_ids = [sid]
+            group_ids = [g for g in group_ids if int(counts.get(g, 0)) > 0]
+            if not group_ids:
                 continue
+            page_count = max(int(counts.get(g, 0)) for g in group_ids)
             start = next_page if auto_numbering else int(entry.get('start_page') or next_page)
 
-            # Select rows for this song ordered by page_number then id
-            rows = (SongbookPage.query
-                    .filter_by(songbook_id=songbook_id, song_id=sid)
-                    .order_by(SongbookPage.page_number.asc(), SongbookPage.id.asc())
-                    .all())
-            # Reassign page numbers sequentially from 'start'
-            p = start
-            for r in rows:
-                r.page_number = p
-                p += 1
+            for member_id in group_ids:
+                # Select rows for this song ordered by page_number then id
+                rows = (SongbookPage.query
+                        .filter_by(songbook_id=songbook_id, song_id=member_id)
+                        .order_by(SongbookPage.page_number.asc(), SongbookPage.id.asc())
+                        .all())
+                # Reassign page numbers sequentially from 'start'
+                p = start
+                for r in rows:
+                    r.page_number = p
+                    p += 1
 
             next_page = start + page_count if not auto_numbering else (next_page + page_count)
 
