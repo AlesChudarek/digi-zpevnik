@@ -1674,6 +1674,11 @@ function openCreateModal() {
       section.id = 'edit-songs-section';
       section.innerHTML = `
         <div class=\"section-head\" style=\"display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top: 6px;\">\n          <h3 class=\"section-title\" style=\"margin: 0;\">Písničky</h3>\n          <div class=\"right-actions\" style=\"display:flex; align-items:center; gap:8px;\">\n            <button class=\"btn\" id=\"btn-add-blank-page-nb\">Přidat prázdnou stránku</button>\n            <button class=\"btn\" id=\"btn-add-nonsong-page-nb\">Přidat nepísničkovou stránku</button>\n            <button class=\"btn primary\" id=\"btn-add-custom-song-nb\">Přidat svou písničku</button>\n          </div>\n        </div>
+        <div class=\"songs-toolbar\" style=\"margin-top:8px; display:flex; align-items:center; gap:8px;\">
+          <label for=\"nb-first-page\">Číslo první strany</label>
+          <input type=\"number\" id=\"nb-first-page\" min=\"1\" value=\"1\" style=\"width:80px;\">
+          <span class=\"tooltip\" data-tooltip=\"Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.\" style=\"cursor:help;\">?</span>
+        </div>
         <div class="songs-list" style="margin-top:12px; border:1px solid var(--muted-border, #dbeadf); border-radius:10px; overflow:visible;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
@@ -2218,6 +2223,8 @@ function openCreateModal() {
           updateDisplayPages();
           wireEditRowActions();
         }
+        const firstPageEl = document.getElementById('nb-first-page');
+        if (firstPageEl) firstPageEl.value = sb.first_page_number || 1;
         // Ensure create/edit dirty flag remains clean after initial populate
         try { createDirty = false; } catch(_) {}
         // Capture initial state for dirty checks on close
@@ -2251,6 +2258,8 @@ function openCreateModal() {
         const hex = (document.getElementById('hex-col') && document.getElementById('hex-col').value) || '#ffffff';
         fd.append('color', hex);
         fd.append('auto_numbering', '1');
+        const firstPageInput = document.getElementById('nb-first-page');
+        if (firstPageInput && firstPageInput.value) fd.append('first_page_number', firstPageInput.value);
         const pendingNewSongs = [];
         const pendingNewMap = (window.__pendingNewSongs && typeof window.__pendingNewSongs.forEach === 'function') ? window.__pendingNewSongs : null;
         if (pendingNewMap) {
