@@ -39,9 +39,45 @@
     margin: 10px;
     padding: 0;
   }
+
+  .manage-bar {
+    display: flex;
+    justify-content: center;
+    margin-top: 12px;
+  }
+
+  .manage-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: var(--brand-strong, #2E7D32);
+    color: #fff;
+    font-weight: bold;
+    text-decoration: none;
+    transition: filter 0.2s;
+  }
+
+  .manage-link:hover { filter: brightness(1.1); }
+
+  .manage-link img {
+    width: 18px;
+    height: 18px;
+    filter: brightness(0) invert(1);
+  }
 </style>
 
 <h1 style="text-align:center; margin-top: 30px;">Naše zpěvníky</h1>
+
+{% if can_manage %}
+  <div class="manage-bar">
+    <a class="manage-link" href="{{ url_for('manage_public_songbooks') }}">
+      <img src="{{ static_bust('img/icons/edit.svg') }}" alt="">
+      Upravit naše zpěvníky
+    </a>
+  </div>
+{% endif %}
 
 <div class="grid-container">
   {% for book in songbooks|sort(attribute='id') %}
