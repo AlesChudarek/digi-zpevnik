@@ -1767,27 +1767,33 @@ def songbook_detail(book_id):
     # Query outro pages ordered by page_number
     outros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='outro').order_by(SongbookIntroOutroImage.sort_order).all()
 
-    # Query songbook pages ordered by page_number
-    seen_images = set()
-    pages = []
-    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(SongbookPage.page_number).all()
-    current_page_number = 1  # Start with page 1
+    # Build the page list from the stored page numbers, so a songbook numbered from
+    # its title page keeps showing what is printed on the scans. Counting positions
+    # here made the viewer disagree with the table of contents.
+    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(
+        SongbookPage.page_number.asc(), SongbookPage.id.asc()
+    ).all()
 
+    pages_by_song = {}
     for page in raw_pages:
-        song = Song.query.get(page.song_id)
-        if not song:
-            continue
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
-        if not song_images:
-            # Non-song page: represent as a single blank content page and advance numbering
-            pages.append({"file": "blank", "page_number": current_page_number, "kind": "content"})
-            current_page_number += 1
-        else:
-            for img in song_images:
-                if img.image_path not in seen_images:
-                    seen_images.add(img.image_path)
-                    pages.append({"file": img.image_path, "page_number": current_page_number, "kind": "content"})
-                    current_page_number += 1
+        pages_by_song.setdefault(page.song_id, []).append(page.page_number)
+
+    # A page number maps to one image; several short songs can share that one page.
+    image_for_page = {}
+    for song_id, page_numbers in pages_by_song.items():
+        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.id.asc()).all()
+        for offset, page_number in enumerate(sorted(set(page_numbers))):
+            if page_number in image_for_page:
+                continue  # already provided by another song on this same page
+            # A multi-page song has one page per image, in order
+            image_for_page[page_number] = (
+                song_images[offset].image_path if offset < len(song_images) else "blank"
+            )
+
+    pages = [
+        {"file": image_for_page[page_number], "page_number": page_number, "kind": "content"}
+        for page_number in sorted(image_for_page)
+    ]
 
     def pair_pages(intro_images, pages, outro_images, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
