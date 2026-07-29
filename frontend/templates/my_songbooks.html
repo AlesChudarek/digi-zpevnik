@@ -1956,15 +1956,11 @@ function openCreateModal() {
       if (titleLabel) titleLabel.textContent = isNonSong ? 'Název (nepovinný)' : 'Název';
       if (pagesLabel) pagesLabel.textContent = isNonSong ? 'Počet stran' : 'Počet stran písničky';
       if (nsTitle) nsTitle.placeholder = isNonSong ? 'např. Rejstřík' : 'Moje písnička';
-      document.querySelectorAll('.ns-extra-author-wrap').forEach(el => {
-        el.style.display = isNonSong ? 'none' : '';
-      });
-      const plusWrap = document.querySelector('#ns-add-song-wrap .tooltip');
-      if (plusWrap) {
-        plusWrap.setAttribute('data-tooltip', isNonSong
-          ? 'Přidat další stránku bez písničky'
-          : 'Přidat další písničku na tuto stejnou stránku');
-      }
+      // A non-song page carries no song, so there is nothing to add another of.
+      const plusWrap = document.getElementById('ns-add-song-wrap');
+      if (plusWrap) plusWrap.style.display = isNonSong ? 'none' : '';
+      const extraWrap = document.getElementById('ns-extra-songs');
+      if (isNonSong && extraWrap) extraWrap.innerHTML = '';
     }
 
     // Extra title/author rows: more than one song sitting on the same page
@@ -2003,6 +1999,8 @@ function openCreateModal() {
         title: (nsTitle.value || '').trim(),
         author: isNonSong ? '' : ((nsAuthor.value || '').trim() || '-'),
       }];
+      // A non-song page is always a single entry; there is no song to add another of
+      if (isNonSong) return members;
       if (nsExtraWrap) {
         nsExtraWrap.querySelectorAll('.ns-extra-song').forEach(row => {
           const t = (row.querySelector('.ns-extra-title')?.value || '').trim();
