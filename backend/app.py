@@ -167,6 +167,22 @@ def is_admin(user):
 def is_guest(user):
     return user.is_authenticated and user.role == 'guest'
 
+
+# ---------- Non-song pages ----------
+# Pages that belong to a songbook but carry no song: intros, dividers, indexes.
+# They order and move exactly like song pages, but stay out of the table of
+# contents and out of global search. Rows created before the is_non_song column
+# existed are still recognised by their generated titles.
+NON_SONG_TITLE = '<Prázdná strana>'
+NON_SONG_AUTHOR = 'System'
+
+
+def _is_non_song(song) -> bool:
+    if getattr(song, 'is_non_song', 0):
+        return True
+    title = getattr(song, 'title', '') or ''
+    return title == NON_SONG_TITLE or title.startswith('Non-song page')
+
 # Načti konfiguraci z .env
 load_dotenv()
 
@@ -501,9 +517,8 @@ def get_songbook_toc(songbook_id):
         if not song:
             continue
 
-        # Skip system-generated dummy songs for non-song pages
-        if song.title.startswith("Non-song page"):
-            # Still count the page in the numbering
+        # Non-song pages stay out of the TOC, but still take up page numbers
+        if _is_non_song(song):
             song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
             current_page_number += len(song_images) if song_images else 1
             continue
@@ -604,8 +619,9 @@ def search():
     ).outerjoin(shared_counts_subq, shared_counts_subq.c.songbook_id == Songbook.id
     ).join(Author, Song.author_id == Author.id, isouter=True)
 
-    # Exclude system-generated dummy entries for non-song pages
-    q = q.filter(~or_(Song.title.like('Non-song page%'), Song.title == '<Prázdná strana>'))
+    # Non-song pages never show up in search (legacy rows are matched by title too)
+    q = q.filter(Song.is_non_song == 0)
+    q = q.filter(~or_(Song.title.like('Non-song page%'), Song.title == NON_SONG_TITLE))
 
     # Filter accessible songbooks. Admins search across every songbook, matching
     # can_view_songbook() and the admin branch of /my-songbooks.
@@ -785,8 +801,17 @@ def create_custom_song(songbook_id):
     if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
-    title = (request.form.get('title') or 'Moje písnička').strip() or 'Moje písnička'
-    author_name = (request.form.get('author') or '-').strip() or '-'
+    # A non-song page is an ordinary page with images that carries no song: it may
+    # have a title for the editor's benefit, but never an author, and it stays out
+    # of the table of contents and out of global search.
+    non_song = request.form.get('non_song') in ('1', 'true', 'True', 'on')
+
+    if non_song:
+        title = (request.form.get('title') or '').strip() or NON_SONG_TITLE
+        author_name = NON_SONG_AUTHOR
+    else:
+        title = (request.form.get('title') or 'Moje písnička').strip() or 'Moje písnička'
+        author_name = (request.form.get('author') or '-').strip() or '-'
     try:
         page_count = int(request.form.get('page_count') or '1')
     except Exception:
@@ -812,7 +837,7 @@ def create_custom_song(songbook_id):
 
     # Create song
     new_song_id = f"custom_{uuid4().hex[:12]}"
-    song = Song(id=new_song_id, title=title, author_id=author.id)
+    song = Song(id=new_song_id, title=title, author_id=author.id, is_non_song=1 if non_song else 0)
     db.session.add(song)
     db.session.flush()
 
@@ -1291,7 +1316,7 @@ def get_songbook_structure(songbook_id):
     rows = (
         db.session.query(
             Song.id, Song.title, Author.name.label('author'),
-            subq_min.c.start_page, subq_min.c.page_count
+            subq_min.c.start_page, subq_min.c.page_count, Song.is_non_song
         )
         .join(subq_min, subq_min.c.song_id == Song.id)
         .join(Author, Song.author_id == Author.id, isouter=True)
@@ -1314,22 +1339,12 @@ def get_songbook_structure(songbook_id):
         except Exception:
             return None
 
-    # Extra (non-song) pages: intro pages come before the songs, outro pages after
-    extra_rows = (SongbookIntroOutroImage.query
-                  .filter_by(songbook_id=songbook_id)
-                  .order_by(SongbookIntroOutroImage.sort_order.asc(), SongbookIntroOutroImage.id.asc())
-                  .all())
-    extra_pages = {'intro': [], 'outro': []}
-    for row in extra_rows:
-        bucket = extra_pages.get(row.type)
-        if bucket is None:
-            continue
-        bucket.append({
-            'id': row.id,
-            'image_path': row.image_path,
-            'name': filename_or_none(row.image_path),
-            'sort_order': row.sort_order or 0,
-        })
+    def _row_is_non_song(row):
+        """Row order is (id, title, author, start_page, page_count, is_non_song)."""
+        if row[5]:
+            return True
+        title = row[1] or ''
+        return title == NON_SONG_TITLE or str(title).startswith('Non-song page')
 
     return jsonify({
         'ok': True,
@@ -1337,7 +1352,6 @@ def get_songbook_structure(songbook_id):
             'id': sb.id,
             'title': sb.title,
             'color': getattr(sb, 'color', '#FFFFFF') or '#FFFFFF',
-            'extra_pages': extra_pages,
             'covers': {
                 'front_outer': sb.img_path_cover_front_outer,
                 'front_inner': sb.img_path_cover_front_inner,
@@ -1351,12 +1365,18 @@ def get_songbook_structure(songbook_id):
             'songs': [
                 {
                     'song_id': r[0],
-                    # For non-song pages, present a visibly different label. Use escaped angle brackets so HTML stays visible.
-                    'title': ("&lt;Prázdná strana&gt;" if (not r[1] or (isinstance(r[1], str) and (r[1].startswith("Non-song page") or r[1] == "<Prázdná strana>"))) else r[1]),
-                    'author': ('-' if (not r[1] or (isinstance(r[1], str) and (r[1].startswith("Non-song page") or r[1] == "<Prázdná strana>"))) else (r[2] or '')),
+                    # Non-song pages show their own title if they have one, otherwise a
+                    # placeholder. Escaped angle brackets keep the placeholder visible.
+                    'title': (
+                        ("&lt;Prázdná strana&gt;" if (not r[1] or r[1] == NON_SONG_TITLE
+                                                      or str(r[1]).startswith("Non-song page")) else r[1])
+                        if _row_is_non_song(r) else r[1]
+                    ),
+                    'author': ('' if _row_is_non_song(r) else (r[2] or '')),
                     'start_page': r[3],
                     'page_count': r[4],
                     'is_private': (r[0] in private_set),
+                    'is_non_song': bool(_row_is_non_song(r)),
                 }
                 for r in rows
             ]
@@ -1494,8 +1514,13 @@ def update_songbook_structure(songbook_id):
         payloads = []
         for temp_id in referenced_new_ids:
             meta = new_songs_map.get(temp_id) or {}
-            title = (meta.get('title') or 'Moje písnička').strip() or 'Moje písnička'
-            author_name = (meta.get('author') or '-').strip() or '-'
+            non_song = bool(meta.get('non_song'))
+            if non_song:
+                title = (meta.get('title') or '').strip() or NON_SONG_TITLE
+                author_name = NON_SONG_AUTHOR
+            else:
+                title = (meta.get('title') or 'Moje písnička').strip() or 'Moje písnička'
+                author_name = (meta.get('author') or '-').strip() or '-'
             try:
                 requested_pages = int(meta.get('page_count') or 1)
             except Exception:
@@ -1508,10 +1533,11 @@ def update_songbook_structure(songbook_id):
                 if file_obj:
                     files.append(file_obj)
             if not files:
-                return jsonify({'ok': False, 'error': f'Chybí soubory pro novou písničku: {title}'}), 400
-            payloads.append((temp_id, title, author_name, files))
+                label = 'nové stránky' if non_song else f'novou písničku: {title}'
+                return jsonify({'ok': False, 'error': f'Chybí soubory pro {label}'}), 400
+            payloads.append((temp_id, title, author_name, files, non_song))
 
-        for temp_id, title, author_name, files in payloads:
+        for temp_id, title, author_name, files, non_song in payloads:
             author = Author.query.filter_by(name=author_name).first()
             if not author:
                 author = Author(name=author_name)
@@ -1519,7 +1545,8 @@ def update_songbook_structure(songbook_id):
                 db.session.flush()
 
             new_song_id = f"custom_{uuid4().hex[:12]}"
-            song = Song(id=new_song_id, title=title, author_id=author.id)
+            song = Song(id=new_song_id, title=title, author_id=author.id,
+                        is_non_song=1 if non_song else 0)
             db.session.add(song)
             db.session.flush()
 
@@ -1601,7 +1628,7 @@ def update_songbook_structure(songbook_id):
                     # Create dummy song + one page
                     ns_song_id = f"{songbook_id}_ns_{uuid4().hex[:8]}"
                     sys_author_id = get_system_author_id()
-                    ns_song = Song(id=ns_song_id, title='<Prázdná strana>', author_id=sys_author_id)
+                    ns_song = Song(id=ns_song_id, title=NON_SONG_TITLE, author_id=sys_author_id, is_non_song=1)
                     db.session.add(ns_song)
                     db.session.flush()
                     db.session.add(SongbookPage(songbook_id=songbook_id, song_id=ns_song_id, page_number=start))
@@ -1637,71 +1664,6 @@ def update_songbook_structure(songbook_id):
                 s = Song.query.get(sid)
                 if s:
                     _handle_song_delete_for_book(sb, s)
-
-    # Extra (non-song) pages: 'intro' pages render before the songs, 'outro' after them.
-    # The viewer already lays these out (see pair_pages); this is the write side.
-    delete_extra_raw = request.form.get('delete_extra_pages')
-    if delete_extra_raw:
-        try:
-            extra_ids = _json.loads(delete_extra_raw)
-        except Exception:
-            extra_ids = []
-        extra_ids = [i for i in extra_ids if isinstance(i, int)] if isinstance(extra_ids, list) else []
-        if extra_ids:
-            doomed = SongbookIntroOutroImage.query.filter(
-                SongbookIntroOutroImage.songbook_id == songbook_id,
-                SongbookIntroOutroImage.id.in_(extra_ids),
-            ).all()
-            for row in doomed:
-                abs_path = _abs_image_path(row.image_path)
-                if abs_path and abs_path.exists():
-                    try:
-                        abs_path.unlink()
-                    except Exception:
-                        pass  # best-effort cleanup
-                db.session.delete(row)
-            db.session.flush()
-
-    for kind in ('intro', 'outro'):
-        prefix = f'extra_{kind}_'
-
-        def upload_index(key):
-            try:
-                return int(key.rsplit('_', 1)[1])
-            except Exception:
-                return 0
-
-        keys = sorted((k for k in request.files.keys() if k.startswith(prefix)), key=upload_index)
-        new_files = [request.files[k] for k in keys if request.files[k] and request.files[k].filename]
-        if not new_files:
-            continue
-
-        abs_dir = resolve_book_dir()
-        abs_dir.mkdir(parents=True, exist_ok=True)
-        next_sort = (db.session.query(func.max(SongbookIntroOutroImage.sort_order))
-                     .filter_by(songbook_id=songbook_id, type=kind).scalar() or 0)
-        taken = {Path(p).name for (p,) in db.session.query(SongbookIntroOutroImage.image_path)
-                 .filter_by(songbook_id=songbook_id).all() if p}
-
-        n = 1
-        for file_storage in new_files:
-            ext = (Path(file_storage.filename).suffix or '.png').lower()
-            if ext not in ('.png', '.jpg', '.jpeg', '.webp'):
-                ext = '.png'
-            # Follow the seeded naming convention: intro1.png, outro1.png, ...
-            while f'{kind}{n}{ext}' in taken:
-                n += 1
-            filename = f'{kind}{n}{ext}'
-            taken.add(filename)
-            abs_path = abs_dir / filename
-            _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
-            next_sort += 1
-            db.session.add(SongbookIntroOutroImage(
-                songbook_id=songbook_id,
-                type=kind,
-                image_path=_rel_for_stored_file(abs_path, sb),
-                sort_order=next_sort,
-            ))
 
     db.session.commit()
     return jsonify({'ok': True})

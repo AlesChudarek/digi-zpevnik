@@ -23,6 +23,9 @@ class Song(db.Model):
     id = db.Column(db.String, primary_key=True)
     title = db.Column(db.String, nullable=False)
     author_id = db.Column(db.Integer, db.ForeignKey("authors.id"))
+    # Non-song pages (intros, dividers, indexes) are ordinary pages that carry no
+    # song: they are hidden from the table of contents and from global search.
+    is_non_song = db.Column(db.Integer, default=0, nullable=False, server_default="0")
     author = db.relationship("Author", backref="songs")
     images = db.relationship("SongImage", backref="song", cascade="all, delete-orphan")
 

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS songs (
     id TEXT PRIMARY KEY,
     title TEXT NOT NULL,
     author_id INTEGER,
+    -- 1 = non-song page (intro, divider, index): hidden from TOC and search
+    is_non_song INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (author_id) REFERENCES authors(id)
 );
 
