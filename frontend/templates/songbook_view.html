@@ -6,11 +6,22 @@
   .zoom-scroll-wrapper {
     width: 100%;
     max-width: 100%;
-    height: 100vh;
+    /* The navbar spacer already takes 70px, so a full 100vh here made the page
+       70px taller than the window - that overscroll was the white strip at the
+       bottom. dvh (where supported) also excludes the phone's URL bar, which vh
+       does not. */
+    height: calc(100vh - 70px);
+    height: calc(100dvh - 70px);
     overflow: auto;
     position: relative;
     isolation: isolate;
     z-index: 0;
+  }
+
+  /* With the navbar collapsed the spacer is 0, so the reader takes the whole window */
+  .navbar.hidden ~ .zoom-scroll-wrapper {
+    height: 100vh;
+    height: 100dvh;
   }
 </style>
 
