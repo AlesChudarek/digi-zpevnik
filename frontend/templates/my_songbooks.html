@@ -14,6 +14,15 @@
     margin: 0 auto;
   }
 
+  /* Same as in Naše zpěvníky: 40px padding on a phone left room for one column only */
+  @media (max-width: 640px) {
+    .grid-container {
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 14px;
+      padding: 16px 12px;
+    }
+  }
+
   .songbook-card {
     background: white;
     border-radius: 10px;

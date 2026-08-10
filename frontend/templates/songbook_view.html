@@ -10,8 +10,8 @@
        70px taller than the window - that overscroll was the white strip at the
        bottom. dvh (where supported) also excludes the phone's URL bar, which vh
        does not. */
-    height: calc(100vh - 70px);
-    height: calc(100dvh - 70px);
+    height: calc(100vh - var(--navbar-h, 70px));
+    height: calc(100dvh - var(--navbar-h, 70px));
     overflow: auto;
     position: relative;
     isolation: isolate;
