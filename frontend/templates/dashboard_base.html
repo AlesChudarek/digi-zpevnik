@@ -320,16 +320,19 @@
         margin-top: 4px;
         padding-top: 6px;
       }
+      /* Explicit order, so this does not depend on the markup: the palette goes left
+         and logout right. The theme panel drops down and to the right, so the palette
+         needs the space on that side. */
+      .navbar.menu-open .right .theme-picker { margin: 0; order: 1; }
       .navbar.menu-open .right a {
         margin: 0;
         padding: 10px 12px;
+        order: 2;
       }
-      .navbar.menu-open .right .theme-picker { margin: 0; }
-      /* Anchored to the palette button on the right, and never wider than the screen */
       .navbar.menu-open .theme-panel {
         top: 40px;
-        right: 0;
-        left: auto;
+        left: 0;
+        right: auto;
         max-width: calc(100vw - 24px);
       }
       .navbar.menu-open .nav-links .tooltip { display: block; }
