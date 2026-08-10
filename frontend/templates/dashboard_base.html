@@ -48,18 +48,83 @@
       transition: transform 0.3s ease-in-out;
     }
     .left-group { display: flex; align-items: center; gap: 18px; }
+    /* gap matches .left-group's, so nesting the links keeps desktop spacing identical */
+    .nav-links { display: flex; align-items: center; gap: 18px; }
+    /* Hidden on desktop: the links sit in the bar there */
+    .nav-burger {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--brand-contrast);
+      font-size: 26px;
+      line-height: 1;
+      padding: 4px 8px;
+      cursor: pointer;
+    }
     .brand-logo { height: 42px; width: auto; aspect-ratio: 1892 / 546; display: block; border-radius: 4px; background: #fff; padding: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.15); cursor: pointer; transition: transform 0.2s ease; }
     .brand-logo:hover { transform: scale(1.05); }
     .navbar.hidden {
       transform: translateY(-100%);
     }
 
+    /* Kept in a variable so the reader height (calc(100dvh - var(--navbar-h)))
+       cannot drift away from the spacer when the bar gets shorter on phones. */
+    :root { --navbar-h: 70px; }
+
     .navbar-spacer {
-      height: 70px;
+      height: var(--navbar-h);
       transition: height 0.3s ease-in-out;
     }
     .navbar.hidden ~ .navbar-spacer {
       height: 0;
+    }
+
+    /* Narrow screens: the logo and the links do not fit on one line, so the links
+       overflowed off-screen. Here only the logo and a burger stay in the bar and
+       everything else drops below it when opened. display:contents promotes the
+       left group's children to navbar-level flex items, so the desktop markup and
+       desktop styling stay exactly as they were. */
+    @media (max-width: 820px) {
+      :root { --navbar-h: 56px; }
+
+      .navbar {
+        flex-wrap: wrap;
+        padding: 8px 12px;
+        row-gap: 4px;
+        align-items: center;
+      }
+      .left-group { display: contents; }
+      .brand-logo { order: 1; height: 34px; }
+      .nav-burger { display: inline-flex; order: 2; margin-left: auto; }
+      /* The ↑ button hides the whole bar; with the burger next to it that is two
+         controls doing similar things in one corner, so it steps aside here. */
+      .navbar-toggle { display: none; }
+
+      .nav-links, .navbar .right {
+        display: none;
+        flex-basis: 100%;
+        width: 100%;
+      }
+      .nav-links { order: 3; gap: 0; }
+      .navbar .right { order: 4; }
+
+      .navbar.menu-open .nav-links,
+      .navbar.menu-open .right {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .navbar.menu-open .nav-links a,
+      .navbar.menu-open .right a {
+        margin: 2px 0;
+        padding: 10px 12px;
+      }
+      .navbar.menu-open .right {
+        border-top: 1px solid rgba(255, 255, 255, 0.25);
+        margin-top: 4px;
+        padding-top: 4px;
+      }
+      .navbar.menu-open .tooltip { display: block; }
     }
 
     .navbar-toggle {
@@ -241,16 +306,21 @@
   <div class="navbar">
     <div class="left-group">
       <img class="brand-logo" src="{{ static_bust('img/logo/handicao_zlin.svg') }}" alt="Handicap Zlín" onclick="window.location.href='{{ url_for('dashboard') }}'" />
-      <a href="{{ url_for('public_songbooks') }}" class="highlight">Naše zpěvníky</a>
-      {% if guest is defined and guest %}
-        <span class="tooltip" data-tooltip="Pouze pro přihlášené uživatele">
-          <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#cccccc;">Moje zpěvníky</a>
-        </span>
-      {% else %}
-        <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
-      {% endif %}
-      <a href="{{ url_for('search') }}">Hledat písničku</a>
+      <div class="nav-links">
+        <a href="{{ url_for('public_songbooks') }}" class="highlight">Naše zpěvníky</a>
+        {% if guest is defined and guest %}
+          <span class="tooltip" data-tooltip="Pouze pro přihlášené uživatele">
+            <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#cccccc;">Moje zpěvníky</a>
+          </span>
+        {% else %}
+          <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
+        {% endif %}
+        <a href="{{ url_for('search') }}">Hledat písničku</a>
+      </div>
     </div>
+    {# Only shown on narrow screens, where the links do not fit next to the logo #}
+    <button class="nav-burger" type="button" onclick="toggleNavMenu()"
+            aria-label="Zobrazit menu" aria-expanded="false">☰</button>
     <div class="right">
       <span class="theme-picker">
         <button class="theme-btn tooltip" data-tooltip="Změnit téma" id="theme-picker-btn" aria-haspopup="true" aria-expanded="false">
@@ -279,6 +349,19 @@
       event.preventDefault();
       alert("Tato funkce je dostupná pouze pro přihlášené uživatele.");
     }
+    // Narrow screens only: opens the stacked menu under the bar
+    function toggleNavMenu() {
+      const navbar = document.querySelector('.navbar');
+      const burger = document.querySelector('.nav-burger');
+      if (!navbar) return;
+      const isOpen = navbar.classList.toggle('menu-open');
+      if (burger) {
+        burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        burger.setAttribute('aria-label', isOpen ? 'Skrýt menu' : 'Zobrazit menu');
+        burger.textContent = isOpen ? '✕' : '☰';
+      }
+    }
+
     function toggleNavbar() {
       const navbar = document.querySelector('.navbar');
       const toggle = document.querySelector('.navbar-toggle');
