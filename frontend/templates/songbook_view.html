@@ -325,24 +325,30 @@
     }
 
     /* On a phone the contents box was sized for a desktop window: it started 90px
-       down with 30px padding, so it overflowed and felt enormous. */
+       down with 30px padding, so its heading ended up out of reach above the screen
+       and it left almost no backdrop to tap. The overlay itself scrolls here, so
+       the heading can always be scrolled to, and the bottom margin keeps a strip of
+       backdrop for closing it. */
     @media (max-width: 820px) {
-      #toc-modal-wrapper {
-        top: 8px;
-        left: 0;
+      #toc-modal {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #toc-modal-wrapper,
+      .navbar.hidden ~ #toc-modal #toc-modal-wrapper,
+      body.navbar-hidden #toc-modal #toc-modal-wrapper {
+        position: static;
+        top: auto;
+        left: auto;
         transform: none;
         width: 100%;
+        margin: 8px auto 56px;
         padding: 0 8px;
         box-sizing: border-box;
       }
-      .navbar.hidden ~ #toc-modal #toc-modal-wrapper {
-        top: 8px;
-      }
       #toc-modal .content {
         padding: 14px;
-        max-height: calc(100vh - 24px);
-        max-height: calc(100dvh - 24px);
-        overflow-x: auto;
+        max-height: none;
       }
       #toc-modal .content h3 { font-size: 1.05em; }
       #toc-modal td { padding: 6px 8px; font-size: 0.9em; }

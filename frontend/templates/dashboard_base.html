@@ -275,7 +275,7 @@
         order: 2;
         margin-left: auto;
         /* Leaves room for the bar-hiding ↑ button, which stays outside the menu */
-        margin-right: 46px;
+        margin-right: 38px;
         width: 40px;
         height: 40px;
         padding: 0;
@@ -300,23 +300,39 @@
       .nav-links { order: 3; gap: 0; }
       .navbar .right { order: 4; }
 
-      .navbar.menu-open .nav-links,
-      .navbar.menu-open .right {
+      .navbar.menu-open .nav-links {
         display: flex;
         flex-direction: column;
         align-items: stretch;
       }
-      .navbar.menu-open .nav-links a,
-      .navbar.menu-open .right a {
+      .navbar.menu-open .nav-links a {
         margin: 2px 0;
         padding: 10px 12px;
       }
+      /* Logout and the palette fit on one line, so they sit on opposite ends
+         instead of stacking - logout left, palette right. */
       .navbar.menu-open .right {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
         border-top: 1px solid rgba(255, 255, 255, 0.25);
         margin-top: 4px;
-        padding-top: 4px;
+        padding-top: 6px;
       }
-      .navbar.menu-open .tooltip { display: block; }
+      .navbar.menu-open .right a {
+        margin: 0;
+        padding: 10px 12px;
+      }
+      .navbar.menu-open .right .theme-picker { margin: 0; }
+      /* Anchored to the palette button on the right, and never wider than the screen */
+      .navbar.menu-open .theme-panel {
+        top: 40px;
+        right: 0;
+        left: auto;
+        max-width: calc(100vw - 24px);
+      }
+      .navbar.menu-open .nav-links .tooltip { display: block; }
     }
   </style>
 </head>
