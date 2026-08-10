@@ -330,6 +330,12 @@
        the heading can always be scrolled to, and the bottom margin keeps a strip of
        backdrop for closing it. */
     @media (max-width: 820px) {
+      /* Both gaps were fixed at desktop sizes (30px between the two pages of a
+         spread, 20px between scrolled pages). Next to a ~180px page on a phone that
+         is a chasm, so they shrink here while desktop keeps its original values. */
+      .page-pair { gap: 8px; margin-bottom: 10px; }
+      .scroll-mode { gap: 8px; }
+
       #toc-modal {
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
