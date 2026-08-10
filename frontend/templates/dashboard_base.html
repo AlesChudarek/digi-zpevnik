@@ -4,6 +4,8 @@
   <link rel="icon" type="image/x-icon" href="{{ static_bust('img/icons/favicon.ico') }}">
   <link rel="preload" as="image" href="{{ static_bust('img/logo/handicao_zlin.svg') }}">
   <meta charset="UTF-8">
+  {# No user-scalable=no: pinch zoom stays available on phones and tablets #}
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}DigiZpěvník{% endblock %}</title>
   {% include '_theme.html' %}
   <style>

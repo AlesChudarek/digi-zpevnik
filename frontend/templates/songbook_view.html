@@ -561,6 +561,16 @@
     scroll: "Zobrazit jako seznam"
   };
   let currentMode = 'double';
+
+  // A two-page spread is unreadable on a narrow screen, so that is where reading
+  // starts in scroll mode. It is only the starting point: the toggle keeps working,
+  // so turning the phone sideways and choosing the book layout is still possible.
+  const NARROW_SCREEN_PX = 820;
+
+  function prefersScrollByDefault() {
+    const width = window.innerWidth || document.documentElement.clientWidth || 0;
+    return width > 0 && width < NARROW_SCREEN_PX;
+  }
   let currentPage = 1;
   // Unified mode-toggle preview state (no legacy state machine)
   let modeToggleHoverActive = false; // true while the button is hovered/focused/touched
@@ -1377,14 +1387,38 @@ let userZoomedDouble = false; // becomes true after manual +/- in double mode
 let userZoomedScroll = false; // becomes true after manual +/- in scroll mode
 let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
 
+  // Page widths used to be hardcoded at 600px per page (1200px for a spread), which
+  // never fit a phone. They are now capped by the space actually available, so a wide
+  // screen keeps the original sizing and a narrow one scales down instead of overflowing.
+  const DOUBLE_PAGE_BASE_PX = 600;
+  const SCROLL_PAGE_BASE_PX = 1200;
+
+  function availableViewerWidth() {
+    const wrapper = document.querySelector('.zoom-scroll-wrapper');
+    const measured = wrapper ? wrapper.clientWidth : 0;
+    return Math.max(240, measured || window.innerWidth || SCROLL_PAGE_BASE_PX);
+  }
+
+  function doublePageBaseWidth() {
+    // Two pages sit side by side, so each may use half of the space (minus a margin)
+    const perPage = (availableViewerWidth() - 8) / 2;
+    return Math.max(120, Math.min(DOUBLE_PAGE_BASE_PX, perPage));
+  }
+
+  function scrollPageBaseWidth() {
+    return Math.max(160, Math.min(SCROLL_PAGE_BASE_PX, availableViewerWidth() - 8));
+  }
+
   function applyZoom() {
     const doublePage = document.querySelectorAll('#double-page img');
     const scrollPages = document.querySelectorAll('#scroll-mode img');
     const blankLeft = document.getElementById('left-page-blank');
     const blankRight = document.getElementById('right-page-blank');
+    const doubleBase = doublePageBaseWidth();
+    const scrollBase = scrollPageBaseWidth();
 
   doublePage.forEach(img => {
-    img.style.width = `${zoomDouble * 600}px`;
+    img.style.width = `${zoomDouble * doubleBase}px`;
     const ar = 2480/1748;
     const w = parseFloat(img.style.width || '0');
     if (w > 0) img.style.height = (w * ar) + 'px';
@@ -1393,13 +1427,13 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
   // Size blank canvases to match images
   [blankLeft, blankRight].forEach(el => {
     if (!el) return;
-    el.style.width = `${zoomDouble * 600}px`;
+    el.style.width = `${zoomDouble * doubleBase}px`;
     const ar = 2480/1748;
     const w = parseFloat(el.style.width || '0');
     if (w > 0) el.style.height = (w * ar) + 'px';
   });
   scrollPages.forEach(img => {
-    img.style.width = `${zoomScroll * 1200}px`;
+    img.style.width = `${zoomScroll * scrollBase}px`;
     // Approximate aspect box for scroll images as well
     const ar = 2480/1748;
     const w = parseFloat(img.style.width || '0');
@@ -1569,7 +1603,19 @@ function scrollToTop() {
       modeToggleButton.addEventListener('touchend', () => setHoverState(false), { passive: true });
     }
     trackScrollPage();
-    // Initial render: double-page mode by default; fit height if user hasn't zoomed
+    // Start in scroll mode on narrow screens; the book layout stays one tap away
+    if (prefersScrollByDefault() && currentMode === 'double') {
+      enableScrollMode();
+    }
+    // Re-fit when the window changes size or the phone is rotated. The mode is not
+    // touched here, so a chosen layout survives rotation.
+    let refitTimer = null;
+    const refitToViewport = () => {
+      clearTimeout(refitTimer);
+      refitTimer = setTimeout(() => { applyZoom(); }, 120);
+    };
+    window.addEventListener('resize', refitToViewport);
+    window.addEventListener('orientationchange', refitToViewport);
     document.addEventListener('click', (event) => {
       const modal = document.getElementById("toc-modal");
       const content = modal.querySelector(".content");
