@@ -79,54 +79,6 @@
       height: 0;
     }
 
-    /* Narrow screens: the logo and the links do not fit on one line, so the links
-       overflowed off-screen. Here only the logo and a burger stay in the bar and
-       everything else drops below it when opened. display:contents promotes the
-       left group's children to navbar-level flex items, so the desktop markup and
-       desktop styling stay exactly as they were. */
-    @media (max-width: 820px) {
-      :root { --navbar-h: 56px; }
-
-      .navbar {
-        flex-wrap: wrap;
-        padding: 8px 12px;
-        row-gap: 4px;
-        align-items: center;
-      }
-      .left-group { display: contents; }
-      .brand-logo { order: 1; height: 34px; }
-      .nav-burger { display: inline-flex; order: 2; margin-left: auto; }
-      /* The ↑ button hides the whole bar; with the burger next to it that is two
-         controls doing similar things in one corner, so it steps aside here. */
-      .navbar-toggle { display: none; }
-
-      .nav-links, .navbar .right {
-        display: none;
-        flex-basis: 100%;
-        width: 100%;
-      }
-      .nav-links { order: 3; gap: 0; }
-      .navbar .right { order: 4; }
-
-      .navbar.menu-open .nav-links,
-      .navbar.menu-open .right {
-        display: flex;
-        flex-direction: column;
-        align-items: stretch;
-      }
-      .navbar.menu-open .nav-links a,
-      .navbar.menu-open .right a {
-        margin: 2px 0;
-        padding: 10px 12px;
-      }
-      .navbar.menu-open .right {
-        border-top: 1px solid rgba(255, 255, 255, 0.25);
-        margin-top: 4px;
-        padding-top: 4px;
-      }
-      .navbar.menu-open .tooltip { display: block; }
-    }
-
     .navbar-toggle {
       position: fixed;
       top: 0;
@@ -299,6 +251,72 @@
       .theme-picker {
         margin: 0 5px;
       }
+    }
+    /* Narrow screens: the logo and the links do not fit on one line, so the links
+       overflowed off-screen. Here only the logo and a burger stay in the bar and
+       everything else drops below it when opened. display:contents promotes the
+       left group's children to navbar-level flex items, so the desktop markup and
+       desktop styling stay exactly as they were. */
+    @media (max-width: 820px) {
+      :root { --navbar-h: 56px; }
+
+      .navbar {
+        flex-wrap: wrap;
+        padding: 8px 12px;
+        row-gap: 4px;
+        align-items: center;
+      }
+      .left-group { display: contents; }
+      .brand-logo { order: 1; height: 34px; }
+      .nav-burger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        order: 2;
+        margin-left: auto;
+        /* Leaves room for the bar-hiding ↑ button, which stays outside the menu */
+        margin-right: 46px;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+      }
+      /* Hiding the whole toolbar is the one control that must stay reachable
+         without opening the menu, so it sits next to the burger instead. */
+      .navbar-toggle {
+        right: 8px;
+        padding: 4px 10px;
+        font-size: 15px;
+      }
+
+      .nav-links, .navbar .right {
+        display: none;
+        flex-basis: 100%;
+        width: 100%;
+        /* The desktop rule reserves 100px on the right; inside the menu that
+           would just push the theme picker and logout off-screen again. */
+        padding-right: 0;
+        margin-left: 0;
+      }
+      .nav-links { order: 3; gap: 0; }
+      .navbar .right { order: 4; }
+
+      .navbar.menu-open .nav-links,
+      .navbar.menu-open .right {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .navbar.menu-open .nav-links a,
+      .navbar.menu-open .right a {
+        margin: 2px 0;
+        padding: 10px 12px;
+      }
+      .navbar.menu-open .right {
+        border-top: 1px solid rgba(255, 255, 255, 0.25);
+        margin-top: 4px;
+        padding-top: 4px;
+      }
+      .navbar.menu-open .tooltip { display: block; }
     }
   </style>
 </head>

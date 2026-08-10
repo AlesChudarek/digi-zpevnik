@@ -18,6 +18,13 @@
   .types label { background: #ffffff44; padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
   .results { width: 100%; background: #fff; color: var(--muted-text, #1b5e20); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: visible; }
   table { width: 100%; border-collapse: collapse; }
+  /* Six columns do not fit a phone. Scrolling used to happen on the page itself,
+     which slid the content off the fixed background and showed white beside it.
+     The scroll now lives inside this box, so the page never moves sideways. */
+  .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  @media (max-width: 820px) {
+    #results-table { min-width: 620px; }
+  }
   thead th {
     text-align: left;
     padding: 12px 16px;
@@ -131,6 +138,7 @@
 
   <div class="results">
     <div class="header-counter"><span class="bubble" id="count-books">Zobrazeno písní: 0</span></div>
+    <div class="table-scroll">
     <table id="results-table">
       <thead>
         <tr>
@@ -191,6 +199,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 </div>
 
