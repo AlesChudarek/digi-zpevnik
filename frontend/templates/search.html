@@ -22,7 +22,11 @@
      sticky header everywhere: sticky resolves against the nearest scrollport, so
      top: 68px (tuned for the page under the navbar) pushed the header 68px down
      inside this box and left white above it. */
-  .table-scroll { width: 100%; }
+  /* The card surface moves onto the table itself, so the area revealed when the
+     scroll rubber-bands past the edge can take a colour from the palette instead
+     of being hardcoded white. */
+  #results-table { background: #fff; }
+  .table-scroll { width: 100%; background: var(--muted-bg, #e8f5e9); overscroll-behavior-x: contain; }
   thead th {
     text-align: left;
     padding: 12px 16px;
@@ -52,7 +56,25 @@
   .disabled { opacity: 0.4; cursor: not-allowed; }
   .badge { display: inline-block; padding: 2px 6px; border-radius: 6px; font-size: 11px; background: var(--muted-bg, #e3f2fd); color: var(--brand-strong, #1565C0); margin-left: 6px; }
   /* Counter bubble over table header, flush right, outside table */
-  .results { position: relative; }
+  /* The bubble's right wall is vertical, so the rounded top-right corner underneath
+     made the two look a few pixels apart. Squaring that one corner lets them join. */
+  .results { position: relative; border-top-right-radius: 0; }
+  /* Nothing hinted that the table continues past the right edge, so a fade appears
+     while there is more to scroll to and disappears at the end. */
+  .scroll-hint {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 38px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    /* Top-right stays square to match the corner squared off for the counter */
+    border-radius: 0 0 10px 0;
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0));
+  }
+  .results.can-scroll-right .scroll-hint { opacity: 1; }
   .header-counter { position: absolute; top: 0; right: 0; z-index: 3; display: flex; justify-content: flex-end; transform: translateY(-100%); }
   .header-counter .bubble {
     background: var(--muted-bg, #e8f5e9);
@@ -76,6 +98,17 @@
     #results-table { min-width: 760px; }
     /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
     thead th { position: static; top: auto; }
+    /* Floating above the box, the counter sat on top of the filter checkboxes at
+       around 485px wide. In the flow it cannot overlap anything. */
+    .header-counter {
+      position: static;
+      transform: none;
+      justify-content: flex-end;
+      padding: 0 0 6px;
+    }
+    .header-counter .bubble { border-radius: 10px; }
+    /* Counter is no longer attached to the corner here, so it can round again */
+    .results { border-top-right-radius: 10px; }
   }
 </style>
 
@@ -210,6 +243,7 @@
       </tbody>
     </table>
     </div>
+    <div class="scroll-hint" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -556,6 +590,22 @@
     bindRemoveButtons();
     applyRowColors();
     guardDisabledActionButtons();
+    initScrollHint();
   });
+
+  // Shows the right-edge fade only while the table still continues past the edge,
+  // so it reads as "there is more here" rather than as a permanent decoration.
+  function initScrollHint() {
+    const box = document.querySelector('.table-scroll');
+    const results = document.querySelector('.results');
+    if (!box || !results) return;
+    const update = () => {
+      const more = box.scrollWidth - box.clientWidth - box.scrollLeft > 1;
+      results.classList.toggle('can-scroll-right', more);
+    };
+    box.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+  }
 </script>
 {% endblock %}
