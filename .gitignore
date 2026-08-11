@@ -31,3 +31,6 @@ data/public/images/songbooks/00102/
 ssh-key-*.key
 data/public/seeds/*.xlsx
 backend/scripts/downsize_images.py
+
+# Screenshoty UI (generovane backend/scripts/screenshot_ui.py)
+ui-shots/

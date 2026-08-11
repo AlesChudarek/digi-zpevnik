@@ -329,38 +329,7 @@
        and it left almost no backdrop to tap. The overlay itself scrolls here, so
        the heading can always be scrolled to, and the bottom margin keeps a strip of
        backdrop for closing it. */
-    @media (max-width: 820px) {
-      /* Both gaps were fixed at desktop sizes (30px between the two pages of a
-         spread, 20px between scrolled pages). Next to a ~180px page on a phone that
-         is a chasm, so they shrink here while desktop keeps its original values. */
-      .page-pair { gap: 8px; margin-bottom: 10px; }
-      .scroll-mode { gap: 8px; }
-
-      #toc-modal {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      #toc-modal-wrapper,
-      .navbar.hidden ~ #toc-modal #toc-modal-wrapper,
-      body.navbar-hidden #toc-modal #toc-modal-wrapper {
-        position: static;
-        top: auto;
-        left: auto;
-        transform: none;
-        width: 100%;
-        margin: 8px auto 56px;
-        padding: 0 8px;
-        box-sizing: border-box;
-      }
-      #toc-modal .content {
-        padding: 14px;
-        max-height: none;
-      }
-      #toc-modal .content h3 { font-size: 1.05em; }
-      #toc-modal td { padding: 6px 8px; font-size: 0.9em; }
-    }
-
-    #toc-modal table {
+#toc-modal table {
         width: 100%;
         border-collapse: collapse;
     }
@@ -483,6 +452,51 @@
       pointer-events: none;
       display: block;
       margin: auto;
+    }
+
+    @media (max-width: 820px) {
+      /* Both gaps were fixed at desktop sizes (30px between the two pages of a
+         spread, 20px between scrolled pages). Next to a ~180px page on a phone that
+         is a chasm, so they shrink here while desktop keeps its original values. */
+      .page-pair { gap: 8px; margin-bottom: 10px; }
+      .scroll-mode { gap: 8px; }
+
+      /* 60px circles inset 40px from each edge sat right on top of the page once the
+         page filled the whole width. Smaller, tucked to the edge and slightly
+         see-through, so the notes underneath stay readable. */
+      .zoom-buttons { top: 74px; left: 4px; gap: 8px; }
+      .mode-buttons { top: 74px; right: 4px; gap: 8px; }
+      .zoom-buttons button,
+      .mode-buttons button {
+        width: 40px;
+        height: 40px;
+        opacity: 0.82;
+      }
+      .zoom-buttons img,
+      .mode-buttons img { width: 20px; height: 20px; }
+
+      #toc-modal {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
+      #toc-modal-wrapper,
+      .navbar.hidden ~ #toc-modal #toc-modal-wrapper,
+      body.navbar-hidden #toc-modal #toc-modal-wrapper {
+        position: static;
+        top: auto;
+        left: auto;
+        transform: none;
+        width: 100%;
+        margin: 8px auto 56px;
+        padding: 0 8px;
+        box-sizing: border-box;
+      }
+      #toc-modal .content {
+        padding: 14px;
+        max-height: none;
+      }
+      #toc-modal .content h3 { font-size: 1.05em; }
+      #toc-modal td { padding: 6px 8px; font-size: 0.9em; }
     }
 </style>
 
