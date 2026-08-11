@@ -20,7 +20,16 @@
   /* separate, not collapse: browsers ignore border-radius on cells when borders are
      collapsed, so the header corner could never round. border-spacing: 0 keeps the
      layout identical to collapsed. */
-  table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  /* table-layout: fixed makes the columns share the available width and wrap their
+     text instead of demanding their content width. Without it the table pushed past
+     the window on desktop and refused to narrow at all on a phone. */
+  table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; }
+  /* Only cell content may break mid-word; a header breaking into "Odebra t" is worse
+     than a slightly tighter column. */
+  tbody td { overflow-wrap: anywhere; }
+  /* The icon columns are 52px wide, which with 16px padding left no room for the word
+     "Odebrat", so it wrapped. Less padding there, same column width. */
+  #results-table th.center, #results-table td.center { padding-left: 6px; padding-right: 6px; }
   /* With separate borders the header's bottom and the first row's top would stack */
   tbody tr:first-child td { border-top: none; }
   /* Plain wrapper on desktop. Making it a scroll container at every width broke the
@@ -105,6 +114,12 @@
      painted over the card's rounded corner and looked square. Right stays square
      because the counter bubble joins there. */
   #results-table thead th:first-child { border-top-left-radius: 10px; }
+  /* Tooltips are centred with translateX(-50%) and never wrap, so on the last two
+     columns half of one stuck out past the table: 66px of invisible, scrollable
+     emptiness (the "extra column") and enough to let the whole page be dragged
+     sideways. Anchored to the right edge of their own cell they stay inside.
+     Measured: this was the entire cause of both, in the rows rather than the header. */
+  #results-table .tooltip::after { left: auto; right: 0; transform: none; }
   #results-table th.center, #results-table td.center { text-align: center; }
   #results-table td.icon-cell { text-align: center; }
   @media (max-width: 820px) {
@@ -114,11 +129,11 @@
        axis from visible into auto and this becomes a nested vertical scroller that
        steals touch scrolling. */
     .table-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-    /* Sized by its content, so there is nothing left over to show as an empty strip.
-       Fixed pixel widths kept leaving one: the box grew but the columns laid out
-       against the container width instead. min-width: 100% fills the box when the
-       content happens to be narrower. */
-    #results-table { width: max-content; min-width: 100%; }
+    /* Columns keep shrinking with the window down to this width and only then does
+       the table start to scroll, so narrow screens are not forced into scrolling
+       straight away. With table-layout: fixed the columns always fill the box, so
+       no leftover strip can appear. */
+    #results-table { min-width: 620px; }
     /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
     thead th { position: static; top: auto; }
     /* The counter floats above the table, so the table drops a row to make room for
