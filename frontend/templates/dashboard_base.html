@@ -14,7 +14,11 @@
       padding: 0;
       height: 100%;
       width: 100%;
-      background-color: transparent;
+      /* The gradient is background-attachment: fixed, so anything outside it - the
+         rubber-band area past the bottom, or overscroll - fell through to the
+         browser's white canvas. A solid colour from the palette sits underneath so
+         no white can show anywhere. */
+      background-color: var(--bg-grad-end, #2E7D32);
       background-image: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
       background-attachment: fixed;
       background-repeat: no-repeat;

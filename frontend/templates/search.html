@@ -17,7 +17,12 @@
   .types { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
   .types label { background: #ffffff44; padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
   .results { width: 100%; background: #fff; color: var(--muted-text, #1b5e20); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: visible; }
-  table { width: 100%; border-collapse: collapse; }
+  /* separate, not collapse: browsers ignore border-radius on cells when borders are
+     collapsed, so the header corner could never round. border-spacing: 0 keeps the
+     layout identical to collapsed. */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  /* With separate borders the header's bottom and the first row's top would stack */
+  tbody tr:first-child td { border-top: none; }
   /* Plain wrapper on desktop. Making it a scroll container at every width broke the
      sticky header everywhere: sticky resolves against the nearest scrollport, so
      top: 68px (tuned for the page under the navbar) pushed the header 68px down
@@ -109,20 +114,16 @@
        axis from visible into auto and this becomes a nested vertical scroller that
        steals touch scrolling. */
     .table-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-    /* Explicit width, not width: 100% plus min-width. With those two the table box
-       grew to 760px but the columns still laid out across the container width, and
-       the difference showed up as an empty strip past the last column. */
-    #results-table { width: 760px; min-width: 760px; }
+    /* Sized by its content, so there is nothing left over to show as an empty strip.
+       Fixed pixel widths kept leaving one: the box grew but the columns laid out
+       against the container width instead. min-width: 100% fills the box when the
+       content happens to be narrower. */
+    #results-table { width: max-content; min-width: 100%; }
     /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
     thead th { position: static; top: auto; }
     /* The counter floats above the table, so the table drops a row to make room for
        it instead of the counter landing on the filters. */
     .results { margin-top: 38px; }
-  }
-  /* Side by side, the two checkboxes reached under the counter bubble. Stacked, they
-     stay clear of it. */
-  @media (max-width: 560px) {
-    .types { flex-direction: column; align-items: flex-start; gap: 8px; }
   }
 </style>
 
