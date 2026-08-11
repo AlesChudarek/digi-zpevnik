@@ -23,18 +23,6 @@
      top: 68px (tuned for the page under the navbar) pushed the header 68px down
      inside this box and left white above it. */
   .table-scroll { width: 100%; }
-  @media (max-width: 820px) {
-    /* Six columns do not fit a phone, so the table scrolls sideways in here rather
-       than the page doing it - page scrolling slid content off the fixed background.
-       overflow-y: hidden is required: with only overflow-x set, CSS turns the other
-       axis from visible into auto and this becomes a nested vertical scroller that
-       steals touch scrolling. */
-    .table-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-    /* Enough room for all six columns, including Odebrat on the far right */
-    #results-table { min-width: 760px; }
-    /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
-    thead th { position: static; top: auto; }
-  }
   thead th {
     text-align: left;
     padding: 12px 16px;
@@ -77,6 +65,18 @@
   }
   #results-table th.center, #results-table td.center { text-align: center; }
   #results-table td.icon-cell { text-align: center; }
+  @media (max-width: 820px) {
+    /* Six columns do not fit a phone, so the table scrolls sideways in here rather
+       than the page doing it - page scrolling slid content off the fixed background.
+       overflow-y: hidden is required: with only overflow-x set, CSS turns the other
+       axis from visible into auto and this becomes a nested vertical scroller that
+       steals touch scrolling. */
+    .table-scroll { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
+    /* Enough room for all six columns, including Odebrat on the far right */
+    #results-table { min-width: 760px; }
+    /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
+    thead th { position: static; top: auto; }
+  }
 </style>
 
 <style>
