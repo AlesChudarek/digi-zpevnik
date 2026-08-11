@@ -22,11 +22,12 @@
      sticky header everywhere: sticky resolves against the nearest scrollport, so
      top: 68px (tuned for the page under the navbar) pushed the header 68px down
      inside this box and left white above it. */
-  /* The card surface moves onto the table itself, so the area revealed when the
-     scroll rubber-bands past the edge can take a colour from the palette instead
-     of being hardcoded white. */
+  /* The scroller stays transparent. Tinting it to theme the overscroll gap backfired:
+     any width the table did not cover showed up as a fake extra column in the header
+     colour, and it did not spring back. Transparent means such a gap is the same
+     white as the card and rows, so it cannot be mistaken for content. */
   #results-table { background: #fff; }
-  .table-scroll { width: 100%; background: var(--muted-bg, #e8f5e9); overscroll-behavior-x: contain; }
+  .table-scroll { width: 100%; overscroll-behavior-x: contain; }
   thead th {
     text-align: left;
     padding: 12px 16px;
@@ -59,22 +60,32 @@
   /* The bubble's right wall is vertical, so the rounded top-right corner underneath
      made the two look a few pixels apart. Squaring that one corner lets them join. */
   .results { position: relative; border-top-right-radius: 0; }
-  /* Nothing hinted that the table continues past the right edge, so a fade appears
-     while there is more to scroll to and disappears at the end. */
+  /* "There is something you cannot see this way": a fade on whichever side still has
+     content. It appears only while that direction can actually be scrolled, so on a
+     desktop where the whole table fits, neither ever shows. */
   .scroll-hint {
     position: absolute;
     top: 0;
-    right: 0;
     bottom: 0;
-    width: 38px;
+    width: 46px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s ease;
+    z-index: 2;
+  }
+  .scroll-hint.right {
+    right: 0;
     /* Top-right stays square to match the corner squared off for the counter */
     border-radius: 0 0 10px 0;
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.20), rgba(0, 0, 0, 0));
+    background: linear-gradient(to left, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
   }
-  .results.can-scroll-right .scroll-hint { opacity: 1; }
+  .scroll-hint.left {
+    left: 0;
+    border-radius: 10px 0 0 10px;
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
+  }
+  .results.can-scroll-right .scroll-hint.right { opacity: 1; }
+  .results.can-scroll-left .scroll-hint.left { opacity: 1; }
   .header-counter { position: absolute; top: 0; right: 0; z-index: 3; display: flex; justify-content: flex-end; transform: translateY(-100%); }
   .header-counter .bubble {
     background: var(--muted-bg, #e8f5e9);
@@ -98,17 +109,6 @@
     #results-table { min-width: 760px; }
     /* No navbar to hug here, and sticky inside a scrollport only offsets the header */
     thead th { position: static; top: auto; }
-    /* Floating above the box, the counter sat on top of the filter checkboxes at
-       around 485px wide. In the flow it cannot overlap anything. */
-    .header-counter {
-      position: static;
-      transform: none;
-      justify-content: flex-end;
-      padding: 0 0 6px;
-    }
-    .header-counter .bubble { border-radius: 10px; }
-    /* Counter is no longer attached to the corner here, so it can round again */
-    .results { border-top-right-radius: 10px; }
   }
 </style>
 
@@ -174,8 +174,9 @@
     </div>
     <div class="types">
       <label><input type="checkbox" id="t-public" checked> Veřejné</label>
+      {# Shared songbooks are somebody's private ones, so they belong under Soukromé.
+         The list still marks them with their own icon. #}
       <label><input type="checkbox" id="t-private" checked> Soukromé</label>
-      <label><input type="checkbox" id="t-shared" checked> Sdílené</label>
     </div>
   </div>
 
@@ -243,7 +244,8 @@
       </tbody>
     </table>
     </div>
-    <div class="scroll-hint" aria-hidden="true"></div>
+    <div class="scroll-hint left" aria-hidden="true"></div>
+    <div class="scroll-hint right" aria-hidden="true"></div>
   </div>
 </div>
 
@@ -259,7 +261,6 @@
     const fPage = document.getElementById('f-page');
     const tPublic = document.getElementById('t-public');
     const tPrivate = document.getElementById('t-private');
-    const tShared = document.getElementById('t-shared');
     function updateCounts() {
       const all = Array.from(document.querySelectorAll('#results-table tbody tr'));
       const visible = all.filter(tr => tr.style.display !== 'none');
@@ -276,15 +277,14 @@
       const p = normalizeStr(fPage.value);
       const showPublic = !!tPublic.checked;
       const showPrivate = !!tPrivate.checked;
-      const showShared = !!tShared.checked;
 
       rows.forEach(tr => {
         const mt = normalizeStr(tr.getAttribute('data-title'));
         const ma = normalizeStr(tr.getAttribute('data-author'));
         const mb = normalizeStr(tr.getAttribute('data-book'));
         const mp = normalizeStr(tr.getAttribute('data-page'));
-        const type = (tr.getAttribute('data-type') || '').trim(); // '' | 'private' | 'shared'
-        const typeOk = (type === '' && showPublic) || (type === 'private' && showPrivate) || (type === 'shared' && showShared);
+        const type = (tr.getAttribute('data-type') || '').trim(); // '' = public, jinak soukromy (vlastni nebo sdileny)
+        const typeOk = type === '' ? showPublic : showPrivate;
         const ok = typeOk && (!t || mt.includes(t)) && (!a || ma.includes(a)) && (!b || mb.includes(b)) && (!p || mp.includes(p));
         tr.style.display = ok ? '' : 'none';
       });
@@ -297,7 +297,7 @@
     window.__searchApply = apply;
 
     [fTitle, fAuthor, fBook, fPage].forEach(inp => inp.addEventListener('input', apply));
-    [tPublic, tPrivate, tShared].forEach(cb => cb.addEventListener('change', apply));
+    [tPublic, tPrivate].forEach(cb => cb.addEventListener('change', apply));
     // Initial pass to apply any default state
     apply();
   }
@@ -600,8 +600,9 @@
     const results = document.querySelector('.results');
     if (!box || !results) return;
     const update = () => {
-      const more = box.scrollWidth - box.clientWidth - box.scrollLeft > 1;
-      results.classList.toggle('can-scroll-right', more);
+      const maxScroll = box.scrollWidth - box.clientWidth;
+      results.classList.toggle('can-scroll-right', maxScroll - box.scrollLeft > 1);
+      results.classList.toggle('can-scroll-left', box.scrollLeft > 1);
     };
     box.addEventListener('scroll', update, { passive: true });
     window.addEventListener('resize', update);
