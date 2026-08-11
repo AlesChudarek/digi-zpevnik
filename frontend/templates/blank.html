@@ -5,6 +5,19 @@
   <meta charset="UTF-8">
   <title>{% block title %}{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    /* This layout had no background at all, so the page fell back to the browser's
+       white canvas instead of taking a colour from the palette. */
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background-color: var(--bg-grad-end, #2E7D32);
+      background-image: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
+      background-attachment: fixed;
+      background-repeat: no-repeat;
+      background-size: cover;
+    }
+  </style>
 </head>
 <body>
   {% block content %}{% endblock %}
