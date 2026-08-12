@@ -1636,52 +1636,42 @@ async function fitDoublePageToViewport() {
   }
 }
 
-function zoomIn() {
+// Zoom kept the top-left corner in place, so whatever you were reading slid away
+// from the middle of the screen. This anchors the point that is in the centre of the
+// view: it stays in the centre, in both reading modes.
+function zoomByFactor(factor) {
   const wrapper = document.querySelector('.zoom-scroll-wrapper');
-  const prevScrollY = wrapper.scrollTop;
-  const prevScrollX = wrapper.scrollLeft;
-  const prevScrollHeight = wrapper.scrollHeight;
+  if (!wrapper) return;
+
+  // Measured before the zoom, because applying it changes both sizes
   const prevScrollWidth = wrapper.scrollWidth;
+  const prevScrollHeight = wrapper.scrollHeight;
+  const centreX = wrapper.scrollLeft + wrapper.clientWidth / 2;
+  const centreY = wrapper.scrollTop + wrapper.clientHeight / 2;
 
   const isDouble = document.getElementById('double-page').style.display !== 'none';
   if (isDouble) {
-    zoomDouble = Math.min(4.0, zoomDouble * 1.1);
+    zoomDouble = Math.min(4.0, Math.max(0.25, zoomDouble * factor));
     userZoomedDouble = true;
   } else {
-    zoomScroll = Math.min(4.0, zoomScroll * 1.1);
+    zoomScroll = Math.min(4.0, Math.max(0.25, zoomScroll * factor));
     userZoomedScroll = true;
   }
   applyZoom();
 
-  const newScrollHeight = wrapper.scrollHeight;
-  const newScrollWidth = wrapper.scrollWidth;
+  // Where that same point sits now, put it back in the middle
+  const ratioX = prevScrollWidth ? centreX / prevScrollWidth : 0.5;
+  const ratioY = prevScrollHeight ? centreY / prevScrollHeight : 0.5;
+  wrapper.scrollLeft = ratioX * wrapper.scrollWidth - wrapper.clientWidth / 2;
+  wrapper.scrollTop = ratioY * wrapper.scrollHeight - wrapper.clientHeight / 2;
+}
 
-  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
-  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+function zoomIn() {
+  zoomByFactor(1.1);
 }
 
 function zoomOut() {
-  const wrapper = document.querySelector('.zoom-scroll-wrapper');
-  const prevScrollY = wrapper.scrollTop;
-  const prevScrollX = wrapper.scrollLeft;
-  const prevScrollHeight = wrapper.scrollHeight;
-  const prevScrollWidth = wrapper.scrollWidth;
-
-  const isDouble = document.getElementById('double-page').style.display !== 'none';
-  if (isDouble) {
-    zoomDouble = Math.max(0.25, zoomDouble * 0.9);
-    userZoomedDouble = true;
-  } else {
-    zoomScroll = Math.max(0.25, zoomScroll * 0.9);
-    userZoomedScroll = true;
-  }
-  applyZoom();
-
-  const newScrollHeight = wrapper.scrollHeight;
-  const newScrollWidth = wrapper.scrollWidth;
-
-  wrapper.scrollTop = (prevScrollY / prevScrollHeight) * newScrollHeight;
-  wrapper.scrollLeft = (prevScrollX / prevScrollWidth) * newScrollWidth;
+  zoomByFactor(0.9);
 }
 
 function scrollToTop() {
