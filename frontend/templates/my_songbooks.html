@@ -95,8 +95,14 @@
   .shared-indicator .shared-tooltip {
     position: absolute;
     top: 46px;
-    left: 50%;
-    transform: translateX(-50%);
+    /* Anchored to the indicator's right edge, not centred on it. Centred, this 200px
+       popup stuck 54px past a 390px screen even while invisible, which let the whole
+       page be dragged sideways - and with the page dragged, the fixed navbar stayed
+       put and looked as if it had lost its burger and arrow. */
+    right: 0;
+    left: auto;
+    transform: none;
+    max-width: calc(100vw - 24px);
     background: rgba(0,0,0,0.9);
     color: #ffffff;
     font-size: 0.75em;
@@ -635,6 +641,40 @@
   .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
   /* Hide bottom actions in classic edit modal too */
   #edit-book-modal .modal .modal-actions { display: none; }
+
+  /* Phone layout for the songbook dialogs. Kept at the very end of the styles so it
+     wins over the base rules - putting mobile overrides earlier silently lost to
+     equal-specificity rules below them, three times already. */
+  @media (max-width: 820px) {
+    /* width: min(880px, 92vw) plus 24px padding on a content-box made the dialog
+       wider than the screen (407px inside a 390px window) and shifted it off-centre. */
+    #new-book-modal .modal,
+    #edit-book-modal .modal,
+    #new-song-modal .modal {
+      box-sizing: border-box;
+      width: 96vw;
+      padding: 14px;
+    }
+    #new-book-modal .modal-wrap,
+    #edit-book-modal .modal-wrap,
+    #new-song-modal .modal-wrap { margin-top: 8px; }
+
+    /* Four cover dropzones two-up do not fit a phone */
+    .cover-grid { grid-template-columns: 1fr; gap: 12px; }
+    .ns-row { grid-template-columns: 1fr; }
+
+    /* These sat at right: -34px, outside their own box, and reached 506px on a 390px
+       screen - that was the widest thing on the page. Moved inside. */
+    .dz-clear,
+    .dz-clear.outside {
+      right: 6px;
+      left: auto;
+      margin-left: 0;
+    }
+
+    /* The 3D book preview is sized for a desktop dialog */
+    .book-preview { max-width: 100%; }
+  }
 </style>
 
 <div id="edit-book-modal">

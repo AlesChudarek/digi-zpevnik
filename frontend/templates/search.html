@@ -16,7 +16,11 @@
   .field.page input { max-width: 140px; }
   .types { grid-column: 1 / -1; display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
   .types label { background: #ffffff44; padding: 6px 10px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-  .results { width: 100%; background: #fff; color: var(--muted-text, #1b5e20); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: visible; }
+  /* The card takes a palette colour, not white. The header's rounded corner reveals
+     whatever is behind it, and against white that gap read as a square corner - most
+     obvious in the midnight theme. With the same colour as the header it disappears,
+     and rows stay white because #results-table carries that. */
+  .results { width: 100%; background: var(--muted-bg, #e8f5e9); color: var(--muted-text, #1b5e20); border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.25); overflow: visible; }
   /* separate, not collapse: browsers ignore border-radius on cells when borders are
      collapsed, so the header corner could never round. border-spacing: 0 keeps the
      layout identical to collapsed. */
