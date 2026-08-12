@@ -414,6 +414,14 @@
       }
     }
 
+    // Tapping anywhere outside the open menu closes it, like any dropdown
+    document.addEventListener('click', (event) => {
+      const navbar = document.querySelector('.navbar');
+      if (!navbar || !navbar.classList.contains('menu-open')) return;
+      if (event.target.closest('.navbar') || event.target.closest('.nav-burger')) return;
+      toggleNavMenu();
+    });
+
     function toggleNavbar() {
       const navbar = document.querySelector('.navbar');
       const toggle = document.querySelector('.navbar-toggle');

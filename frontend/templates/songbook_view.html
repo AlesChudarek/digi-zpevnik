@@ -322,7 +322,38 @@
 
     #toc-modal .content h3 {
       margin-top: 0;
+      margin-bottom: 0;
     }
+
+    /* Opening the contents scrolls straight to the current page, which used to carry
+       the heading off the top of the screen. As a sticky strip it stays put and the
+       close button with it, so closing never depends on finding backdrop to tap. */
+    .toc-head {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: white;
+      padding-bottom: 6px;
+      z-index: 2;
+    }
+
+    .toc-close {
+      flex: 0 0 auto;
+      width: 30px;
+      height: 30px;
+      border: none;
+      border-radius: 50%;
+      background: var(--muted-bg, #e8f5e9);
+      color: var(--brand-dark, #1b5e20);
+      font-size: 22px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 1;
+    }
+    .toc-close:hover { filter: brightness(0.95); }
 
     /* On a phone the contents box was sized for a desktop window: it started 90px
        down with 30px padding, so its heading ended up out of reach above the screen
@@ -475,10 +506,9 @@
       .zoom-buttons img,
       .mode-buttons img { width: 20px; height: 20px; }
 
-      #toc-modal {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-      }
+      /* The content scrolls, not the overlay: a sticky heading needs the scrollport to
+         be the box it lives in. */
+      #toc-modal { overflow: hidden; }
       #toc-modal-wrapper,
       .navbar.hidden ~ #toc-modal #toc-modal-wrapper,
       body.navbar-hidden #toc-modal #toc-modal-wrapper {
@@ -493,7 +523,10 @@
       }
       #toc-modal .content {
         padding: 14px;
-        max-height: none;
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       #toc-modal .content h3 { font-size: 1.05em; }
       #toc-modal td { padding: 6px 8px; font-size: 0.9em; }
@@ -544,14 +577,7 @@
     </button>
   </div>
 
-  <div id="toc-modal">
-    <div id="toc-modal-wrapper">
-      <div class="content">
-        <h3>Obsah</h3>
-        <table id="toc-table"></table>
-      </div>
-    </div>
-  </div>
+
 
   <div class="zoom-buttons">
     <div class="button-container">
@@ -575,6 +601,24 @@
 </div>
 </div>
 </div>
+
+  {# Deliberately outside .zoom-scroll-wrapper: that wrapper has isolation: isolate
+     and z-index: 0, which makes its own stacking context, so this dialog's
+     z-index: 2000 was trapped inside it and rendered BEHIND the fixed navbar -
+     which is why its heading could not be seen. #}
+  <div id="toc-modal">
+    <div id="toc-modal-wrapper">
+      <div class="content">
+        {# The box can fill the screen, leaving no backdrop to tap, so closing must not
+           depend on hitting the area around it. #}
+        <div class="toc-head">
+          <h3>Obsah</h3>
+          <button type="button" class="toc-close" onclick="toggleToc()" aria-label="Zavřít obsah">&times;</button>
+        </div>
+        <table id="toc-table"></table>
+      </div>
+    </div>
+  </div>
 
 <div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="panel">
