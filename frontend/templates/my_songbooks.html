@@ -20,6 +20,11 @@
       grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
       gap: 14px;
       padding: 16px 12px;
+      /* Fractional column widths rounded up to a 1px wider page, which made it
+         draggable sideways and the fixed navbar then looked offset. */
+      box-sizing: border-box;
+      max-width: 100%;
+      overflow-x: hidden;
     }
   }
 

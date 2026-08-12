@@ -44,12 +44,18 @@
      any width the table did not cover showed up as a fake extra column in the header
      colour, and it did not spring back. Transparent means such a gap is the same
      white as the card and rows, so it cannot be mistaken for content. */
-  #results-table { background: #fff; }
+  /* The table is a square white rectangle behind the header, so it filled in the
+     corner that both the header cell and the card round away - that was the square
+     corner still showing. Rounding it too makes all three agree. */
+  #results-table { background: #fff; border-top-left-radius: 10px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
   /* overscroll-behavior-x: none stops the elastic overscroll itself, not just its
      chaining to the page - that bounce was what exposed the backdrop. The tint is
      safe now: the phantom 66px that used to make it look like a column were the row
      tooltips, not this background. */
-  .table-scroll { width: 100%; overscroll-behavior-x: none; background: var(--muted-bg, #e8f5e9); }
+  /* No background here: this box has no rounded corners, so its tint was the last
+     square layer filling in the corner that everything else rounds away. The card
+     underneath now carries the same colour, so overscroll still never shows white. */
+  .table-scroll { width: 100%; overscroll-behavior-x: none; }
   thead th {
     text-align: left;
     padding: 12px 16px;
