@@ -44,10 +44,11 @@
      any width the table did not cover showed up as a fake extra column in the header
      colour, and it did not spring back. Transparent means such a gap is the same
      white as the card and rows, so it cannot be mistaken for content. */
-  /* The table is a square white rectangle behind the header, so it filled in the
-     corner that both the header cell and the card round away - that was the square
-     corner still showing. Rounding it too makes all three agree. */
-  #results-table { background: #fff; border-top-left-radius: 10px; border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+  /* No background on the table at all. applyRowColors() gives every row its own
+     background (white when the songbook has no colour), so this layer was redundant -
+     and being a second surface under the header it left a pale fringe along the
+     rounded corner where the two blended. */
+  #results-table { background: transparent; }
   /* overscroll-behavior-x: none stops the elastic overscroll itself, not just its
      chaining to the page - that bounce was what exposed the backdrop. The tint is
      safe now: the phantom 66px that used to make it look like a column were the row
@@ -87,7 +88,10 @@
   /* Counter bubble over table header, flush right, outside table */
   /* The bubble's right wall is vertical, so the rounded top-right corner underneath
      made the two look a few pixels apart. Squaring that one corner lets them join. */
-  .results { position: relative; border-top-right-radius: 0; }
+  /* Only the top-left corner is rounded. The rows carry square backgrounds and the
+     counter bubble joins at the top right, so rounding anything else would show as
+     one layer curving while another stays straight. */
+  .results { position: relative; border-radius: 10px 0 0 0; }
   /* "There is something you cannot see this way": a fade on whichever side still has
      content. It appears only while that direction can actually be scrolled, so on a
      desktop where the whole table fits, neither ever shows. */
@@ -103,8 +107,8 @@
   }
   .scroll-hint.right {
     right: 0;
-    /* Top-right stays square to match the corner squared off for the counter */
-    border-radius: 0 0 10px 0;
+    /* Square, like every corner of the card except the top-left one */
+    border-radius: 0;
     background: linear-gradient(to left, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
   }
   .scroll-hint.left {
