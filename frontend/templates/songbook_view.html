@@ -518,6 +518,15 @@
       .zoom-buttons img,
       .mode-buttons img { width: 20px; height: 20px; }
 
+      /* Pevných 230px by na telefonu vyjelo za pravý kraj. Panel si vezme, co zbývá
+         od tlačítka k druhé straně obrazovky, a nechá tam rezervu na tlačítka módů. */
+      .speed-panel {
+        left: calc(100% + 8px);
+        width: min(230px, calc(100vw - 110px));
+        padding: 8px 14px;
+      }
+      .speed-readout { font-size: 12px; }
+
       /* The content scrolls, not the overlay: a sticky heading needs the scrollport to
          be the box it lives in. */
       #toc-modal { overflow: hidden; }
@@ -647,6 +656,28 @@
       </button>
       <div class="tooltip-text">Oddálit</div>
     </div>
+    {# Automatické sjíždění: jen v rolovacím módu, stejně jako "zpět nahoru" #}
+    <div class="button-container" id="auto-scroll-button" style="display: none;">
+      {# Bez onclick v atributu: obsluha se váže až v JS, aby šla dlouhým stiskem
+         potlačit. Posluchač z atributu se totiž zapíše při parsování, tedy dřív než
+         cokoliv našeho, a na cíli události rozhoduje pořadí zápisu, ne fáze. #}
+      <button id="auto-scroll-toggle"
+              aria-pressed="false" aria-label="Automatické sjíždění">
+        <img id="auto-scroll-icon" src="{{ static_bust('img/icons/auto_scroll.svg') }}"
+             alt="Automatické sjíždění">
+      </button>
+      <div class="tooltip-text" id="auto-scroll-tooltip">Automatické sjíždění</div>
+
+      {# Vysouvá se vedle tlačítka, ne pod něj, aby sloupec nerostl do výšky -
+         na telefonu na šířku je výška to jediné, čeho je málo. #}
+      <div class="speed-panel" id="auto-scroll-panel" aria-hidden="true">
+        <input type="range" id="auto-scroll-speed" class="speed-slider"
+               min="0" max="100" step="1" value="50"
+               aria-label="Rychlost automatického sjíždění">
+        <div class="speed-readout"><span id="auto-scroll-readout">1 strana / 45 s</span></div>
+      </div>
+    </div>
+
     <div class="button-container" id="jump-up-button" style="display: none;">
       <button onclick="scrollToTop()">
         <img src="{{ static_bust('img/icons/jump_up.svg') }}" alt="Scroll to Top">
@@ -709,6 +740,8 @@
 <script>
   const pageFiles = {{ page_files | tojson | safe }};
   const BOOK_COLOR = {{ (book_color or '#FFFFFF') | tojson | safe }};
+  const AUTO_SCROLL_ICON_CLOCK = {{ static_bust('img/icons/auto_scroll.svg') | tojson }};
+  const AUTO_SCROLL_ICON_PAUSE = {{ static_bust('img/icons/auto_scroll_pause.svg') | tojson }};
   const IS_GUEST = {{ guest | tojson }};
   const TOC_ADD_TOOLTIP = {{ ('Pouze pro přihlášené uživatele' if guest else 'Přidat do vlastního zpěvníku') | tojson }};
   const TOC_CAN_REMOVE = {{ (not guest and songbook_is_private and can_manage_songbook) | tojson }};
@@ -1065,6 +1098,7 @@
       wrapper.scrollLeft = 0;
     }
     document.getElementById("jump-up-button").style.display = "block";
+    document.getElementById("auto-scroll-button").style.display = "block";
     // Hide TOC modal if open
     const modal = document.getElementById("toc-modal");
     if (modal.style.display === "flex") {
@@ -1148,6 +1182,10 @@
     // Do not auto-fit on mode switch; keep the last double-page zoom
     applyZoom();
     document.getElementById("jump-up-button").style.display = "none";
+    // Knižní mód se nesjíždí, tak sjíždění skončí i kdyby zrovna běželo
+    stopAutoScroll();
+    closeSpeedPanel();
+    document.getElementById("auto-scroll-button").style.display = "none";
     const modal = document.getElementById("toc-modal");
     if (modal.style.display === "flex") {
       modal.style.display = "none";
@@ -1555,6 +1593,15 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
   // screen keeps the original sizing and a narrow one scales down instead of overflowing.
   const DOUBLE_PAGE_BASE_PX = 600;
   const SCROLL_PAGE_BASE_PX = 1200;
+  // Gap between the two pages of a spread: a share of the page width, so it looks the
+  // same whether a page is 600px or 120px wide.
+  const MIN_PAGE_GAP = 6;
+  const MAX_PAGE_GAP = 30;
+  const PAGE_GAP_RATIO = 0.08;
+
+  function pageGapFor(pageWidth) {
+    return Math.round(Math.max(MIN_PAGE_GAP, Math.min(MAX_PAGE_GAP, pageWidth * PAGE_GAP_RATIO)));
+  }
 
   function availableViewerWidth() {
     const wrapper = document.querySelector('.zoom-scroll-wrapper');
@@ -1593,6 +1640,14 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     const blankRight = document.getElementById('right-page-blank');
     const doubleBase = doublePageBaseWidth();
     const scrollBase = scrollPageBaseWidth();
+
+  // The gap between the two pages of a spread was fixed per breakpoint: 30px normally,
+  // 8px under 820px. A phone in landscape is 844 or 926px wide, so it fell on the
+  // desktop side and kept 30px next to a 105px page - a third of a page of empty paper
+  // down the middle. It now scales with the page itself, so it looks the same at every
+  // size and no breakpoint can miss it.
+  const pairEl = document.getElementById('double-page');
+  if (pairEl) pairEl.style.gap = `${pageGapFor(zoomDouble * doubleBase)}px`;
 
   doublePage.forEach(img => {
     img.style.width = `${zoomDouble * doubleBase}px`;
@@ -1695,7 +1750,23 @@ async function fitDoublePageToViewport() {
     setTimeout(() => { fitDoublePageToViewport(); }, 60);
     return;
   }
-  let heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
+  const heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
+
+  // Fitting by height alone ignored how wide the spread came out. On a phone held
+  // upright that meant two 454px pages inside a 390px window, readable only by dragging
+  // sideways; the spread now has to fit the width as well. The gap is measured at this
+  // baseline zoom, so it is a slight overestimate once everything shrinks - erring
+  // towards a spread that definitely fits.
+  // Always measured against a full two-page spread, even when the fit runs on the cover
+  // where only one page shows. Sizing for the one visible page let a tablet held upright
+  // settle on a zoom that overflowed by 591px the moment the reader turned to the first
+  // real spread, and the fit runs only once so nothing ever corrected it. Fitting for
+  // two also keeps the page the same size throughout the book instead of shrinking at
+  // the first turn.
+  const baselineBase = doublePageBaseWidth();
+  const baselineW = 2 * baselineBase + pageGapFor(baselineBase);
+  const usableW = availableViewerWidth() - viewerChromeWidth();
+  const widthZoom = usableW / Math.max(1, baselineW);
 
   // Clamp between 0.25 and 4.0
   const fitZoom = Math.max(0.25, Math.min(4.0, Math.min(heightZoom, widthZoom)));
@@ -1852,6 +1923,16 @@ function scrollToTop() {
   }
   let odkladuSkryti = 0;
   function hideSideUI() {
+    // Držená kulička slideru se nesmí schovat pod rukou. Stačilo podržet palec tři
+    // vteřiny bez pohybu a celý sloupec i s panelem zmizel uprostřed nastavování.
+    // Odkládá se ale jen omezeně: kdyby příznak tažení někdy uvázl, nesmí to schovávání
+    // vyřadit natrvalo. Půl minuty je víc, než kdo udrží palec, a přitom konečné.
+    if (autoScrollDragging && odkladuSkryti < 75) {
+      odkladuSkryti += 1;
+      inactivityTimer = setTimeout(hideSideUI, 400);
+      return;
+    }
+    odkladuSkryti = 0;
     sideGroups.forEach(g => g && g.classList.add('fade-hidden'));
     // Ať se sloupec nevrátí s otevřeným panelem, který nikdo nevyvolal
     closeSpeedPanel();
@@ -1889,20 +1970,47 @@ function scrollToTop() {
       }
     }, 0);
   };
+  // Dotyk nechává na klepnutém tlačítku zavěšený hover, který už nikdy neodejde:
+  // Firefox po ťuknutí pošle mouseleave a hned zase mouseenter, a tím to skončí.
+  // Dokud na tom viselo pozastavení odpočtu, sloupec po prvním ťuknutí nezmizel už
+  // nikdy. Pozastavuje proto jen skutečná myš, která odjetí spolehlivě ohlásí.
+  const jenMys = (fn) => (event) => {
+    if (!event.pointerType || event.pointerType === 'mouse') fn();
+  };
   sideButtons.forEach(btn => {
-    btn.addEventListener('mouseenter', pauseInactivityTimer);
-    btn.addEventListener('mouseleave', resumeInactivityTimer);
-    btn.addEventListener('focusin', pauseInactivityTimer);
+    btn.addEventListener('pointerenter', jenMys(pauseInactivityTimer));
+    btn.addEventListener('pointerleave', jenMys(resumeInactivityTimer));
+    btn.addEventListener('focusin', () => {
+      // Ťuknutí prstem tlačítko taky zaměří a focusout už nepřijde. Zaměření z
+      // klávesnice ale pozastavit má, jinak by se ovládání ztrácelo pod rukama.
+      try {
+        if (btn.matches(':focus-visible')) pauseInactivityTimer();
+      } catch (e) {
+        pauseInactivityTimer(); // starý prohlížeč :focus-visible nezná
+      }
+    });
     btn.addEventListener('focusout', resumeIfNoSideFocus);
     btn.addEventListener('touchstart', pauseInactivityTimer, { passive: true });
     btn.addEventListener('touchend', resumeInactivityTimer, { passive: true });
   });
+  // Otevřený panel rychlosti nesmí zmizet pod rukou uprostřed nastavování
+  const speedPanelEl = document.getElementById('auto-scroll-panel');
+  if (speedPanelEl) {
+    speedPanelEl.addEventListener('pointerenter', jenMys(pauseInactivityTimer));
+    speedPanelEl.addEventListener('pointerleave', jenMys(resumeInactivityTimer));
+    speedPanelEl.addEventListener('touchstart', pauseInactivityTimer, { passive: true });
+    speedPanelEl.addEventListener('touchend', resumeInactivityTimer, { passive: true });
+  }
+  // Po celou dobu tažení se odpočet nepočítá, ať kurzor vyjede kamkoliv
+  document.addEventListener('auto-scroll-drag-start', pauseInactivityTimer);
+  document.addEventListener('auto-scroll-drag-end', resumeInactivityTimer);
+
   // Start the inactivity countdown after initial paint
   resetInactivityTimer();
   window.addEventListener('mousemove', resetInactivityTimer, { passive: true });
   window.addEventListener('touchstart', (event) => {
     const target = event.target;
-    if (target && target.closest('.zoom-buttons button, .mode-buttons button')) {
+    if (target && target.closest('.zoom-buttons button, .mode-buttons button, .speed-panel')) {
       pauseInactivityTimer();
     } else {
       resumeInactivityTimer();
