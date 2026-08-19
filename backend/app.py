@@ -914,6 +914,10 @@ def delete_song_from_songbook(songbook_id, song_id):
     if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
         db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
         db.session.commit()
+        # Předpřipravit nové PDF: tuhle cestu volá obsah zpěvníku ve čtečce
+        # i editor, takže bez toho by po smazání písničky zůstalo ke stažení
+        # staré PDF, které už neodpovídá webu.
+        schedule_export_warm(songbook_id)
         return jsonify({'ok': True, 'detached_only': True})
 
     # Build base rel path for a songbook: users/<...>/<...>
@@ -943,6 +947,7 @@ def delete_song_from_songbook(songbook_id, song_id):
         # Only detach from this songbook
         db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
         db.session.commit()
+        schedule_export_warm(songbook_id)
         return jsonify({'ok': True, 'detached_only': True})
 
     if other_ids:
@@ -974,6 +979,7 @@ def delete_song_from_songbook(songbook_id, song_id):
         # Detach from this songbook only
         db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
         db.session.commit()
+        schedule_export_warm(songbook_id)
         return jsonify({'ok': True, 'moved_origin_to': new_sb.id})
     else:
         # Delete song entirely (no other references)
@@ -988,6 +994,7 @@ def delete_song_from_songbook(songbook_id, song_id):
         db.session.query(SongImage).filter_by(song_id=song.id).delete()
         db.session.delete(song)
         db.session.commit()
+        schedule_export_warm(songbook_id)
         return jsonify({'ok': True, 'deleted_song': True})
 
 @app.route('/public-songbooks')
