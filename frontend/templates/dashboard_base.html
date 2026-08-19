@@ -422,6 +422,47 @@
       toggleNavMenu();
     });
 
+    /* --navbar-h was a guess: 70px, or 56px on phones. Measured, the bar is actually 76px
+       on a wide window and 86px between 840 and 1080, where the button labels wrap onto a
+       second line. The reader sizes itself as calc(100dvh - var(--navbar-h)), so it was
+       claiming 6 to 16px of height that the bar had already taken, and the top of the page
+       ended up underneath it. Measuring beats guessing, so the variable now follows the
+       bar - including any future change to the labels, padding or font. */
+    (function syncNavbarHeightToReality() {
+      const navbar = document.querySelector('.navbar');
+      if (!navbar) return;
+      let lastApplied = 0;
+      const sync = () => {
+        // While hidden the bar is translated off-screen and the spacer collapses to 0;
+        // its own height has not changed, so keep the last real measurement.
+        if (navbar.classList.contains('hidden')) return;
+        const h = Math.round(navbar.getBoundingClientRect().height);
+        if (h <= 0 || h === lastApplied) return;
+        lastApplied = h;
+
+        // The spacer animates its height over 0.3s, which is right when the bar is being
+        // collapsed but wrong here: correcting a measurement is not a state change, and
+        // gliding it made every page slide a few pixels downwards just after it loaded.
+        // Suppressed for this write only, so hiding the bar still animates.
+        const spacer = document.querySelector('.navbar-spacer');
+        const puvodniPrechod = spacer ? spacer.style.transition : null;
+        if (spacer) spacer.style.transition = 'none';
+        document.documentElement.style.setProperty('--navbar-h', h + 'px');
+        if (spacer) {
+          void spacer.offsetHeight; // vynutí přepočet, než se přechod vrátí
+          spacer.style.transition = puvodniPrechod || '';
+        }
+        // The reader below has to re-fit, and a bar that wraps without the window
+        // resizing (a font finishing loading, say) fires no resize event of its own.
+        window.dispatchEvent(new CustomEvent('navbar-height-change', { detail: h }));
+      };
+      sync();
+      if (window.ResizeObserver) new ResizeObserver(sync).observe(navbar);
+      window.addEventListener('resize', sync);
+      // Web fonts land after first paint and can change the bar's height with them
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(sync);
+    })();
+
     function toggleNavbar() {
       const navbar = document.querySelector('.navbar');
       const toggle = document.querySelector('.navbar-toggle');
@@ -435,6 +476,11 @@
       } else {
         spacer.classList.remove('collapsed');
       }
+      // Collapsing the bar hands the reader the bar's whole height back, but the window
+      // itself has not changed size, so nothing told the reader to grow into it - it sat
+      // at its old zoom with a band of empty space underneath.
+      window.dispatchEvent(new CustomEvent('navbar-height-change',
+        { detail: isHidden ? 0 : navbar.getBoundingClientRect().height }));
     }
     // --- Theme picker ---
     (function(){

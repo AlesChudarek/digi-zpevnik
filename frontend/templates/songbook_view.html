@@ -184,7 +184,11 @@
 
     .mode-buttons {
         position: fixed;
-        top: 90px;
+        /* Was a hardcoded 90px, which assumed a 70px bar. The bar is really 76px, and 86px
+           once its labels wrap, so these sat 4px under it instead of 20px - and on a phone
+           in landscape that is exactly where the page needs the room. Hung off the measured
+           bar height instead, with the 20px clearance the 90px was meant to give. */
+        top: calc(var(--navbar-h, 70px) + 20px);
         right: 40px;
         display: flex;
         flex-direction: column;
@@ -302,7 +306,8 @@
       position: absolute;
       left: 50%;
       transform: translateX(-50%);
-      top: 90px;
+      /* Same measured bar height the buttons hang off */
+      top: calc(var(--navbar-h, 70px) + 20px);
     }
 
     .navbar.hidden ~ #toc-modal #toc-modal-wrapper {
@@ -433,7 +438,8 @@
 <style>
   .zoom-buttons {
     position: fixed;
-    top: 90px;
+    /* Follows the measured bar height, same as .mode-buttons */
+    top: calc(var(--navbar-h, 70px) + 20px);
     left: 40px;
     display: flex;
     flex-direction: column;
@@ -486,17 +492,23 @@
     }
 
     @media (max-width: 820px) {
-      /* Both gaps were fixed at desktop sizes (30px between the two pages of a
-         spread, 20px between scrolled pages). Next to a ~180px page on a phone that
-         is a chasm, so they shrink here while desktop keeps its original values. */
-      .page-pair { gap: 8px; margin-bottom: 10px; }
+      /* The 20px gap between scrolled pages is a chasm next to a ~180px page on a
+         phone. The spread's own gap is no longer set here: a breakpoint on width
+         cannot see a phone in landscape, so applyZoom() scales it with the page. */
+      .page-pair { margin-bottom: 10px; }
       .scroll-mode { gap: 8px; }
+
+      /* 20px of side padding is a sensible margin on a desktop and 40px of lost page
+         width on a phone. The zoom and mode buttons float over the page and fade out
+         after a moment, so the spread is welcome to run underneath them - what the fit
+         has to respect is the edge of the screen, not those buttons. */
+      .viewer-container { padding-left: 8px; padding-right: 8px; }
 
       /* 60px circles inset 40px from each edge sat right on top of the page once the
          page filled the whole width. Smaller, tucked to the edge and slightly
          see-through, so the notes underneath stay readable. */
-      .zoom-buttons { top: 74px; left: 4px; gap: 8px; }
-      .mode-buttons { top: 74px; right: 4px; gap: 8px; }
+      .zoom-buttons { top: calc(var(--navbar-h, 56px) + 18px); left: 4px; gap: 8px; }
+      .mode-buttons { top: calc(var(--navbar-h, 56px) + 18px); right: 4px; gap: 8px; }
       .zoom-buttons button,
       .mode-buttons button {
         width: 40px;
@@ -531,10 +543,53 @@
       #toc-modal .content h3 { font-size: 1.05em; }
       #toc-modal td { padding: 6px 8px; font-size: 0.9em; }
     }
+
+    /* A short window - a phone in landscape, or a desktop window dragged flat - is where
+       vertical padding hurts. At 1256x500 the reader had 430px of height and spent 34 % of
+       it on padding, margins and fit reserve, so the spread came out at 199px wide with a
+       dead band underneath. Height is the scarce dimension here, width is not, so only the
+       vertical values shrink. Deliberately keyed on height: a breakpoint on width cannot
+       see a phone in landscape, which is 844px or 926px wide.
+
+       Kept last in this stylesheet on purpose - it overrides .viewer-container and
+       .page-pair above at equal specificity, so it only wins by coming later. */
+    @media (max-height: 560px) {
+      .viewer-container,
+      .viewer-container.double-page-mode {
+        padding-top: 8px;
+        padding-bottom: 8px;
+      }
+      .page-pair { margin-bottom: 6px; }
+      .nav-buttons { margin-top: 4px; }
+
+      /* The page arrows are a hardcoded 60px circle, which is a fifth of the 320px a
+         phone in landscape has to give. They stay comfortably tappable at 44px, which is
+         the usual minimum for a touch target. */
+      .nav-buttons { gap: 24px; }
+      .nav-buttons button { width: 44px; height: 44px; }
+      .nav-buttons img { width: 22px; height: 22px; }
+
+      /* Same reasoning as the narrow-screen rule: the screen edge binds, not the
+         floating buttons. */
+      .viewer-container { padding-left: 8px; padding-right: 8px; }
+    }
+
+    /* Collapsing the top bar gives the reader the whole window, and the contents modal
+       already moved up with it - the side buttons never did, so they stayed parked in the
+       band where the bar used to be. --navbar-h deliberately keeps its last real value
+       while the bar is hidden (the bar is only translated away, its height is unchanged),
+       so the offset has to be zeroed here rather than falling out of the calc. */
+    body.navbar-hidden .zoom-buttons,
+    body.navbar-hidden .mode-buttons {
+      top: 20px;
+    }
 </style>
 
 <div class="zoom-scroll-wrapper">
-  <div class="viewer-container">
+  {# Double is the starting mode, but the class that trims the bottom padding was only
+     added when switching modes, so a reader opened straight into the book kept the
+     40px padding. On a phone in landscape that is 28px stolen from a 320px window. #}
+  <div class="viewer-container double-page-mode">
   <div id="double-page" class="page-pair">
   <img id="left-page" src="">
   <img id="right-page" src="">
@@ -1507,14 +1562,28 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     return Math.max(240, measured || window.innerWidth || SCROLL_PAGE_BASE_PX);
   }
 
+  // How much width the container itself eats before any page gets a say. This used to be
+  // a flat 8px, but .viewer-container has 20px of padding on each side, so every width
+  // calculation was 32px too optimistic and the spread hung 33px off the right edge of a
+  // phone held upright.
+  function viewerChromeWidth() {
+    const viewer = document.querySelector('.viewer-container');
+    if (!viewer) return 0;
+    const s = getComputedStyle(viewer);
+    return (parseFloat(s.paddingLeft) || 0) + (parseFloat(s.paddingRight) || 0);
+  }
+
   function doublePageBaseWidth() {
-    // Two pages sit side by side, so each may use half of the space (minus a margin)
-    const perPage = (availableViewerWidth() - 8) / 2;
+    // Two pages sit side by side, so each may use half of what is left over. MAX_PAGE_GAP
+    // is reserved rather than the gap actually in force, because the gap is derived from
+    // the page width - reserving the largest keeps that from chasing its own tail.
+    const perPage = (availableViewerWidth() - viewerChromeWidth() - MAX_PAGE_GAP) / 2;
     return Math.max(120, Math.min(DOUBLE_PAGE_BASE_PX, perPage));
   }
 
   function scrollPageBaseWidth() {
-    return Math.max(160, Math.min(SCROLL_PAGE_BASE_PX, availableViewerWidth() - 8));
+    const usable = availableViewerWidth() - viewerChromeWidth();
+    return Math.max(160, Math.min(SCROLL_PAGE_BASE_PX, usable));
   }
 
   function applyZoom() {
@@ -1602,7 +1671,11 @@ async function fitDoublePageToViewport() {
   const navH = nav && nav.offsetHeight ? nav.offsetHeight : 0;
   const navMarginTop = nStyles ? (parseFloat(nStyles.marginTop) || 0) : 0;
   const navMarginBottom = nStyles ? (parseFloat(nStyles.marginBottom) || 0) : 0;
-  const reserve = 32; // extra space so nav buttons are fully visible
+  // Slack so the nav buttons are clearly clear of the page, on top of the nav's own
+  // measured height. A flat 32px is fine in a 750px window and absurd in the 320px one a
+  // phone in landscape leaves, where the reserves together ate more than half the height
+  // and pushed the fit onto its 0.25 floor.
+  const reserve = Math.min(32, Math.max(4, wrapperH * 0.03));
 
   const extras = padTop + padBottom + pairMarginTop + pairMarginBottom + navMarginTop + navMarginBottom + navH + reserve;
   const availableH = Math.max(100, wrapperH - extras);
@@ -1625,9 +1698,9 @@ async function fitDoublePageToViewport() {
   let heightZoom = availableH / currentPairH; // because zoomDouble is 1.0 here
 
   // Clamp between 0.25 and 4.0
-  heightZoom = Math.max(0.25, Math.min(4.0, heightZoom));
+  const fitZoom = Math.max(0.25, Math.min(4.0, Math.min(heightZoom, widthZoom)));
 
-  zoomDouble = heightZoom;
+  zoomDouble = fitZoom;
   applyZoom();
   // Mark initial auto-fit as completed to avoid further automatic changes
   if (!initialDoubleFitDone) {
@@ -1710,10 +1783,20 @@ function scrollToTop() {
     let refitTimer = null;
     const refitToViewport = () => {
       clearTimeout(refitTimer);
-      refitTimer = setTimeout(() => { applyZoom(); }, 120);
+      refitTimer = setTimeout(() => {
+        // Rotating a phone swaps both dimensions, so merely re-applying the old zoom
+        // left the spread either overflowing or marooned in empty space. A zoom the
+        // reader set by hand is theirs, so that one is only re-applied.
+        const isDouble = document.getElementById('double-page').style.display !== 'none';
+        if (isDouble && !userZoomedDouble) fitDoublePageToViewport();
+        else applyZoom();
+      }, 120);
     };
     window.addEventListener('resize', refitToViewport);
     window.addEventListener('orientationchange', refitToViewport);
+    // The top bar grows when its button labels wrap, which changes how much height is
+    // left for the reader without the window itself changing size.
+    window.addEventListener('navbar-height-change', refitToViewport);
     document.addEventListener('click', (event) => {
       const modal = document.getElementById("toc-modal");
       const content = modal.querySelector(".content");
@@ -1750,13 +1833,11 @@ function scrollToTop() {
       nextPage();
     }
   });
-  // Refit on window resize if in double mode and user hasn't adjusted zoom
-  window.addEventListener('resize', () => {
-    const isDouble = document.getElementById('double-page').style.display !== 'none';
-    if (isDouble && !userZoomedDouble) {
-      fitDoublePageToViewport();
-    }
-  });
+  // Resize refitting lives in refitToViewport above: debounced, and shared with
+  // orientationchange. This second, unthrottled listener fired a full fit per resize
+  // event on top of it.
+
+  initAutoScroll();
 
   // Side UI auto-hide on inactivity (mouse/touch) with fade in/out
   const sideZoom = document.querySelector('.zoom-buttons');
@@ -1769,8 +1850,11 @@ function scrollToTop() {
   function showSideUI() {
     sideGroups.forEach(g => g && g.classList.remove('fade-hidden'));
   }
+  let odkladuSkryti = 0;
   function hideSideUI() {
     sideGroups.forEach(g => g && g.classList.add('fade-hidden'));
+    // Ať se sloupec nevrátí s otevřeným panelem, který nikdo nevyvolal
+    closeSpeedPanel();
   }
   function resetInactivityTimer() {
     if (inactivityPaused) return;
