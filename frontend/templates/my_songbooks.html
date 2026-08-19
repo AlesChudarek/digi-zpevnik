@@ -176,6 +176,30 @@
   .add-card .plus-icon { width: 72px; height: 72px; background: var(--brand-strong, #2E7D32); }
   .add-card .plus-icon { -webkit-mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; }
   .add-card:hover .cover { background: #eaeaea; }
+
+  /* Nabídka stahování u dlaždice zpěvníku. Visí na body, ne v dlaždici: karty mají
+     overflow a nabídka by se v nich ořízla. */
+  .download-chooser {
+    position: absolute;
+    z-index: 3000;
+    width: 240px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    padding: 6px;
+  }
+  .download-chooser-title {
+    font-size: 12px; color: #666; padding: 4px 10px 6px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .download-chooser button {
+    display: block; width: 100%; text-align: left; border: none; background: transparent;
+    padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  }
+  .download-chooser button:hover { background: var(--muted-bg, #e8f5e9); }
+  .download-chooser strong { display: block; font-size: 14px; color: var(--brand-dark, #1b5e20); }
+  .download-chooser span { display: block; font-size: 12px; color: #666; }
+  .download-chooser-state { font-size: 12px; color: var(--brand-dark, #1b5e20); padding: 0 10px 4px; }
 </style>
 
 <!-- Reusable confirm modal -->
@@ -307,6 +331,11 @@
             </button>
           </span>
         {% endif %}
+        <span class="tooltip" data-tooltip="Stáhnout zpěvník">
+          <button class="icon-btn btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
+            <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
+          </button>
+        </span>
         <span class="tooltip" data-tooltip="Smazat zpěvník">
           <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
@@ -1468,6 +1497,97 @@ function openCreateModal() {
         openShareModalFor(btn);
       });
     });
+
+    /* Stažení zpěvníku rovnou ze seznamu, bez otevírání čtečky.
+       Server na první požádání odpoví 202 a soubor skládá na pozadí, takže se tu stejně
+       jako ve čtečce čeká dotazováním. U našich zpěvníků bývá hotový hned, protože se
+       předpřipravuje po každé úpravě. */
+    document.querySelectorAll('.btn-download').forEach(btn => {
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openDownloadChooser(btn.dataset.bookId, btn.dataset.bookTitle || '', btn);
+      });
+    });
+
+    function openDownloadChooser(bookId, title, anchor) {
+      document.querySelectorAll('.download-chooser').forEach(el => el.remove());
+
+      const box = document.createElement('div');
+      box.className = 'download-chooser';
+      box.innerHTML = `
+        <div class="download-chooser-title">${title ? title : 'Stáhnout zpěvník'}</div>
+        <button type="button" data-kind="pdf" data-q="small">
+          <strong>PDF, menší soubor</strong><span>pro čtení na telefonu</span></button>
+        <button type="button" data-kind="pdf" data-q="high">
+          <strong>PDF, plné rozlišení</strong><span>pro tisk</span></button>
+        <button type="button" data-kind="zip" data-q="">
+          <strong>Obrázky v ZIP</strong><span>původní kvalita beze změny</span></button>
+        <div class="download-chooser-state"></div>`;
+      document.body.appendChild(box);
+
+      const rect = anchor.getBoundingClientRect();
+      // Ukotvit k tlačítku, ale nepustit za okraj okna
+      const sirka = 240;
+      box.style.top = `${window.scrollY + rect.bottom + 8}px`;
+      box.style.left = `${Math.max(8, Math.min(
+        window.scrollX + rect.left, window.scrollX + window.innerWidth - sirka - 8))}px`;
+
+      const stav = box.querySelector('.download-chooser-state');
+      box.querySelectorAll('button').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.stopPropagation();
+          stahniZpevnik(bookId, b.dataset.kind, b.dataset.q, stav);
+        });
+      });
+
+      setTimeout(() => {
+        document.addEventListener('click', function zavri(ev) {
+          if (box.contains(ev.target)) return;
+          box.remove();
+          document.removeEventListener('click', zavri);
+        });
+      }, 0);
+    }
+
+    async function stahniZpevnik(bookId, kind, variant, stavEl) {
+      const query = kind === 'pdf' ? `?q=${variant}` : '';
+      const url = `/songbook/${encodeURIComponent(bookId)}/export.${kind}${query}`;
+      // Varianta patří i do dotazu na stav, jinak by odpovídal za jinou variantu
+      const statusUrl = `/songbook/${encodeURIComponent(bookId)}/export-status/${kind}${query}`;
+      stavEl.textContent = 'Připravuji…';
+
+      let odpoved;
+      try {
+        odpoved = await fetch(url);
+      } catch (e) {
+        stavEl.textContent = 'Stažení se nepovedlo.';
+        return;
+      }
+      // Výhradně 200: response.ok je pravdivé i pro 202, tedy "začal jsem to skládat"
+      if (odpoved.status === 200) {
+        stavEl.textContent = '';
+        window.location = url;
+        return;
+      }
+      if (odpoved.status === 429) { stavEl.textContent = 'Server je zaneprázdněn, zkus to za chvíli.'; return; }
+      if (odpoved.status === 413) { stavEl.textContent = 'Zpěvník je příliš velký.'; return; }
+      if (odpoved.status !== 202) { stavEl.textContent = 'Stažení se nepovedlo.'; return; }
+
+      const zacatek = Date.now();
+      const dotaz = async () => {
+        const uplynulo = Date.now() - zacatek;
+        if (uplynulo > 5 * 60 * 1000) { stavEl.textContent = 'Trvá to moc dlouho, zkus to znovu.'; return; }
+        let stav = 'building';
+        try { stav = (await (await fetch(statusUrl)).json()).state; } catch (e) { stav = 'error'; }
+        if (stav === 'ready') { stavEl.textContent = ''; window.location = url; return; }
+        if (stav === 'error') { stavEl.textContent = 'Skládání selhalo.'; return; }
+        if (stav === 'idle') fetch(url).catch(() => {});
+        stavEl.textContent = `Připravuji… ${Math.round(uplynulo / 1000)} s`;
+        setTimeout(dotaz, uplynulo > 40000 ? 5000 : 2000);
+      };
+      setTimeout(dotaz, 1500);
+    }
 
     if (shareCancelBtn) {
       shareCancelBtn.addEventListener('click', (event) => {

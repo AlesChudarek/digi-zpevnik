@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Stazeni zpevniku. Sipka dolu nad podlozkou, jednobarevne cerne jako ostatni ikony. -->
+<svg width="800px" height="800px" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path fill="#000000" d="M10 2a1 1 0 011 1v7.586l2.293-2.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 10.586V3a1 1 0 011-1z"/>
+  <path fill="#000000" d="M3 14a1 1 0 011 1v1.5a.5.5 0 00.5.5h11a.5.5 0 00.5-.5V15a1 1 0 112 0v1.5A2.5 2.5 0 0115.5 19h-11A2.5 2.5 0 012 16.5V15a1 1 0 011-1z"/>
+</svg>
