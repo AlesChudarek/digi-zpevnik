@@ -1,7 +1,8 @@
 import os
+import sys
 import json
 import click
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from flask.cli import with_appcontext
@@ -10,6 +11,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 import re
 import unicodedata
 import time
+import hashlib
+import threading
+import zipfile
 from pathlib import Path
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func
@@ -32,6 +36,31 @@ MIN_RESIZE_DIMENSION = max(320, int(os.getenv("MIN_RESIZE_DIMENSION", "640")))
 RESIZE_SCALE_FACTOR = 0.85
 RESIZE_MAX_STEPS = 8
 ALLOWED_RESIZE_FORMATS = {'JPEG', 'PNG', 'WEBP'}
+
+# Export zpěvníků do PDF a ZIP.
+# Leží záměrně MIMO oba obrazové kořeny: route /songbooks/<path> servíruje cokoliv pod
+# nimi bez jakékoli autorizace, takže hotový export soukromého zpěvníku by se dal
+# stáhnout uhodnutím URL. Sem se dostane jen přes routu, která práva kontroluje.
+EXPORTS_DIR = Path(__file__).parent.parent / 'data' / 'exports'
+# Skenované strany jsou A4 při 210 DPI. Jedno místo, ne trojí zopakované 1748 v kódu.
+PAGE_DPI = 210
+PAGE_PX = (1748, 2480)
+A4_INCHES = (8.268, 11.693)
+# Dvě varianty PDF. Čísla jsou naměřená na zpěvníku 00101 (123 stran, 51 MB originálů):
+#   menší    q75 + zmenšení na 1754 px  ->  25,5 MB
+#   kvalitní q85 v plném rozlišení      ->  49,8 MB
+# Kvalita 95 se nepoužívá schválně: vyšla na 73,6 MB, tedy víc než originály, a přitom
+# ztrátově. Bezztrátovou cestu plní stažení obrázků v ZIP, ne PDF - Pillow vkládá RGB do
+# PDF vždycky jako JPEG, takže bezztrátové PDF by chtělo další závislost.
+EXPORT_VARIANTS = {
+    'small': {'quality': 75, 'max_edge': 1754},
+    'high': {'quality': 85, 'max_edge': 0},
+}
+EXPORT_MAX_PAGES = 400
+MAX_CONCURRENT_EXPORTS = 2
+EXPORTS_TOTAL_LIMIT_BYTES = 500 * 1024 * 1024
+EXPORT_LOCK_STALE_SECONDS = 600
+EXPORT_GENERATOR_VERSION = b'v1'
 
 
 def _ext_to_format(ext_hint, detected):
@@ -1747,7 +1776,444 @@ def update_songbook_structure(songbook_id):
                     _handle_song_delete_for_book(sb, s)
 
     db.session.commit()
+    # Až po commitu: předpřipravit ke stažení novou podobu zpěvníku a zahodit tu starou.
+    # Bez toho by první, kdo si zpěvník stáhne po úpravě, čekal na skládání - a hlavně
+    # by hrozilo, že se stáhne jiný stav, než je na webu, kdyby na to někdo zapomněl.
+    schedule_export_warm(songbook_id)
     return jsonify({'ok': True})
+
+def _drop_stale_exports(songbook, sequence):
+    """Delete every download of this songbook that no longer matches its content.
+
+    The cache key already makes a stale file unreachable, so this is not needed for
+    correctness - but leaving old builds around until the size cap sweeps them means
+    paying disk for versions nobody can ever ask for again.
+    """
+    safe_id = re.sub(r'[^A-Za-z0-9_]', '_', songbook.id)
+    platne = set()
+    for variant in EXPORT_VARIANTS:
+        platne.add(_export_paths(songbook.id, variant, 'pdf',
+                                 songbook_export_key(sequence, variant))['final'].name)
+    platne.add(_export_paths(songbook.id, 'orig', 'zip',
+                             songbook_export_key(sequence, 'orig'))['final'].name)
+    try:
+        for path in EXPORTS_DIR.glob(f"{safe_id}-*"):
+            if path.is_file() and path.suffix in ('.pdf', '.zip') and path.name not in platne:
+                path.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def schedule_export_warm(book_id):
+    """Rebuild the downloadable PDF for a songbook in the background.
+
+    Called after a save, so it must never make saving fail or wait: the whole thing is
+    wrapped in a thread and swallows its own errors. If the rebuild does not happen, the
+    next download simply builds it the usual way - nothing breaks, it is just slower.
+
+    The stale file needs no deleting: the cache key is derived from the page list and the
+    files' mtimes, so an edited songbook resolves to a different name and the old build is
+    pruned as a superseded sibling.
+    """
+    def prace():
+        try:
+            with app.app_context():
+                songbook = Songbook.query.get(book_id)
+                if songbook is None:
+                    return
+                sequence = build_songbook_export_sequence(songbook)
+                if not sequence or len(sequence) > EXPORT_MAX_PAGES:
+                    return
+                variant = 'small'
+                key = songbook_export_key(sequence, variant)
+                paths = _export_paths(book_id, variant, 'pdf', key)
+                if paths['final'].exists() or paths['lock'].exists():
+                    return
+                EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+                render_songbook_pdf(sequence, paths['part'], variant)
+                os.replace(paths['part'], paths['final'])
+                _prune_exports(paths['final'], paths['siblings'])
+                _drop_stale_exports(songbook, sequence)
+        except Exception:  # noqa: BLE001 - uložení zpěvníku tím nesmí být dotčené
+            pass
+
+    threading.Thread(target=prace, daemon=False).start()
+
+
+def build_songbook_content_pages(book_id):
+    """Ordered content pages of a songbook: [{"file", "page_number", "kind"}].
+
+    The single source of truth for page order, moved out of songbook_detail() so the
+    reader and the export cannot drift apart. There is no page entity in the model: a
+    physical page is a page_number paired with an image that belongs to a *song*, so
+    two things have to be untangled here. Several short songs sharing one printed page
+    collapse to a single entry, and a song spanning several pages takes its images in
+    order. A page with no image becomes the literal "blank".
+    """
+    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(
+        SongbookPage.page_number.asc(), SongbookPage.id.asc()
+    ).all()
+
+    pages_by_song = {}
+    for page in raw_pages:
+        pages_by_song.setdefault(page.song_id, []).append(page.page_number)
+
+    # A page number maps to one image; several short songs can share that one page.
+    image_for_page = {}
+    for song_id, page_numbers in pages_by_song.items():
+        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.id.asc()).all()
+        for offset, page_number in enumerate(sorted(set(page_numbers))):
+            if page_number in image_for_page:
+                continue  # already provided by another song on this same page
+            # A multi-page song has one page per image, in order
+            image_for_page[page_number] = (
+                song_images[offset].image_path if offset < len(song_images) else "blank"
+            )
+
+    return [
+        {"file": image_for_page[page_number], "page_number": page_number, "kind": "content"}
+        for page_number in sorted(image_for_page)
+    ]
+
+
+def build_songbook_export_sequence(songbook):
+    """Physical pages of a songbook in print order, for PDF and ZIP export.
+
+    Deliberately different from what the reader renders:
+      - no double-page pairing and no first_page_side offset. Which page falls on the
+        left is a property of the viewer, not of the document.
+      - a cover that does not exist is skipped rather than replaced by a blank sheet.
+      - "blank" inside the content is kept and drawn as an empty page, so printed page
+        numbers still line up.
+
+    This is the only place the export learns where pages come from. When PDF import
+    lands, "use the archived source page instead of the image" belongs here and the
+    renderer will not have to change.
+    """
+    sequence = []
+
+    def add(rel_path, kind):
+        if rel_path:
+            sequence.append({"file": rel_path, "kind": kind})
+
+    add(songbook.img_path_cover_front_outer, "cover")
+    add(songbook.img_path_cover_front_inner, "cover")
+
+    for image in SongbookIntroOutroImage.query.filter_by(
+        songbook_id=songbook.id, type='intro'
+    ).order_by(SongbookIntroOutroImage.sort_order).all():
+        add(image.image_path, "intro")
+
+    sequence.extend(
+        {"file": page["file"], "kind": "content", "page_number": page["page_number"]}
+        for page in build_songbook_content_pages(songbook.id)
+    )
+
+    for image in SongbookIntroOutroImage.query.filter_by(
+        songbook_id=songbook.id, type='outro'
+    ).order_by(SongbookIntroOutroImage.sort_order).all():
+        add(image.image_path, "outro")
+
+    add(songbook.img_path_cover_back_inner, "cover")
+    add(songbook.img_path_cover_back_outer, "cover")
+
+    return sequence
+
+
+def _flatten_to_rgb(image):
+    """Drop the alpha channel onto white.
+
+    Every scanned page is stored as RGBA and PDF has no plain alpha: left as it is, the
+    pages come out on a black background. White rather than a transparency mask, because
+    an SMask inflates the file and prints unpredictably.
+    """
+    if image.mode == 'RGB':
+        return image
+    if image.mode not in ('RGBA', 'LA', 'PA'):
+        image = image.convert('RGBA')
+    canvas = Image.new('RGB', image.size, (255, 255, 255))
+    canvas.paste(image, mask=image.split()[-1])
+    return canvas
+
+
+def songbook_export_key(sequence, variant):
+    """Cache key derived from what the export actually reads.
+
+    Content-addressed on purpose: no invalidation hook anywhere in the editor, nothing
+    to forget to call. Any edit changes the order or a file's mtime, which changes the
+    key, which means a different file. The old one is simply never asked for again.
+    """
+    digest = hashlib.sha256()
+    digest.update(EXPORT_GENERATOR_VERSION)
+    digest.update(variant.encode())
+    for item in sequence:
+        rel = item['file']
+        digest.update(rel.encode())
+        abs_path = _abs_image_path(rel) if rel != 'blank' else None
+        try:
+            stat = abs_path.stat() if abs_path else None
+        except OSError:
+            stat = None
+        digest.update(f"|{stat.st_mtime_ns if stat else 0}|{stat.st_size if stat else 0}\n".encode())
+    return digest.hexdigest()[:16]
+
+
+def _open_export_page(rel_path):
+    """One page as an RGB image. A missing file must not sink the whole export."""
+    abs_path = None if rel_path == 'blank' else _abs_image_path(rel_path)
+    if abs_path is None or not abs_path.exists():
+        return Image.new('RGB', PAGE_PX, (255, 255, 255))
+    with Image.open(abs_path) as raw:
+        # Načíst pixely, dokud je soubor otevřený. U stran s alfou je stáhne až
+        # skládání na bílou, ale strana, která je rovnou RGB, se vrací tak jak je -
+        # a po zavření souboru by z ní nešlo číst.
+        raw.load()
+        return _flatten_to_rgb(raw)
+
+
+def render_songbook_pdf(sequence, out_path, variant, on_page=None):
+    """Write the songbook to a PDF, one page at a time.
+
+    Streamed deliberately. Pillow's save_all with append_images holds every page decoded
+    at once, and a 123-page book at 1748x2480 RGBA is over 2 GB - instant OOM on a 1 GB
+    box. Appending page by page keeps memory flat: measured 170-250 MB peak regardless
+    of whether the book has 26 pages or 123.
+
+    The physical size is pinned to A4 by deriving DPI from each page's own pixel size,
+    so scans at other resolutions still come out A4 and no bitmap is rescaled unless the
+    variant asks for it.
+    """
+    settings = EXPORT_VARIANTS[variant]
+    quality, max_edge = settings['quality'], settings['max_edge']
+
+    first = True
+    for item in sequence:
+        started = time.time()
+        page = _open_export_page(item['file'])
+        if max_edge and max(page.size) > max_edge:
+            page.thumbnail((max_edge, max_edge), Image.LANCZOS)
+        width, height = page.size
+        page.save(
+            out_path,
+            'PDF',
+            dpi=(width / A4_INCHES[0], height / A4_INCHES[1]),
+            quality=quality,
+            append=not first,
+        )
+        page.close()
+        first = False
+        if on_page:
+            on_page(time.time() - started)
+
+    if first:
+        # Prázdný zpěvník: PDF bez jediné strany uložit nejde, tak aspoň jednu bílou
+        Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
+
+
+def render_songbook_zip(sequence, out_path):
+    """Pack the original page files, without touching the pixels.
+
+    This is the lossless route: the PDF re-encodes to JPEG, the ZIP does not.
+
+    Names lead with a zero-padded sequence number so the archive always opens in reading
+    order, and then say what the page is. A bare number would sort right but lose which
+    file is a cover and which printed page a scan actually is - and the two do not match,
+    because a songbook can start numbering at 3.
+    """
+    with zipfile.ZipFile(out_path, 'w', compression=zipfile.ZIP_STORED) as archive:
+        # ZIP_STORED, ne DEFLATE: PNG i JPEG jsou už komprimované, takže by se procesor
+        # spálil za setiny procenta.
+        for index, item in enumerate(sequence, start=1):
+            abs_path = None if item['file'] == 'blank' else _abs_image_path(item['file'])
+            if abs_path is None or not abs_path.exists():
+                continue
+            if item['kind'] == 'content' and item.get('page_number') is not None:
+                popis = f"strana-{item['page_number']}"
+            else:
+                popis = {'cover': 'obalka', 'intro': 'uvod', 'outro': 'zaver'}.get(
+                    item['kind'], item['kind'])
+            archive.write(abs_path, f"{index:04d}-{popis}{abs_path.suffix.lower()}")
+
+
+def _prune_exports(keep_path, sibling_glob):
+    """Keep the exports directory from growing without bound.
+
+    sibling_glob matches only *older builds of the same songbook in the same variant and
+    format* - superseded the moment the key changed. It must not be widened to the whole
+    songbook: doing that made a request for the full-resolution PDF delete the smaller one
+    somebody was still waiting for, and their tab then polled a file that would never come.
+    """
+    try:
+        for path in EXPORTS_DIR.glob(sibling_glob):
+            if path.is_file() and path != keep_path:
+                path.unlink(missing_ok=True)
+        files = [p for p in EXPORTS_DIR.glob('*') if p.is_file() and p.suffix in ('.pdf', '.zip')]
+    except OSError:
+        return
+
+    files = [p for p in EXPORTS_DIR.glob('*') if p.is_file() and p.suffix in ('.pdf', '.zip')]
+    total = sum(p.stat().st_size for p in files if p.exists())
+    for path in sorted(files, key=lambda p: p.stat().st_mtime if p.exists() else 0):
+        if total <= EXPORTS_TOTAL_LIMIT_BYTES:
+            break
+        if path == keep_path:
+            continue
+        try:
+            total -= path.stat().st_size
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _export_paths(book_id, variant, kind, key):
+    """Files for one build. Everything hangs off one name, so nothing can drift apart."""
+    safe_id = re.sub(r'[^A-Za-z0-9_]', '_', book_id)
+    stem = EXPORTS_DIR / f"{safe_id}-{variant}-{key}"
+    return {
+        'final': Path(f"{stem}.{kind}"),
+        'part': Path(f"{stem}.{kind}.part"),
+        'lock': Path(f"{stem}.{kind}.lock"),
+        'err': Path(f"{stem}.{kind}.err"),
+        # Jen starší buildy TÉŽE varianty a formátu. Širší vzor by mazal soubory,
+        # na které někdo jiný zrovna čeká.
+        'siblings': f"{safe_id}-{variant}-*.{kind}",
+    }
+
+
+def _build_export_file(book_id, variant, kind, paths):
+    """Run one export to completion. Runs in a thread, so it must not raise."""
+    try:
+        with app.app_context():
+            songbook = Songbook.query.get(book_id)
+            if songbook is None:
+                raise RuntimeError(f"zpěvník {book_id} mezitím zmizel")
+            sequence = build_songbook_export_sequence(songbook)
+            if kind == 'pdf':
+                render_songbook_pdf(sequence, paths['part'], variant)
+            else:
+                render_songbook_zip(sequence, paths['part'])
+        # Až tady je soubor hotový. Přejmenování je atomické, takže hotový export se
+        # nikdy neobjeví rozepsaný - kdo ho najde, najde ho celý.
+        os.replace(paths['part'], paths['final'])
+        paths['err'].unlink(missing_ok=True)
+        _prune_exports(paths['final'], paths['siblings'])
+    except Exception as exc:  # noqa: BLE001 - vlákno nesmí spadnout potichu
+        paths['part'].unlink(missing_ok=True)
+        try:
+            paths['err'].write_text(str(exc)[:500], encoding='utf-8')
+        except OSError:
+            pass
+    finally:
+        paths['lock'].unlink(missing_ok=True)
+
+
+def _start_export_build(book_id, variant, kind, paths):
+    """Claim the build and start it. Returns the state to report back."""
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    if paths['lock'].exists():
+        # Po zabitém workeru by tu zámek zůstal navěky a export by už nikdy nevznikl
+        try:
+            stale = time.time() - paths['lock'].stat().st_mtime > EXPORT_LOCK_STALE_SECONDS
+        except OSError:
+            stale = False
+        if not stale:
+            return 'building'
+        paths['lock'].unlink(missing_ok=True)
+
+    try:
+        # O_EXCL je atomické napříč procesy. Workerů jsou čtyři a nesdílejí paměť,
+        # takže zámek nemůže být v proměnné - musí být na disku.
+        fd = os.open(str(paths['lock']), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        return 'building'
+    os.close(fd)
+
+    if len(list(EXPORTS_DIR.glob('*.lock'))) > MAX_CONCURRENT_EXPORTS:
+        paths['lock'].unlink(missing_ok=True)
+        return 'busy'
+
+    threading.Thread(
+        target=_build_export_file, args=(book_id, variant, kind, paths), daemon=False
+    ).start()
+    return 'building'
+
+
+def _resolve_export_request(book_id, kind):
+    """Shared by the download and the status route: authorise, then locate the file."""
+    songbook = Songbook.query.get_or_404(book_id)
+    if not can_view_songbook(current_user, songbook):
+        return None, ("Access denied", 403)
+
+    if kind == 'pdf':
+        variant = request.args.get('q', 'small')
+        if variant not in EXPORT_VARIANTS:
+            return None, (jsonify({'error': 'neznámá varianta'}), 400)
+    else:
+        variant = 'orig'  # ZIP se nepřekóduje, varianta kvality pro něj nedává smysl
+
+    sequence = build_songbook_export_sequence(songbook)
+    if len(sequence) > EXPORT_MAX_PAGES:
+        return None, (jsonify({'error': 'zpěvník je příliš velký'}), 413)
+
+    key = songbook_export_key(sequence, variant)
+    return {
+        'songbook': songbook,
+        'variant': variant,
+        'kind': kind,
+        'paths': _export_paths(book_id, variant, kind, key),
+    }, None
+
+
+@app.route('/songbook/<book_id>/export.<kind>')
+@login_required
+def songbook_export(book_id, kind):
+    """Download the songbook, building it in the background on first ask.
+
+    Not synchronous: a gunicorn sync worker only reports liveness between requests, so
+    even a streamed response would not survive the 30s timeout on a long book. The
+    client gets 202 and polls instead.
+    """
+    if kind not in ('pdf', 'zip'):
+        return jsonify({'error': 'neznámý formát'}), 404
+
+    resolved, error = _resolve_export_request(book_id, kind)
+    if error:
+        return error
+
+    paths, songbook = resolved['paths'], resolved['songbook']
+    if paths['final'].exists():
+        return send_file(
+            paths['final'],
+            as_attachment=True,
+            download_name=f"{slugify(songbook.title) or songbook.id}.{kind}",
+            mimetype='application/pdf' if kind == 'pdf' else 'application/zip',
+            conditional=True,
+        )
+
+    state = _start_export_build(book_id, resolved['variant'], kind, paths)
+    return jsonify({'state': state}), 429 if state == 'busy' else 202
+
+
+@app.route('/songbook/<book_id>/export-status/<kind>')
+@login_required
+def songbook_export_status(book_id, kind):
+    if kind not in ('pdf', 'zip'):
+        return jsonify({'error': 'neznámý formát'}), 404
+
+    resolved, error = _resolve_export_request(book_id, kind)
+    if error:
+        return error
+
+    paths = resolved['paths']
+    if paths['final'].exists():
+        return jsonify({'state': 'ready'})
+    if paths['err'].exists():
+        return jsonify({'state': 'error'})
+    if paths['lock'].exists():
+        return jsonify({'state': 'building'})
+    return jsonify({'state': 'idle'})
+
 
 @app.route('/songbook/<book_id>')
 @login_required
@@ -1774,26 +2240,8 @@ def songbook_detail(book_id):
         SongbookPage.page_number.asc(), SongbookPage.id.asc()
     ).all()
 
-    pages_by_song = {}
-    for page in raw_pages:
-        pages_by_song.setdefault(page.song_id, []).append(page.page_number)
-
-    # A page number maps to one image; several short songs can share that one page.
-    image_for_page = {}
-    for song_id, page_numbers in pages_by_song.items():
-        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.id.asc()).all()
-        for offset, page_number in enumerate(sorted(set(page_numbers))):
-            if page_number in image_for_page:
-                continue  # already provided by another song on this same page
-            # A multi-page song has one page per image, in order
-            image_for_page[page_number] = (
-                song_images[offset].image_path if offset < len(song_images) else "blank"
-            )
-
-    pages = [
-        {"file": image_for_page[page_number], "page_number": page_number, "kind": "content"}
-        for page_number in sorted(image_for_page)
-    ]
+    # raw_pages above stays: the table of contents further down still walks it.
+    pages = build_songbook_content_pages(book_id)
 
     def pair_pages(intro_images, pages, outro_images, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
@@ -1958,6 +2406,120 @@ def inject_user_status():
     )
 
 # ---------- CLI PŘÍKAZY ----------
+
+@app.cli.command("export-bench")
+@click.argument("book_id")
+@click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
+@click.option("--keep", is_flag=True, help="nechat vygenerovaný soubor na disku")
+@with_appcontext
+def export_bench(book_id, variant, keep):
+    """Změří generování PDF: čas na stranu, celkový čas, velikost a špičku paměti.
+
+    Existuje proto, aby se o kvalitě a případném zmenšování rozhodovalo z čísel a hlavně
+    aby se to samé dalo spustit na serveru, kde to poběží - tam rozhoduje špička paměti,
+    ne rychlost Macu.
+    """
+    import resource
+
+    songbook = Songbook.query.get(book_id)
+    if not songbook:
+        raise SystemExit(f"❌ zpěvník {book_id} neexistuje")
+
+    sequence = build_songbook_export_sequence(songbook)
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = EXPORTS_DIR / f"bench-{book_id}-{variant}.pdf"
+    out_path.unlink(missing_ok=True)
+
+    # Měří se ta samá funkce, která poběží v provozu - vlastní kopie smyčky by se s ní
+    # dřív nebo později rozešla a měřilo by se něco jiného, než co dělá server.
+    casy = []
+    zacatek = time.time()
+    render_songbook_pdf(sequence, out_path, variant, on_page=casy.append)
+    celkem = time.time() - zacatek
+    casy_ms = sorted(round(c * 1000) for c in casy)
+    velikost = out_path.stat().st_size
+    # ru_maxrss je na Linuxu v kB, na macOS v bajtech
+    maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    maxrss_mb = maxrss / 1024 / 1024 if sys.platform == 'darwin' else maxrss / 1024
+
+    nastaveni = EXPORT_VARIANTS[variant]
+    print(f"zpěvník {book_id}: {len(sequence)} stran, varianta {variant} "
+          f"(q{nastaveni['quality']}, delší hrana "
+          f"{nastaveni['max_edge'] or 'beze změny'})")
+    print(f"  celkem      {celkem:.1f} s")
+    if casy_ms:
+        print(f"  na stranu   min {casy_ms[0]} ms, medián {casy_ms[len(casy_ms) // 2]} ms, "
+              f"max {casy_ms[-1]} ms")
+        # Linearita: kdyby append přepisoval celý soubor, posledních pět stran bude
+        # výrazně pomalejších než prvních pět
+        prvnich5 = sum(casy[:5]) / max(1, len(casy[:5]))
+        poslednich5 = sum(casy[-5:]) / max(1, len(casy[-5:]))
+        print(f"  linearita   prvních 5 {prvnich5 * 1000:.0f} ms, "
+              f"posledních 5 {poslednich5 * 1000:.0f} ms "
+              f"({'lineární' if poslednich5 < prvnich5 * 3 else '⚠️ ROSTE, nejspíš O(n²)'})")
+    print(f"  PDF         {velikost / 1024 / 1024:.1f} MB")
+    print(f"  špička RAM  {maxrss_mb:.0f} MB")
+
+    if not keep:
+        out_path.unlink(missing_ok=True)
+
+
+@app.cli.command("export-warm")
+@click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
+@click.option("--public-only/--all", default=True,
+              help="jen naše veřejné zpěvníky, nebo i uživatelské")
+@with_appcontext
+def export_warm(variant, public_only):
+    """Předpřipraví PDF, aby první stažení nečekalo na skládání.
+
+    Cache je klíčovaná obsahem, takže tenhle příkaz nedělá nic zvláštního - postaví
+    přesně ty soubory, které by jinak vznikly při prvním stažení. Když se zpěvník změní,
+    klíč se změní taky a soubor se prostě přestane používat; stačí příkaz spustit znovu.
+
+    Hodí se po nasazení a po hromadné úpravě veřejných zpěvníků. ZIP se schválně
+    nepředpřipravuje: jeho složení je jen zabalení hotových souborů (naměřeno pod
+    sekundu), zatímco uložený by zabral tolik místa jako všechny obrázky dohromady.
+    """
+    query = Songbook.query
+    if public_only:
+        query = query.filter(Songbook.is_public == 1)
+    songbooks = query.order_by(Songbook.id.asc()).all()
+
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    zacatek = time.time()
+    postaveno = preskoceno = 0
+    celkem_bytu = 0
+
+    for songbook in songbooks:
+        sequence = build_songbook_export_sequence(songbook)
+        if not sequence or len(sequence) > EXPORT_MAX_PAGES:
+            print(f"  {songbook.id}  přeskočeno ({len(sequence)} stran)")
+            continue
+        key = songbook_export_key(sequence, variant)
+        paths = _export_paths(songbook.id, variant, 'pdf', key)
+        if paths['final'].exists():
+            preskoceno += 1
+            celkem_bytu += paths['final'].stat().st_size
+            print(f"  {songbook.id}  už hotové")
+            continue
+
+        t0 = time.time()
+        render_songbook_pdf(sequence, paths['part'], variant)
+        os.replace(paths['part'], paths['final'])
+        _prune_exports(paths['final'], paths['siblings'])
+        velikost = paths['final'].stat().st_size
+        celkem_bytu += velikost
+        postaveno += 1
+        print(f"  {songbook.id}  {len(sequence):>3} stran  "
+              f"{velikost / 1024 / 1024:5.1f} MB  za {time.time() - t0:4.1f} s")
+
+    print(f"\npostaveno {postaveno}, už bylo {preskoceno}, "
+          f"celkem {celkem_bytu / 1024 / 1024:.0f} MB, "
+          f"trvalo {time.time() - zacatek:.0f} s")
+    if celkem_bytu > EXPORTS_TOTAL_LIMIT_BYTES:
+        print(f"⚠️  strop na adresář je {EXPORTS_TOTAL_LIMIT_BYTES / 1024 / 1024:.0f} MB, "
+              f"úklid začne předpřipravené soubory mazat")
+
 
 @app.cli.command("init-db")
 @with_appcontext

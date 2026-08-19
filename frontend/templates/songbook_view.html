@@ -469,6 +469,170 @@
     transform: scale(1.1);
   }
 
+  /* --- Automatické sjíždění --------------------------------------------------
+     Kolečko je v klidu černobílé jako ostatní. Značková barva se objeví, teprve když
+     sjíždění běží - nese informaci "jede to", ne dekoraci. */
+  /* Podržení tlačítka rozbaluje slider, takže se na něm nesmí spustit nic z toho, co
+     dlouhý stisk na telefonu obvykle znamená - nabídka obrázku ani označování textu. */
+  #auto-scroll-toggle {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+
+  #auto-scroll-toggle.running {
+    background: var(--brand, #2E7D32);
+  }
+  #auto-scroll-toggle.running img {
+    filter: brightness(0) invert(1);
+  }
+
+  /* Vysouvá se doprava vedle tlačítka. Tlačítko je 60px, střed tedy 30px od kraje;
+     panel se svisle vystředí na něj. */
+  .speed-panel {
+    position: absolute;
+    left: calc(100% + 12px);
+    top: 50%;
+    /* Otevírá se posunem, ne scaleX. Škálování by po dobu animace vodorovně stlačilo
+       i slider uvnitř, takže by kurzor ukazoval jinam, než kam podle své geometrie patří
+       palec - přesně to vypadá jako "kulička se opožďuje za kurzorem". Posun geometrii
+       ovládacího prvku nedeformuje. */
+    transform: translateY(-50%) translateX(-8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    background: white;
+    border-radius: 30px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    padding: 10px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 230px;
+    /* Bez toho by se dlouhý popisek zalomil a panel by povyrostl do výšky */
+    white-space: nowrap;
+  }
+  .speed-panel.open {
+    transform: translateY(-50%) translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Prvek je vysoký 34px, ale vidět je jen 6px dráha vykreslená přes ::-*-track.
+     Tenká dráha se špatně chytá prstem i rychlou myší, a minutý stisk je jedna z cest,
+     jak tažení skončí dřív, než začne. */
+  .speed-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 34px;
+    background: transparent;
+    outline: none;
+    margin: 0;
+    /* Tažení patří slideru, ne rolování stránky pod ním */
+    touch-action: none;
+  }
+  .speed-slider::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--muted-border, #dbeadf);
+  }
+  .speed-slider::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--muted-border, #dbeadf);
+  }
+  /* Palec musí zůstat velký i na dotyk, i když je dráha tenká */
+  .speed-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--brand, #2E7D32);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    /* Dráha je 6px, palec 22px - bez posunu by seděl na jejím horním okraji */
+    margin-top: -8px;
+  }
+  .speed-slider::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: none;
+    border-radius: 50%;
+    background: var(--brand, #2E7D32);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+
+  .speed-readout {
+    font-size: 13px;
+    color: var(--brand-dark, #1b5e20);
+    text-align: center;
+    font-weight: 600;
+  }
+
+  /* --- Stažení zpěvníku ------------------------------------------------------
+     Vysouvá se doleva, protože tenhle sloupec sedí u pravého kraje okna. */
+  .download-menu {
+    position: absolute;
+    right: calc(100% + 12px);
+    top: 0;
+    transform: translateX(8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 230px;
+    z-index: 600;
+  }
+  .download-menu.open {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* Položky nabídky jsou obdélníky, ne kolečka jako zbytek sloupce - proto se
+     pravidlům pro .mode-buttons button musí přebít tvar i velikost. */
+  .mode-buttons .download-menu button {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+    background: transparent;
+    box-shadow: none;
+    text-align: left;
+    padding: 8px 12px;
+    display: block;
+    cursor: pointer;
+  }
+  .mode-buttons .download-menu button:hover {
+    background: var(--muted-bg, #e8f5e9);
+    transform: none;
+  }
+  .download-menu strong {
+    display: block;
+    font-size: 14px;
+    color: var(--brand-dark, #1b5e20);
+  }
+  .download-menu span {
+    display: block;
+    font-size: 12px;
+    color: #666;
+  }
+  .download-state {
+    display: none;
+    padding: 6px 12px 4px;
+    font-size: 12px;
+    color: var(--brand-dark, #1b5e20);
+  }
+  .download-state.visible { display: block; }
+
   /* Shared fade behaviour for side UI groups */
   .zoom-buttons { opacity: 1; transition: opacity 0.25s ease; }
   .mode-buttons { opacity: 1; transition: opacity 0.25s ease; }
@@ -732,6 +896,30 @@
       <img src="{{ static_bust('img/icons/toc.svg') }}" alt="Obsah">
     </button>
     <div class="tooltip-text">Zobrazit obsah</div>
+  </div>
+
+  {# Stažení celého zpěvníku. Nabídka se vysouvá doleva, protože tenhle sloupec sedí
+     u pravého kraje - doprava by neměla kam. #}
+  <div class="button-container" id="download-button">
+    <button onclick="toggleDownloadMenu(event)" id="download-toggle" aria-expanded="false">
+      <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
+    </button>
+    <div class="tooltip-text" id="download-tooltip">Stáhnout zpěvník</div>
+    <div class="download-menu" id="download-menu" aria-hidden="true">
+      <button type="button" onclick="startDownload('pdf', 'small')">
+        <strong>PDF, menší soubor</strong>
+        <span>pro čtení na telefonu</span>
+      </button>
+      <button type="button" onclick="startDownload('pdf', 'high')">
+        <strong>PDF, plné rozlišení</strong>
+        <span>pro tisk</span>
+      </button>
+      <button type="button" onclick="startDownload('zip', null)">
+        <strong>Obrázky v ZIP</strong>
+        <span>původní kvalita beze změny</span>
+      </button>
+      <div class="download-state" id="download-state"></div>
+    </div>
   </div>
 </div>
 
@@ -1777,6 +1965,388 @@ async function fitDoublePageToViewport() {
   if (!initialDoubleFitDone) {
     initialDoubleFitDone = true;
     initialDoubleFitScheduled = false;
+  }
+}
+
+/* --- Stažení zpěvníku -------------------------------------------------------------
+   Server na první požádání odpoví 202 a začne soubor skládat na pozadí. Synchronně to
+   nejde: gunicorn hlásí životnost workeru až mezi požadavky, takže dlouhý zpěvník by
+   spadl na třicetisekundovém timeoutu ještě před dokončením. Klient se proto ptá. */
+const DOWNLOAD_BOOK_ID = {{ book_id | tojson }};
+
+function toggleDownloadMenu(event) {
+  if (event) event.stopPropagation();
+  const menu = document.getElementById('download-menu');
+  const open = menu.classList.toggle('open');
+  menu.setAttribute('aria-hidden', open ? 'false' : 'true');
+  document.getElementById('download-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function setDownloadState(text) {
+  const el = document.getElementById('download-state');
+  el.textContent = text || '';
+  el.classList.toggle('visible', !!text);
+}
+
+async function startDownload(kind, variant) {
+  const query = kind === 'pdf' ? `?q=${variant}` : '';
+  const url = `/songbook/${encodeURIComponent(DOWNLOAD_BOOK_ID)}/export.${kind}${query}`;
+  setDownloadState('Připravuji…');
+
+  try {
+    const response = await fetch(url, { headers: { 'Accept': 'application/pdf, application/zip' } });
+    // Výhradně 200, ne response.ok: to je pravdivé i pro 202, tedy "začal jsem to
+    // skládat" - a na tom se dá odnavigovat na JSON místo stažení souboru.
+    if (response.status === 200) {
+      setDownloadState('');
+      window.location = url; // hotové, server ho vydá ze své cache
+      return;
+    }
+    if (response.status === 429) {
+      setDownloadState('Server teď skládá jiný zpěvník, zkus to za chvíli.');
+      return;
+    }
+    if (response.status === 413) {
+      setDownloadState('Zpěvník je na stažení příliš velký.');
+      return;
+    }
+    if (response.status !== 202) {
+      setDownloadState('Stažení se nepovedlo.');
+      return;
+    }
+  } catch (e) {
+    setDownloadState('Stažení se nepovedlo.');
+    return;
+  }
+
+  // Skládá se. Zprvu se ptáme často, po chvíli řidčeji - u velkého zpěvníku nemá smysl
+  // bušit na server každé dvě vteřiny několik minut v kuse.
+  // Varianta musí být i tady. Bez ní se stav ptal vždycky za tu menší, a když už ta
+  // hotová byla, odpověděl "ready" a klient odnavigoval na plnou, která se ještě
+  // stavěla - skončilo to na JSONu {"state":"building"} místo staženého souboru.
+  const statusUrl = `/songbook/${encodeURIComponent(DOWNLOAD_BOOK_ID)}/export-status/${kind}${query}`;
+  const zacatek = Date.now();
+  const dotaz = async () => {
+    const uplynulo = Date.now() - zacatek;
+    if (uplynulo > 5 * 60 * 1000) {
+      setDownloadState('Trvá to podezřele dlouho, zkus to prosím znovu.');
+      return;
+    }
+    let stav = 'building';
+    try {
+      const r = await fetch(statusUrl);
+      stav = (await r.json()).state;
+    } catch (e) {
+      stav = 'error';
+    }
+    if (stav === 'ready') {
+      setDownloadState('');
+      window.location = url;
+      return;
+    }
+    if (stav === 'error') {
+      setDownloadState('Skládání souboru selhalo.');
+      return;
+    }
+    if (stav === 'idle') {
+      // Nikdo to nestaví a hotové to není: soubor mezitím zmizel, třeba když se uklízelo
+      // místo. Bez tohohle se tu čekalo na něco, co už nikdy nepřijde, až do stropu.
+      fetch(url).catch(() => {});
+    }
+    setDownloadState(`Připravuji… ${Math.round(uplynulo / 1000)} s`);
+    setTimeout(dotaz, uplynulo > 40000 ? 5000 : 2000);
+  };
+  setTimeout(dotaz, 1500);
+}
+
+document.addEventListener('click', (event) => {
+  if (event.target.closest('#download-button')) return;
+  const menu = document.getElementById('download-menu');
+  if (menu && menu.classList.contains('open')) toggleDownloadMenu();
+});
+
+/* --- Automatické sjíždění v rolovacím módu ----------------------------------------
+   Rychlost se drží v sekundách na stranu, ne v pixelech za sekundu. Pixely by po
+   každém přiblížení znamenaly něco jiného a na telefonu něco jiného než na notebooku;
+   "strana za 45 s" znamená všude totéž. Na pixely se to přepočítá až v okamžiku
+   posunu, podle toho, jak je strana zrovna vysoká. */
+const AUTO_SCROLL_SLOWEST_S = 180; // sekund na stranu na levém konci slideru
+const AUTO_SCROLL_FASTEST_S = 12;  // a na pravém
+const AUTO_SCROLL_STORAGE_KEY = 'zpevnik-auto-scroll-speed';
+
+let autoScrollRunning = false;
+let autoScrollFrame = null;
+let autoScrollLastTs = 0;
+// Vlastní poloha v desetinných číslech. Dřív se hromadily zlomky a scrollTop se posouval
+// po celých pixelech, takže na pomalých rychlostech (7 px/s) stránka poskočila o pixel
+// jednou za osm snímků - viditelné cukání. scrollTop desetinná čísla přijímá, takže krok
+// je teď omezený až rozlišením obrazovky, ne celým pixelem.
+let autoScrollPosition = 0;
+let autoScrollDragging = false; // drží se palec slideru? pak se nic neschovává
+let autoScrollPointerId = null; // který ukazatel slider zachytil, ať jde uvolnit i nouzově
+
+function autoScrollSecondsPerPage(sliderValue) {
+  // Geometricky, ne lineárně: mezi 12 a 20 sekundami je poznat velký rozdíl, mezi
+  // 170 a 180 žádný. Lineární slider by měl polovinu dráhy k ničemu.
+  const t = Math.max(0, Math.min(100, sliderValue)) / 100;
+  return AUTO_SCROLL_SLOWEST_S * Math.pow(AUTO_SCROLL_FASTEST_S / AUTO_SCROLL_SLOWEST_S, t);
+}
+
+function autoScrollPageHeight() {
+  // Výška jedné strany tak, jak je zrovna vykreslená - tedy včetně zoomu.
+  const img = document.querySelector('#scroll-mode img');
+  const measured = img ? img.getBoundingClientRect().height : 0;
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  // Než se obrázky načtou, padáme zpět na výšku okna, ať se nikdy nedělí nulou
+  return measured > 20 ? measured : Math.max(200, wrapper ? wrapper.clientHeight : 600);
+}
+
+function updateAutoScrollReadout() {
+  const slider = document.getElementById('auto-scroll-speed');
+  const readout = document.getElementById('auto-scroll-readout');
+  if (!slider || !readout) return;
+  const seconds = autoScrollSecondsPerPage(parseFloat(slider.value));
+  readout.textContent = `1 strana / ${Math.round(seconds)} s`;
+}
+
+function autoScrollStep(timestamp) {
+  if (!autoScrollRunning) return;
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  const slider = document.getElementById('auto-scroll-speed');
+  if (!wrapper || !slider) return stopAutoScroll();
+
+  if (!autoScrollLastTs) autoScrollLastTs = timestamp;
+  // Přepnutí na jiný panel nebo uspání telefonu jinak nasčítá obří skok
+  const elapsed = Math.min(100, timestamp - autoScrollLastTs);
+  autoScrollLastTs = timestamp;
+
+  const pxPerSecond = autoScrollPageHeight() / autoScrollSecondsPerPage(parseFloat(slider.value));
+
+  // Kdyby mezitím posunul stránkou člověk (prstem, kolečkem), navážeme tam, kde je
+  const skutecna = wrapper.scrollTop;
+  if (Math.abs(skutecna - autoScrollPosition) > 2) autoScrollPosition = skutecna;
+
+  autoScrollPosition += (pxPerSecond * elapsed) / 1000;
+  const konec = wrapper.scrollHeight - wrapper.clientHeight;
+  if (autoScrollPosition >= konec) {
+    wrapper.scrollTop = konec;
+    return stopAutoScroll(); // konec zpěvníku, dál to nejde
+  }
+  // Rolování se drží mřížky celých pixelů, takže při 7 px/s stránka stojí sedm snímků
+  // a osmý poskočí. Celou část posunu proto obstará scrollTop a zlomek pixelu dorovná
+  // posun obsahu - ten prohlížeč vykreslí podpixelově a cukání zmizí.
+  const cely = Math.floor(autoScrollPosition);
+  wrapper.scrollTop = cely;
+  const obsah = document.getElementById('scroll-mode');
+  if (obsah) obsah.style.transform = `translateY(${-(autoScrollPosition - cely).toFixed(3)}px)`;
+  autoScrollFrame = requestAnimationFrame(autoScrollStep);
+}
+
+function startAutoScroll() {
+  if (autoScrollRunning) return;
+  autoScrollRunning = true;
+  autoScrollLastTs = 0;
+  const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  autoScrollPosition = wrapper ? wrapper.scrollTop : 0;
+  const button = document.getElementById('auto-scroll-toggle');
+  const icon = document.getElementById('auto-scroll-icon');
+  const tooltip = document.getElementById('auto-scroll-tooltip');
+  if (button) { button.classList.add('running'); button.setAttribute('aria-pressed', 'true'); }
+  if (icon) icon.src = AUTO_SCROLL_ICON_PAUSE;
+  if (tooltip) tooltip.textContent = 'Zastavit sjíždění';
+  autoScrollFrame = requestAnimationFrame(autoScrollStep);
+}
+
+function stopAutoScroll() {
+  autoScrollRunning = false;
+  if (autoScrollFrame) cancelAnimationFrame(autoScrollFrame);
+  autoScrollFrame = null;
+  // Podpixelové dorovnání patří jen k běžícímu sjíždění
+  const obsah = document.getElementById('scroll-mode');
+  if (obsah) obsah.style.transform = '';
+  const button = document.getElementById('auto-scroll-toggle');
+  const icon = document.getElementById('auto-scroll-icon');
+  const tooltip = document.getElementById('auto-scroll-tooltip');
+  if (button) { button.classList.remove('running'); button.setAttribute('aria-pressed', 'false'); }
+  if (icon) icon.src = AUTO_SCROLL_ICON_CLOCK;
+  if (tooltip) tooltip.textContent = 'Automatické sjíždění';
+}
+
+function openSpeedPanel() {
+  const panel = document.getElementById('auto-scroll-panel');
+  if (!panel) return;
+  panel.classList.add('open');
+  panel.setAttribute('aria-hidden', 'false');
+}
+
+function closeSpeedPanel() {
+  const panel = document.getElementById('auto-scroll-panel');
+  if (!panel) return;
+  panel.classList.remove('open');
+  panel.setAttribute('aria-hidden', 'true');
+}
+
+// Tlačítko je součástí sloupce a mizí s ním. Navíc má dva stavy, zabalený a rozbalený:
+// rozbalí ho jedině spuštění sjíždění nebo najetí na pauzu, když už jede. Zastavení a
+// schování sloupce ho zase zabalí, takže po každém opětovném zobrazení začíná bez
+// slideru - stejně, jako by tam žádný nebyl.
+function toggleAutoScroll() {
+  if (autoScrollRunning) {
+    stopAutoScroll();
+    closeSpeedPanel();
+  } else {
+    startAutoScroll();
+    openSpeedPanel();
+  }
+}
+
+function initAutoScroll() {
+  const slider = document.getElementById('auto-scroll-speed');
+  if (!slider) return;
+  let saved = null;
+  try { saved = localStorage.getItem(AUTO_SCROLL_STORAGE_KEY); } catch (e) { /* private mode */ }
+  if (saved !== null && !Number.isNaN(parseFloat(saved))) slider.value = saved;
+  updateAutoScrollReadout();
+
+  // Tažení si řídíme sami. Firefox u rozsahového vstupu napodobuje systémový posuvník:
+  // když se kurzor při tažení dostane moc daleko od dráhy, tažení zruší a vrátí hodnotu,
+  // kterou měl slider před stiskem. Při pomalém tažení se práh nepřekročí, ale rychlý
+  // hod pošle kurzor daleko mezi dvěma událostmi a hodnota spadne zpátky na začátek.
+  // (Zachyceno v protokolu událostí: poslední "input" před puštěním nesl původní
+  // hodnotu, kterou tam nezapsal žádný náš kód.) Pozice se proto přepočítává jen
+  // z vodorovné souřadnice - svislá vzdálenost od dráhy nehraje roli, což je i to,
+  // co člověk při tažení čeká.
+  
+  function hodnotaZPozice(clientX) {
+    const r = slider.getBoundingClientRect();
+    const min = parseFloat(slider.min) || 0;
+    const max = parseFloat(slider.max) || 100;
+    const krok = parseFloat(slider.step) || 1;
+    // Palec má šířku, takže krajní hodnoty leží o půl palce od okrajů dráhy - bez
+    // toho by na konce slideru nešlo dosáhnout.
+    const palec = 22;
+    const draha = Math.max(1, r.width - palec);
+    const podil = Math.min(1, Math.max(0, (clientX - r.left - palec / 2) / draha));
+    const surova = min + podil * (max - min);
+    return Math.min(max, Math.max(min, Math.round(surova / krok) * krok));
+  }
+
+  function nastavZPozice(clientX) {
+    const nova = String(hodnotaZPozice(clientX));
+    if (nova === slider.value) return;
+    slider.value = nova;
+    slider.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  slider.addEventListener('pointerdown', (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    // Zabrání tomu, aby se rozjelo vlastní tažení prohlížeče, které bychom pak
+    // přebíjeli - a hlavně tomu, aby mohlo být zrušeno se svým návratem na začátek.
+    event.preventDefault();
+    autoScrollDragging = true;
+    autoScrollPointerId = event.pointerId;
+    slider.focus();
+    // Odjetí kurzoru z panelu při tažení jinak nastartuje odpočet skrývání
+    document.dispatchEvent(new CustomEvent('auto-scroll-drag-start'));
+    try { slider.setPointerCapture(event.pointerId); } catch (e) { /* starý prohlížeč */ }
+    nastavZPozice(event.clientX);
+  });
+
+  slider.addEventListener('pointermove', (event) => {
+    if (autoScrollDragging) nastavZPozice(event.clientX);
+  });
+
+  const dokonciTazeni = (event) => {
+    if (!autoScrollDragging) return;
+    autoScrollDragging = false;
+    if (event && event.clientX !== undefined) nastavZPozice(event.clientX);
+    // Nouzová cesta nemá vlastní událost, tak se uvolní ten ukazatel, který se zachytil
+    const id = (event && event.pointerId !== undefined) ? event.pointerId : autoScrollPointerId;
+    try { if (id !== null) slider.releasePointerCapture(id); } catch (e) { /* ignore */ }
+    autoScrollPointerId = null;
+    slider.dispatchEvent(new Event('change', { bubbles: true }));
+    document.dispatchEvent(new CustomEvent('auto-scroll-drag-end'));
+  };
+  slider.addEventListener('pointerup', dokonciTazeni);
+  slider.addEventListener('pointercancel', dokonciTazeni);
+  // Kdyby prohlížeč zachycení přesto sebral, tažení skončí tam, kde bylo - ne na začátku
+  slider.addEventListener('lostpointercapture', () => { autoScrollDragging = false; });
+
+  // Záchranná síť. Když se puštění ke slideru nedostane - myš pustíš mimo okno,
+  // prohlížeč zachycení zahodí, přepneš se na jinou aplikaci - zůstalo by tažení
+  // navždy "probíhající". To má dva viditelné následky: sloupec tlačítek se pak
+  // nikdy neschová, protože skrývání se během tažení donekonečna odkládá, a ukazatel
+  // zůstane zachycený u slideru, takže po celé obrazovce ukazuje jeho kurzor a nic
+  // jiného nereaguje. Odsud to vypadá, jako by celá stránka byla jedno tlačítko.
+  const nouzovyKonec = (event) => {
+    if (!autoScrollDragging) return;
+    dokonciTazeni(event || {});
+  };
+  window.addEventListener('pointerup', nouzovyKonec);
+  window.addEventListener('pointercancel', nouzovyKonec);
+  window.addEventListener('blur', () => nouzovyKonec(null));
+  // Puštění tlačítka mimo okno prohlížeče nepošle pointerup vůbec, ale příští pohyb
+  // myši už přijde s prázdným seznamem stisknutých tlačítek.
+  window.addEventListener('pointermove', (event) => {
+    if (autoScrollDragging && event.buttons === 0) nouzovyKonec(event);
+  });
+
+  slider.addEventListener('input', updateAutoScrollReadout);
+  // Zapisuje se až na konci tažení, ne při každém pohybu. localStorage je synchronní
+  // a desítky zápisů za vteřinu jsou práce navíc přesně v okamžiku, kdy má být plynulo.
+  slider.addEventListener('change', () => {
+    updateAutoScrollReadout();
+    try { localStorage.setItem(AUTO_SCROLL_STORAGE_KEY, slider.value); } catch (e) { /* ignore */ }
+  });
+
+  // Najetím se rychlost ukáže, odjetím schová. Panel leží uvnitř #auto-scroll-button,
+  // takže přejezd z tlačítka na slider není odjetí a nic se nezavírá.
+  // Najetí rozbalí jen tehdy, když sjíždění běží - tedy když je pod kurzorem pauza.
+  // Na zastavených hodinkách není co nastavovat, tam rozbalení jen překáží.
+  // Odjetí nezabaluje: rozbalený stav drží, dokud se sjíždění nezastaví nebo dokud
+  // nezmizí celý sloupec. Kdyby zabalovalo odjetí, slider by utekl pokaždé, když se
+  // od něj hne ruka - a po puštění tažení taky, protože prohlížeč pošle mouseleave
+  // až po uvolnění zachyceného ukazatele, kdy už tažení neběží.
+  const obal = document.getElementById('auto-scroll-button');
+  if (obal) {
+    obal.addEventListener('pointerenter', (event) => {
+      // Jen skutečná myš: po ťuknutí prstem zůstane na tlačítku zavěšený hover, který
+      // by panel rozbaloval sám od sebe. Na dotyku slouží k rozbalení podržení.
+      if (event.pointerType && event.pointerType !== 'mouse') return;
+      if (autoScrollRunning) openSpeedPanel();
+    });
+  }
+
+  // Na dotykové obrazovce žádné najetí neexistuje, takže by za běhu nebylo jak se ke
+  // slideru dostat - ťuknutí sjíždění zastaví. Podržení proto dělá totéž co najetí:
+  // rozbalí panel a ťuknutí, které by jinak následovalo, se zahodí.
+  const tlacitko = document.getElementById('auto-scroll-toggle');
+  if (tlacitko) {
+    let stiskCasovac = null;
+    let bylDlouhyStisk = false;
+    const DLOUHY_STISK_MS = 450;
+
+    tlacitko.addEventListener('pointerdown', () => {
+      bylDlouhyStisk = false;
+      clearTimeout(stiskCasovac);
+      stiskCasovac = setTimeout(() => {
+        // Na zastavených hodinkách není co nastavovat; tam ťuknutí spustí a rozbalí samo
+        if (!autoScrollRunning) return;
+        bylDlouhyStisk = true;
+        openSpeedPanel();
+      }, DLOUHY_STISK_MS);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(typ => {
+      tlacitko.addEventListener(typ, () => clearTimeout(stiskCasovac));
+    });
+
+    tlacitko.addEventListener('click', () => {
+      if (bylDlouhyStisk) {
+        bylDlouhyStisk = false;
+        return; // podržení rozbaluje, nepauzuje
+      }
+      toggleAutoScroll();
+    });
   }
 }
 
