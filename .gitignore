@@ -34,4 +34,8 @@ backend/scripts/downsize_images.py
 
 # Screenshoty UI (generovane backend/scripts/screenshot_ui.py)
 ui-shots/
-data/exports/
+
+# Obsah zpěvníků do gitu nepatří. Zdrojem pravdy je server: zpěvníky vytvořené přes web
+# existují jen tam, takže verzovaná kopie stejně nikdy nebyla úplná a jen se rozcházela.
+# Bylo to 1253 obrázků a 816 MB v historii.
+data/
