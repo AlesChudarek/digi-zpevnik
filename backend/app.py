@@ -1889,9 +1889,14 @@ def build_songbook_export_sequence(songbook):
     Deliberately different from what the reader renders:
       - no double-page pairing and no first_page_side offset. Which page falls on the
         left is a property of the viewer, not of the document.
-      - a cover that does not exist is skipped rather than replaced by a blank sheet.
       - "blank" inside the content is kept and drawn as an empty page, so printed page
         numbers still line up.
+
+    Chybějící část obálky se doplní prázdnou stranou v barvě zpěvníku, stejně jako to
+    dělá čtečka. Dřív se přeskakovala, jenže obálka je složený list: vynechat jednu její
+    stranu znamená posunout všechny dvoustrany a vytisknout něco, co se nedá složit.
+    Prázdná vnitřní strana obálky navíc nemusí být soubor - jednolitá barevná plocha se
+    dá nakreslit, a na rozdíl od obrázku se přebarví spolu se zpěvníkem.
 
     This is the only place the export learns where pages come from. When PDF import
     lands, "use the archived source page instead of the image" belongs here and the
@@ -1902,12 +1907,20 @@ def build_songbook_export_sequence(songbook):
     # Musí ji tedy sem dostat i export, jinak PDF složí alfu na bílou a obálka zbělá.
     barva_obalky = getattr(songbook, 'color', None) or '#FFFFFF'
 
+    # Stejné pravidlo jako ve čtečce: buď zpěvník obálku má a pak má všechny čtyři její
+    # strany, nebo ji nemá vůbec a nedoplňuje se nic.
+    ma_obalku = any([
+        songbook.img_path_cover_front_outer, songbook.img_path_cover_front_inner,
+        songbook.img_path_cover_back_inner, songbook.img_path_cover_back_outer,
+    ])
+
     def add(rel_path, kind):
-        if rel_path:
-            item = {"file": rel_path, "kind": kind}
-            if kind == "cover":
-                item["bg"] = barva_obalky
-            sequence.append(item)
+        if kind == "cover":
+            if not ma_obalku:
+                return
+            sequence.append({"file": rel_path or "blank", "kind": kind, "bg": barva_obalky})
+        elif rel_path:
+            sequence.append({"file": rel_path, "kind": kind})
 
     add(songbook.img_path_cover_front_outer, "cover")
     add(songbook.img_path_cover_front_inner, "cover")
