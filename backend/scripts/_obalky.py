@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageStat
 
 SLOTY = [
     ('img_path_cover_front_outer', 'coverfrontout'),
@@ -24,8 +24,12 @@ SLOTY = [
 ]
 
 TOLERANCE = 8         # o kolik se smí barva lišit, aby platila za shodnou
-PODIL_OKRAJE = 99.0   # kolik procent okraje musí být v barvě zpěvníku, aby pozadí bylo jednolité
 PODIL_ALFY = 0.10     # od kolika průhledných pixelů považujeme obrázek za průhledný
+
+# Průhledná varianta se přijme, když složená na barvu zpěvníku vypadá jako barevný originál.
+# Naměřený rozptyl u dobrých dvojic je 1,05 až 4,52; dvojice, kde barva nesedí, vychází přes
+# 80. Práh 6 tedy leží v prázdném pásmu mezi tím.
+PRAH_ODCHYLKY = 6.0
 
 # Průhledná varianta bývá v jiném rozlišení než barevný originál - jsou to naskenované
 # předlohy, které někdo cestou zmenšil. Rozhoduje proto tvar, ne počet pixelů: když sedí
@@ -68,22 +72,25 @@ def je_cely_v_barve(img, barva_rgb) -> bool:
     return max(kanal[1] for kanal in rozdil.getextrema()) <= TOLERANCE
 
 
-def podil_okraje_v_barve(img, barva_rgb) -> float:
-    """Kolik procent obvodu je v toleranci dané barvy.
+def odchylka_po_slozeni(cesta_t: Path, original, barva_rgb) -> float:
+    """Průměrná odchylka průhledné varianty složené na barvu zpěvníku od originálu.
 
-    Schválně ne "kolik procent má přesně jednu barvu": naskenovaná plocha má šum, takže
-    okraj bývá rozsypaný do desítek hodnot kolem té správné. Přesná shoda tak u zpěvníků
-    15 a 17 hlásila 71 a 68 procent, přestože je ten okraj na pohled jednolitý.
+    Tohle je ta otázka, na které záleží: vypadá to po složení stejně? Dřív se místo toho
+    zkoumalo, jestli je okraj originálu jednolitý, což je jen náhražka - a špatná. Obálka
+    17 má podél pravého kraje tmavý proužek ze skenu, takže tím testem propadla, přestože
+    její průhledná varianta sedí líp než čtyři jiné, které prošly.
+
+    Přímé srovnání navíc nahrazuje i kontrolu barvy: když se barva zpěvníku s pozadím
+    originálu rozchází, odchylka vyskočí o řád.
     """
-    w, h = img.size
-    v_barve = celkem = 0
-    for vyrez in (img.crop((0, 0, w, 1)), img.crop((0, h - 1, w, h)),
-                  img.crop((0, 0, 1, h)), img.crop((w - 1, 0, w, h))):
-        for pocet, barva in (vyrez.getcolors(maxcolors=1 << 24) or []):
-            celkem += pocet
-            if max(abs(a - b) for a, b in zip(barva, barva_rgb)) <= TOLERANCE:
-                v_barve += pocet
-    return v_barve / celkem * 100 if celkem else 0.0
+    with Image.open(cesta_t) as im:
+        im.load()
+        t = im.convert('RGBA')
+        if t.size != original.size:
+            t = t.resize(original.size, Image.LANCZOS)
+    slozene = Image.new('RGB', original.size, barva_rgb)
+    slozene.paste(t, mask=t.split()[-1])
+    return sum(ImageStat.Stat(ImageChops.difference(original, slozene)).mean) / 3
 
 
 def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
@@ -92,7 +99,7 @@ def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
     kreslená        v DB prázdno, čtečka i export dokreslí barvou
     prázdná         soubor je celý v barvě zpěvníku, dá se zahodit
     průhledná       už dnes má alfu
-    půjde průhledná vedle leží T varianta se stejným tvarem a pozadím v barvě zpěvníku
+    půjde průhledná vedle leží T varianta, která po složení na barvu vypadá jako originál
     neprůhledná     plná grafika bez průhledné varianty, barvu následovat nebude
     chybí soubor    v DB je cesta, ale soubor tam není
     """
@@ -115,8 +122,10 @@ def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
     if t.exists():
         with Image.open(t) as im:
             rozmer_t = im.size
+        # Poměr stran jako levná pojistka: obrázek jiného tvaru by se škálováním zkreslil
+        # a srovnávat by se nemělo co.
         if abs(rozmer[0] / rozmer[1] - rozmer_t[0] / rozmer_t[1]) <= POMER_TOLERANCE:
-            if podil_okraje_v_barve(slozeny, barva_rgb) >= PODIL_OKRAJE:
+            if odchylka_po_slozeni(t, slozeny, barva_rgb) <= PRAH_ODCHYLKY:
                 return 'půjde průhledná'
     return 'neprůhledná'
 
