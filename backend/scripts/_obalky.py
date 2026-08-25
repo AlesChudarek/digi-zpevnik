@@ -25,6 +25,11 @@ TOLERANCE = 8         # o kolik se smí barva lišit, aby platila za shodnou
 PODIL_OKRAJE = 99.0   # kolik procent okraje musí být jedna barva, aby pozadí bylo jednolité
 PODIL_ALFY = 0.10     # od kolika průhledných pixelů považujeme obrázek za průhledný
 
+# Průhledná varianta bývá v jiném rozlišení než barevný originál - jsou to naskenované
+# předlohy, které někdo cestou zmenšil. Rozhoduje proto tvar, ne počet pixelů: když sedí
+# poměr stran, je to tentýž obrázek a čtečka i PDF si ho stejně škálují do své plochy.
+POMER_TOLERANCE = 0.005
+
 # Slot buď barvu zpěvníku následuje, nebo ne. Tohle je ta hranice.
 NASLEDUJE_BARVU = {'kreslená', 'prázdná', 'průhledná', 'půjde průhledná'}
 
@@ -57,7 +62,7 @@ def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
     kreslená        v DB prázdno, čtečka i export dokreslí barvou
     prázdná         soubor je celý v barvě zpěvníku, dá se zahodit
     průhledná       už dnes má alfu
-    půjde průhledná vedle leží T varianta, která projde kontrolou
+    půjde průhledná vedle leží T varianta se stejným tvarem a pozadím v barvě zpěvníku
     neprůhledná     plná grafika bez průhledné varianty, barvu následovat nebude
     chybí soubor    v DB je cesta, ale soubor tam není
     """
@@ -82,7 +87,9 @@ def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
     if t.exists():
         with Image.open(t) as im:
             rozmer_t = im.size
-        if rozmer_t == rozmer:
+        pomer = rozmer[0] / rozmer[1]
+        pomer_t = rozmer_t[0] / rozmer_t[1]
+        if abs(pomer - pomer_t) <= POMER_TOLERANCE:
             okraj = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]).reshape(-1, 3)
             barvy, pocty = np.unique(okraj, axis=0, return_counts=True)
             dominantni = barvy[pocty.argmax()]
