@@ -1898,10 +1898,16 @@ def build_songbook_export_sequence(songbook):
     renderer will not have to change.
     """
     sequence = []
+    # Obálka smí být průhledná, aby šla barva zpěvníku měnit bez překreslování obrázku.
+    # Musí ji tedy sem dostat i export, jinak PDF složí alfu na bílou a obálka zbělá.
+    barva_obalky = getattr(songbook, 'color', None) or '#FFFFFF'
 
     def add(rel_path, kind):
         if rel_path:
-            sequence.append({"file": rel_path, "kind": kind})
+            item = {"file": rel_path, "kind": kind}
+            if kind == "cover":
+                item["bg"] = barva_obalky
+            sequence.append(item)
 
     add(songbook.img_path_cover_front_outer, "cover")
     add(songbook.img_path_cover_front_inner, "cover")
@@ -1927,18 +1933,34 @@ def build_songbook_export_sequence(songbook):
     return sequence
 
 
-def _flatten_to_rgb(image):
-    """Drop the alpha channel onto white.
+def _hex_to_rgb(hex_color, default=(255, 255, 255)):
+    """#rgb nebo #rrggbb na trojici. Cokoliv nečitelného vrací default."""
+    h = (hex_color or '').strip().lstrip('#')
+    if len(h) == 3:
+        h = ''.join(c * 2 for c in h)
+    if len(h) != 6:
+        return default
+    try:
+        return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+    except ValueError:
+        return default
+
+
+def _flatten_to_rgb(image, background=(255, 255, 255)):
+    """Drop the alpha channel onto a solid background.
 
     Every scanned page is stored as RGBA and PDF has no plain alpha: left as it is, the
-    pages come out on a black background. White rather than a transparency mask, because
-    an SMask inflates the file and prints unpredictably.
+    pages come out on a black background. A solid fill rather than a transparency mask,
+    because an SMask inflates the file and prints unpredictably.
+
+    Bílá platí pro vnitřní strany. Obálka dostane barvu zpěvníku - ta je u průhledné
+    obálky jediné, co ji odlišuje, a čtečka ji pod obálku kreslí taky.
     """
     if image.mode == 'RGB':
         return image
     if image.mode not in ('RGBA', 'LA', 'PA'):
         image = image.convert('RGBA')
-    canvas = Image.new('RGB', image.size, (255, 255, 255))
+    canvas = Image.new('RGB', image.size, background)
     canvas.paste(image, mask=image.split()[-1])
     return canvas
 
@@ -1962,20 +1984,25 @@ def songbook_export_key(sequence, variant):
         except OSError:
             stat = None
         digest.update(f"|{stat.st_mtime_ns if stat else 0}|{stat.st_size if stat else 0}\n".encode())
+        # Barva se propisuje do pixelů průhledné obálky, takže její změna musí dát jiný
+        # klíč. Bez tohohle by po přebarvení zpěvníku zůstalo viset staré PDF.
+        digest.update(f"|{item.get('bg') or ''}\n".encode())
     return digest.hexdigest()[:16]
 
 
-def _open_export_page(rel_path):
+def _open_export_page(item):
     """One page as an RGB image. A missing file must not sink the whole export."""
+    rel_path = item['file']
+    pozadi = _hex_to_rgb(item.get('bg'))
     abs_path = None if rel_path == 'blank' else _abs_image_path(rel_path)
     if abs_path is None or not abs_path.exists():
-        return Image.new('RGB', PAGE_PX, (255, 255, 255))
+        return Image.new('RGB', PAGE_PX, pozadi)
     with Image.open(abs_path) as raw:
         # Načíst pixely, dokud je soubor otevřený. U stran s alfou je stáhne až
-        # skládání na bílou, ale strana, která je rovnou RGB, se vrací tak jak je -
+        # skládání na pozadí, ale strana, která je rovnou RGB, se vrací tak jak je -
         # a po zavření souboru by z ní nešlo číst.
         raw.load()
-        return _flatten_to_rgb(raw)
+        return _flatten_to_rgb(raw, pozadi)
 
 
 def render_songbook_pdf(sequence, out_path, variant, on_page=None):
@@ -1996,7 +2023,7 @@ def render_songbook_pdf(sequence, out_path, variant, on_page=None):
     first = True
     for item in sequence:
         started = time.time()
-        page = _open_export_page(item['file'])
+        page = _open_export_page(item)
         if max_edge and max(page.size) > max_edge:
             page.thumbnail((max_edge, max_edge), Image.LANCZOS)
         width, height = page.size
