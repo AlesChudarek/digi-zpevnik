@@ -5,14 +5,16 @@ podporují všechny čtyři strany, nebo žádná - poloviční stav by znamenal
 změní jen některé z nich a obálka přestane držet pohromadě.
 
 Proto se tady nejdřív každý slot zařadí a teprve pak se rozhodne o celém zpěvníku.
+
+Schválně jen Pillow, bez numpy: oba skripty musí jít pustit i na serveru, a ten má 1 GB
+RAM a numpy tam není. Pillow tam je, protože na něm stojí aplikace.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-import numpy as np
-from PIL import Image
+from PIL import Image, ImageChops
 
 SLOTY = [
     ('img_path_cover_front_outer', 'coverfrontout'),
@@ -22,7 +24,7 @@ SLOTY = [
 ]
 
 TOLERANCE = 8         # o kolik se smí barva lišit, aby platila za shodnou
-PODIL_OKRAJE = 99.0   # kolik procent okraje musí být jedna barva, aby pozadí bylo jednolité
+PODIL_OKRAJE = 99.0   # kolik procent okraje musí být v barvě zpěvníku, aby pozadí bylo jednolité
 PODIL_ALFY = 0.10     # od kolika průhledných pixelů považujeme obrázek za průhledný
 
 # Průhledná varianta bývá v jiném rozlišení než barevný originál - jsou to naskenované
@@ -46,14 +48,42 @@ def hex_na_rgb(h, default=(255, 255, 255)):
         return default
 
 
-def slozit_na(cesta: Path, barva_rgb):
+def podil_pruhlednych(im) -> float:
+    """Jaká část plochy není plně neprůhledná. Přes histogram, ať se nečte pixel po pixelu."""
+    histogram = im.convert('RGBA').getchannel('A').histogram()
+    celkem = sum(histogram)
+    return sum(histogram[:255]) / celkem if celkem else 0.0
+
+
+def slozit_na(im, barva_rgb):
     """Obrázek složený na danou barvu, jako to dělá čtečka i export."""
-    with Image.open(cesta) as im:
-        im.load()
-        plocha = Image.new('RGB', im.size, barva_rgb)
-        rgba = im.convert('RGBA')
-        plocha.paste(rgba, mask=rgba.split()[-1])
-        return np.asarray(plocha), im.size
+    plocha = Image.new('RGB', im.size, barva_rgb)
+    rgba = im.convert('RGBA')
+    plocha.paste(rgba, mask=rgba.split()[-1])
+    return plocha
+
+
+def je_cely_v_barve(img, barva_rgb) -> bool:
+    rozdil = ImageChops.difference(img, Image.new('RGB', img.size, barva_rgb))
+    return max(kanal[1] for kanal in rozdil.getextrema()) <= TOLERANCE
+
+
+def podil_okraje_v_barve(img, barva_rgb) -> float:
+    """Kolik procent obvodu je v toleranci dané barvy.
+
+    Schválně ne "kolik procent má přesně jednu barvu": naskenovaná plocha má šum, takže
+    okraj bývá rozsypaný do desítek hodnot kolem té správné. Přesná shoda tak u zpěvníků
+    15 a 17 hlásila 71 a 68 procent, přestože je ten okraj na pohled jednolitý.
+    """
+    w, h = img.size
+    v_barve = celkem = 0
+    for vyrez in (img.crop((0, 0, w, 1)), img.crop((0, h - 1, w, h)),
+                  img.crop((0, 0, 1, h)), img.crop((w - 1, 0, w, h))):
+        for pocet, barva in (vyrez.getcolors(maxcolors=1 << 24) or []):
+            celkem += pocet
+            if max(abs(a - b) for a, b in zip(barva, barva_rgb)) <= TOLERANCE:
+                v_barve += pocet
+    return v_barve / celkem * 100 if celkem else 0.0
 
 
 def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
@@ -74,27 +104,19 @@ def klasifikuj(cesta: Path | None, zaklad: str, barva_rgb):
     with Image.open(cesta) as im:
         im.load()
         rozmer = im.size
-        alfa = np.asarray(im.convert('RGBA').split()[-1])
-    if (alfa < 255).mean() > PODIL_ALFY:
-        return 'průhledná'
+        if podil_pruhlednych(im) > PODIL_ALFY:
+            return 'průhledná'
+        slozeny = slozit_na(im, barva_rgb)
 
-    a, _ = slozit_na(cesta, barva_rgb)
-    cil = np.array(barva_rgb, dtype=np.int16)
-    if (np.abs(a.astype(np.int16) - cil).max(axis=2) <= TOLERANCE).all():
+    if je_cely_v_barve(slozeny, barva_rgb):
         return 'prázdná'
 
     t = cesta.parent / (zaklad + 'T.png')
     if t.exists():
         with Image.open(t) as im:
             rozmer_t = im.size
-        pomer = rozmer[0] / rozmer[1]
-        pomer_t = rozmer_t[0] / rozmer_t[1]
-        if abs(pomer - pomer_t) <= POMER_TOLERANCE:
-            okraj = np.concatenate([a[0], a[-1], a[:, 0], a[:, -1]]).reshape(-1, 3)
-            barvy, pocty = np.unique(okraj, axis=0, return_counts=True)
-            dominantni = barvy[pocty.argmax()]
-            if (pocty.max() / len(okraj) * 100 >= PODIL_OKRAJE
-                    and int(np.abs(dominantni.astype(int) - np.array(barva_rgb)).max()) <= TOLERANCE):
+        if abs(rozmer[0] / rozmer[1] - rozmer_t[0] / rozmer_t[1]) <= POMER_TOLERANCE:
+            if podil_okraje_v_barve(slozeny, barva_rgb) >= PODIL_OKRAJE:
                 return 'půjde průhledná'
     return 'neprůhledná'
 
