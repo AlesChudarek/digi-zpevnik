@@ -5,10 +5,13 @@ Taková obálka je horší než nic. Barva je v ní zapečená v pixelech, takž
 přebarví, průhledné vnější obálky se změní, ale tahle zůstane ve staré barvě. Prázdnou
 plochu umí export i čtečka nakreslit samy - a nakreslená se přebarví se zpěvníkem.
 
-Smaže se jen soubor, který splňuje všechno:
-  - je to obálka (je na něj odkaz z některého sloupce img_path_cover_*)
-  - po složení na barvu zpěvníku je celá plocha jedna barva (tolerance 8 na kanál)
-  - ta barva se rovná barvě zpěvníku
+Maže se ale po celých zpěvnících. Měnitelnost barvy je vlastnost celé obálky: kdyby se
+prázdná strana zahodila u zpěvníku, jehož ostatní strany zůstávají neprůhledné, přebarvení
+by změnilo jen tu dokreslenou a zbytek nechalo ve staré barvě. U takového zpěvníku tedy
+prázdné obálky necháváme ležet - barva se u něj měnit nebude nikde.
+
+Uvnitř měnitelného zpěvníku se smaže soubor, který je po složení na barvu zpěvníku celý
+tou barvou.
 
 Sloupec v DB se nastaví na prázdno. Náhled ukazující na mizející soubor se přesměruje na
 přední vnější obálku, a když ani ta nezbyde, vyprázdní se taky.
@@ -26,34 +29,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
-import numpy as np
-from PIL import Image
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
-SLOTY = ['img_path_cover_front_outer', 'img_path_cover_front_inner',
-         'img_path_cover_back_inner', 'img_path_cover_back_outer']
-TOLERANCE = 8
+sys.path.insert(0, str(SCRIPT_DIR))
+from _obalky import SLOTY as SLOTY_PARY, rozbor_zpevniku  # noqa: E402
 
-
-def hex_na_rgb(h):
-    h = (h or '').strip().lstrip('#')
-    if len(h) == 3:
-        h = ''.join(c * 2 for c in h)
-    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4)) if len(h) == 6 else (255, 255, 255)
-
-
-def je_prazdna(cesta: Path, barva_rgb):
-    """Je obrázek po složení na barvu zpěvníku celý tou barvou?"""
-    with Image.open(cesta) as im:
-        im.load()
-        plocha = Image.new('RGB', im.size, barva_rgb)
-        rgba = im.convert('RGBA')
-        plocha.paste(rgba, mask=rgba.split()[-1])
-        a = np.asarray(plocha)
-    odchylka = np.abs(a.astype(np.int16) - np.array(barva_rgb, dtype=np.int16))
-    return bool((odchylka.max(axis=2) <= TOLERANCE).all())
+SLOTY = [s[0] for s in SLOTY_PARY]
 
 
 def main():
@@ -90,22 +72,22 @@ def main():
     preskoceno = []
 
     for kniha in knihy:
-        barva = hex_na_rgb(kniha['color'])
+        try:
+            stav, menitelny = rozbor_zpevniku(kniha, abs_cesta)
+        except Exception as exc:  # noqa: BLE001
+            preskoceno.append((kniha['id'], '-', str(exc)))
+            continue
+        if not menitelny:
+            spatne = [f"{s.replace('img_path_cover_', '')}={stav[s]}" for s in stav
+                      if stav[s] in ('neprůhledná', 'chybí soubor')]
+            preskoceno.append((kniha['id'], 'celý zpěvník',
+                               'barva nebude měnitelná: ' + ', '.join(spatne)))
+            continue
         mizi = set()
         for slot in SLOTY:
-            rel = kniha[slot]
-            if not rel:
-                continue
-            p = abs_cesta(rel)
-            if not p.exists():
-                preskoceno.append((kniha['id'], slot, f'{rel} - soubor neexistuje'))
-                continue
-            try:
-                if je_prazdna(p, barva):
-                    ke_smazani.append((kniha['id'], slot, rel))
-                    mizi.add(rel)
-            except Exception as exc:  # noqa: BLE001
-                preskoceno.append((kniha['id'], slot, f'{rel} - {exc}'))
+            if stav[slot] == 'prázdná':
+                ke_smazani.append((kniha['id'], slot, kniha[slot]))
+                mizi.add(kniha[slot])
 
         nahled = kniha['img_path_cover_preview']
         if nahled and nahled in mizi:
