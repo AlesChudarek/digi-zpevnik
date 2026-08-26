@@ -367,7 +367,9 @@ def _handle_song_delete_for_book(sb: Songbook, song: Song):
     imgs = SongImage.query.filter_by(song_id=song.id).all()
     if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
         db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        return {'detached_only': True}
+        # Soubory u veřejných zpěvníků maže volající až po commitu, viz smaz_osirele_obrazky.
+        return {'detached_only': True,
+                'kandidati': [img.image_path for img in imgs]}
 
     this_base_rel = _base_rel_for_book(sb)
     origin_dir_rel = str(Path(this_base_rel) / 'songs' / song.id)
@@ -413,6 +415,54 @@ def _handle_song_delete_for_book(sb: Songbook, song: Song):
         db.session.query(SongImage).filter_by(song_id=song.id).delete()
         db.session.delete(song)
         return {'deleted_song': True}
+
+def smaz_osirele_obrazky(kandidati):
+    """Smaže obrázky, na které už z databáze nikdo neukazuje.
+
+    Odebrání strany ze zpěvníku dosud mazalo soubor jen u soukromých zpěvníků. U veřejných
+    se jen zrušil odkaz a soubor zůstal ležet - tak vznikly ty, které se musely uklízet
+    ručně. Tohle to dodělává pro obě cesty.
+
+    Rozhoduje se podle databáze, ne podle toho, kdo mazání vyvolal: cesta se smí smazat
+    teprve tehdy, když na ni neukazuje žádný SongImage ani žádný sloupec obálky. V layoutu
+    veřejných zpěvníků totiž obrázek leží pod složkou toho zpěvníku, ze kterého pochází, a
+    ukazovat na něj může i druhý zpěvník - smazat ho po odebrání v jednom by rozbilo ten
+    druhý. Sedmdesát písniček je dnes ve dvou zpěvnících naráz.
+
+    Volat až po commitu, jinak dotazy uvidí ještě neodstraněné řádky.
+    """
+    kandidati = {c for c in kandidati if c}
+    if not kandidati:
+        return 0
+
+    stale_pouzite = {
+        p for (p,) in db.session.query(SongImage.image_path)
+        .filter(SongImage.image_path.in_(kandidati)).all()
+    }
+    for sloupec in (Songbook.img_path_cover_preview, Songbook.img_path_cover_front_outer,
+                    Songbook.img_path_cover_front_inner, Songbook.img_path_cover_back_inner,
+                    Songbook.img_path_cover_back_outer):
+        stale_pouzite.update(
+            p for (p,) in db.session.query(sloupec).filter(sloupec.in_(kandidati)).all())
+
+    smazano = 0
+    for rel in kandidati - stale_pouzite:
+        try:
+            p = _abs_image_path(rel)
+            if p and p.exists():
+                p.unlink()
+                smazano += 1
+                # Prázdná složka po písničce nemá důvod zůstat, ale mazat se smí jen ta
+                # její vlastní - výš už je složka zpěvníku se zbytkem stran.
+                rodic = p.parent
+                if rodic.name.startswith('custom_') and not any(rodic.iterdir()):
+                    rodic.rmdir()
+        except OSError:
+            # Nepodařené smazání nesmí shodit požadavek, který uživatel poslal. Nejhorší
+            # následek je soubor navíc na disku, což kontrola_zpevniku.py stejně najde.
+            pass
+    return smazano
+
 
 def slugify(value: str, maxlen: int = 60) -> str:
     """Create filesystem-friendly slug from arbitrary string.
@@ -912,8 +962,16 @@ def delete_song_from_songbook(songbook_id, song_id):
 
     # If no images or images are public (not under users/), just detach from this songbook
     if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
+        kandidati = [img.image_path for img in imgs]
+        # Osamocenou písničku není proč držet v databázi, když ji nemá žádný zpěvník.
         db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+        db.session.flush()
+        zbyva = db.session.query(SongbookPage.id).filter_by(song_id=song.id).first()
+        if not zbyva:
+            db.session.query(SongImage).filter_by(song_id=song.id).delete()
+            db.session.delete(song)
         db.session.commit()
+        smaz_osirele_obrazky(kandidati)
         # Předpřipravit nové PDF: tuhle cestu volá obsah zpěvníku ve čtečce
         # i editor, takže bez toho by po smazání písničky zůstalo ke stažení
         # staré PDF, které už neodpovídá webu.
@@ -1450,6 +1508,10 @@ def update_songbook_structure(songbook_id):
     if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
+    # Cesty obrázků, které by po uložení mohly zůstat bez odkazu. Plní se cestou dolů,
+    # vyhodnocuje až po commitu.
+    ke_smazani_soubory = set()
+
     title = (request.form.get('title') or sb.title).strip()
     color = (request.form.get('color') or getattr(sb, 'color', '#FFFFFF') or '#FFFFFF').strip()
     auto_numbering = (request.form.get('auto_numbering', '1') in ('1', 'true', 'True', 'on'))
@@ -1704,6 +1766,12 @@ def update_songbook_structure(songbook_id):
         to_delete = set(existing_ids) - incoming_ids
 
         if to_delete:
+            # Cesty obrázků odebíraných písniček si musíme zapamatovat teď, dokud na ně
+            # ještě vedou řádky v databázi. Smazat se smí až po commitu a jen ty, na které
+            # už nikdo neukazuje - viz smaz_osirele_obrazky.
+            ke_smazani_soubory.update(
+                p for (p,) in db.session.query(SongImage.image_path)
+                .filter(SongImage.song_id.in_(list(to_delete))).all())
             # Delete all pages for songs that are no longer present in the submitted order
             (db.session.query(SongbookPage)
              .filter(SongbookPage.songbook_id == songbook_id, SongbookPage.song_id.in_(list(to_delete)))
@@ -1783,6 +1851,8 @@ def update_songbook_structure(songbook_id):
                     _handle_song_delete_for_book(sb, s)
 
     db.session.commit()
+    # Až po commitu, protože se rozhoduje podle toho, co v databázi zbylo.
+    smaz_osirele_obrazky(ke_smazani_soubory)
     # Až po commitu: předpřipravit ke stažení novou podobu zpěvníku a zahodit tu starou.
     # Bez toho by první, kdo si zpěvník stáhne po úpravě, čekal na skládání - a hlavně
     # by hrozilo, že se stáhne jiný stav, než je na webu, kdyby na to někdo zapomněl.
