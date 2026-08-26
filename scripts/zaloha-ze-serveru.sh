@@ -25,6 +25,12 @@ LOG="$CIL/log/zaloha.log"
 ZAMEK="$CIL/.zamek"
 
 DRZET_SNIMKU=7
+POKUSU=3
+
+# Keepalive: přenos 500 MB trvá minuty a spojení mezi tím občas usne. Bez tohohle
+# spadne celá záloha na "Operation timed out" a den zůstane bez snímku - jednou se to
+# stalo. S keepalive se ssh ozývá každých 15 s a vydrží dvě minuty ticha.
+SSH_VOLBY="-i $KLIC -o ConnectTimeout=20 -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=8"
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; }
 
@@ -40,7 +46,7 @@ trap 'rmdir "$ZAMEK" 2>/dev/null || true' EXIT
 
 log "=== start ==="
 
-ssh_cmd() { ssh -i "$KLIC" -o ConnectTimeout=20 -o BatchMode=yes "$SERVER" "$@"; }
+ssh_cmd() { ssh $SSH_VOLBY "$SERVER" "$@"; }
 
 if ! ssh_cmd true 2>/dev/null; then
   log "CHYBA: server $SERVER neodpovida, koncim bez zmeny zalohy"
@@ -66,16 +72,33 @@ PY" | tee -a "$LOG"
 
 # --delete drží zrcadlo věrné serveru; historii řeší snímky níž, ne tenhle krok.
 # exports/ je generovaná cache PDF a ZIP, dá se vyrobit znovu, tak ji netaháme.
+# Opakování, protože spadlé spojení uprostřed stahování je jediná chyba, kterou tenhle
+# skript reálně potkává. Rsync je přírůstkový, takže druhý pokus naváže tam, kde první
+# skončil, a nestahuje znovu, co už leží na disku.
+stahni() {
+  local popis="$1"; shift
+  local pokus=1
+  while true; do
+    if rsync "$@" 2>&1 | tee -a "$LOG"; then
+      return 0
+    fi
+    if [ "$pokus" -ge "$POKUSU" ]; then
+      log "CHYBA: $popis se nepovedlo ani na $POKUSU. pokus"
+      return 1
+    fi
+    log "     $popis spadlo, zkouším znovu ($((pokus + 1))/$POKUSU)"
+    pokus=$((pokus + 1))
+    sleep 10
+  done
+}
+
 log "stahuji data/ (bez exports)"
-rsync -a --delete \
-  --exclude 'exports/' \
-  -e "ssh -i $KLIC -o ConnectTimeout=20 -o BatchMode=yes" \
-  "$SERVER:$VZDALENY_REPO/data/" "$ZRCADLO/data/" 2>&1 | tee -a "$LOG"
+stahni "stahování dat" -a --delete --exclude 'exports/' -e "ssh $SSH_VOLBY" \
+  "$SERVER:$VZDALENY_REPO/data/" "$ZRCADLO/data/"
 
 log "stahuji DB"
-rsync -a \
-  -e "ssh -i $KLIC -o ConnectTimeout=20 -o BatchMode=yes" \
-  "$SERVER:/tmp/zpevnik-zaloha/zpevnik.db" "$ZRCADLO/zpevnik.db" 2>&1 | tee -a "$LOG"
+stahni "stahování DB" -a -e "ssh $SSH_VOLBY" \
+  "$SERVER:/tmp/zpevnik-zaloha/zpevnik.db" "$ZRCADLO/zpevnik.db"
 
 POCET=$(find "$ZRCADLO" -type f | wc -l | tr -d ' ')
 VELIKOST=$(du -sh "$ZRCADLO" | cut -f1)
