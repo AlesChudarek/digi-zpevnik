@@ -16,7 +16,7 @@ ubuntu@92.5.116.155 : /home/ubuntu/digitalni-zpevnik/
 Zpěvníky vytvořené přes web existují **jen tady**. V gitu data nejsou od commitu
 "Obsah zpěvníků ven z gitu".
 
-## Na Macu jsou tři kopie a každá má jinou roli
+## Na Macu
 
 ```
 ~/digitalni-zpevnik/
@@ -39,16 +39,13 @@ dat mimo server. Ověřeno: `git clean -xdn` ji nevypisuje. Proti `git clean -xd
 Pozor, `data/` v tom seznamu je - `git clean` ji smaže. Nevadí to, je to jen pracovní
 kopie a stáhne se ze zálohy nebo ze serveru znovu.
 
-**`data/` v repu není záloha.** Je to pracovní kopie, kterou lze kdykoli znovu stáhnout
-ze serveru. Naopak `~/zpevnik-zalohy/` je jediné místo mimo server, kde data jsou —
+**`data/` a `zalohy/` nejsou totéž, i když leží vedle sebe.** `data/` je pracovní kopie,
+kterou lze kdykoli stáhnout znovu. `zalohy/` je jediné místo mimo server, kde data jsou -
 kdyby ta instance zmizela, je to všechno, co zbyde.
 
-### Proč záloha nebydlí v repu
-
-Nabízí se dát ji do repa do gitignorované složky, ať je všechno pohromadě. Nedělá se to
-schválně: `git clean -xdf` maže i ignorované soubory, takže jedno neopatrné uklizení
-pracovního stromu by smazalo zálohu. Záloha uvnitř zálohovaného adresáře taky není
-oddělená kopie. Když chceš mít odkaz po ruce, patří tam symlink, ne data.
+Zbývá jedno riziko, které tím nezmizelo: záloha uvnitř zálohovaného adresáře není
+oddělená kopie. Smazání celé složky repa vezme obojí naráz. Proti tomu by pomohla až
+kopie na jiném disku nebo do cloudu.
 
 ## Co je z aplikace dostupné a co ne
 
@@ -62,7 +59,7 @@ Nedostupné soubory aplikace nikdy nezobrazí; leží na disku a zabírají mís
 | **nedostupné: strany bez odkazu z DB** | 2 | 1,6 |
 | **nedostupné: ručně odložené `*OLD.png`** | 2 | 0,5 |
 
-Lokální kopie je s serverem shodná - 1008 obrázků na obou stranách, nula rozdílů - takže
+Lokální kopie je se serverem shodná - 1008 obrázků na obou stranách, nula rozdílů - takže
 tenhle seznam platí pro obě.
 
 ### Ty dvě strany bez odkazu nejsou ztracené stránky
@@ -91,4 +88,4 @@ Nic z toho není nikde jinde potřeba, ale je to na rozmyšlenou, ne na hned.
 | ~~Mac~~ | ~~`data_backup/`~~ — **NEMAZAT**, drží originály ve vyšším rozlišení, přesunuto do `zalohy/archiv/rucni-kopie-09-2025/` | — |
 | ~~Mac~~ | ~~`prace/`~~ — smazáno 26. 8. 2026 | 402 MB |
 
-Naopak **nikdy nemazat**: `~/zpevnik-zalohy/aktualni/` a `~/zpevnik-zalohy/snimky/`.
+Naopak **nikdy nemazat**: `zalohy/aktualni/`, `zalohy/snimky/` a `zalohy/archiv/`.
