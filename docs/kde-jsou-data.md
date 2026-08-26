@@ -21,16 +21,23 @@ Zpěvníky vytvořené přes web existují **jen tady**. V gitu data nejsou od c
 ```
 ~/digitalni-zpevnik/
 ├── data/                 583 MB    PRACOVNÍ KOPIE, z ní běží lokální aplikace
-├── data_backup/          1,0 GB    ruční kopie z 9-11/2025, překonaná
+├── zalohy/               2,4 GB    ZÁLOHA - jediná kopie mimo server
+│   ├── aktualni/           440 MB    zrcadlo serveru
+│   ├── snimky/<datum>/     885 MB    7 denních verzí přes tvrdé odkazy
+│   ├── archiv/             1,1 GB    ruční kopie z 2025, drží originály ve vyšším rozlišení
+│   └── log/zaloha.log
+├── ke-kontrole/           23 MB    osiřelé obrázky čekající na tvoje posouzení
 ├── ui-shots/             5,8 MB    screenshoty z testů
 └── backend/instance/     428 kB    lokální DB (kopie serverové) + pojistky
-
-~/zpevnik-zalohy/                   ZÁLOHA - jediná kopie mimo server
-├── aktualni/             440 MB    zrcadlo serveru
-├── snimky/<datum>/       885 MB    7 denních verzí přes tvrdé odkazy
-├── prace/                402 MB    pracovní adresář z úklidu 8/2026
-└── log/zaloha.log
 ```
+
+`zalohy/` je gitignorovaná a má uvnitř vlastní prázdný `.git`. To ji chrání před
+`git clean -xdf`, které jinak maže i ignorované soubory - a smazalo by tím jedinou kopii
+dat mimo server. Ověřeno: `git clean -xdn` ji nevypisuje. Proti `git clean -xdff`
+(dvojité force) ochrana není, to sebere všechno.
+
+Pozor, `data/` v tom seznamu je - `git clean` ji smaže. Nevadí to, je to jen pracovní
+kopie a stáhne se ze zálohy nebo ze serveru znovu.
 
 **`data/` v repu není záloha.** Je to pracovní kopie, kterou lze kdykoli znovu stáhnout
 ze serveru. Naopak `~/zpevnik-zalohy/` je jediné místo mimo server, kde data jsou —
@@ -77,11 +84,11 @@ Nic z toho není nikde jinde potřeba, ale je to na rozmyšlenou, ne na hned.
 
 | kde | co | ušetří |
 |---|---|---|
-| server | `~/digitalni-zpevnik.backup` (ruční kopie z 11/2025) | 2,8 GB |
+| ~~server~~ | ~~`~/digitalni-zpevnik.backup`~~ — smazáno 26. 8. 2026, unikátní zbytky přesunuty do `zalohy/archiv/` | 2,8 GB |
 | server + Mac | `00009/testinf scaling/` (testovací adresář) | 22,1 MB |
 | server + Mac | `00016/*OLD.png` | 0,5 MB |
 | server + Mac | `00022/page7.png`, `00025/page12.png` (po kontrole) | 1,6 MB |
-| Mac | `data_backup/` (ruční kopie z 9/2025) | 1,0 GB |
-| Mac | `~/zpevnik-zalohy/prace/` (pracovní adresář z úklidu) | 402 MB |
+| ~~Mac~~ | ~~`data_backup/`~~ — **NEMAZAT**, drží originály ve vyšším rozlišení, přesunuto do `zalohy/archiv/rucni-kopie-09-2025/` | — |
+| ~~Mac~~ | ~~`prace/`~~ — smazáno 26. 8. 2026 | 402 MB |
 
 Naopak **nikdy nemazat**: `~/zpevnik-zalohy/aktualni/` a `~/zpevnik-zalohy/snimky/`.

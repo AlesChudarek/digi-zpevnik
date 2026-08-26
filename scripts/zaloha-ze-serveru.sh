@@ -6,6 +6,10 @@
 # neexistují a v gitu je od commitu "Obsah zpěvníků ven z gitu" taky nemáme. Tenhle skript
 # je proto jediná záloha mimo server.
 #
+# Cílem je zalohy/ uvnitř repa. Je gitignorovaná a má vlastní prázdný .git, aby ji
+# nesmazalo "git clean -xdf" - to maže i ignorované soubory a vzalo by tím jedinou kopii
+# dat mimo server.
+#
 # Drží zrcadlo v aktualni/ plus sedm denních snímků v snimky/. Snímky jsou tvrdé odkazy,
 # takže nezměněný soubor nezabere místo podruhé - sedm verzí 1GB dat stojí pár desítek MB.
 # Kvůli nim přežije i to, co někdo na serveru smaže: samotné zrcadlo by smazání propagovalo.
@@ -18,7 +22,8 @@ SERVER="ubuntu@92.5.116.155"
 KLIC="$HOME/.ssh/zpevnik-oracle.key"
 VZDALENY_REPO="digitalni-zpevnik"
 
-CIL="$HOME/zpevnik-zalohy"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CIL="$REPO/zalohy"
 ZRCADLO="$CIL/aktualni"
 SNIMKY="$CIL/snimky"
 LOG="$CIL/log/zaloha.log"

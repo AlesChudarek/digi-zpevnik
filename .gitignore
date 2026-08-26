@@ -39,3 +39,7 @@ ui-shots/
 # existují jen tam, takže verzovaná kopie stejně nikdy nebyla úplná a jen se rozcházela.
 # Bylo to 1253 obrázků a 816 MB v historii.
 data/
+
+# Zálohy dat ze serveru. Vlastní .git uvnitř je štít proti git clean -xdf.
+zalohy/
+ke-kontrole/
