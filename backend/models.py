@@ -11,6 +11,21 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String, nullable=False)
     role = db.Column(db.String, default='user')
 
+class LoginAttempt(db.Model):
+    """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.
+
+    Ukládá se do databáze, ne do paměti procesu: gunicorn běží ve dvou workerech a
+    každý by měl vlastní počítadlo, takže by povolený počet pokusů byl ve skutečnosti
+    dvojnásobný. Úspěšné přihlášení své záznamy smaže.
+    """
+    __tablename__ = "login_attempts"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String, index=True)
+    ip = db.Column(db.String, index=True)
+    cas = db.Column(db.DateTime, index=True, nullable=False)
+
+
 class Author(db.Model):
     __tablename__ = "authors"
 
