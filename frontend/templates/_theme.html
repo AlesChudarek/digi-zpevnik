@@ -1,4 +1,5 @@
 <script>
+  window.__dzPrihlasen = {{ (logged_in and not guest) | tojson if logged_in is defined else 'false' }};
   (function(){
     var KEY = 'dz_theme';
     var DEFAULT = 'blue'; // 'green' | 'blue' | 'dark' | 'purple' | 'amber' | 'slate' | 'teal' | 'emerald' | 'cyan' | 'indigo' | 'rose' | 'pink'
@@ -9,10 +10,29 @@
         if (theme && theme !== 'green') el.classList.add('theme-'+theme);
       } catch(e){}
     }
+    // Motiv uložený u účtu má přednost před volbou v prohlížeči: přihlášený uživatel
+    // má mít svoje barvy na každém zařízení, aniž by je znovu přepínal. Nepřihlášenému
+    // a hostovi zůstává chování jako dřív, tedy podle prohlížeče.
+    var TEMA_UCTU = {{ (tema_uctu or '') | tojson }};
     try {
-      var t = localStorage.getItem(KEY) || DEFAULT;
+      var t = TEMA_UCTU || localStorage.getItem(KEY) || DEFAULT;
       applyThemeEarly(t);
-      window.setDzTheme = function(theme){ localStorage.setItem(KEY, theme); applyThemeEarly(theme); };
+      // Ať se po odhlášení nevrátí barva z doby před přihlášením.
+      if (TEMA_UCTU) { try { localStorage.setItem(KEY, TEMA_UCTU); } catch (e) {} }
+
+      window.setDzTheme = function(theme){
+        try { localStorage.setItem(KEY, theme); } catch (e) {}
+        applyThemeEarly(theme);
+        // Uložení k účtu je jen doplněk - když selže (nepřihlášený, výpadek sítě),
+        // barva stejně platí z prohlížeče, takže se nic nehlásí.
+        if (window.__dzPrihlasen) {
+          fetch('/api/nastaveni/tema', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({tema: theme})
+          }).catch(function(){});
+        }
+      };
     } catch (e) {}
   })();
 </script>
