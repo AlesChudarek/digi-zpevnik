@@ -8,6 +8,7 @@ from flask_login import LoginManager, login_user, logout_user, login_required, U
 from flask.cli import with_appcontext
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 import re
 import unicodedata
 import time
@@ -225,6 +226,21 @@ app = Flask(__name__, template_folder='../frontend/templates', static_folder='..
 
 # Nastavení tajného klíče a databáze z prostředí s bezpečným fallbackem pro vývoj
 app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-me")
+
+# Za reverzní proxy (Caddy) dorazí požadavek na gunicorn jako obyčejné HTTP, takže by si
+# Flask myslel, že běží nešifrovaně. ProxyFix mu dá přečíst hlavičky X-Forwarded-*, které
+# Caddy posílá. Bez toho by odkazy generované přes url_for(_external=True) vycházely jako
+# http:// - to zatím nikde nepoužíváme, ale ověřovací odkaz v registračním e-mailu ano bude.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+# Cookie s přihlášením se nikdy nesmí poslat nešifrovaně a nemá co dělat v JavaScriptu.
+# Zapíná se podle prostředí: na produkci ano, ve vývoji na http://localhost by Secure
+# znamenalo, že se cookie neuloží vůbec a nešlo by se přihlásit.
+app.config['SESSION_COOKIE_SECURE'] = _str_to_bool(os.getenv("HTTPS_ONLY"), False)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['REMEMBER_COOKIE_SECURE'] = app.config['SESSION_COOKIE_SECURE']
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
 basedir = os.path.abspath(os.path.dirname(__file__))
 project_root = Path(basedir).parent
 backend_instance_dir = Path(basedir) / 'instance'
