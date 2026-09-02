@@ -80,12 +80,16 @@
     .guest-link a:hover {
       text-decoration: underline;
     }
-    .napoveda { font-size: 13px; color: #666; margin: -4px 0 10px; }
-    .chyba-hesla {
-      display: none; font-size: 13px; color: #721c24; background: #f8d7da;
-      border-radius: 4px; padding: 8px; margin-bottom: 10px;
+    .podminky { list-style: none; margin: -4px 0 12px; padding: 0; font-size: 13px; }
+    .podminky li {
+      display: flex; align-items: center; gap: 7px; padding: 2px 0;
+      color: #b3261e; transition: color .15s;
     }
-    .chyba-hesla.videt { display: block; }
+    .podminky li.splneno { color: #1a7f37; }
+    .podminky .znak { font-weight: bold; width: 12px; text-align: center; }
+    .shoda { font-size: 13px; min-height: 18px; margin: -6px 0 10px; }
+    .shoda.ne { color: #b3261e; }
+    .shoda.ano { color: #1a7f37; }
     .flash {
       padding: 10px;
       margin-bottom: 15px;
@@ -123,15 +127,21 @@
       <button type="submit">Přihlásit se</button>
     </form>
 
-    <form id="register" method="POST" action="{{ url_for('register') }}"
-          onsubmit="return zkontrolujHesla(this)">
+    {# novalidate schválně: vestavěná kontrola prohlížeče hlásí chyby anglicky a
+       v okamžiku odeslání. Vlastní kontrola mluví česky a ukazuje se průběžně. #}
+    <form id="register" method="POST" action="{{ url_for('register') }}" novalidate
+          onsubmit="return odeslatRegistraci(this)">
       <input type="email" name="email" placeholder="Email" required>
-      <input type="password" name="password" placeholder="Heslo" required
-             minlength="8" autocomplete="new-password">
-      <input type="password" name="password2" placeholder="Heslo znovu" required
-             minlength="8" autocomplete="new-password">
-      <div class="napoveda">Heslo musí mít aspoň 8 znaků.</div>
-      <div class="chyba-hesla" id="chyba-hesla"></div>
+      <input type="password" name="password" placeholder="Heslo" id="reg-heslo"
+             autocomplete="new-password">
+      <ul class="podminky" id="podminky">
+        <li data-pravidlo="delka"><span class="znak">✕</span> aspoň 8 znaků</li>
+        <li data-pravidlo="velke"><span class="znak">✕</span> velké písmeno (A–Z)</li>
+        <li data-pravidlo="zvlastni"><span class="znak">✕</span> speciální znak (. , ! ? - _ # @)</li>
+      </ul>
+      <input type="password" name="password2" placeholder="Heslo znovu" id="reg-heslo2"
+             autocomplete="new-password">
+      <div class="shoda" id="shoda"></div>
       <button type="submit">Registrovat se</button>
     </form>
 
@@ -145,18 +155,54 @@
   </div>
 
   <script>
-    // Kontrola v prohlížeči je jen pohodlí - stejná pravidla platí i na serveru,
-    // protože tenhle formulář se dá odeslat i s vypnutým JavaScriptem.
-    function zkontrolujHesla(form) {
-      const chyba = document.getElementById('chyba-hesla');
-      const h1 = form.password.value, h2 = form.password2.value;
-      let text = '';
-      if (h1.length < 8) text = 'Heslo musí mít aspoň 8 znaků.';
-      else if (h1 !== h2) text = 'Hesla se neshodují.';
-      chyba.textContent = text;
-      chyba.classList.toggle('videt', !!text);
-      return !text;
+    // Pravidla na heslo. Stejná platí i na serveru - tenhle formulář jde odeslat
+    // i s vypnutým JavaScriptem, takže kontrola tady je jen pohodlí, ne ochrana.
+    const PRAVIDLA = {
+      delka:    h => h.length >= 8,
+      velke:    h => /[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]/.test(h),
+      zvlastni: h => /[^A-Za-z0-9ÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž]/.test(h),
+    };
+
+    function prekresliPodminky() {
+      const h = document.getElementById('reg-heslo').value;
+      let vseSplneno = true;
+      document.querySelectorAll('#podminky li').forEach(li => {
+        const ok = PRAVIDLA[li.dataset.pravidlo](h);
+        li.classList.toggle('splneno', ok);
+        li.querySelector('.znak').textContent = ok ? '✓' : '✕';
+        if (!ok) vseSplneno = false;
+      });
+      return vseSplneno;
     }
+
+    function prekresliShodu() {
+      const h1 = document.getElementById('reg-heslo').value;
+      const h2 = document.getElementById('reg-heslo2').value;
+      const el = document.getElementById('shoda');
+      if (!h2) { el.textContent = ''; el.className = 'shoda'; return false; }
+      const sedi = h1 === h2;
+      el.textContent = sedi ? '✓ Hesla se shodují' : '✕ Hesla se neshodují';
+      el.className = 'shoda ' + (sedi ? 'ano' : 'ne');
+      return sedi;
+    }
+
+    function odeslatRegistraci(form) {
+      const heslaOk = prekresliPodminky();
+      const shodaOk = prekresliShodu();
+      if (!form.email.value.trim()) { form.email.focus(); return false; }
+      if (!heslaOk) { document.getElementById('reg-heslo').focus(); return false; }
+      if (!shodaOk) { document.getElementById('reg-heslo2').focus(); return false; }
+      return true;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const h1 = document.getElementById('reg-heslo');
+      const h2 = document.getElementById('reg-heslo2');
+      if (!h1) return;
+      h1.addEventListener('input', () => { prekresliPodminky(); prekresliShodu(); });
+      h2.addEventListener('input', prekresliShodu);
+      prekresliPodminky();
+    });
 
     function showForm(formId) {
       document.querySelectorAll('form').forEach(f => f.classList.remove('active'));

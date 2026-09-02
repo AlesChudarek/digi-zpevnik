@@ -1,0 +1,61 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Odstranění účtu{% endblock %}
+{% block content %}
+<div class="rusit">
+  <h1>Odstranění účtu</h1>
+
+  <div class="karta">
+    <p>Chystáte se nevratně zrušit účet <strong>{{ current_user.email }}</strong>.</p>
+
+    {% if zpevniky %}
+      <p>Spolu s ním zmizí i tyhle vaše zpěvníky včetně nahraných obrázků:</p>
+      <ul class="seznam">
+        {% for sb in zpevniky %}<li>{{ sb.title or sb.id }}</li>{% endfor %}
+      </ul>
+      <p class="drobne">Písničky, které jste přidali do cizích zpěvníků, tam zůstanou —
+         mažou se jen obrázky, na které už nikdo jiný neukazuje.</p>
+    {% else %}
+      <p>Žádné vlastní zpěvníky nemáte, takže se maže jen samotný účet.</p>
+    {% endif %}
+
+    <p class="varovani">Tuhle akci nejde vzít zpět.</p>
+
+    <form method="POST">
+      <label for="potvrzeni">Pro potvrzení opište svou e-mailovou adresu:</label>
+      <input type="text" id="potvrzeni" name="potvrzeni" autocomplete="off"
+             placeholder="{{ current_user.email }}" required>
+      <div class="tlacitka">
+        <a class="zpet" href="{{ url_for('dashboard') }}">Zpět</a>
+        <button type="submit" class="smazat">Odstranit účet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  .rusit { max-width: 620px; margin: 24px auto 60px; padding: 0 16px; }
+  .rusit h1 { color: #fff; font-size: 24px; margin: 0 0 18px; }
+  .rusit .karta {
+    background: #fff; color: #222; border-radius: 10px; padding: 22px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+  }
+  .rusit p { font-size: 15px; line-height: 1.55; margin: 0 0 12px; }
+  .rusit .drobne { font-size: 13px; color: #666; }
+  .rusit .varovani { color: #b3261e; font-weight: 600; }
+  .seznam { margin: 0 0 12px; padding-left: 22px; font-size: 15px; }
+  .seznam li { margin-bottom: 4px; }
+  label { display: block; font-size: 14px; color: #555; margin-bottom: 6px; }
+  #potvrzeni {
+    width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #ccc;
+    border-radius: 6px; font-size: 15px; margin-bottom: 16px;
+  }
+  .tlacitka { display: flex; gap: 12px; align-items: center; justify-content: flex-end; }
+  .zpet { color: #555; text-decoration: none; font-size: 15px; padding: 10px; }
+  .zpet:hover { text-decoration: underline; }
+  .smazat {
+    background: #b3261e; color: #fff; border: 0; border-radius: 6px;
+    padding: 11px 20px; font-size: 15px; cursor: pointer;
+  }
+  .smazat:hover { background: #94201a; }
+</style>
+{% endblock %}

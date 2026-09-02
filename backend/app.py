@@ -452,6 +452,17 @@ def _handle_song_delete_for_book(sb: Songbook, song: Song):
         db.session.delete(song)
         return {'deleted_song': True}
 
+# Sloupce s obálkami. Na jednom místě, ať se seznam nemusí opisovat v každé funkci,
+# která obálky prochází.
+SLOTY_OBALEK = [
+    ('img_path_cover_preview', 'náhled'),
+    ('img_path_cover_front_outer', 'přední ven'),
+    ('img_path_cover_front_inner', 'přední dovnitř'),
+    ('img_path_cover_back_inner', 'zadní dovnitř'),
+    ('img_path_cover_back_outer', 'zadní ven'),
+]
+
+
 def smaz_osirele_obrazky(kandidati):
     """Smaže obrázky, na které už z databáze nikdo neukazuje.
 
@@ -540,6 +551,25 @@ def _lighten_hex(hex_color: str, pct: float) -> str:
 # ---------- VALIDACE ----------
 def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email)
+
+
+VELKA_PISMENA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ'
+PISMENA_A_CISLICE = VELKA_PISMENA + VELKA_PISMENA.lower() + '0123456789'
+
+
+def chyba_hesla(heslo: str):
+    """Vrací popis první nesplněné podmínky, nebo None když je heslo v pořádku.
+
+    Stejná pravidla hlídá i formulář v prohlížeči, ale ten se dá obejít vypnutým
+    JavaScriptem, takže poslední slovo má server.
+    """
+    if len(heslo) < 8:
+        return 'Heslo musí mít aspoň 8 znaků.'
+    if not any(z in VELKA_PISMENA for z in heslo):
+        return 'Heslo musí obsahovat velké písmeno.'
+    if all(z in PISMENA_A_CISLICE for z in heslo):
+        return 'Heslo musí obsahovat speciální znak, například . , ! ? - _ # @'
+    return None
 
 
 # ---------- OMEZENÍ POKUSŮ O PŘIHLÁŠENÍ ----------
@@ -634,10 +664,9 @@ def register():
             flash('Neplatná e-mailová adresa', 'error')
             return redirect(url_for('register'))
 
-        # Stejná pravidla jako v prohlížeči. Kontrola na straně serveru musí být i tak,
-        # formulář jde odeslat i bez JavaScriptu.
-        if len(password) < 8:
-            flash('Heslo musí mít aspoň 8 znaků.', 'error')
+        chyba = chyba_hesla(password)
+        if chyba:
+            flash(chyba, 'error')
             return redirect(url_for('register'))
         if password != (request.form.get('password2') or password):
             flash('Hesla se neshodují.', 'error')
@@ -745,8 +774,8 @@ def zmena_hesla():
         # by tudy jinak mohl heslo hádat bez omezení.
         zaznamenej_neuspesny_pokus(current_user.email)
         flash('Současné heslo nesouhlasí.', 'error')
-    elif len(nove) < 8:
-        flash('Nové heslo musí mít aspoň 8 znaků.', 'error')
+    elif chyba_hesla(nove):
+        flash(chyba_hesla(nove), 'error')
     elif nove != nove2:
         flash('Nová hesla se neshodují.', 'error')
     else:
@@ -756,6 +785,53 @@ def zmena_hesla():
         zapomen_pokusy(current_user.email)
         flash('Heslo bylo změněno.', 'success')
     return redirect(url_for('profil'))
+
+
+@app.route('/smazat-ucet', methods=['GET', 'POST'])
+@login_required
+def smazat_ucet():
+    """Zrušení účtu i s tím, co k němu patří.
+
+    Potvrzuje se opsáním vlastní e-mailové adresy, ne jen kliknutím. Je to nevratné a
+    mizí při tom i soukromé zpěvníky, takže omylem spuštěné to být nemá.
+    """
+    if is_guest(current_user):
+        flash('Účet hosta se ruší odhlášením.', 'error')
+        return redirect(url_for('dashboard'))
+
+    moje = Songbook.query.filter_by(owner_id=current_user.id).all()
+    if request.method == 'POST':
+        if (request.form.get('potvrzeni') or '').strip().lower() != current_user.email.lower():
+            flash('Pro potvrzení opište přesně svou e-mailovou adresu.', 'error')
+            return render_template('smazat_ucet.html', zpevniky=moje)
+
+        uid, email = current_user.id, current_user.email
+        soubory = []
+        for sb in moje:
+            for sloupec, _ in SLOTY_OBALEK:
+                cesta = getattr(sb, sloupec, None)
+                if cesta:
+                    soubory.append(cesta)
+            for strana in build_songbook_content_pages(sb.id):
+                if strana['file'] != 'blank':
+                    soubory.append(strana['file'])
+            db.session.query(SongbookPage).filter_by(songbook_id=sb.id).delete()
+            db.session.query(UserSongbookAccess).filter_by(songbook_id=sb.id).delete()
+            db.session.delete(sb)
+
+        db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
+        logout_user()
+        db.session.query(User).filter_by(id=uid).delete()
+        db.session.commit()
+
+        # Až po commitu a jen to, na co už nikdo neukazuje - písničku můžou sdílet i cizí
+        # zpěvníky a smazat jim obrázky by je rozbilo.
+        smaz_osirele_obrazky(soubory)
+        app.logger.info("Účet %s smazán i s %d zpěvníky", email, len(moje))
+        flash('Váš účet byl odstraněn.', 'success')
+        return redirect(url_for('index'))
+
+    return render_template('smazat_ucet.html', zpevniky=moje)
 
 
 @app.route('/zapomenute-heslo', methods=['GET', 'POST'])
@@ -820,8 +896,9 @@ def obnova_hesla(token):
         return render_template('heslo.html', rezim='neplatny')
     if request.method == 'POST':
         heslo = request.form.get('password') or ''
-        if len(heslo) < 8:
-            flash('Heslo musí mít aspoň 8 znaků.', 'error')
+        chyba = chyba_hesla(heslo)
+        if chyba:
+            flash(chyba, 'error')
             return render_template('heslo.html', rezim='nastaveni', token=token)
         user.password = generate_password_hash(heslo, method='pbkdf2:sha256', salt_length=16)
         # Kdo si dokázal vyzvednout odkaz z e-mailu, prokázal tím i vlastnictví adresy.

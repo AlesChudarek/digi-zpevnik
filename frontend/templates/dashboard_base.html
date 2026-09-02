@@ -242,18 +242,41 @@
         opacity: 1;
     }
 
-    /* Účet v liště: adresa vede na profil, tečka upozorňuje na neověřenou adresu. */
+    /* Účet v liště a jeho vysouvací panel. */
+    .ucet-obal { position: relative; display: inline-block; }
     .ucet {
-      display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
-      padding: 8px 12px; border-radius: 8px; text-decoration: none;
-      color: var(--brand-contrast); font-size: 14px;
+      display: inline-flex; align-items: center; gap: 6px; max-width: 240px;
+      padding: 8px 12px; border-radius: 8px; border: 0; background: none;
+      color: var(--brand-contrast); font-size: 14px; font-family: inherit; cursor: pointer;
     }
     .ucet:hover { background: rgba(255,255,255,0.15); }
     .ucet-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .ucet-tecka {
-      width: 8px; height: 8px; border-radius: 50%; background: #ffd970; flex: 0 0 auto;
-    }
+    .ucet-tecka { width: 8px; height: 8px; border-radius: 50%; background: #ffd970; flex: 0 0 auto; }
+    .ucet-sipka { font-size: 11px; opacity: .8; }
     @media (max-width: 820px) { .ucet-email { display: none; } }
+
+    .ucet-panel {
+      display: none; position: absolute; right: 0; top: calc(100% + 8px);
+      min-width: 250px; background: #fff; color: #222; border-radius: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.28); overflow: hidden; z-index: 1200;
+      text-align: left;
+    }
+    .ucet-panel.open { display: block; }
+    .ucet-hlava { padding: 14px 16px; border-bottom: 1px solid #eee; }
+    .ucet-adresa { font-weight: 600; font-size: 14px; word-break: break-all; margin-bottom: 6px; }
+    .ucet-panel .odznak { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .ucet-panel .odznak-ok { background: #d4edda; color: #155724; }
+    .ucet-panel .odznak-cekam { background: #fff3cd; color: #7a5b00; }
+    .ucet-panel form { margin: 0; }
+    .ucet-polozka {
+      display: block; width: 100%; box-sizing: border-box; padding: 11px 16px;
+      background: none; border: 0; border-top: 1px solid #f2f2f2; text-align: left;
+      font-size: 14px; font-family: inherit; color: #222; text-decoration: none;
+      cursor: pointer;
+    }
+    .ucet-polozka:hover { background: #f5f5f5; }
+    .ucet-nebezpeci { color: #a5402f; }
+    .ucet-odhlasit { color: #b3261e; font-weight: 600; }
 
     /* Hlášky po přesměrování. Dashboard je dosud neuměl zobrazit vůbec, takže hláška
        o odeslaném ověřovacím e-mailu čekala v session a vyskočila až o stránku dál. */
@@ -406,17 +429,42 @@
       {% if guest is defined and guest %}
         <a href="{{ url_for('login') }}" style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block;">Přihlásit</a>
       {% else %}
-        {# Dřív tu bylo jen "Odhlásit", takže uživatel nikde neviděl, pod jakým účtem je
-           přihlášený. Teď vede adresa na profil a odhlášení je až tam i tady vedle. #}
-        <a class="ucet" href="{{ url_for('profil') }}" title="Můj účet">
-          <span class="ucet-email">{{ current_user.email }}</span>
-          {% if not current_user.email_verified %}<span class="ucet-tecka" title="Neověřená adresa"></span>{% endif %}
-        </a>
-        <a href="#" onclick="document.getElementById('logout-form').submit(); return false;"
-          style="padding: 8px 15px; border: 2px solid transparent; border-radius: 8px; display: inline-block; background: none; color: var(--brand-contrast); font-weight: bold; cursor: pointer;">
-          Odhlásit
-        </a>
-        <form id="logout-form" action="{{ url_for('logout') }}" method="post" style="display: none;"></form>
+        {# Účet místo holého "Odhlásit". Kliknutí nikam neodnavigovává, jen vysune panel -
+           uživatel nepřijde o rozečtenou stránku kvůli tomu, že si chtěl zkontrolovat,
+           pod kým je přihlášený. #}
+        <span class="ucet-obal">
+          <button class="ucet" id="ucet-btn" onclick="prepniUcet(event)"
+                  aria-expanded="false" aria-haspopup="true" title="Můj účet">
+            <span class="ucet-email">{{ current_user.email }}</span>
+            {% if not current_user.email_verified %}<span class="ucet-tecka" title="Neověřená adresa"></span>{% endif %}
+            <span class="ucet-sipka" aria-hidden="true">▾</span>
+          </button>
+
+          <div class="ucet-panel" id="ucet-panel" role="menu" aria-hidden="true">
+            <div class="ucet-hlava">
+              <div class="ucet-adresa">{{ current_user.email }}</div>
+              <div>
+                {% if current_user.email_verified %}
+                  <span class="odznak odznak-ok">ověřená adresa</span>
+                {% else %}
+                  <span class="odznak odznak-cekam">neověřená adresa</span>
+                {% endif %}
+              </div>
+            </div>
+
+            {% if not current_user.email_verified %}
+            <form method="POST" action="{{ url_for('poslat_overeni_znovu') }}">
+              <button type="submit" class="ucet-polozka">Poslat ověřovací e-mail znovu</button>
+            </form>
+            {% endif %}
+
+            <a class="ucet-polozka" href="{{ url_for('profil') }}">Změnit heslo</a>
+            <a class="ucet-polozka ucet-nebezpeci" href="{{ url_for('smazat_ucet') }}">Odstranit účet</a>
+            <form id="logout-form" action="{{ url_for('logout') }}" method="post">
+              <button type="submit" class="ucet-polozka ucet-odhlasit">Odhlásit se</button>
+            </form>
+          </div>
+        </span>
       {% endif %}
     </div>
   </div>
@@ -443,6 +491,33 @@
     // Server vrací chyby jako JSON. Vypisovat ho uživateli syrový znamená hlášku typu
     // "Vytvoření selhalo: {"error":"Nejd\u0159\u00edv si pros\u00edm..."}", kde je
     // vlastní sdělení schované mezi uvozovkami a únikovými sekvencemi.
+    function prepniUcet(event) {
+      event.preventDefault();
+      event.stopPropagation();
+      const panel = document.getElementById('ucet-panel');
+      const btn = document.getElementById('ucet-btn');
+      const otevreno = panel.classList.toggle('open');
+      panel.setAttribute('aria-hidden', otevreno ? 'false' : 'true');
+      btn.setAttribute('aria-expanded', otevreno ? 'true' : 'false');
+    }
+    // Kliknutí jinam i Escape panel zavřou, ať nezůstane viset přes obsah.
+    document.addEventListener('click', (e) => {
+      const panel = document.getElementById('ucet-panel');
+      if (panel && panel.classList.contains('open') && !e.target.closest('.ucet-obal')) {
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+        document.getElementById('ucet-btn').setAttribute('aria-expanded', 'false');
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      const panel = document.getElementById('ucet-panel');
+      if (panel) {
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+      }
+    });
+
     function popisChyby(text, kod) {
       if (!text) return 'chyba ' + kod;
       try {
