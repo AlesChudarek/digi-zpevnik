@@ -2598,6 +2598,31 @@ def inject_user_status():
 
 # ---------- CLI PŘÍKAZY ----------
 
+@app.cli.command("posli-test")
+@click.argument("adresa")
+def posli_test(adresa):
+    """Pošle testovací zprávu. Slouží k ověření doručitelnosti přes mail-tester.com."""
+    try:
+        from .mail import posli_email
+    except ImportError:
+        from mail import posli_email
+    posli_email(
+        adresa,
+        "Testovací zpráva z Digi zpěvníku",
+        "Tohle je testovací zpráva z aplikace Digi zpěvník.\n\n"
+        "Slouží k ověření, že odesílání funguje a že zprávy procházejí kontrolou SPF, "
+        "DKIM a DMARC.\n\n"
+        "Pokud jste ji dostali omylem, nic se neděje - stačí ji smazat.\n\n"
+        "https://digizpevnik.cz\n",
+        "<p>Tohle je testovací zpráva z aplikace <strong>Digi zpěvník</strong>.</p>"
+        "<p>Slouží k ověření, že odesílání funguje a že zprávy procházejí kontrolou "
+        "SPF, DKIM a DMARC.</p>"
+        "<p>Pokud jste ji dostali omylem, nic se neděje - stačí ji smazat.</p>"
+        "<p><a href=\"https://digizpevnik.cz\">digizpevnik.cz</a></p>",
+    )
+    click.echo(f"Odesláno na {adresa}")
+
+
 @app.cli.command("export-bench")
 @click.argument("book_id")
 @click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
