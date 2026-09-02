@@ -754,6 +754,25 @@ def posli_overovaci_email(user) -> bool:
         return False
 
 
+ZNAME_MOTIVY = {'green', 'blue', 'dark', 'purple', 'amber', 'slate', 'teal',
+                'emerald', 'cyan', 'indigo', 'rose', 'pink'}
+
+
+@app.route('/api/nastaveni/tema', methods=['POST'])
+@login_required
+def uloz_tema():
+    """Zapamatuje si vybraný motiv u účtu, ať ho uživatel nepřepíná na každém zařízení."""
+    tema = (request.get_json(silent=True) or {}).get('tema') or request.form.get('tema')
+    if tema not in ZNAME_MOTIVY:
+        return jsonify({'ok': False, 'error': 'neznámý motiv'}), 400
+    if is_guest(current_user):
+        # Host je sdílený účet, takže by si volbu přepisovali navzájem.
+        return jsonify({'ok': True, 'ulozeno': False})
+    current_user.theme = tema
+    db.session.commit()
+    return jsonify({'ok': True, 'ulozeno': True})
+
+
 @app.route('/profil')
 @login_required
 def profil():
@@ -2898,7 +2917,11 @@ def songbook_detail(book_id):
 def inject_user_status():
     return dict(
         guest=is_guest(current_user),
-        logged_in=current_user.is_authenticated
+        logged_in=current_user.is_authenticated,
+        # Motiv uložený u účtu. Šablona ho vloží do stránky, takže se použije hned při
+        # vykreslení - kdyby se dotahoval až skriptem, blikla by na okamžik cizí barva.
+        tema_uctu=(getattr(current_user, 'theme', None)
+                   if current_user.is_authenticated else None),
     )
 
 # ---------- CLI PŘÍKAZY ----------
@@ -2929,6 +2952,11 @@ def migrace_overeni(overit_stavajici):
         ).update({User.email_verified: True}, synchronize_session=False)
         db.session.commit()
         click.echo(f"označeno jako ověřených: {pocet} účtů")
+
+    if 'theme' not in [r[1] for r in db.session.execute(text("PRAGMA table_info(users)"))]:
+        db.session.execute(text("ALTER TABLE users ADD COLUMN theme VARCHAR"))
+        db.session.commit()
+        click.echo("sloupec theme přidán")
 
     for u in User.query.order_by(User.id).all():
         click.echo(f"  {u.id:3} {u.email:34} role={u.role:6} ověřen={bool(u.email_verified)}")

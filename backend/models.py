@@ -15,6 +15,9 @@ class User(db.Model, UserMixin):
     # nebylo by po ověření kam ho vrátit.
     email_verified = db.Column(db.Boolean, nullable=False, default=False,
                                server_default='0')
+    # Vybraný barevný motiv. Prázdno znamená "nic uloženého" - pak platí volba
+    # z prohlížeče. Díky tomu si host i nepřihlášený barvu pořád mění jako dřív.
+    theme = db.Column(db.String, nullable=True)
 
 class LoginAttempt(db.Model):
     """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.
