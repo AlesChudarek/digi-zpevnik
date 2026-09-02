@@ -3032,7 +3032,13 @@ def mesicni_hlaseni(komu, jen_vypsat):
         click.echo(text)
         return
 
-    cil = komu or os.getenv("MAIL_REPLY_TO") or os.getenv("MAIL_FROM")
+    # Vlastní proměnná, ne MAIL_REPLY_TO: ta je schválně prázdná, protože Reply-To na
+    # freemail stojí 2,5 bodu u antispamových filtrů. A MAIL_FROM je noreply adresa, kam
+    # se nic nedoručí - hlášení by tiše mizelo.
+    cil = komu or os.getenv("HLASENI_KOMU")
+    if not cil:
+        raise click.ClickException(
+            "Chybí HLASENI_KOMU v prostředí - není kam přehled poslat.")
     predmet = "Digi zpěvník - měsíční přehled"
     if varovani:
         predmet += " (něco vyžaduje pozornost)"
