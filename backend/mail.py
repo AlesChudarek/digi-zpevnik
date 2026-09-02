@@ -70,7 +70,11 @@ def posli_email(komu: str, predmet: str, text: str, html: str | None = None) -> 
     zprava['From'] = formataddr((n['jmeno'], n['odesilatel']))
     zprava['To'] = komu
     if n['odpoved']:
-        # Z noreply adresy nikdo poštu nepřijímá, takže odpověď musí jít jinam.
+        # Z noreply adresy nikdo poštu nepřijímá, takže odpověď musí jít jinam. Pozor ale:
+        # Reply-To na freemailu (seznam, gmail) proti From na vlastní doméně je typický znak
+        # podvodné zprávy a SpamAssassin za to strhává 2,5 bodu pravidlem
+        # FREEMAIL_FORGED_REPLYTO. Naměřeno. Vyplatí se tedy nechat MAIL_REPLY_TO prázdné,
+        # dokud nebude k dispozici adresa na vlastní doméně.
         zprava['Reply-To'] = n['odpoved']
     # Date a Message-ID si server nedoplní sám a jejich chybějící podoba zhoršuje
     # hodnocení u antispamových filtrů.

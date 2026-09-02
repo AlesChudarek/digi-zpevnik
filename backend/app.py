@@ -2609,16 +2609,29 @@ def posli_test(adresa):
     posli_email(
         adresa,
         "Testovací zpráva z Digi zpěvníku",
-        "Tohle je testovací zpráva z aplikace Digi zpěvník.\n\n"
-        "Slouží k ověření, že odesílání funguje a že zprávy procházejí kontrolou SPF, "
-        "DKIM a DMARC.\n\n"
-        "Pokud jste ji dostali omylem, nic se neděje - stačí ji smazat.\n\n"
-        "https://digizpevnik.cz\n",
-        "<p>Tohle je testovací zpráva z aplikace <strong>Digi zpěvník</strong>.</p>"
-        "<p>Slouží k ověření, že odesílání funguje a že zprávy procházejí kontrolou "
-        "SPF, DKIM a DMARC.</p>"
-        "<p>Pokud jste ji dostali omylem, nic se neděje - stačí ji smazat.</p>"
-        "<p><a href=\"https://digizpevnik.cz\">digizpevnik.cz</a></p>",
+        "Dobrý den,\n\n"
+        "tohle je testovací zpráva z aplikace Digi zpěvník, která spravuje naskenované "
+        "zpěvníky letního tábora. Posíláme ji proto, abychom si ověřili, že odesílání "
+        "e-mailů funguje správně a že zprávy procházejí kontrolou pravosti odesílatele.\n\n"
+        "Aplikace posílá jen dva druhy zpráv: potvrzení e-mailové adresy při registraci "
+        "a odkaz na obnovu zapomenutého hesla. Žádné novinky ani nabídky rozesílat "
+        "nebudeme.\n\n"
+        "Pokud vám tato zpráva přišla omylem, nic se neděje a stačí ji smazat. Nikdo "
+        "vás na jejím základě nikam nepřihlásil ani neregistroval.\n\n"
+        "Zpěvníky najdete na https://digizpevnik.cz\n\n"
+        "Tato zpráva byla vygenerována automaticky.\n",
+        "<p>Dobrý den,</p>"
+        "<p>tohle je testovací zpráva z aplikace <strong>Digi zpěvník</strong>, která "
+        "spravuje naskenované zpěvníky letního tábora. Posíláme ji proto, abychom si "
+        "ověřili, že odesílání e-mailů funguje správně a že zprávy procházejí kontrolou "
+        "pravosti odesílatele.</p>"
+        "<p>Aplikace posílá jen dva druhy zpráv: potvrzení e-mailové adresy při registraci "
+        "a odkaz na obnovu zapomenutého hesla. Žádné novinky ani nabídky rozesílat "
+        "nebudeme.</p>"
+        "<p>Pokud vám tato zpráva přišla omylem, nic se neděje a stačí ji smazat. Nikdo "
+        "vás na jejím základě nikam nepřihlásil ani neregistroval.</p>"
+        "<p>Zpěvníky najdete na <a href=\"https://digizpevnik.cz\">digizpevnik.cz</a></p>"
+        "<p>Tato zpráva byla vygenerována automaticky.</p>",
     )
     click.echo(f"Odesláno na {adresa}")
 
