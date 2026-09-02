@@ -25,6 +25,7 @@
   </style>
 </head>
 <body>
+  {% include '_pruh_overeni.html' %}
   <nav>
     <a href="{{ url_for('index') }}">Domů</a> |
     {% if current_user.is_authenticated %}

@@ -1,0 +1,30 @@
+{# Pruh pro přihlášeného uživatele, který ještě nepotvrdil svou e-mailovou adresu.
+   Vkládá se do obou rámů (base i dashboard_base), ať ho vidí všude.
+
+   Účet zůstává použitelný schválně - blokovat přihlášení do potvrzení by znamenalo, že
+   kdo si adresu překlepl nebo komu zpráva spadla do spamu, zůstane venku bez pomoci. #}
+{% if current_user.is_authenticated and not guest and not current_user.email_verified %}
+<div class="pruh-overeni">
+  <span>
+    Ověřte prosím svou e-mailovou adresu <strong>{{ current_user.email }}</strong>.
+    Bez toho nejde zakládat vlastní zpěvníky ani je stahovat.
+  </span>
+  <form method="POST" action="{{ url_for('poslat_overeni_znovu') }}">
+    <button type="submit">Poslat ověření znovu</button>
+  </form>
+</div>
+<style>
+  .pruh-overeni {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 12px; padding: 10px 16px; background: #fff3cd; color: #7a5b00;
+    border-bottom: 1px solid #ffe08a; font-size: 14px; line-height: 1.4;
+  }
+  .pruh-overeni form { margin: 0; }
+  .pruh-overeni button {
+    padding: 6px 12px; border: 1px solid #d9a400; border-radius: 4px;
+    background: #ffd970; color: #5c4400; font-size: 13px; cursor: pointer;
+    white-space: nowrap;
+  }
+  .pruh-overeni button:hover { background: #ffcf4d; }
+</style>
+{% endif %}

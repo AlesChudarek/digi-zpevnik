@@ -1,0 +1,32 @@
+{% set nadpis_stranky = 'Obnova hesla' %}
+{% extends '_auth_layout.html' %}
+
+{% block obsah %}
+  {% if rezim == 'zadost' %}
+    <h1>Zapomenuté heslo</h1>
+    <p>Zadejte adresu, se kterou jste se registrovali. Pošleme na ni odkaz na nastavení
+       nového hesla.</p>
+    <form method="POST">
+      <input type="email" name="email" placeholder="Email" required
+             style="width:100%;padding:10px;margin:6px 0 14px;box-sizing:border-box;
+                    border:1px solid #ccc;border-radius:4px;font-size:15px;">
+      <button type="submit">Poslat odkaz</button>
+    </form>
+    <div class="pod"><a href="{{ url_for('login') }}">Zpět na přihlášení</a></div>
+
+  {% elif rezim == 'nastaveni' %}
+    <h1>Nové heslo</h1>
+    <p>Zvolte si nové heslo. Musí mít aspoň 8 znaků.</p>
+    <form method="POST">
+      <input type="password" name="password" placeholder="Nové heslo" required
+             minlength="8" autocomplete="new-password">
+      <button type="submit">Nastavit heslo</button>
+    </form>
+
+  {% else %}
+    <h1>Odkaz neplatí</h1>
+    <p>Tenhle odkaz na obnovu hesla je neplatný, vypršel, nebo už byl použit. Odkazy platí
+       dvě hodiny a jakmile si heslo změníte, přestanou platit.</p>
+    <a class="odkaz-tlacitko" href="{{ url_for('zapomenute_heslo') }}">Požádat znovu</a>
+  {% endif %}
+{% endblock %}

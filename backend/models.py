@@ -10,6 +10,11 @@ class User(db.Model, UserMixin):
     email = db.Column(db.String, unique=True, nullable=False)
     password = db.Column(db.String, nullable=False)
     role = db.Column(db.String, default='user')
+    # Prokázal uživatel, že mu ta adresa patří? Schválně samostatný příznak, ne další role:
+    # role říká, čím uživatel je, tohle jestli je jeho adresa ověřená. Kdyby to byla role,
+    # nebylo by po ověření kam ho vrátit.
+    email_verified = db.Column(db.Boolean, nullable=False, default=False,
+                               server_default='0')
 
 class LoginAttempt(db.Model):
     """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.
