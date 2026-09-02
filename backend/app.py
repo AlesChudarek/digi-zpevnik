@@ -196,6 +196,18 @@ def can_edit_songbook(user, songbook):
 def is_admin(user):
     return user.is_authenticated and user.role == 'admin'
 
+def smi_tvorit(user):
+    """Smí uživatel zakládat obsah a stahovat zpěvníky?
+
+    Dvě podmínky, každá z jiného důvodu: host je sdílený účet, takže mu nic vlastního
+    nepatří, a neověřená adresa znamená, že o uživateli nevíme, jak ho zastihnout. Obojí
+    jsou zároveň ty operace, které stojí server nejvíc výkonu.
+    """
+    if not user.is_authenticated or is_guest(user):
+        return False
+    return bool(getattr(user, 'email_verified', False))
+
+
 def is_guest(user):
     """Jediné místo, kde se rozhoduje, jestli jde o hosta.
 
@@ -627,11 +639,20 @@ def register():
             return redirect(url_for('register'))
         else:
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
-            new_user = User(email=email, password=hashed_password, role='user')
+            new_user = User(email=email, password=hashed_password, role='user',
+                            email_verified=False)
             db.session.add(new_user)
             db.session.commit()
-            flash('Registrace proběhla úspěšně. Přihlas se.', 'success')
-            return redirect(url_for('login'))
+            # Nepouštíme ho pryč a nenutíme ho nejdřív ověřit. Kdyby si adresu překlepl nebo
+            # zpráva spadla do spamu, zůstal by s mrtvým účtem a nemá se jak dostat dovnitř.
+            # Dovnitř tedy může, jen s omezením a s pruhem nahoře.
+            login_user(new_user)
+            if posli_overovaci_email(new_user):
+                flash('Registrace proběhla. Poslali jsme vám ověřovací e-mail.', 'success')
+            else:
+                flash('Registrace proběhla, ale ověřovací e-mail se nepodařilo odeslat. '
+                      'Zkuste ho poslat znovu později.', 'error')
+            return redirect(url_for('dashboard'))
 
     return render_template('auth.html')
 
@@ -654,6 +675,163 @@ def guest_login():
 
     login_user(user)
     return redirect(url_for('dashboard'))
+
+def posli_overovaci_email(user) -> bool:
+    """Odešle ověřovací odkaz. Vrací, jestli se to povedlo - volající o tom uživatele zpraví."""
+    try:
+        from .mail import posli_email
+        from .tokeny import token_overeni
+    except ImportError:
+        from mail import posli_email
+        from tokeny import token_overeni
+    odkaz = url_for('overit_email', token=token_overeni(user), _external=True)
+    try:
+        posli_email(
+            user.email,
+            "Potvrzení e-mailové adresy - Digi zpěvník",
+            "Dobrý den,\n\n"
+            "někdo si na webu Digi zpěvník zaregistroval účet s touto e-mailovou adresou. "
+            "Pokud jste to byli vy, potvrďte prosím adresu otevřením následující stránky "
+            "a stisknutím tlačítka:\n\n"
+            f"{odkaz}\n\n"
+            "Odkaz platí 24 hodin. Samotné otevření stránky nic nepotvrzuje, potvrzení "
+            "provede až stisknutí tlačítka.\n\n"
+            "Pokud jste se neregistrovali, nemusíte dělat nic. Bez potvrzení se s adresou "
+            "nedá pracovat a účet zůstane omezený.\n\n"
+            "https://digizpevnik.cz\n\n"
+            "Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.\n",
+            "<p>Dobrý den,</p>"
+            "<p>někdo si na webu <strong>Digi zpěvník</strong> zaregistroval účet s touto "
+            "e-mailovou adresou. Pokud jste to byli vy, potvrďte prosím adresu:</p>"
+            f'<p><a href="{odkaz}">Potvrdit e-mailovou adresu</a></p>'
+            "<p>Odkaz platí 24 hodin. Samotné otevření stránky nic nepotvrzuje, potvrzení "
+            "provede až stisknutí tlačítka na ní.</p>"
+            "<p>Pokud jste se neregistrovali, nemusíte dělat nic. Bez potvrzení se "
+            "s adresou nedá pracovat a účet zůstane omezený.</p>"
+            "<p>Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.</p>",
+        )
+        return True
+    except Exception as chyba:  # noqa: BLE001 - registrace nesmí spadnout kvůli poště
+        app.logger.error("Ověřovací e-mail pro %s se neodeslal: %s", user.email, chyba)
+        return False
+
+
+@app.route('/zapomenute-heslo', methods=['GET', 'POST'])
+def zapomenute_heslo():
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip()
+        user = User.query.filter_by(email=email).first()
+        # Odpověď je vždycky stejná, i když účet neexistuje. Jinak by šlo přes tenhle
+        # formulář zjišťovat, které adresy jsou zaregistrované.
+        if user and not is_guest(user):
+            if prihlaseni_zablokovano(email) is None:
+                zaznamenej_neuspesny_pokus(email)
+                try:
+                    from .mail import posli_email
+                    from .tokeny import token_hesla
+                except ImportError:
+                    from mail import posli_email
+                    from tokeny import token_hesla
+                odkaz = url_for('obnova_hesla', token=token_hesla(user), _external=True)
+                try:
+                    posli_email(
+                        user.email,
+                        "Obnova hesla - Digi zpěvník",
+                        "Dobrý den,\n\n"
+                        "někdo požádal o obnovu hesla k účtu na webu Digi zpěvník. Pokud "
+                        "jste to byli vy, nastavte si nové heslo na této stránce:\n\n"
+                        f"{odkaz}\n\n"
+                        "Odkaz platí dvě hodiny a dá se použít jen jednou. Jakmile si "
+                        "heslo změníte, přestane platit.\n\n"
+                        "Pokud jste o obnovu nežádali, nemusíte dělat nic. Vaše heslo "
+                        "zůstává beze změny a nikdo se k účtu nedostal.\n\n"
+                        "https://digizpevnik.cz\n\n"
+                        "Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.\n",
+                        "<p>Dobrý den,</p>"
+                        "<p>někdo požádal o obnovu hesla k účtu na webu "
+                        "<strong>Digi zpěvník</strong>. Pokud jste to byli vy, nastavte si "
+                        "nové heslo:</p>"
+                        f'<p><a href="{odkaz}">Nastavit nové heslo</a></p>'
+                        "<p>Odkaz platí dvě hodiny a dá se použít jen jednou. Jakmile si "
+                        "heslo změníte, přestane platit.</p>"
+                        "<p>Pokud jste o obnovu nežádali, nemusíte dělat nic. Vaše heslo "
+                        "zůstává beze změny a nikdo se k účtu nedostal.</p>"
+                        "<p>Tato zpráva byla vygenerována automaticky, neodpovídejte "
+                        "na ni.</p>",
+                    )
+                except Exception as chyba:  # noqa: BLE001
+                    app.logger.error("Obnova hesla pro %s se neodeslala: %s", email, chyba)
+        flash('Pokud u nás účet s touto adresou existuje, poslali jsme na ni odkaz '
+              'na obnovu hesla.', 'success')
+        return redirect(url_for('login'))
+    return render_template('heslo.html', rezim='zadost')
+
+
+@app.route('/obnova-hesla/<token>', methods=['GET', 'POST'])
+def obnova_hesla(token):
+    try:
+        from .tokeny import uzivatel_z_hesla
+    except ImportError:
+        from tokeny import uzivatel_z_hesla
+    user = uzivatel_z_hesla(token, User)
+    if not user:
+        return render_template('heslo.html', rezim='neplatny')
+    if request.method == 'POST':
+        heslo = request.form.get('password') or ''
+        if len(heslo) < 8:
+            flash('Heslo musí mít aspoň 8 znaků.', 'error')
+            return render_template('heslo.html', rezim='nastaveni', token=token)
+        user.password = generate_password_hash(heslo, method='pbkdf2:sha256', salt_length=16)
+        # Kdo si dokázal vyzvednout odkaz z e-mailu, prokázal tím i vlastnictví adresy.
+        user.email_verified = True
+        db.session.commit()
+        zapomen_pokusy(user.email)
+        flash('Heslo bylo změněno, můžete se přihlásit.', 'success')
+        return redirect(url_for('login'))
+    return render_template('heslo.html', rezim='nastaveni', token=token)
+
+
+@app.route('/overit-email/<token>', methods=['GET', 'POST'])
+def overit_email(token):
+    """Ověření adresy.
+
+    GET jen ukáže stránku s tlačítkem, POST teprve ověří. Vypadá to zbytečně, ale je to
+    nutné: Brevo u transakčních zpráv přepisuje odkazy kvůli sledování a bezpečnostní
+    skenery v poštovních systémech si odkazy samy otevírají, aby zkontrolovaly, kam vedou.
+    Kdyby ověřovalo samotné otevření, skener by odkaz spotřeboval dřív než uživatel.
+    """
+    try:
+        from .tokeny import uzivatel_z_overeni
+    except ImportError:
+        from tokeny import uzivatel_z_overeni
+    user = uzivatel_z_overeni(token, User)
+    if not user:
+        return render_template('overeni.html', stav='neplatny')
+    if user.email_verified:
+        return render_template('overeni.html', stav='hotovo', email=user.email)
+    if request.method == 'POST':
+        user.email_verified = True
+        db.session.commit()
+        return render_template('overeni.html', stav='potvrzeno', email=user.email)
+    return render_template('overeni.html', stav='potvrdit', email=user.email)
+
+
+@app.route('/poslat-overeni-znovu', methods=['POST'])
+@login_required
+def poslat_overeni_znovu():
+    if current_user.email_verified or is_guest(current_user):
+        return redirect(url_for('dashboard'))
+    # Stejné počítadlo jako u přihlašování, ať z toho není nástroj na zahlcení cizí schránky.
+    if prihlaseni_zablokovano(current_user.email) is not None:
+        flash('Ověřovací e-mail jsme právě posílali. Zkuste to prosím za chvíli.', 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+    zaznamenej_neuspesny_pokus(current_user.email)
+    if posli_overovaci_email(current_user):
+        flash('Ověřovací e-mail jsme poslali znovu.', 'success')
+    else:
+        flash('E-mail se nepodařilo odeslat, zkuste to prosím později.', 'error')
+    return redirect(request.referrer or url_for('dashboard'))
+
 
 @app.route('/api/songbook/<songbook_id>/toc')
 def get_songbook_toc(songbook_id):
@@ -1237,8 +1415,11 @@ def my_songbooks():
 @app.route('/api/my-songbooks', methods=['POST'])
 @login_required
 def api_create_songbook():
-    if current_user.role == 'guest':
+    if is_guest(current_user):
         return jsonify({"ok": False, "error": "Guests cannot create songbooks"}), 403
+    if not smi_tvorit(current_user):
+        return jsonify({"ok": False,
+                        "error": "Nejdřív si prosím ověřte e-mailovou adresu"}), 403
 
     want_public = request.form.get('is_public') in ('1', 'true', 'True', 'on')
     if want_public and not is_admin(current_user):
@@ -2333,8 +2514,12 @@ def _resolve_export_request(book_id, kind):
         return None, ("Access denied", 403)
     # Skládání PDF je nejdražší operace, kterou umí návštěvník spustit, a na stroji s 1 GB
     # paměti trvá desítky sekund. Hostům proto stahování nepatří - ať si založí účet.
-    if is_guest(current_user):
-        return None, (jsonify({'error': 'Stahování je jen pro přihlášené uživatele'}), 403)
+    if not smi_tvorit(current_user):
+        # Skládání PDF je nejdražší operace, kterou umí návštěvník spustit, a na stroji
+        # s 1 GB paměti trvá desítky sekund. Hostům a neověřeným účtům proto nepatří.
+        zprava = ('Stahování je jen pro přihlášené uživatele' if is_guest(current_user)
+                  else 'Stahování bude dostupné po ověření e-mailové adresy')
+        return None, (jsonify({'error': zprava}), 403)
 
     if kind == 'pdf':
         variant = request.args.get('q', 'small')
@@ -2597,6 +2782,37 @@ def inject_user_status():
     )
 
 # ---------- CLI PŘÍKAZY ----------
+
+@app.cli.command("migrace-overeni")
+@click.option("--overit-stavajici/--neoverovat", default=True,
+              help="označit stávající účty za ověřené (výchozí)")
+@with_appcontext
+def migrace_overeni(overit_stavajici):
+    """Přidá sloupec email_verified a označí stávající účty za ověřené.
+
+    Lidé, kteří už účet mají, za nic nemůžou - nutit je zpětně k ověření by znamenalo
+    otravovat je kvůli něčemu, co v době jejich registrace neexistovalo.
+    """
+    from sqlalchemy import text
+    sloupce = [r[1] for r in db.session.execute(text("PRAGMA table_info(users)"))]
+    if 'email_verified' not in sloupce:
+        db.session.execute(text(
+            "ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT 0"))
+        db.session.commit()
+        click.echo("sloupec email_verified přidán")
+    else:
+        click.echo("sloupec email_verified už existoval")
+
+    if overit_stavajici:
+        pocet = db.session.query(User).filter(
+            (User.email_verified == False) | (User.email_verified.is_(None))  # noqa: E712
+        ).update({User.email_verified: True}, synchronize_session=False)
+        db.session.commit()
+        click.echo(f"označeno jako ověřených: {pocet} účtů")
+
+    for u in User.query.order_by(User.id).all():
+        click.echo(f"  {u.id:3} {u.email:34} role={u.role:6} ověřen={bool(u.email_verified)}")
+
 
 @app.cli.command("posli-test")
 @click.argument("adresa")

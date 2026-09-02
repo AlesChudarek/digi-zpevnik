@@ -1,0 +1,55 @@
+{# Společný rám pro samostatné stránky kolem přihlášení (ověření adresy, obnova hesla).
+   Vychází ze vzhledu auth.html, aby na sebe navazovaly. #}
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  {% include '_theme.html' %}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ nadpis_stranky }} – Digitální Zpěvník</title>
+  <style>
+    :root { --bg-grad-start:#4CAF50; --bg-grad-end:#2E7D32; --brand:#38843B; --brand-strong:#2E7D32; --brand-dark:#1b5e20; --brand-contrast:#ffffff; }
+    body.theme-blue { --bg-grad-start:#64B5F6; --bg-grad-end:#1976D2; --brand:#1E88E5; --brand-strong:#1565C0; --brand-dark:#0D47A1; --brand-contrast:#ffffff; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, var(--bg-grad-start), var(--bg-grad-end));
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; padding: 20px; box-sizing: border-box;
+    }
+    .container {
+      background-color: white; border-radius: 8px; width: 380px; max-width: 100%;
+      padding: 30px; box-shadow: 0 0 15px rgba(0,0,0,0.2); box-sizing: border-box;
+    }
+    h1 { font-size: 20px; margin: 0 0 16px; color: var(--brand-dark); }
+    p { color: #333; line-height: 1.5; font-size: 15px; }
+    .adresa { font-weight: bold; word-break: break-all; }
+    input[type="password"] {
+      width: 100%; padding: 10px; margin: 6px 0 14px; box-sizing: border-box;
+      border: 1px solid #ccc; border-radius: 4px; font-size: 15px;
+    }
+    button, .odkaz-tlacitko {
+      display: inline-block; width: 100%; padding: 11px; box-sizing: border-box;
+      background: var(--brand); color: var(--brand-contrast); border: 0; border-radius: 4px;
+      font-size: 15px; cursor: pointer; text-align: center; text-decoration: none;
+    }
+    button:hover, .odkaz-tlacitko:hover { background: var(--brand-strong); }
+    .flash { padding: 10px; border-radius: 4px; margin-bottom: 14px; font-size: 14px; }
+    .flash.error { background: #f8d7da; color: #721c24; }
+    .flash.success { background: #d4edda; color: #155724; }
+    .pod { margin-top: 16px; text-align: center; font-size: 14px; }
+    .pod a { color: var(--brand-strong); text-decoration: none; }
+    .pod a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}">{{ message }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block obsah %}{% endblock %}
+  </div>
+</body>
+</html>

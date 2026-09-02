@@ -1,0 +1,31 @@
+{% set nadpis_stranky = 'Ověření e-mailu' %}
+{% extends '_auth_layout.html' %}
+
+{% block obsah %}
+  {% if stav == 'potvrdit' %}
+    <h1>Potvrzení e-mailové adresy</h1>
+    <p>Potvrzujete adresu <span class="adresa">{{ email }}</span>.</p>
+    {# Potvrzuje až tohle tlačítko, ne otevření odkazu. Bezpečnostní skenery v poštovních
+       systémech si odkazy ze zpráv samy načítají; kdyby ověřovalo samotné otevření,
+       spotřeboval by odkaz skener dřív než uživatel. #}
+    <form method="POST">
+      <button type="submit">Potvrdit adresu</button>
+    </form>
+  {% elif stav == 'potvrzeno' %}
+    <h1>Hotovo</h1>
+    <p>Adresa <span class="adresa">{{ email }}</span> je ověřená. Teď už můžete zakládat
+       vlastní zpěvníky a stahovat je.</p>
+    <a class="odkaz-tlacitko" href="{{ url_for('dashboard') }}">Pokračovat do aplikace</a>
+  {% elif stav == 'hotovo' %}
+    <h1>Už je ověřeno</h1>
+    <p>Adresa <span class="adresa">{{ email }}</span> byla ověřená už dřív, nemusíte nic
+       dělat.</p>
+    <a class="odkaz-tlacitko" href="{{ url_for('dashboard') }}">Pokračovat do aplikace</a>
+  {% else %}
+    <h1>Odkaz neplatí</h1>
+    <p>Tenhle ověřovací odkaz je neplatný nebo mu vypršela platnost. Odkazy platí 24 hodin
+       od odeslání.</p>
+    <p>Přihlaste se a nechte si poslat nový — nabídneme vám to hned nahoře.</p>
+    <a class="odkaz-tlacitko" href="{{ url_for('login') }}">Přejít na přihlášení</a>
+  {% endif %}
+{% endblock %}
