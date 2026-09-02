@@ -2962,6 +2962,90 @@ def migrace_overeni(overit_stavajici):
         click.echo(f"  {u.id:3} {u.email:34} role={u.role:6} ověřen={bool(u.email_verified)}")
 
 
+@app.cli.command("mesicni-hlaseni")
+@click.option("--komu", default=None, help="kam poslat (výchozí MAIL_REPLY_TO nebo MAIL_FROM)")
+@click.option("--jen-vypsat", is_flag=True, help="nic neposílat, jen ukázat obsah")
+@with_appcontext
+def mesicni_hlaseni(komu, jen_vypsat):
+    """Krátký přehled o stavu, posílaný jednou měsíčně.
+
+    Má dva úkoly zároveň. Za prvé udrží živý SMTP klíč - Brevo ho ruší po 90 dnech
+    nečinnosti a naše jediné zprávy jsou registrace a obnova hesla, takže čtvrt roku ticha
+    je běžný stav. Za druhé je to kontrolka: když zpráva nepřijde, něco je rozbité.
+
+    Proto se posílá bez ohledu na to, jestli se něco změnilo. Zpráva "vše v pořádku" nese
+    informaci právě tím, že dorazila.
+    """
+    import shutil
+    from datetime import datetime
+
+    uzivatelu = User.query.count()
+    neovereni = User.query.filter_by(email_verified=False).count()
+    verejnych = Songbook.query.filter_by(is_public=1).count()
+    soukromych = Songbook.query.filter(Songbook.is_public != 1).count()
+    pisnicek = Song.query.count()
+
+    koren = Path(app.root_path).parent
+    velikost = sum(f.stat().st_size for f in (koren / 'data').rglob('*') if f.is_file())
+    volno = shutil.disk_usage(str(koren)).free
+
+    # Značku píše zálohovací skript na Macu po úspěšném běhu. Když zestárne, znamená to,
+    # že zálohy tiše přestaly chodit - a to je jediná kopie dat mimo tenhle server.
+    znacka = Path.home() / '.posledni-zaloha'
+    if znacka.exists():
+        stari_dnu = (datetime.now() - datetime.fromtimestamp(znacka.stat().st_mtime)).days
+        zaloha = f"před {stari_dnu} dny" if stari_dnu else "dnes"
+    else:
+        stari_dnu, zaloha = None, "neznámo (značka chybí)"
+
+    varovani = []
+    if stari_dnu is None or stari_dnu > 3:
+        varovani.append(f"Poslední záloha: {zaloha}. Zálohy zřejmě nechodí.")
+    if volno < 5 * 1024**3:
+        varovani.append(f"Na disku zbývá jen {volno / 1024**3:.1f} GB.")
+
+    radky = [
+        "Měsíční přehled Digi zpěvníku.",
+        "",
+        f"Uživatelé:       {uzivatelu} (z toho {neovereni} neověřených)",
+        f"Zpěvníky:        {verejnych} veřejných, {soukromych} soukromých",
+        f"Písničky:        {pisnicek}",
+        f"Data na disku:   {velikost / 1e6:.0f} MB",
+        f"Volné místo:     {volno / 1024**3:.1f} GB",
+        f"Poslední záloha: {zaloha}",
+        "",
+    ]
+    if varovani:
+        radky += ["POZOR:"] + [f"  - {v}" for v in varovani] + [""]
+    else:
+        radky += ["Nic k řešení.", ""]
+    radky += [
+        "Tahle zpráva chodí jednou měsíčně schválně i když je všechno v pořádku:",
+        "udržuje živý přístup k odesílání pošty, který by jinak po 90 dnech nečinnosti",
+        "vypršel a shodil registrace. Když nedorazí, něco se pokazilo.",
+        "",
+        "https://digizpevnik.cz",
+    ]
+    text = "\n".join(radky)
+
+    if jen_vypsat:
+        click.echo(text)
+        return
+
+    cil = komu or os.getenv("MAIL_REPLY_TO") or os.getenv("MAIL_FROM")
+    predmet = "Digi zpěvník - měsíční přehled"
+    if varovani:
+        predmet += " (něco vyžaduje pozornost)"
+    try:
+        from .mail import posli_email
+    except ImportError:
+        from mail import posli_email
+    posli_email(cil, predmet, text,
+                "<pre style=\"font-family:monospace;font-size:14px\">"
+                + text.replace('&', '&amp;').replace('<', '&lt;') + "</pre>")
+    click.echo(f"odesláno na {cil}")
+
+
 @app.cli.command("posli-test")
 @click.argument("adresa")
 def posli_test(adresa):
