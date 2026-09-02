@@ -39,6 +39,14 @@ SSH_VOLBY="-i $KLIC -o ConnectTimeout=20 -o BatchMode=yes -o ServerAliveInterval
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S')  $*" | tee -a "$LOG"; }
 
+# Selhání se dosud pozná jen z logu, do kterého se nikdo nedívá. Záloha je přitom jediná
+# kopie dat mimo server, takže týden tichého selhání znamená týden bez pojistky.
+upozorni() {
+  log "CHYBA: $1"
+  osascript -e "display notification \"$1\" with title \"Záloha zpěvníku selhala\" sound name \"Basso\"" 2>/dev/null || true
+}
+
+# Cokoliv nečekaného pod set -e projde tudy, ne jen ty chyby, na které se ptáme.
 mkdir -p "$ZRCADLO" "$SNIMKY" "$(dirname "$LOG")"
 
 # Dva souběžné běhy by si šlapaly po zrcadle (launchd může dohnat zmeškaný běh v okamžiku,
@@ -47,14 +55,16 @@ if ! mkdir "$ZAMEK" 2>/dev/null; then
   log "PRESKOCENO: uz bezi jina zaloha ($ZAMEK)"
   exit 0
 fi
-trap 'rmdir "$ZAMEK" 2>/dev/null || true' EXIT
+# Až tady, ne dřív: kdyby byl trap nastavený před získáním zámku, smazal by při souběhu
+# cizí zámek a pustil by dva běhy na sebe.
+trap 'kod=$?; [ $kod -ne 0 ] && upozorni "Skript skončil s chybou $kod, podrobnosti v log/zaloha.log"; rmdir "$ZAMEK" 2>/dev/null || true' EXIT
 
 log "=== start ==="
 
 ssh_cmd() { ssh $SSH_VOLBY "$SERVER" "$@"; }
 
 if ! ssh_cmd true 2>/dev/null; then
-  log "CHYBA: server $SERVER neodpovida, koncim bez zmeny zalohy"
+  upozorni "Server $SERVER neodpovídá, záloha se nespustila"
   exit 1
 fi
 
@@ -88,7 +98,7 @@ stahni() {
       return 0
     fi
     if [ "$pokus" -ge "$POKUSU" ]; then
-      log "CHYBA: $popis se nepovedlo ani na $POKUSU. pokus"
+      upozorni "$popis se nepovedlo ani na $POKUSU. pokus"
       return 1
     fi
     log "     $popis spadlo, zkouším znovu ($((pokus + 1))/$POKUSU)"
@@ -112,7 +122,7 @@ log "zrcadlo: $POCET souboru, $VELIKOST"
 # Prázdné zrcadlo by znamenalo, že se něco pokazilo. Snímek z něj nedělám, ať nevytlačí
 # těch sedm dobrých.
 if [ "$POCET" -lt 100 ]; then
-  log "CHYBA: zrcadlo ma jen $POCET souboru, to nevypada spravne - snimek nedelam"
+  upozorni "Zrcadlo má jen $POCET souborů, snímek nedělám"
   exit 1
 fi
 
@@ -135,6 +145,10 @@ if [ "$POCET_SNIMKU" -gt "$DRZET_SNIMKU" ]; then
 fi
 
 ssh_cmd "rm -rf /tmp/zpevnik-zaloha" || true
+
+# Značka pro měsíční hlášení: server sám neví, jestli zálohy chodí, protože je stahuje
+# Mac. Když značka zestárne, hlášení na to upozorní.
+ssh_cmd "touch ~/.posledni-zaloha" || log "poznámka: značku o záloze se nepodařilo zapsat"
 
 CELKEM=$(du -sh "$CIL" | cut -f1)
 log "=== hotovo, zalohy celkem $CELKEM, snimku: $(ls -1 "$SNIMKY" | wc -l | tr -d ' ') ==="
