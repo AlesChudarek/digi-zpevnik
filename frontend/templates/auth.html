@@ -80,6 +80,12 @@
     .guest-link a:hover {
       text-decoration: underline;
     }
+    .napoveda { font-size: 13px; color: #666; margin: -4px 0 10px; }
+    .chyba-hesla {
+      display: none; font-size: 13px; color: #721c24; background: #f8d7da;
+      border-radius: 4px; padding: 8px; margin-bottom: 10px;
+    }
+    .chyba-hesla.videt { display: block; }
     .flash {
       padding: 10px;
       margin-bottom: 15px;
@@ -117,9 +123,15 @@
       <button type="submit">Přihlásit se</button>
     </form>
 
-    <form id="register" method="POST" action="{{ url_for('register') }}">
+    <form id="register" method="POST" action="{{ url_for('register') }}"
+          onsubmit="return zkontrolujHesla(this)">
       <input type="email" name="email" placeholder="Email" required>
-      <input type="password" name="password" placeholder="Heslo" required>
+      <input type="password" name="password" placeholder="Heslo" required
+             minlength="8" autocomplete="new-password">
+      <input type="password" name="password2" placeholder="Heslo znovu" required
+             minlength="8" autocomplete="new-password">
+      <div class="napoveda">Heslo musí mít aspoň 8 znaků.</div>
+      <div class="chyba-hesla" id="chyba-hesla"></div>
       <button type="submit">Registrovat se</button>
     </form>
 
@@ -133,6 +145,19 @@
   </div>
 
   <script>
+    // Kontrola v prohlížeči je jen pohodlí - stejná pravidla platí i na serveru,
+    // protože tenhle formulář se dá odeslat i s vypnutým JavaScriptem.
+    function zkontrolujHesla(form) {
+      const chyba = document.getElementById('chyba-hesla');
+      const h1 = form.password.value, h2 = form.password2.value;
+      let text = '';
+      if (h1.length < 8) text = 'Heslo musí mít aspoň 8 znaků.';
+      else if (h1 !== h2) text = 'Hesla se neshodují.';
+      chyba.textContent = text;
+      chyba.classList.toggle('videt', !!text);
+      return !text;
+    }
+
     function showForm(formId) {
       document.querySelectorAll('form').forEach(f => f.classList.remove('active'));
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));

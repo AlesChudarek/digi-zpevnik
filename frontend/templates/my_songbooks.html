@@ -1406,7 +1406,7 @@ function openCreateModal() {
           const res = await fetch('/api/my-songbooks', { method: 'POST', body: fd });
           if (!res.ok) {
             const msg = await res.text();
-            alert('Vytvoření selhalo: ' + (msg || res.status));
+            alert('Vytvoření selhalo: ' + popisChyby(msg, res.status));
             return;
           }
           // Success: reload to show the new songbook

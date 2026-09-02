@@ -634,6 +634,15 @@ def register():
             flash('Neplatná e-mailová adresa', 'error')
             return redirect(url_for('register'))
 
+        # Stejná pravidla jako v prohlížeči. Kontrola na straně serveru musí být i tak,
+        # formulář jde odeslat i bez JavaScriptu.
+        if len(password) < 8:
+            flash('Heslo musí mít aspoň 8 znaků.', 'error')
+            return redirect(url_for('register'))
+        if password != (request.form.get('password2') or password):
+            flash('Hesla se neshodují.', 'error')
+            return redirect(url_for('register'))
+
         if User.query.filter_by(email=email).first():
             flash('Účet už existuje', 'error')
             return redirect(url_for('register'))
@@ -714,6 +723,39 @@ def posli_overovaci_email(user) -> bool:
     except Exception as chyba:  # noqa: BLE001 - registrace nesmí spadnout kvůli poště
         app.logger.error("Ověřovací e-mail pro %s se neodeslal: %s", user.email, chyba)
         return False
+
+
+@app.route('/profil')
+@login_required
+def profil():
+    return render_template('profil.html')
+
+
+@app.route('/profil/zmena-hesla', methods=['POST'])
+@login_required
+def zmena_hesla():
+    if is_guest(current_user):
+        return redirect(url_for('profil'))
+    stare = request.form.get('stare') or ''
+    nove = request.form.get('nove') or ''
+    nove2 = request.form.get('nove2') or ''
+
+    if not check_password_hash(current_user.password, stare):
+        # Počítá se stejně jako neúspěšné přihlášení: kdo zná session, ale ne heslo,
+        # by tudy jinak mohl heslo hádat bez omezení.
+        zaznamenej_neuspesny_pokus(current_user.email)
+        flash('Současné heslo nesouhlasí.', 'error')
+    elif len(nove) < 8:
+        flash('Nové heslo musí mít aspoň 8 znaků.', 'error')
+    elif nove != nove2:
+        flash('Nová hesla se neshodují.', 'error')
+    else:
+        current_user.password = generate_password_hash(nove, method='pbkdf2:sha256',
+                                                       salt_length=16)
+        db.session.commit()
+        zapomen_pokusy(current_user.email)
+        flash('Heslo bylo změněno.', 'success')
+    return redirect(url_for('profil'))
 
 
 @app.route('/zapomenute-heslo', methods=['GET', 'POST'])
@@ -2771,7 +2813,8 @@ def songbook_detail(book_id):
         book_color=book_color,
         songbook_type=book_type,
         songbook_is_private=(not is_public),
-        can_manage_songbook=can_manage
+        can_manage_songbook=can_manage,
+        smi_stahovat=smi_tvorit(current_user)
     )
 
 @app.context_processor

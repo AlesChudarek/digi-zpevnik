@@ -575,6 +575,9 @@
 
   /* --- Stažení zpěvníku ------------------------------------------------------
      Vysouvá se doleva, protože tenhle sloupec sedí u pravého kraje okna. */
+  /* Zašedlá ikona stahování pro hosty a neověřené účty. */
+  #download-toggle.zakazano { opacity: .4; cursor: not-allowed; }
+
   .download-menu {
     position: absolute;
     right: calc(100% + 12px);
@@ -901,10 +904,16 @@
   {# Stažení celého zpěvníku. Nabídka se vysouvá doleva, protože tenhle sloupec sedí
      u pravého kraje - doprava by neměla kam. #}
   <div class="button-container" id="download-button">
-    <button onclick="toggleDownloadMenu(event)" id="download-toggle" aria-expanded="false">
+    {# Kdo stahovat nesmí, nemá dostat rozbalovací nabídku tří možností, ze kterých ani
+       jedna nezafunguje. Ikona je zašedlá a rovnou řekne proč. #}
+    <button onclick="toggleDownloadMenu(event)" id="download-toggle" aria-expanded="false"
+            {% if not smi_stahovat %}class="zakazano" aria-disabled="true"{% endif %}>
       <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
     </button>
-    <div class="tooltip-text" id="download-tooltip">Stáhnout zpěvník</div>
+    <div class="tooltip-text" id="download-tooltip">{{
+      'Stáhnout zpěvník' if smi_stahovat
+      else ('Stahování je jen pro přihlášené uživatele' if guest
+            else 'Stahování bude dostupné po ověření e-mailové adresy') }}</div>
     <div class="download-menu" id="download-menu" aria-hidden="true">
       <button type="button" onclick="startDownload('pdf', 'small')">
         <strong>PDF, menší soubor</strong>
@@ -1671,7 +1680,7 @@ function animateModeTogglePreview(showTarget, force = false) {
                   try {
                     const fd = new FormData(); fd.append('song_id', songId);
                     const res = await fetch(`/api/songbooks/${encodeURIComponent(it.id)}/add-song`, { method: 'POST', body: fd });
-                    if (!res.ok) { const t = await res.text(); alert('Přidání selhalo: ' + (t || res.status)); } else { overlay.remove(); }
+                    if (!res.ok) { const t = await res.text(); alert('Přidání selhalo: ' + popisChyby(t, res.status)); } else { overlay.remove(); }
                   } catch(_) { alert('Chyba při komunikaci se serverem'); }
                 });
                 list.appendChild(b);
@@ -1716,7 +1725,7 @@ function animateModeTogglePreview(showTarget, force = false) {
                   const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(BOOK_ID)}/songs/${encodeURIComponent(entry.song_id)}`, { method: 'DELETE' });
                   if (!resp.ok) {
                     const text = await resp.text();
-                    alert('Mazání písničky selhalo: ' + (text || resp.status));
+                    alert('Mazání písničky selhalo: ' + popisChyby(text, resp.status));
                     return;
                   }
                   window.location.reload();
@@ -1974,8 +1983,17 @@ async function fitDoublePageToViewport() {
    spadl na třicetisekundovém timeoutu ještě před dokončením. Klient se proto ptá. */
 const DOWNLOAD_BOOK_ID = {{ book_id | tojson }};
 
+const SMI_STAHOVAT = {{ smi_stahovat | tojson }};
+const DUVOD_ZAKAZU = {{ ('Stahování je jen pro přihlášené uživatele' if guest
+    else 'Stahování bude dostupné po ověření e-mailové adresy') | tojson }};
+
 function toggleDownloadMenu(event) {
   if (event) event.stopPropagation();
+  if (!SMI_STAHOVAT) {
+    // Rovnou důvod, ne nabídka tří možností, ze kterých žádná nezafunguje.
+    alert(DUVOD_ZAKAZU);
+    return;
+  }
   const menu = document.getElementById('download-menu');
   const open = menu.classList.toggle('open');
   menu.setAttribute('aria-hidden', open ? 'false' : 'true');
