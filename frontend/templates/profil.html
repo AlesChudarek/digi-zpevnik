@@ -1,0 +1,119 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Můj účet{% endblock %}
+{% block content %}
+<div class="profil">
+  <h1>Můj účet</h1>
+
+  <div class="karta">
+    <div class="radek">
+      <span class="popisek">E-mail</span>
+      <span class="hodnota">{{ current_user.email }}</span>
+    </div>
+    <div class="radek">
+      <span class="popisek">Stav adresy</span>
+      <span class="hodnota">
+        {% if current_user.email_verified %}
+          <span class="odznak odznak-ok">ověřená</span>
+        {% else %}
+          <span class="odznak odznak-cekam">neověřená</span>
+        {% endif %}
+      </span>
+    </div>
+    <div class="radek">
+      <span class="popisek">Role</span>
+      <span class="hodnota">
+        {% if current_user.role == 'admin' %}správce
+        {% elif current_user.role == 'guest' %}host
+        {% else %}uživatel{% endif %}
+      </span>
+    </div>
+  </div>
+
+  {% if not current_user.email_verified and current_user.role != 'guest' %}
+  <div class="karta">
+    <h2>Ověření adresy</h2>
+    <p>Dokud adresu nepotvrdíte, nejde zakládat vlastní zpěvníky ani je stahovat.</p>
+    <form method="POST" action="{{ url_for('poslat_overeni_znovu') }}">
+      <button type="submit">Poslat ověřovací e-mail znovu</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if current_user.role != 'guest' %}
+  <div class="karta">
+    <h2>Změna hesla</h2>
+    <form method="POST" action="{{ url_for('zmena_hesla') }}" onsubmit="return zkontroluj(this)">
+      <input type="password" name="stare" placeholder="Současné heslo" required
+             autocomplete="current-password">
+      <input type="password" name="nove" placeholder="Nové heslo" required
+             minlength="8" autocomplete="new-password">
+      <input type="password" name="nove2" placeholder="Nové heslo znovu" required
+             minlength="8" autocomplete="new-password">
+      <div class="napoveda">Nové heslo musí mít aspoň 8 znaků.</div>
+      <div class="chyba" id="chyba"></div>
+      <button type="submit">Změnit heslo</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="karta">
+    <a class="odhlasit" href="{{ url_for('logout') }}">Odhlásit se</a>
+  </div>
+</div>
+
+<style>
+  .profil { max-width: 620px; margin: 24px auto 60px; padding: 0 16px; }
+  .profil h1 { color: #fff; font-size: 24px; margin: 0 0 18px; }
+  .karta {
+    background: #fff; border-radius: 10px; padding: 20px; margin-bottom: 16px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    /* Tělo stránky má bílý text kvůli barevnému pozadí. Bez tohohle je text na bílé
+       kartě neviditelný - přesně to se stalo u e-mailu a role. */
+    color: #222;
+  }
+  .karta h2 { font-size: 17px; margin: 0 0 10px; color: var(--brand-dark, #1b5e20); }
+  .karta p { font-size: 14px; color: #555; line-height: 1.5; margin: 0 0 14px; }
+  .radek {
+    display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    padding: 9px 0; border-bottom: 1px solid #eee;
+  }
+  .radek:last-child { border-bottom: 0; }
+  .popisek { color: #666; font-size: 14px; }
+  .hodnota { font-weight: 600; word-break: break-all; text-align: right; }
+  .odznak { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .odznak-ok { background: #d4edda; color: #155724; }
+  .odznak-cekam { background: #fff3cd; color: #7a5b00; }
+  .karta input[type="password"] {
+    width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 15px;
+  }
+  .napoveda { font-size: 13px; color: #666; margin-bottom: 10px; }
+  .chyba {
+    display: none; font-size: 13px; color: #721c24; background: #f8d7da;
+    border-radius: 6px; padding: 8px; margin-bottom: 10px;
+  }
+  .chyba.videt { display: block; }
+  .karta button {
+    background: var(--brand, #38843B); color: #fff; border: 0; border-radius: 6px;
+    padding: 11px 18px; font-size: 15px; cursor: pointer;
+  }
+  .karta button:hover { filter: brightness(0.92); }
+  .odhlasit {
+    display: inline-block; color: #b3261e; text-decoration: none; font-size: 15px;
+    font-weight: 600;
+  }
+  .odhlasit:hover { text-decoration: underline; }
+</style>
+
+<script>
+  function zkontroluj(form) {
+    const ch = document.getElementById('chyba');
+    let t = '';
+    if (form.nove.value.length < 8) t = 'Nové heslo musí mít aspoň 8 znaků.';
+    else if (form.nove.value !== form.nove2.value) t = 'Nová hesla se neshodují.';
+    ch.textContent = t;
+    ch.classList.toggle('videt', !!t);
+    return !t;
+  }
+</script>
+{% endblock %}

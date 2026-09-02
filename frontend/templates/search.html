@@ -226,7 +226,16 @@
       <label><input type="checkbox" id="t-public" checked> Veřejné</label>
       {# Shared songbooks are somebody's private ones, so they belong under Soukromé.
          The list still marks them with their own icon. #}
-      <label><input type="checkbox" id="t-private" checked> Soukromé</label>
+      {% if guest %}
+        {# Host k soukromým zpěvníkům přístup nemá, takže filtr nejen nezaškrtnutý,
+           ale ani přepínatelný - jinak by klikal na něco, co nikdy nic neukáže. #}
+        <label class="tooltip" data-tooltip="Pouze pro přihlášené uživatele"
+               style="opacity:.55;cursor:not-allowed;">
+          <input type="checkbox" id="t-private" disabled> Soukromé
+        </label>
+      {% else %}
+        <label><input type="checkbox" id="t-private" checked> Soukromé</label>
+      {% endif %}
     </div>
   </div>
 
@@ -489,7 +498,7 @@
           const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/songs/${encodeURIComponent(songId)}`, { method: 'DELETE' });
           if (!resp.ok) {
             const text = await resp.text();
-            alert('Odstranění selhalo: ' + (text || resp.status));
+            alert('Odstranění selhalo: ' + popisChyby(text, resp.status));
             return;
           }
           tr.remove();
@@ -597,7 +606,7 @@
               fd.append('song_id', songId);
               const res = await fetch(`/api/songbooks/${encodeURIComponent(it.id)}/add-song`, { method: 'POST', body: fd });
               if (!res.ok) {
-                const t = await res.text(); alert('Přidání selhalo: ' + (t || res.status));
+                const t = await res.text(); alert('Přidání selhalo: ' + popisChyby(t, res.status));
               } else {
                 overlay.remove();
                 // Refresh to show the new entry in the target songbook
