@@ -268,15 +268,20 @@
     .ucet-panel .odznak-ok { background: #d4edda; color: #155724; }
     .ucet-panel .odznak-cekam { background: #fff3cd; color: #7a5b00; }
     .ucet-panel form { margin: 0; }
-    .ucet-polozka {
-      display: block; width: 100%; box-sizing: border-box; padding: 11px 16px;
-      background: none; border: 0; border-top: 1px solid #f2f2f2; text-align: left;
-      font-size: 14px; font-family: inherit; color: #222; text-decoration: none;
+    /* Zapsané přes .ucet-panel schválně: .navbar a má vyšší specificitu než samotná
+       třída, takže by odkazům v panelu vnutila bílou barvu z lišty (bílý text na bílém
+       pozadí) a k tomu vlastní okraje a inline-block. Tohle ji přebije. */
+    .ucet-panel .ucet-polozka {
+      display: block; width: 100%; box-sizing: border-box;
+      margin: 0; padding: 11px 16px; border: 0; border-top: 1px solid #f2f2f2;
+      background: none; text-align: left; text-decoration: none;
+      font-size: 14px; font-weight: normal; font-family: inherit; color: #222;
       cursor: pointer;
     }
-    .ucet-polozka:hover { background: #f5f5f5; }
-    .ucet-nebezpeci { color: #a5402f; }
-    .ucet-odhlasit { color: #b3261e; font-weight: 600; }
+    .ucet-panel .ucet-polozka:hover { background: #f5f5f5; }
+    .ucet-panel .ucet-nebezpeci { color: #a5402f; }
+    .ucet-panel .ucet-odhlasit { color: #b3261e; font-weight: 600; }
+    .ucet-panel .ucet-adresa { color: #222; }
 
     /* Hlášky po přesměrování. Dashboard je dosud neuměl zobrazit vůbec, takže hláška
        o odeslaném ověřovacím e-mailu čekala v session a vyskočila až o stránku dál. */
