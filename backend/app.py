@@ -11,6 +11,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 import re
 import unicodedata
+from datetime import datetime, timedelta
 import time
 import hashlib
 import threading
@@ -156,11 +157,12 @@ try:
         Author,
         User,
         UserSongbookAccess,
+        LoginAttempt,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, db, init_app
+    from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -195,7 +197,13 @@ def is_admin(user):
     return user.is_authenticated and user.role == 'admin'
 
 def is_guest(user):
-    return user.is_authenticated and user.role == 'guest'
+    """Jediné místo, kde se rozhoduje, jestli jde o hosta.
+
+    Dřív se to zjišťovalo třemi způsoby zároveň - podle role, podle e-mailu
+    guest@guest.com a podle příznaku v session. Tři odpovědi na jednu otázku se dřív nebo
+    později rozejdou, takže platí jen role.
+    """
+    return user.is_authenticated and getattr(user, 'role', None) == 'guest'
 
 
 # ---------- Non-song pages ----------
@@ -521,6 +529,51 @@ def _lighten_hex(hex_color: str, pct: float) -> str:
 def is_valid_email(email):
     return re.match(r"[^@]+@[^@]+\.[^@]+", email)
 
+
+# ---------- OMEZENÍ POKUSŮ O PŘIHLÁŠENÍ ----------
+# Bez tohohle jde hesla zkoušet donekonečna. Počítá se ve dvou rovinách zvlášť: na e-mail,
+# aby nešlo louskat konkrétní účet, a na IP adresu, aby nešlo zkoušet jedno heslo proti
+# mnoha účtům.
+OKNO_POKUSU = timedelta(minutes=15)
+MAX_POKUSU_EMAIL = 5
+MAX_POKUSU_IP = 20
+DRZET_POKUSY = timedelta(hours=24)
+
+
+def _ip_klienta():
+    # ProxyFix už hlavičku X-Forwarded-For vyhodnotil, takže remote_addr je skutečný klient.
+    return request.remote_addr or 'neznama'
+
+
+def prihlaseni_zablokovano(email):
+    """Vyčerpal někdo počet pokusů? Vrací zbývající minuty, nebo None když je čisto."""
+    od = datetime.utcnow() - OKNO_POKUSU
+    for sloupec, hodnota, limit in ((LoginAttempt.email, (email or '').lower(), MAX_POKUSU_EMAIL),
+                                    (LoginAttempt.ip, _ip_klienta(), MAX_POKUSU_IP)):
+        pokusy = (LoginAttempt.query
+                  .filter(sloupec == hodnota, LoginAttempt.cas >= od)
+                  .order_by(LoginAttempt.cas.asc()).all())
+        if len(pokusy) >= limit:
+            # Odblokuje se, až nejstarší pokus vypadne z okna.
+            zbyva = (pokusy[0].cas + OKNO_POKUSU) - datetime.utcnow()
+            return max(1, int(zbyva.total_seconds() // 60) + 1)
+    return None
+
+
+def zaznamenej_neuspesny_pokus(email):
+    db.session.add(LoginAttempt(email=(email or '').lower(), ip=_ip_klienta(),
+                                cas=datetime.utcnow()))
+    # Úklid starých záznamů při zápisu, ať tabulka neroste donekonečna.
+    LoginAttempt.query.filter(LoginAttempt.cas < datetime.utcnow() - DRZET_POKUSY).delete()
+    db.session.commit()
+
+
+def zapomen_pokusy(email):
+    LoginAttempt.query.filter(
+        (LoginAttempt.email == (email or '').lower()) | (LoginAttempt.ip == _ip_klienta())
+    ).delete(synchronize_session=False)
+    db.session.commit()
+
 # ---------- MODELY ----------
 # Používej modely pouze z backend/models.py (viz import výše)
 
@@ -539,12 +592,23 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
+
+        zbyva = prihlaseni_zablokovano(email)
+        if zbyva is not None:
+            # Heslo se schválně ani neověřuje - jinak by šlo měřením času zjistit,
+            # jestli bylo správné.
+            flash(f'Příliš mnoho pokusů o přihlášení. Zkuste to znovu za {zbyva} min.', 'error')
+            return render_template('auth.html')
+
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
+            zapomen_pokusy(email)
             login_user(user)
-            session['guest'] = (user.email == "guest@guest.com")
             return redirect(url_for('dashboard'))
         else:
+            zaznamenej_neuspesny_pokus(email)
+            # Stejná hláška pro neexistující účet i špatné heslo, ať se nedá zjistit,
+            # které e-maily jsou zaregistrované.
             flash('Nesprávné přihlašovací údaje', 'error')
     return render_template('auth.html')
 
@@ -573,11 +637,7 @@ def register():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    # Korektní odhlášení přes Flask-Login + uklid session flagu guest
-    try:
-        logout_user()
-    finally:
-        session.pop('guest', None)
+    logout_user()
     return redirect(url_for('login'))
 
 @app.route('/guest-login')
@@ -593,8 +653,6 @@ def guest_login():
         db.session.commit()
 
     login_user(user)
-    session['guest'] = True
-    # flash('Přihlášen jako host.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/api/songbook/<songbook_id>/toc')
@@ -656,9 +714,7 @@ def get_songbook_toc(songbook_id):
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.email == "guest@guest.com":
-        return render_template('dashboard.html', guest=True)
-    return render_template('dashboard.html', guest=False)
+    return render_template('dashboard.html', guest=is_guest(current_user))
 
 @app.route('/search')
 @login_required
@@ -788,8 +844,7 @@ def search():
             'can_edit': can_edit
         })
 
-    is_guest = (current_user.email == "guest@guest.com")
-    return render_template('search.html', rows=results, guest=is_guest)
+    return render_template('search.html', rows=results, guest=is_guest(current_user))
 
 # API: List current user's private songbooks (for adding songs)
 @app.route('/api/my-songbooks/options')
@@ -1078,11 +1133,10 @@ def public_songbooks():
     songbooks = db.session.execute(
         db.select(Songbook).where(Songbook.is_public == 1)
     ).scalars().all()
-    is_guest = (current_user.email == "guest@guest.com")
     return render_template(
         'public_songbooks.html',
         songbooks=songbooks,
-        guest=is_guest,
+        guest=is_guest(current_user),
         can_manage=is_admin(current_user),
     )
 
@@ -2277,6 +2331,10 @@ def _resolve_export_request(book_id, kind):
     songbook = Songbook.query.get_or_404(book_id)
     if not can_view_songbook(current_user, songbook):
         return None, ("Access denied", 403)
+    # Skládání PDF je nejdražší operace, kterou umí návštěvník spustit, a na stroji s 1 GB
+    # paměti trvá desítky sekund. Hostům proto stahování nepatří - ať si založí účet.
+    if is_guest(current_user):
+        return None, (jsonify({'error': 'Stahování je jen pro přihlášené uživatele'}), 403)
 
     if kind == 'pdf':
         variant = request.args.get('q', 'small')
@@ -2534,7 +2592,7 @@ def songbook_detail(book_id):
 @app.context_processor
 def inject_user_status():
     return dict(
-        guest=session.get('guest', False),
+        guest=is_guest(current_user),
         logged_in=current_user.is_authenticated
     )
 
