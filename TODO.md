@@ -97,10 +97,11 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] aplikace maže staré obrázky stran (`smaz_osirele_obrazky`) — smaže se jen soubor,
       na který už neukazuje žádný `SongImage` ani sloupec obálky
 - [X] 00016 dostal průhledné obálky, prázdné vnitřní odebrány
-- [ ] **náhledy obálek — hotové v pracovní kopii, čeká na commit a nasazení.** Přehled
-      zobrazuje obálku ve výšce 250 px, ale posílal originál: naměřeno **24,1 MB na
-      třicet obálek**, jedna z nich 6,5 MB. Ve WebP o šířce 700 px je to 0,7 MB, tedy
-      **34x méně**. Viz `backend/nahledy.py` a CLI `flask nahledy-warm`.
+- [X] náhledy obálek v přehledech (`backend/nahledy.py`, CLI `flask nahledy-warm`).
+      Naměřeno na serveru po nasazení: třicet obálek **24,1 MB → 2,89 MB, tedy 8,3x
+      méně**. Pozor, komentář v `nahledy.py` uvádí 0,7 MB a 34x — to nejspíš není
+      celek, ale jen obálky, které se stihnou načíst nad ohybem při `loading="lazy"`.
+      Neověřeno, chce to změřit v prohlížeči, než se to číslo bude někde opakovat.
 - [ ] **náhledové verze stran do čtečky.** Změřeno: strana váží v průměru **878 kB** a
       jeden zpěvník **26 MB**. Čtečka dostává plné 1748×2480 a prohlížeč to zmenšuje sám,
       takže se na telefonu u táboráku tahají megabajty na každé otočení stránky. Pozor:
