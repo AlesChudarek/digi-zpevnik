@@ -24,7 +24,6 @@ backend/.env
 
 # Soubory jen pro me
 data_backup/
-TODO.md
 data/private/seeds/00102/obsah.txt
 data/public/images/songbooks/00101/
 data/public/images/songbooks/00102/
