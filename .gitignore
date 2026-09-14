@@ -43,3 +43,6 @@ data/
 # Zálohy dat ze serveru. Vlastní .git uvnitř je štít proti git clean -xdf.
 zalohy/
 ke-kontrole/
+
+# Zmenšené náhledy obálek - odvozená data, generují se samy.
+data/nahledy/
