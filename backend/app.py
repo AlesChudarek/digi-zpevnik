@@ -758,6 +758,65 @@ ZNAME_MOTIVY = {'green', 'blue', 'dark', 'purple', 'amber', 'slate', 'teal',
                 'emerald', 'cyan', 'indigo', 'rose', 'pink'}
 
 
+NAHLEDY_DIR = Path(__file__).parent.parent / 'data' / 'nahledy'
+
+
+def _nahledy():
+    try:
+        from . import nahledy
+    except ImportError:
+        import nahledy
+    return nahledy
+
+
+def url_nahledu(songbook):
+    """Adresa zmenšeného náhledu obálky, nebo None když zpěvník obálku nemá.
+
+    Klíč je součástí adresy schválně - po výměně obálky se adresa změní, takže se náhled
+    udělá znovu sám a prohlížeč nepodstrčí starý obrázek z cache.
+    """
+    rel = getattr(songbook, 'img_path_cover_preview', None)
+    if not rel:
+        return None
+    zdroj = _abs_image_path(rel)
+    if not zdroj:
+        return None
+    k = _nahledy().klic(zdroj)
+    if not k:
+        return None
+    return url_for('nahled_obalky', book_id=songbook.id, klic=k)
+
+
+app.jinja_env.globals['url_nahledu'] = url_nahledu
+
+
+@app.route('/nahled/<book_id>/<klic>.webp')
+@login_required
+def nahled_obalky(book_id, klic):
+    songbook = Songbook.query.get_or_404(book_id)
+    if not can_view_songbook(current_user, songbook):
+        return ("Access denied", 403)
+
+    rel = songbook.img_path_cover_preview
+    zdroj = _abs_image_path(rel) if rel else None
+    n = _nahledy()
+    if not zdroj or n.klic(zdroj) != klic:
+        # Klíč nesedí na dnešní obálku - odkaz je z dřívějška. Ať si prohlížeč vyzvedne
+        # aktuální adresu, místo aby dostal cizí obrázek.
+        return ("Not Found", 404)
+
+    cil = n.soubor_nahledu(NAHLEDY_DIR, book_id, klic)
+    if not cil.exists() and not n.vyrob(zdroj, cil):
+        # Když se náhled nepovede, ať stránka nezůstane bez obrázku.
+        return redirect(url_for('serve_songbook_image', filename=rel))
+    n.uklid_starych(NAHLEDY_DIR, book_id, klic)
+
+    odpoved = send_from_directory(str(NAHLEDY_DIR), cil.name)
+    # Ta adresa už nikdy neponese jiný obsah, protože klíč je z obsahu originálu.
+    odpoved.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return odpoved
+
+
 @app.route('/api/nastaveni/tema', methods=['POST'])
 @login_required
 def uloz_tema():
@@ -2960,6 +3019,32 @@ def migrace_overeni(overit_stavajici):
 
     for u in User.query.order_by(User.id).all():
         click.echo(f"  {u.id:3} {u.email:34} role={u.role:6} ověřen={bool(u.email_verified)}")
+
+
+@app.cli.command("nahledy-warm")
+@with_appcontext
+def nahledy_warm():
+    """Předpřipraví náhledy obálek, ať na ně první návštěvník nečeká."""
+    n = _nahledy()
+    hotovo = preskoceno = chyb = 0
+    for sb in Songbook.query.all():
+        rel = sb.img_path_cover_preview
+        zdroj = _abs_image_path(rel) if rel else None
+        k = n.klic(zdroj) if zdroj else None
+        if not k:
+            preskoceno += 1
+            continue
+        cil = n.soubor_nahledu(NAHLEDY_DIR, sb.id, k)
+        if cil.exists():
+            hotovo += 1
+        elif n.vyrob(zdroj, cil):
+            hotovo += 1
+        else:
+            chyb += 1
+        n.uklid_starych(NAHLEDY_DIR, sb.id, k)
+    velikost = sum(f.stat().st_size for f in NAHLEDY_DIR.glob('*.webp')) if NAHLEDY_DIR.exists() else 0
+    click.echo(f"náhledů: {hotovo}, bez obálky: {preskoceno}, chyb: {chyb}, "
+               f"celkem {velikost / 1e6:.2f} MB")
 
 
 @app.cli.command("mesicni-hlaseni")

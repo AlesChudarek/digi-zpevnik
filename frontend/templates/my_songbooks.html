@@ -296,7 +296,8 @@
       <a href="{{ url_for('songbook_detail', book_id=book.id) }}" style="text-decoration:none; color:inherit;">
         <div class="cover-preview" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
-            <img src="/songbooks/{{ book.img_path_cover_preview }}" alt="Náhled obalu">
+            <img src="{{ url_nahledu(book) or ('/songbooks/' + book.img_path_cover_preview) }}"
+                 loading="lazy" alt="Náhled obalu">
           {% else %}
             <div class="no-cover"></div>
           {% endif %}
