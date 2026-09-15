@@ -28,6 +28,9 @@ from PIL import Image, ImageOps
 # Cesty k obrázkům zpěvníků
 SONGBOOK_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'public' / 'images' / 'songbooks'
 PRIVATE_USER_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'private' / 'users'
+# Nový strom podle docs/ukladani-obrazku.md. Dva kořeny nad ním zůstávají jen jako
+# dědictví, dokud se starý strom nesmaže - nic nového se do nich nezapisuje.
+IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'images'
 
 try:
     MAX_IMAGE_UPLOAD_MB = max(0.5, float(os.getenv("MAX_IMAGE_UPLOAD_MB", "2.0")))
@@ -349,6 +352,8 @@ app.jinja_env.globals['static_bust'] = static_bust
 def serve_songbook_image(filename):
     # If path starts with 'users/', serve from private users directory; otherwise from public songbooks
     try:
+        if _je_nova_cesta(filename):
+            return send_from_directory(str(IMAGES_DIR), filename)
         if filename.startswith('users/'):
             return send_from_directory(str(PRIVATE_USER_IMAGES_DIR), filename.replace('users/', '', 1))
         return send_from_directory(str(SONGBOOK_IMAGES_DIR), filename)
@@ -359,29 +364,17 @@ def serve_songbook_image(filename):
 
 # ---------- Storage layout helpers (public vs private songbooks) ----------
 def _book_storage_base(book: Songbook):
-    """Return (abs_dir, rel_prefix) of the directory holding this songbook's images.
+    """Složka zpěvníku v novém stromu: (absolutní cesta, cesta uložená v DB).
 
-    Public songbooks live in data/public/images/songbooks/<id> and store paths
-    relative to that root ("00030/page1.png"), matching the seeded songbooks.
-    Private songbooks live in data/private/users/<user_dir>/<book_dir> and store
-    paths prefixed with "users/". The prefix is what serve_songbook_image()
-    dispatches on, so both roots stay servable without extra routing.
+    Dřív se skládala ze slugu e-mailu a názvu zpěvníku, takže se po přejmenování rozešla
+    se skutečností - a musel to zachraňovat fallback, který cestu zpětně odhadoval
+    z uloženého sloupce obálky. Teď v ní nic měnitelného není.
+
+    Strany sem nepatří, ty leží ploché v `pages/` - viz `_nova_cesta_strany`.
     """
-    if getattr(book, 'is_public', 0):
-        return SONGBOOK_IMAGES_DIR / book.id, book.id
-    try:
-        p = book.img_path_cover_preview or book.img_path_cover_front_outer or book.img_path_cover_front_inner
-        if p and isinstance(p, str) and p.startswith('users/'):
-            parts = Path(p).parts
-            if len(parts) >= 4:
-                return PRIVATE_USER_IMAGES_DIR / Path(*parts[1:-1]), str(Path(*parts[:-1]))
-    except Exception:
-        pass
-    owner = User.query.get(book.owner_id) if getattr(book, 'owner_id', None) else None
-    owner_email = getattr(owner, 'email', '') if owner else ''
-    user_dir = f"{book.owner_id}_{slugify(owner_email, 50)}"
-    book_dir = f"{book.id}_{slugify(book.title, 50) if book.title else 'untitled'}"
-    return PRIVATE_USER_IMAGES_DIR / user_dir / book_dir, str(Path('users') / user_dir / book_dir)
+    koren = _koren_pro_zpevnik(book)
+    rel = f"{koren}/songbooks/{book.id}"
+    return IMAGES_DIR / rel, rel
 
 
 def _rel_for_stored_file(abs_path: Path, book: Songbook) -> str:
@@ -390,16 +383,66 @@ def _rel_for_stored_file(abs_path: Path, book: Songbook) -> str:
     return str(Path(rel_prefix) / abs_path.relative_to(base_abs))
 
 
+def _je_nova_cesta(rel_path) -> bool:
+    return isinstance(rel_path, str) and rel_path.startswith(('verejne/', 'uzivatele/'))
+
+
 def _abs_image_path(rel_path: str):
-    """Resolve a stored image path to an absolute file, for either storage root."""
+    """Z uložené cesty udělá soubor na disku.
+
+    Nové cesty (`verejne/…`, `uzivatele/<uid>/…`) vedou do `data/images`. Dva staré tvary
+    se čtou dál, dokud starý strom leží na disku; zapisovat se do nich přestalo.
+    """
     try:
         if not rel_path or not isinstance(rel_path, str):
             return None
+        if _je_nova_cesta(rel_path):
+            return IMAGES_DIR / rel_path
         if rel_path.startswith('users/'):
             return PRIVATE_USER_IMAGES_DIR / Path(rel_path).relative_to('users')
         return SONGBOOK_IMAGES_DIR / rel_path
     except Exception:
         return None
+
+
+ROLE_OBALEK = {'coverfrontout': 'front-out', 'coverfrontin': 'front-in',
+               'coverbackin': 'back-in', 'coverbackout': 'back-out'}
+
+
+def _koren_pro_zpevnik(book) -> str:
+    """`verejne`, nebo `uzivatele/<user_id>`.
+
+    Dělí se podle toho, kdo obrázek nahrál - ne podle názvu zpěvníku a e-mailu jako dřív.
+    `user_id` je celé číslo, které se nikdy nemění, takže se cesta nemá jak rozejít
+    se skutečností.
+    """
+    if getattr(book, 'is_public', 0):
+        return 'verejne'
+    return f"uzivatele/{book.owner_id}" if getattr(book, 'owner_id', None) else 'verejne'
+
+
+def _cesta_obalky(book, role: str, pripona: str) -> str:
+    """Obálky mají pevná jména, protože jsou právě čtyři a každá má jinou roli."""
+    return f"{_koren_pro_zpevnik(book)}/songbooks/{book.id}/covers/{ROLE_OBALEK.get(role, role)}{pripona}"
+
+
+def _nova_cesta_strany(book, pripona: str) -> str:
+    """Další volné číslo v `pages/` daného kořene.
+
+    Strana nepatří zpěvníku ani písni - viz docs/ukladani-obrazku.md - takže leží plochá
+    a dostane jen pořadové číslo. Pravdou je disk, ne databáze: kdyby dva uploady dorazily
+    zároveň, volající soubor stejně zakládá výhradním zápisem a při kolizi si řekne o další.
+    """
+    koren = _koren_pro_zpevnik(book)
+    adresar = IMAGES_DIR / koren / 'pages'
+    adresar.mkdir(parents=True, exist_ok=True)
+    nejvyssi = 0
+    for p in adresar.iterdir():
+        try:
+            nejvyssi = max(nejvyssi, int(p.stem))
+        except (ValueError, OSError):
+            continue
+    return f"{koren}/pages/{nejvyssi + 1:06d}{pripona}"
 
 
 def _next_public_songbook_id() -> str:
@@ -412,72 +455,30 @@ def _next_public_songbook_id() -> str:
 
 
 # ---------- Helpers for song file ownership/migration ----------
-def _base_rel_for_book(book: Songbook) -> str:
-    """Return the base relative path for a songbook's image directory."""
-    return _book_storage_base(book)[1]
-
-
 def _handle_song_delete_for_book(sb: Songbook, song: Song):
-    """Apply origin/reference deletion logic for a song in a given songbook.
+    """Odebere píseň z jednoho zpěvníku a uklidí, co po ní zbylo.
 
-    - If song has no private images -> detach only from this book
-    - If this book is not the origin (files live elsewhere) -> detach only
-    - If origin and there are other books -> move files to first other book and detach here
-    - If origin and no other books -> delete song and files entirely
+    Dřív to muselo řešit, který zpěvník je "původní", protože pod ním ležely soubory.
+    Ten pojem zanikl: strana leží v `pages/` a nepatří žádnému zpěvníku, takže stačí
+    odpojit vazbu a podívat se, jestli píseň ještě někde je.
 
-    Returns a dict with details; does not commit.
+    Necommituje. Vrací i `kandidati` - cesty, které se po commitu nabídnou
+    `smaz_osirele_obrazky`, protože tutéž stranu může nést ještě jiná píseň.
     """
     imgs = SongImage.query.filter_by(song_id=song.id).all()
-    if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        # Soubory u veřejných zpěvníků maže volající až po commitu, viz smaz_osirele_obrazky.
-        return {'detached_only': True,
-                'kandidati': [img.image_path for img in imgs]}
+    kandidati = [img.image_path for img in imgs]
+    db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+    db.session.flush()
 
-    this_base_rel = _base_rel_for_book(sb)
-    origin_dir_rel = str(Path(this_base_rel) / 'songs' / song.id)
-    is_origin_here = all((img.image_path or '').startswith(origin_dir_rel + '/') for img in imgs)
+    if db.session.query(SongbookPage.id).filter_by(song_id=song.id).first():
+        # Píseň zůstává v jiném zpěvníku. Dřív se tu soubory stěhovaly, protože cesta
+        # nesla "původní" zpěvník; dnes nenese nic měnitelného a stěhovat není co.
+        return {'detached_only': True, 'kandidati': kandidati}
 
-    other_ids = [sid for (sid,) in db.session.query(SongbookPage.songbook_id).filter(
-        (SongbookPage.song_id == song.id) & (SongbookPage.songbook_id != sb.id)
-    ).distinct().all()]
-
-    if not is_origin_here:
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        return {'detached_only': True}
-
-    if other_ids:
-        new_sb = Songbook.query.get(other_ids[0])
-        new_base_rel = _base_rel_for_book(new_sb)
-        src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
-        dst_abs = PRIVATE_USER_IMAGES_DIR / Path(new_base_rel).relative_to('users') / 'songs' / song.id
-        dst_abs.mkdir(parents=True, exist_ok=True)
-        for img in imgs:
-            try:
-                fname = Path(img.image_path).name
-                src_file = src_abs / fname
-                dst_file = dst_abs / fname
-                if src_file.exists():
-                    shutil.move(str(src_file), str(dst_file))
-                img.image_path = str(Path('users') / dst_file.relative_to(PRIVATE_USER_IMAGES_DIR))
-            except Exception:
-                pass
-        try:
-            shutil.rmtree(src_abs, ignore_errors=True)
-        except Exception:
-            pass
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        return {'moved_origin_to': new_sb.id}
-    else:
-        try:
-            src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
-            shutil.rmtree(src_abs, ignore_errors=True)
-        except Exception:
-            pass
-        db.session.query(SongbookPage).filter_by(song_id=song.id).delete()
-        db.session.query(SongImage).filter_by(song_id=song.id).delete()
-        db.session.delete(song)
-        return {'deleted_song': True}
+    db.session.query(SongImage).filter_by(song_id=song.id).delete()
+    db.session.delete(song)
+    # Soubory maže volající po commitu, protože tutéž stranu může nést jiná píseň.
+    return {'deleted_song': True, 'kandidati': kandidati}
 
 # Sloupce s obálkami. Na jednom místě, ať se seznam nemusí opisovat v každé funkci,
 # která obálky prochází.
@@ -903,7 +904,7 @@ def nahled_strany(klic, filename):
     """Zmenšená strana pro čtečku. Originál zůstává na /songbooks/<filename>."""
     zdroj = _abs_image_path(filename)
     n = _nahledy()
-    if not zdroj or not (_je_pod(zdroj, SONGBOOK_IMAGES_DIR) or _je_pod(zdroj, PRIVATE_USER_IMAGES_DIR)):
+    if not zdroj or not any(_je_pod(zdroj, k) for k in (IMAGES_DIR, SONGBOOK_IMAGES_DIR, PRIVATE_USER_IMAGES_DIR)):
         return ("Not Found", 404)
     if n.klic(zdroj, n.STRANA) != klic:
         # Klíč nesedí na dnešní podobu obrázku - odkaz je z dřívějška. Ať si prohlížeč
@@ -1474,20 +1475,20 @@ def create_custom_song(songbook_id):
     db.session.add(song)
     db.session.flush()
 
-    # Save images in a song-specific subfolder of this book's image directory
-    abs_dir = _book_storage_base(sb)[0] / 'songs' / new_song_id
-    abs_dir.mkdir(parents=True, exist_ok=True)
-
+    # Strany leží ploché v pages/ a nepatří ani písni, ani zpěvníku - jedna strana může
+    # nést dvě písně a jedna píseň může být ve dvou zpěvnících.
     saved = 0
     for idx, file_storage in files:
-        orig = secure_filename(Path(file_storage.filename).name) or f"page_{idx}.png"
-        abs_path = abs_dir / orig
-        ext_hint = Path(orig).suffix.lower() or None
-        _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
+        pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
+        # Číslo se přiděluje po jednom a soubor se hned zapíše, takže další přidělení
+        # už ho vidí obsazené.
+        rel_path = _nova_cesta_strany(sb, pripona)
+        abs_path = IMAGES_DIR / rel_path
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
         # Pořadí v rámci písně, ne ve zpěvníku. Bere se z pořadí nahraných souborů,
         # protože jméno souboru o pořadí nic neříká a říkat nemá.
-        db.session.add(SongImage(song_id=new_song_id, poradi=saved + 1,
-                                 image_path=_rel_for_stored_file(abs_path, sb)))
+        db.session.add(SongImage(song_id=new_song_id, poradi=saved + 1, image_path=rel_path))
         saved += 1
 
     if saved == 0:
@@ -1514,101 +1515,27 @@ def delete_song_from_songbook(songbook_id, song_id):
 
     song = Song.query.get_or_404(song_id)
     imgs = SongImage.query.filter_by(song_id=song.id).all()
+    kandidati = [img.image_path for img in imgs]
 
-    # If no images or images are public (not under users/), just detach from this songbook
-    if not imgs or not any((img.image_path or '').startswith('users/') for img in imgs):
-        kandidati = [img.image_path for img in imgs]
-        # Osamocenou písničku není proč držet v databázi, když ji nemá žádný zpěvník.
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        db.session.flush()
-        zbyva = db.session.query(SongbookPage.id).filter_by(song_id=song.id).first()
-        if not zbyva:
-            db.session.query(SongImage).filter_by(song_id=song.id).delete()
-            db.session.delete(song)
-        db.session.commit()
-        smaz_osirele_obrazky(kandidati)
-        # Předpřipravit nové PDF: tuhle cestu volá obsah zpěvníku ve čtečce
-        # i editor, takže bez toho by po smazání písničky zůstalo ke stažení
-        # staré PDF, které už neodpovídá webu.
-        schedule_export_warm(songbook_id)
-        return jsonify({'ok': True, 'detached_only': True})
+    # Odpojit z tohohle zpěvníku. Soubory se nestěhují: cesta už nenese, ze kterého
+    # zpěvníku strana pochází, takže se nemá s čím rozejít.
+    db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+    db.session.flush()
 
-    # Build base rel path for a songbook: users/<...>/<...>
-    def base_rel_for_book(book: Songbook) -> str:
-        p = book.img_path_cover_preview or book.img_path_cover_front_outer or book.img_path_cover_front_inner
-        if p and isinstance(p, str) and p.startswith('users/'):
-            parts = Path(p).parts
-            if len(parts) >= 4:
-                return str(Path(*parts[: -1]))  # users/<user>/<book>
-        owner = User.query.get(book.owner_id) if book.owner_id else None
-        owner_email = getattr(owner, 'email', '')
-        user_dir = f"{book.owner_id}_{slugify(owner_email, 50)}"
-        book_dir = f"{book.id}_{slugify(book.title, 50) if book.title else 'untitled'}"
-        return str(Path('users') / user_dir / book_dir)
-
-    this_base_rel = base_rel_for_book(sb)
-    origin_dir_rel = str(Path(this_base_rel) / 'songs' / song.id)
-    is_origin_here = all((img.image_path or '').startswith(origin_dir_rel + '/') for img in imgs)
-
-    # Count other references
-    others = db.session.query(SongbookPage.songbook_id).filter(
-        (SongbookPage.song_id == song.id) & (SongbookPage.songbook_id != sb.id)
-    ).distinct().all()
-    other_ids = [sid for (sid,) in others]
-
-    if not is_origin_here:
-        # Only detach from this songbook
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+    zbyva = db.session.query(SongbookPage.id).filter_by(song_id=song.id).first()
+    if zbyva:
         db.session.commit()
         schedule_export_warm(songbook_id)
         return jsonify({'ok': True, 'detached_only': True})
 
-    if other_ids:
-        # Move files to first other songbook and repoint paths
-        new_sb = Songbook.query.get(other_ids[0])
-        new_base_rel = base_rel_for_book(new_sb)
-        src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
-        dst_abs = PRIVATE_USER_IMAGES_DIR / Path(new_base_rel).relative_to('users') / 'songs' / song.id
-        dst_abs.mkdir(parents=True, exist_ok=True)
-
-        # Move all files and update DB paths
-        for img in imgs:
-            try:
-                fname = Path(img.image_path).name
-                src_file = src_abs / fname
-                dst_file = dst_abs / fname
-                if src_file.exists():
-                    shutil.move(str(src_file), str(dst_file))
-                img.image_path = str(Path('users') / dst_file.relative_to(PRIVATE_USER_IMAGES_DIR))
-            except Exception:
-                # Best-effort: if move fails, skip updating this image
-                pass
-        # Remove old directory if empty
-        try:
-            shutil.rmtree(src_abs, ignore_errors=True)
-        except Exception:
-            pass
-
-        # Detach from this songbook only
-        db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-        db.session.commit()
-        schedule_export_warm(songbook_id)
-        return jsonify({'ok': True, 'moved_origin_to': new_sb.id})
-    else:
-        # Delete song entirely (no other references)
-        # Remove files directory
-        try:
-            src_abs = PRIVATE_USER_IMAGES_DIR / Path(origin_dir_rel).relative_to('users')
-            shutil.rmtree(src_abs, ignore_errors=True)
-        except Exception:
-            pass
-        # Remove DB rows
-        db.session.query(SongbookPage).filter_by(song_id=song.id).delete()
-        db.session.query(SongImage).filter_by(song_id=song.id).delete()
-        db.session.delete(song)
-        db.session.commit()
-        schedule_export_warm(songbook_id)
-        return jsonify({'ok': True, 'deleted_song': True})
+    # Píseň už není v žádném zpěvníku, takže může pryč i s vazbami. Soubory až po
+    # commitu a přes smaz_osirele_obrazky, protože tutéž stranu může nést jiná píseň.
+    db.session.query(SongImage).filter_by(song_id=song.id).delete()
+    db.session.delete(song)
+    db.session.commit()
+    smaz_osirele_obrazky(kandidati)
+    schedule_export_warm(songbook_id)
+    return jsonify({'ok': True, 'deleted_song': True})
 
 @app.route('/public-songbooks')
 @login_required
@@ -1737,15 +1664,14 @@ def api_create_songbook():
     if want_public:
         # Keep the seeded 00001.. numbering so public books stay consistent
         sid = _next_public_songbook_id()
-        rel_dir = Path(sid)
-        abs_dir = SONGBOOK_IMAGES_DIR / sid
+        koren = 'verejne'
     else:
         # Generate a simple unique ID scoped by user and timestamp
         sid = f"u{current_user.id}-{int(time.time())}"
-        user_dir = f"{current_user.id}_{slugify(current_user.email, 50)}"
-        book_dir = f"{sid}_{slugify(title, 50) if title else 'untitled'}"
-        rel_dir = Path('users') / user_dir / book_dir
-        abs_dir = PRIVATE_USER_IMAGES_DIR / user_dir / book_dir
+        koren = f"uzivatele/{current_user.id}"
+    # Ani název, ani e-mail - obojí se mění, a cesta by pak lhala.
+    rel_dir = Path(koren) / 'songbooks' / sid / 'covers'
+    abs_dir = IMAGES_DIR / rel_dir
 
     # Prepare file save helper
     def save_cover(file_storage, name_hint):
@@ -1756,7 +1682,7 @@ def api_create_songbook():
         if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
             ext = '.png'
         abs_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{name_hint}{ext}"
+        filename = f"{ROLE_OBALEK.get(name_hint, name_hint)}{ext}"
         abs_path = abs_dir / filename
         _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
         # Return path relative to the /songbooks route root
@@ -1841,70 +1767,46 @@ def api_delete_songbook(songbook_id):
             valid_shared.sort(key=lambda item: item[1].email.lower())
             chosen_entry, new_owner = valid_shared[0]
 
-            old_rel = _base_rel_for_book(sb)
-            old_rel_str = old_rel if isinstance(old_rel, str) else str(old_rel or '')
-
-            new_user_dir = f"{new_owner.id}_{slugify(new_owner.email, 50)}"
-            book_dir = f"{sb.id}_{slugify(sb.title, 50) if sb.title else 'untitled'}"
-            new_rel_path = Path('users') / new_user_dir / book_dir
-            new_rel_str = str(new_rel_path)
-
-            if old_rel_str.startswith('users/'):
-                old_rel_path = Path(old_rel_str)
-                if len(old_rel_path.parts) > 1:
-                    old_abs = PRIVATE_USER_IMAGES_DIR / Path(*old_rel_path.parts[1:])
-                    new_abs = PRIVATE_USER_IMAGES_DIR / Path(new_user_dir) / book_dir
-                    try:
-                        new_abs.parent.mkdir(parents=True, exist_ok=True)
-                        if old_abs.exists():
-                            if new_abs.exists():
-                                shutil.rmtree(new_abs, ignore_errors=True)
-                            shutil.move(str(old_abs), str(new_abs))
-                    except Exception:
-                        pass
-
-            def rewrite_path(value: str) -> str:
-                if not value or not old_rel_str or not isinstance(value, str):
-                    return value
-                if not value.startswith(old_rel_str):
-                    return value
-                suffix = value[len(old_rel_str):].lstrip('/')
-                return new_rel_str if not suffix else f"{new_rel_str}/{suffix}"
-
-            sb.img_path_cover_preview = rewrite_path(sb.img_path_cover_preview)
-            sb.img_path_cover_front_outer = rewrite_path(sb.img_path_cover_front_outer)
-            sb.img_path_cover_front_inner = rewrite_path(sb.img_path_cover_front_inner)
-            sb.img_path_cover_back_inner = rewrite_path(sb.img_path_cover_back_inner)
-            sb.img_path_cover_back_outer = rewrite_path(sb.img_path_cover_back_outer)
-
-            for intro_outro in sb.intros_outros:
-                intro_outro.image_path = rewrite_path(intro_outro.image_path)
-
-            song_ids = {row.song_id for row in SongbookPage.query.filter_by(songbook_id=sb.id).all()}
-            if song_ids:
-                for img in SongImage.query.filter(SongImage.song_id.in_(list(song_ids))).all():
-                    img.image_path = rewrite_path(img.image_path)
-
+            # Soubory se nestěhují a cesty se nepřepisují. Dřív to nutné bylo, protože
+            # složka nesla jméno vlastníka a název zpěvníku; dnes je cesta uložená natvrdo
+            # a o tom, kdo zpěvník vlastní, rozhoduje jedině `owner_id`. Obrázky zůstávají
+            # v kořeni toho, kdo je nahrál - to je i správně pro počítání zabraného místa.
             sb.owner_id = new_owner.id
             db.session.delete(chosen_entry)
             db.session.commit()
 
             return jsonify({"ok": True})
 
-    # Remove the songbook's image directory (private user dir, or public 000NN dir)
+    # Strany zpěvníku se posbírají ještě před smazáním, ale nemažou se natvrdo: tutéž
+    # stranu může mít ještě jiný zpěvník. Rozhodne až smaz_osirele_obrazky po commitu.
+    song_ids = {r.song_id for r in SongbookPage.query.filter_by(songbook_id=sb.id).all()}
+    kandidati = [r.image_path for r in
+                 SongImage.query.filter(SongImage.song_id.in_(song_ids)).all()] if song_ids else []
+    kandidati += [c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
+                              sb.img_path_cover_back_inner, sb.img_path_cover_back_outer,
+                              sb.img_path_cover_preview) if c]
+    kandidati += [io.image_path for io in sb.intros_outros if io.image_path]
+
+    # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
+    db.session.delete(sb)
+    db.session.flush()
+    for song_id in song_ids:
+        if not db.session.query(SongbookPage.id).filter_by(song_id=song_id).first():
+            db.session.query(SongImage).filter_by(song_id=song_id).delete()
+            osirela = Song.query.get(song_id)
+            if osirela:
+                db.session.delete(osirela)
+    db.session.commit()
+
+    smaz_osirele_obrazky(kandidati)
+
+    # Složka obálek zpěvníku už na nic neukazuje, ta může celá.
     try:
-        target_dir = _book_storage_base(sb)[0]
-        # Never let a bad path resolution take out a whole storage root
-        if target_dir.exists() and target_dir.resolve() not in (
-            PRIVATE_USER_IMAGES_DIR.resolve(), SONGBOOK_IMAGES_DIR.resolve()
-        ):
-            shutil.rmtree(target_dir, ignore_errors=True)
+        adresar = IMAGES_DIR / _koren_pro_zpevnik(sb) / 'songbooks' / sb.id
+        if adresar.exists() and adresar.resolve() != IMAGES_DIR.resolve():
+            shutil.rmtree(adresar, ignore_errors=True)
     except Exception:
         pass  # ignore file removal errors
-
-    # Delete DB entry (cascade removes pages/intro_outro)
-    db.session.delete(sb)
-    db.session.commit()
 
     return jsonify({"ok": True})
 
@@ -2085,27 +1987,20 @@ def update_songbook_structure(songbook_id):
             songbook_id=songbook_id).scalar()
     first_page_number = max(1, int(first_page_number or 1))
 
-    # Save optional cover files into the book's existing image folder
-    def resolve_book_dir() -> Path:
-        return _book_storage_base(sb)[0]
-
     def save_cover(file_storage, name_hint):
         if not file_storage:
             return None
-        # Keep user's original filename (sanitized). Overwrite if exists.
-        orig_name = secure_filename(Path(file_storage.filename).name)
-        # Fallback if empty after sanitization
-        if not orig_name:
-            ext = (Path(file_storage.filename).suffix or '.png').lower()
-            if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
-                ext = '.png'
-            orig_name = f"{name_hint}{ext}"
-        abs_dir = resolve_book_dir()
-        abs_dir.mkdir(parents=True, exist_ok=True)
-        abs_path = abs_dir / orig_name
-        ext_hint = Path(orig_name).suffix.lower() or None
-        _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-        return _rel_for_stored_file(abs_path, sb)
+        # Jméno se z uploadu nebere. Dřív se přebíralo to uživatelovo, takže výměna obálky
+        # založila `co_radi_hrajeme.png` vedle `coverfrontout.png` a role souboru se dala
+        # zjistit jen z databáze. Obálky jsou čtyři a každá má pevné jméno podle role.
+        ext = (Path(file_storage.filename).suffix or '.png').lower()
+        if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
+            ext = '.png'
+        rel = _cesta_obalky(sb, name_hint, ext)
+        abs_path = IMAGES_DIR / rel
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+        _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
+        return rel
 
     # Keep originals to allow cleanup when new files are uploaded (avoid storage bloat)
     old_front_outer = sb.img_path_cover_front_outer
@@ -2198,8 +2093,6 @@ def update_songbook_structure(songbook_id):
 
     created_new_songs = {}
     if referenced_new_ids:
-        base_dir = resolve_book_dir()
-        base_dir.mkdir(parents=True, exist_ok=True)
         next_page_number = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=songbook_id).scalar() or 0
         payloads = []
         for temp_id in referenced_new_ids:
@@ -2248,21 +2141,17 @@ def update_songbook_structure(songbook_id):
             shared = len(members) > 1
             member_ids = [f"custom_{uuid4().hex[:12]}" for _ in members]
 
-            # Files are stored once. A shared page lives under pages/<id> rather than
-            # songs/<id> so no single song of the group owns the images.
-            if shared:
-                store_dir = base_dir / 'pages' / uuid4().hex[:12]
-            else:
-                store_dir = base_dir / 'songs' / member_ids[0]
-            store_dir.mkdir(parents=True, exist_ok=True)
-
+            # Soubor se ukládá jednou, ať už na straně stojí jedna píseň nebo tři.
+            # Dřív se rozlišovalo, jestli je strana sdílená, a nesdílená se ukládala pod
+            # jednu z písní - to teď nedává smysl, protože strana nepatří ani jedné.
             saved_paths = []
             for offset, file_storage in enumerate(files, start=1):
-                orig_name = secure_filename(Path(file_storage.filename).name) or f"page_{offset}.png"
-                abs_path = store_dir / orig_name
-                ext_hint = Path(orig_name).suffix.lower() or None
-                _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-                saved_paths.append(_rel_for_stored_file(abs_path, sb))
+                pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
+                rel_path = _nova_cesta_strany(sb, pripona)
+                abs_path = IMAGES_DIR / rel_path
+                abs_path.parent.mkdir(parents=True, exist_ok=True)
+                _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
+                saved_paths.append(rel_path)
 
             if not saved_paths:
                 return jsonify({'ok': False, 'error': f'Nepodařilo se uložit soubory nové písničky: {members[0][0]}'}), 400

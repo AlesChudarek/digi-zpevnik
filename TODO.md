@@ -121,11 +121,23 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       `00025/page12.png`. **Žádný zpěvník to nerozbíjí** — jsou to sirotci, které nikdo
       nezobrazuje, takže se o ty soubory ani nikdo neptá. Chce to dvě věci: doplnit úklid
       písní při mazání zpěvníku a jednorázově těch 12 řádků smazat.
-- [ ] **zjednodušit úložiště obrázků a jeho strukturu.** Cílový tvar i postup migrace jsou
-      nově rozepsané v [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md). Podstata: z cesty
-      zmizí všechno, co se může měnit (název zpěvníku, e-mail, číslo strany, zpěvník
-      u sdílené písně), zůstanou jen identifikátory — `songbooks/<id>/covers/front-out.png`
-      a `songs/<song_id>/01.png`, dělené podle `user_id` místo podle e-mailu a názvu.
+- [X] **zjednodušit úložiště obrázků a jeho strukturu** — lokálně hotovo,
+      `backend/scripts/migrace_uloziste.py`, popsáno v
+      [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md). Ze čtyř tvarů cest je jeden a
+      nenese nic měnitelného: `verejne/songbooks/<id>/covers/front-out.png` pro obálky,
+      `verejne/pages/000123.png` pro strany, `uzivatele/<user_id>/…` pro soukromé.
+      1093 souborů, 12 sirotků smazáno, struktura stran ve všech 33 zpěvnících totožná,
+      `kontrola_zpevniku.py` hlásí jen starý strom, který schválně zůstal ležet.
+      Vypadlo tím i to, co existovalo jen kvůli měnitelným cestám: stěhování souborů při
+      odebrání písně, při změně vlastníka a celé `rewrite_path`.
+- [ ] **nasadit nové úložiště na server** (`migrace_uloziste.py --provest` + `nahledy-warm`).
+      Přibude tam `data/images` vedle starého stromu, tedy dočasně dvojnásobek místa —
+      ověřit, že se tam vejde, než se to pustí.
+- [ ] **smazat starý strom** (`data/public/images/songbooks`, `data/private/users`) —
+      až si provoz sedne. Do té doby je to záchranná síť, aplikace z nich umí číst.
+- [ ] **tabulka `images`.** Zbylá část návrhu: strana má dnes identitu danou cestou, což
+      funguje, ale `smaz_osirele_obrazky` kvůli tomu porovnává řetězce místo `image_id`.
+      Čistě databázová změna, souborů se netýká.
 - [X] **`song_images.poradi`** (`backend/scripts/migrace_poradi_stran.py`). Muselo jít před
       migrací úložiště: pořadí stran vícestránkové písně bylo dané jen pořadím `id` a jedinou
       nezávislou kontrolou bylo číslo v názvu souboru, které nový standard odstraňuje.
@@ -138,8 +150,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [ ] **spustit `migrace_poradi_stran.py --zapsat` na serveru.** Lokálně hotové, na serveru
       ne. Bez toho mají všechny řádky `poradi = 1` z výchozí hodnoty a vícestránkové písně
       by se řadily jen podle `id` — což dnes vychází stejně, ale je to náhoda, ne pravidlo.
-- [ ] `detach_song_from_songbook` v app.py se nikde nevolá, logiku má zdvojenou
-      s DELETE endpointem — buď zapojit, nebo smazat
+- [X] ~~`detach_song_from_songbook` se nikde nevolá~~ — funkce toho jména už neexistuje;
+      šlo o `_handle_song_delete_for_book` a ta se volá. Zdvojení s DELETE endpointem bylo
+      skutečné a zaniklo při migraci úložiště: obě větve se smrskly na „odpoj vazbu, a když
+      píseň není nikde jinde, smaž ji".
 - [X] u 00010 zbyly nepoužité `T` soubory — už tam nejsou, uklidil je `uklid_obrazku.py`.
       Ověřeno smířením DB proti disku: 1093 souborů a na každý něco z DB ukazuje, volně
       ležící soubor není ani jeden.
