@@ -53,15 +53,14 @@ na přepisování cest, když se něco přesune.
 ```
 data/images/
   verejne/
-    songbooks/<songbook_id>/covers/front-out.png     obálky: front|back × out|in
+    songbooks/<songbook_id>/covers/front-out.png   obálky: front|back × out|in
                                   /front-in.png
                                   /back-in.png
                                   /back-out.png
-    songs/<song_id>/01.png                           strany písně, pořadí od 01
-                   /02.png
+    pages/001234.png                               strany, ploché, id z tabulky images
   uzivatele/<user_id>/
     songbooks/<songbook_id>/covers/front-out.png
-    songs/<song_id>/01.png
+    pages/001235.png
 ```
 
 Odvozená data, která jde kdykoliv smazat a vyrobit znovu, patří stranou:
@@ -75,9 +74,40 @@ data/odvozene/
 
 ### Proč zrovna takhle
 
-**Obálka patří zpěvníku, strana patří písni.** To je jediné dělení, které odpovídá
-skutečnosti: obálek jsou právě čtyři na zpěvník a každá má jinou roli, zatímco strana může
-být ve více zpěvnících a nepatří žádnému z nich zvlášť.
+**Strana není majetkem písně.** Tohle je oprava dřívější verze dokumentu, která navrhovala
+`songs/<song_id>/01.png`. Takový tvar neunese skutečnost, protože vztah písně a strany je
+**many-to-many v obou směrech**:
+
+- píseň se může táhnout přes víc stran — dnes 32 písní,
+- na jedné straně můžou být dvě písně — dnes 18 stran.
+
+U sdílené strany by `songs/<song_id>/` musel někdo vyhrát a druhá píseň by zase ukazovala
+pod cizí složku. To je přesně ta chyba, kterou layout A dělá se zpěvníkem; nemá cenu ji jen
+přesunout o patro níž.
+
+A pod zpěvník ji dát nejde taky, protože **70 písní je dnes ve dvou zpěvnících naráz**.
+Uložit stranu pod zpěvník je přesně to, co dělá layout A, a je to ta původní chyba.
+
+**Strana tedy nepatří ničemu a je vlastní věc.** Dostane vlastní `id` z nové tabulky
+`images` a leží plochá v `pages/`. `song_images` pak není vlastnictví, ale vazba: „tahle
+strana nese tuhle píseň a je to její N-tá strana". Soubor se smaže, až na něj neukazuje
+nikdo — což už dnešní `smaz_osirele_obrazky` dělá, jen se bude ptát na `image_id` místo
+na cestu.
+
+**Kořen se řídí tím, kdo obrázek nahrál, ne kdo ho čte.** Strana vzniklá u veřejného
+zpěvníku leží ve `verejne/pages/` i tehdy, když ji pak používá něčí soukromý zpěvník —
+přesně těch 70 dnešních případů. Nevadí to, protože o právech rozhoduje prohlížený zpěvník,
+ne umístění souboru (viz výš), a místo zabrané účtem tak zůstane počítané tomu, kdo ho
+opravdu zabral.
+
+**Obálka je jiný případ a zůstává čitelná.** Obálky se nesdílejí, jsou právě čtyři na
+zpěvník a každá má jinou roli, takže u nich pevné jméno pod zpěvníkem nelže a dá se
+`ls`-nout.
+
+**Co to stojí.** Ploché `pages/001234.png` se hůř prohlíží — dnes jde `ls 00001/` a je
+vidět celý zpěvník. Je to vědomá výměna: čitelnost výpisu za to, že cesta nikdy netvrdí
+nepravdu. Kdo potřebuje vidět zpěvník po souborech, dostane na to CLI; databáze tu
+informaci má přesně a složka ji měla jen náhodou.
 
 **Dva kořeny zůstávají, ale dělí se podle `user_id`, ne podle názvu a e-mailu.** `user_id`
 je celé číslo, které se nikdy nemění. Dělení podle vlastníka drží dvě věci, které budeme
@@ -95,9 +125,10 @@ i sdílené zpěvníky (viz úkol o `serve_songbook_image` bez kontroly práv).
 se to jako `01.png`. Původní jméno nenese informaci, zato nese diakritiku, mezery a
 překvapení. Přípona se řídí skutečným formátem, ne tím, co přišlo.
 
-**Pořadí dvojmístné, od 01, a jen v rámci písně.** Číslo strany ve zpěvníku je vlastnost
-zpěvníku, ne obrázku — drží ho `songbook_pages.page_number` a smí se měnit, aniž by se
-sahalo na soubory.
+**Jméno souboru nenese pořadí vůbec.** Pořadí je dvakrát v DB a pokaždé o něčem jiném:
+`song_images.poradi` je pořadí strany **v rámci písně** (u sdílené strany má každá píseň
+své vlastní) a `songbook_pages.page_number` je číslo strany **ve zpěvníku**. Ani jedno
+nepatří do názvu souboru, protože obojí se mění, aniž by se obrázek dotkl.
 
 **Žádné `T`, `OLD` ani `-final`.** Varianta téhož obrázku patří buď do historie, nebo do
 koše, ne vedle originálu.
@@ -110,12 +141,14 @@ měnit bez překreslování.
 Struktura složek sama nestačí. Dvě věci v DB stojí za to srovnat zároveň, protože na nich
 migrace stojí:
 
-**`song_images` nemá sloupec pořadí.** U vícestránkové písně (dnes 32 písní) je pořadí
+**~~`song_images` nemá sloupec pořadí.~~ Hotovo** — sloupec `poradi` přibyl a naplnil ho
+`backend/scripts/migrace_poradi_stran.py`. Pro pořádek, proč to muselo jít první: U vícestránkové písně (dnes 32 písní) je pořadí
 stran dané jen pořadím `id` řádku. Dnes to jde ještě zkontrolovat proti jménu souboru
 (`page18` před `page19`), ale **standard tuhle informaci z názvu odstraňuje**. Pokud se
 přejmenuje dřív, než se pořadí uloží natvrdo, nezbude už čím ověřit, že se strany písně
-nepřehodily. Sloupec `poradi` je tedy nutné přidat **před** migrací a naplnit ho z dnešních
-jmen, dokud ta informace existuje.
+nepřehodily. Naplnilo se to tedy z dnešních jmen, dokud ta informace
+existuje. Ověřeno, že pořadí z názvů souhlasí s pořadím podle `id` u všech 32 písní, takže
+se nic nepřehodilo.
 
 **`img_path_cover_preview` duplikuje `img_path_cover_front_outer`.** Je to ukazatel na to,
 která obálka se zobrazuje v přehledech, ne samostatný obrázek. Patří to do DB jako volba,
@@ -130,27 +163,31 @@ je stavěný tak, aby se v každém kroku dalo couvnout.
 jejichž soubory na disku stejně nejsou. Pak je počet cest v DB a počet souborů na disku
 stejný a dá se na to spolehnout jako na kontrolu.
 
-**1. Pořadí stran do DB.** Přidat `song_images.poradi` a naplnit ho z dnešních jmen souborů
-(`page18` < `page19`, `zpevnikA4-04` < `zpevnikA4-05`). U 32 vícestránkových písní ručně
-překontrolovat. Tenhle krok se nesmí přeskočit ani odložit, viz výš.
+**1. ~~Pořadí stran do DB.~~ Hotovo.** `song_images.poradi` naplněný z dnešních jmen
+(`page18` < `page19`, `zpevnikA4-04` < `zpevnikA4-05`), bez jediného rozporu proti pořadí
+podle `id`.
 
-**2. Suchý běh.** Vyrobit tabulku staré cesty → nová cesta a **nic nepřesouvat**. Ověřit:
+**2. Tabulka `images`.** Každé unikátní cestě jeden řádek s `id`; `song_images` a sloupce
+obálek na ni začnou ukazovat. Dnes je cest 1105 a souborů 1093, takže se to musí potkat
+na kus.
+
+**3. Suchý běh.** Vyrobit tabulku staré cesty → nová cesta a **nic nepřesouvat**. Ověřit:
 každá cesta z DB se mapuje právě na jednu novou, žádné dvě se netrefí do stejné, každý
 zdroj na disku existuje, a každý soubor na disku je buď v mapě, nebo na seznamu
 nepoužívaných. Dnes to vychází přesně (1093 souborů, na každý něco ukazuje), takže
 **jakýkoliv rozdíl v suchém běhu je chyba mapování**, ne dědictví.
 
-**3. Kopírovat, ne přesouvat.** Nový strom se postaví vedle starého. Dokud se nepřepne, je
+**4. Kopírovat, ne přesouvat.** Nový strom se postaví vedle starého. Dokud se nepřepne, je
 stav vratný smazáním jedné složky.
 
-**4. Přepis cest v DB na kopii databáze.** Jedna transakce, `song_images` i čtyři sloupce
+**5. Přepis cest v DB na kopii databáze.** Jedna transakce, `song_images` i čtyři sloupce
 obálek. Teprve po ověření na ostrou.
 
-**5. Kontrola tím, co už máme.** `backend/scripts/kontrola_zpevniku.py` porovnává čtečku
+**6. Kontrola tím, co už máme.** `backend/scripts/kontrola_zpevniku.py` porovnává čtečku
 proti PDF — to je přejímací test. Musí projít se stejným výsledkem jako před migrací.
 K tomu `flask nahledy-warm`, protože náhledy jsou klíčované cestou a všechny se vyrobí znovu.
 
-**6. Starý strom nechat ležet**, dokud si pár dní nesedne provoz. Teprve pak smazat.
+**7. Starý strom nechat ležet**, dokud si pár dní nesedne provoz. Teprve pak smazat.
 
 **Nesmí se to potkat s importem z PDF.** Import je jediná další věc, která do úložiště
 zapisuje ve velkém. Dokud není migrace hotová, vyráběl by pátý tvar cest — proto v TODO

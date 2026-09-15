@@ -126,11 +126,18 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       zmizí všechno, co se může měnit (název zpěvníku, e-mail, číslo strany, zpěvník
       u sdílené písně), zůstanou jen identifikátory — `songbooks/<id>/covers/front-out.png`
       a `songs/<song_id>/01.png`, dělené podle `user_id` místo podle e-mailu a názvu.
-- [ ] **přidat `song_images.poradi` — musí se stihnout PŘED migrací úložiště.** U 32
-      vícestránkových písní je dnes pořadí stran dané jen pořadím `id` řádku a dá se ověřit
-      proti jménu souboru (`page18` < `page19`). Nový standard tuhle informaci ze jména
-      odstraňuje, takže po přejmenování už nebude čím zkontrolovat, že se strany písně
-      nepřehodily.
+- [X] **`song_images.poradi`** (`backend/scripts/migrace_poradi_stran.py`). Muselo jít před
+      migrací úložiště: pořadí stran vícestránkové písně bylo dané jen pořadím `id` a jedinou
+      nezávislou kontrolou bylo číslo v názvu souboru, které nový standard odstraňuje.
+      Naplněno z názvů, **u všech 32 písní bez jediného rozporu** proti pořadí podle `id`.
+      `poradi` je pořadí v rámci písně, takže unese obojí: píseň přes víc stran (32) i dvě
+      písně na jedné straně (18 stran). Ověřeno, že se pořadí stran ve všech 33 zpěvnících
+      nezměnilo, že čtečka `poradi` opravdu čte (prohození dvou stran se projeví) a že
+      `kontrola_zpevniku.py` projde před i po. Nasazení nemá pořadí: chybějící sloupec si
+      aplikace doplní při startu sama.
+- [ ] **spustit `migrace_poradi_stran.py --zapsat` na serveru.** Lokálně hotové, na serveru
+      ne. Bez toho mají všechny řádky `poradi = 1` z výchozí hodnoty a vícestránkové písně
+      by se řadily jen podle `id` — což dnes vychází stejně, ale je to náhoda, ne pravidlo.
 - [ ] `detach_song_from_songbook` v app.py se nikde nevolá, logiku má zdvojenou
       s DELETE endpointem — buď zapojit, nebo smazat
 - [X] u 00010 zbyly nepoužité `T` soubory — už tam nejsou, uklidil je `uklid_obrazku.py`.

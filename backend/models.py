@@ -53,11 +53,23 @@ class Song(db.Model):
     images = db.relationship("SongImage", backref="song", cascade="all, delete-orphan")
 
 class SongImage(db.Model):
+    """Která strana patří které písni. Je to vazební tabulka, ne vlastnictví.
+
+    Obojí je potřeba umět zároveň: píseň se může táhnout přes víc stran (dnes 32 písní)
+    a na jedné straně můžou být dvě písně (dnes 18 stran). Řádek tedy neříká "tohle je
+    obrázek té písně", ale "tahle strana nese tuhle píseň, a je to její N-tá strana".
+
+    `poradi` je pořadí strany **v rámci té písně**, ne ve zpěvníku. Číslo strany ve
+    zpěvníku drží `songbook_pages.page_number` a mění se s každým přidáním strany, aniž
+    by se sahalo na obrázky. U sdílené strany má každá z písní své vlastní `poradi`.
+    """
+
     __tablename__ = "song_images"
 
     id = db.Column(db.Integer, primary_key=True)
     song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
     image_path = db.Column(db.String, nullable=False)
+    poradi = db.Column(db.Integer, nullable=False, default=1)
 
 class Songbook(db.Model):
     __tablename__ = "songbooks"

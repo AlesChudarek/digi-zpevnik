@@ -298,6 +298,33 @@ app.config['DEBUG'] = _str_to_bool(os.getenv("FLASK_DEBUG"), False)
 # Inicializace databáze
 init_app(app)
 
+
+def _dopln_chybejici_sloupce():
+    """Doplní sloupce, které přibyly v modelech, ať nezáleží na pořadí nasazení.
+
+    Projekt nemá migrační nástroj a `create_all` umí jen chybějící tabulky, ne sloupce.
+    Kdyby se nasadil kód dřív než migrační skript, každý dotaz na `song_images` by spadl.
+    Tohle je ta pojistka; je to jedno PRAGMA při startu a po doplnění už nic nedělá.
+
+    Hodnoty se tady nedopočítávají. Prázdné `poradi` naplní
+    `backend/scripts/migrace_poradi_stran.py`, který u toho umí i zkontrolovat, že se
+    strany vícestránkových písní nepřehodily.
+    """
+    from sqlalchemy import text
+    with app.app_context():
+        try:
+            sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(song_images)"))}
+            if sloupce and 'poradi' not in sloupce:
+                db.session.execute(text(
+                    "ALTER TABLE song_images ADD COLUMN poradi INTEGER NOT NULL DEFAULT 1"))
+                db.session.commit()
+                app.logger.warning("song_images.poradi doplněn; spusť migrace_poradi_stran.py")
+        except Exception as chyba:  # noqa: BLE001 - chybějící DB při startu není důvod spadnout
+            app.logger.warning("kontrola sloupců neproběhla: %s", chyba)
+
+
+_dopln_chybejici_sloupce()
+
 # Správa loginu
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -1127,7 +1154,7 @@ def get_songbook_toc(songbook_id):
     songs = {s.id: s for s in Song.query.filter(Song.id.in_(song_ids)).all()}
     images_by_song = {}
     for img in (SongImage.query.filter(SongImage.song_id.in_(song_ids))
-                .order_by(SongImage.id.asc()).all()):
+                .order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()):
         images_by_song.setdefault(img.song_id, []).append(img)
 
     # Songs sharing a page_number sit on the same physical page, so that page
@@ -1389,7 +1416,7 @@ def add_song_to_songbook(songbook_id):
     next_page = (max_page or 0) + 1
 
     # Append entries for all images of the song, in order
-    song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
+    song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
     added = 0
     for img in song_images:
         db.session.add(SongbookPage(songbook_id=sb.id, song_id=song.id, page_number=next_page))
@@ -1457,7 +1484,10 @@ def create_custom_song(songbook_id):
         abs_path = abs_dir / orig
         ext_hint = Path(orig).suffix.lower() or None
         _save_image_with_limit(file_storage, abs_path, ext_hint=ext_hint)
-        db.session.add(SongImage(song_id=new_song_id, image_path=_rel_for_stored_file(abs_path, sb)))
+        # Pořadí v rámci písně, ne ve zpěvníku. Bere se z pořadí nahraných souborů,
+        # protože jméno souboru o pořadí nic neříká a říkat nemá.
+        db.session.add(SongImage(song_id=new_song_id, poradi=saved + 1,
+                                 image_path=_rel_for_stored_file(abs_path, sb)))
         saved += 1
 
     if saved == 0:
@@ -2252,8 +2282,12 @@ def update_songbook_structure(songbook_id):
                 db.session.add(Song(id=song_id, title=title, author_id=author.id,
                                     is_non_song=1 if non_song else 0))
                 db.session.flush()
-                for rel_path in saved_paths:
-                    db.session.add(SongImage(song_id=song_id, image_path=rel_path))
+                # Každá z písní na téhle straně dostane vlastní číslování od 1 - poradi
+                # je pořadí v rámci písně, takže sdílená strana může být pro jednu píseň
+                # první a pro druhou druhá.
+                for poradi, rel_path in enumerate(saved_paths, 1):
+                    db.session.add(SongImage(song_id=song_id, poradi=poradi,
+                                             image_path=rel_path))
                 for page_number in page_numbers:
                     db.session.add(SongbookPage(songbook_id=songbook_id, song_id=song_id,
                                                 page_number=page_number))
@@ -2465,7 +2499,7 @@ def build_songbook_content_pages(book_id):
     # A page number maps to one image; several short songs can share that one page.
     image_for_page = {}
     for song_id, page_numbers in pages_by_song.items():
-        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.id.asc()).all()
+        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
         for offset, page_number in enumerate(sorted(set(page_numbers))):
             if page_number in image_for_page:
                 continue  # already provided by another song on this same page
@@ -2994,13 +3028,13 @@ def songbook_detail(book_id):
         # Skip system-generated dummy songs for non-song pages
         if song.title.startswith("Non-song page") or song.title == '<Prázdná strana>':
             # Still count the page in the numbering
-            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.image_path).all()
+            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
             current_toc_page += len(song_images) if song_images else 1
             processed_songs.add(page.song_id)
             continue
 
         # Get all images for this song
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.id.asc()).all()
+        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
         if song_images:
             # Calculate page range for this song
             start_page = current_toc_page
