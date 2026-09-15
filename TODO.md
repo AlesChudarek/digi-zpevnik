@@ -111,9 +111,11 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       výměna při zoomu proběhne bez probliknutí (obrázek nikdy nemá nulovou šířku),
       svitek povýší jen strany kolem obrazovky (2 z 26) a přelistování během dotahování
       nedostane cizí stranu do rámečku.
-- [ ] **předgenerované náhledy stran nasadit na server** (`flask nahledy-warm`, přibude
-      ~100 MB v `data/nahledy/strany`). Bez toho si první návštěvník počká, než se každá
-      strana zmenší.
+- [X] **předgenerované náhledy stran nasadit na server** — 1093 náhledů, 118 MB.
+      Nepočítaly se na serveru, ale vyrobily na Macu a nahrály rsyncem: 20 sekund místo
+      desítek minut na jednom jádře. Aby to šlo, musel se klíč přestat počítat
+      z nanosekund — ty rsync nepřenese, takže tentýž soubor měl na každém stroji jiný
+      klíč. Ověřeno, že po nahrání se na serveru nic nedogenerovalo.
 - [ ] **mazání zpěvníku nechává za sebou písně.** V DB je 12 písní, které nejsou v žádném
       zpěvníku, a jejich 12 řádků v `song_images` ukazuje na soubory, které na disku nejsou.
       Deset z nich je po smazaném soukromém zpěvníku `u8-1779984405_muj-zpevnik` (složka je
@@ -152,9 +154,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       nezměnilo, že čtečka `poradi` opravdu čte (prohození dvou stran se projeví) a že
       `kontrola_zpevniku.py` projde před i po. Nasazení nemá pořadí: chybějící sloupec si
       aplikace doplní při startu sama.
-- [ ] **spustit `migrace_poradi_stran.py --zapsat` na serveru.** Lokálně hotové, na serveru
-      ne. Bez toho mají všechny řádky `poradi = 1` z výchozí hodnoty a vícestránkové písně
-      by se řadily jen podle `id` — což dnes vychází stejně, ale je to náhoda, ne pravidlo.
+- [X] **spustit `migrace_poradi_stran.py --zapsat` na serveru** — hotovo, 1035 řádků,
+      bez jediného rozporu.
 - [X] ~~`detach_song_from_songbook` se nikde nevolá~~ — funkce toho jména už neexistuje;
       šlo o `_handle_song_delete_for_book` a ta se volá. Zdvojení s DELETE endpointem bylo
       skutečné a zaniklo při migraci úložiště: obě větve se smrskly na „odpoj vazbu, a když
