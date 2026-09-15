@@ -102,11 +102,25 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       méně**. Pozor, komentář v `nahledy.py` uvádí 0,7 MB a 34x — to nejspíš není
       celek, ale jen obálky, které se stihnou načíst nad ohybem při `loading="lazy"`.
       Neověřeno, chce to změřit v prohlížeči, než se to číslo bude někde opakovat.
-- [ ] **náhledové verze stran do čtečky.** Změřeno: strana váží v průměru **878 kB** a
-      jeden zpěvník **26 MB**. Čtečka dostává plné 1748×2480 a prohlížeč to zmenšuje sám,
-      takže se na telefonu u táboráku tahají megabajty na každé otočení stránky. Pozor:
-      tady plné rozlišení není plýtvání, ale funkce — zoomuje se na akordy. Správný tvar
-      je posílat menší variantu a plnou dotáhnout až při přiblížení, ne ji zahodit.
+- [X] **náhledové verze stran do čtečky** (`backend/nahledy.py` profil `STRANA`, routa
+      `/strana/<klic>/<cesta>`, `flask nahledy-warm`). Čtečka dostane WebP o šířce 1100 px
+      a originál si dotáhne teprve při přiblížení — na akordy se zoomuje a tam je plné
+      rozlišení funkce, ne plýtvání. Naměřeno na 1005 stranách: **479 MB → 99,8 MB, tedy
+      4,8x** (477 → 99 kB na stranu). Zpěvník 00001 v prohlížeči: **15,89 → 2,27 MB, 7x**.
+      Ověřeno `backend/scripts/measure_ostrost.py` v Chromiu: běžné čtení netahá originály,
+      výměna při zoomu proběhne bez probliknutí (obrázek nikdy nemá nulovou šířku),
+      svitek povýší jen strany kolem obrazovky (2 z 26) a přelistování během dotahování
+      nedostane cizí stranu do rámečku.
+- [ ] **předgenerované náhledy stran nasadit na server** (`flask nahledy-warm`, přibude
+      ~100 MB v `data/nahledy/strany`). Bez toho si první návštěvník počká, než se každá
+      strana zmenší.
+- [ ] **mazání zpěvníku nechává za sebou písně.** V DB je 12 písní, které nejsou v žádném
+      zpěvníku, a jejich 12 řádků v `song_images` ukazuje na soubory, které na disku nejsou.
+      Deset z nich je po smazaném soukromém zpěvníku `u8-1779984405_muj-zpevnik` (složka je
+      pryč, `songs` a `song_images` zůstaly), zbylé dva jsou `00022/page7.png` a
+      `00025/page12.png`. **Žádný zpěvník to nerozbíjí** — jsou to sirotci, které nikdo
+      nezobrazuje, takže se o ty soubory ani nikdo neptá. Chce to dvě věci: doplnit úklid
+      písní při mazání zpěvníku a jednorázově těch 12 řádků smazat.
 - [ ] **zjednodušit úložiště obrázků a jeho strukturu.** Původní zpěvníky drží formát
       `<id>/page7.png`, ale přidávání a odebírání písniček, prázdné strany a změny pořadí
       to postupně rozbily: dnes žijí vedle sebe tři schémata, jméno souboru už neodpovídá
@@ -157,6 +171,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       drží živý klíč u Brevo a jeho nepřítomnost sama o sobě něco znamená
       (`scripts/mesicni-hlaseni.sh`, spouští cron na serveru — **ověřit, že ten záznam
       v cronu na serveru opravdu je**)
+- [ ] **obrázky se servírují bez kontroly práv.** `serve_songbook_image`
+      ([app.py:322](backend/app.py#L322)) nemá `@login_required` ani `can_view_songbook`,
+      a přitom obsluhuje i větev `users/` se soukromými obrázky. Kdo zná cestu, dostane
+      obrázek — a cesta obsahuje e-mail uživatele, takže není nijak zvlášť tajná.
+      Náhledová routa `nahled_obalky` ([app.py:791](backend/app.py#L791)) kontrolu má,
+      tahle ne.
 - [ ] **omezit, kolik toho jeden účet nahraje.** Dnes žádný strop není. Jeden obrázek smí
       2 MB, ale počet nikdo nehlídá — při 38 GB volných to je asi 19 000 obrázků do
       zaplnění disku. Ověření e-mailu to ztížilo, ale nezavřelo.
