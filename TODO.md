@@ -121,18 +121,21 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       `00025/page12.png`. **Žádný zpěvník to nerozbíjí** — jsou to sirotci, které nikdo
       nezobrazuje, takže se o ty soubory ani nikdo neptá. Chce to dvě věci: doplnit úklid
       písní při mazání zpěvníku a jednorázově těch 12 řádků smazat.
-- [ ] **zjednodušit úložiště obrázků a jeho strukturu.** Původní zpěvníky drží formát
-      `<id>/page7.png`, ale přidávání a odebírání písniček, prázdné strany a změny pořadí
-      to postupně rozbily: dnes žijí vedle sebe tři schémata, jméno souboru už neodpovídá
-      číslu strany a obrázek leží pod složkou toho zpěvníku, ze kterého náhodou pochází.
-      Cílový tvar je popsaný v [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md) —
-      obálka patří zpěvníku, strana patří písni, jména nikdy z uploadu. Chce to migraci
-      833 obrázků layoutu A i s přepisem cest v DB. Netýká se to jen složek: chce to projít
-      i práci s daty v databázi, ať to je postavené, a ne poskládané od boku.
+- [ ] **zjednodušit úložiště obrázků a jeho strukturu.** Cílový tvar i postup migrace jsou
+      nově rozepsané v [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md). Podstata: z cesty
+      zmizí všechno, co se může měnit (název zpěvníku, e-mail, číslo strany, zpěvník
+      u sdílené písně), zůstanou jen identifikátory — `songbooks/<id>/covers/front-out.png`
+      a `songs/<song_id>/01.png`, dělené podle `user_id` místo podle e-mailu a názvu.
+- [ ] **přidat `song_images.poradi` — musí se stihnout PŘED migrací úložiště.** U 32
+      vícestránkových písní je dnes pořadí stran dané jen pořadím `id` řádku a dá se ověřit
+      proti jménu souboru (`page18` < `page19`). Nový standard tuhle informaci ze jména
+      odstraňuje, takže po přejmenování už nebude čím zkontrolovat, že se strany písně
+      nepřehodily.
 - [ ] `detach_song_from_songbook` v app.py se nikde nevolá, logiku má zdvojenou
       s DELETE endpointem — buď zapojit, nebo smazat
-- [ ] u 00010 zbyly čtyři nepoužité `T` soubory (jeho obálky jsou průhledné pod jinými jmény,
-      `output-onlinepngtools*.png`) — buď smazat, nebo přejmenovat podle standardu
+- [X] u 00010 zbyly nepoužité `T` soubory — už tam nejsou, uklidil je `uklid_obrazku.py`.
+      Ověřeno smířením DB proti disku: 1093 souborů a na každý něco z DB ukazuje, volně
+      ležící soubor není ani jeden.
 - [X] velký check čtečka vs. PDF — `backend/scripts/kontrola_zpevniku.py`, pouští se kdykoliv
 - [ ] ZIP balí originály, takže po povýšení obálek v něm budou průhledné PNG bez barvy
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
