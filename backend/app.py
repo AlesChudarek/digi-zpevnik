@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import click
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from flask.cli import with_appcontext
@@ -37,6 +37,16 @@ try:
 except Exception:
     MAX_IMAGE_UPLOAD_MB = 2.0
 MAX_IMAGE_UPLOAD_BYTES = int(MAX_IMAGE_UPLOAD_MB * 1024 * 1024)
+# Strop na to, kolik smí jeden účet nahrát. Jeden obrázek smí 2 MB, ale počet nikdo
+# nehlídal, takže se aplikace dala použít jako cloud na fotky - a při 38 GB volných by
+# ji zaplnilo asi 19 000 obrázků. Pro orientaci naměřeno: nejobsáhlejší dnešní uživatel
+# má 50 MB (123stránkový zpěvník), běžný zpěvník váží kolem 12 MB.
+try:
+    MAX_USER_STORAGE_MB = max(10.0, float(os.getenv("MAX_USER_STORAGE_MB", "300")))
+except Exception:
+    MAX_USER_STORAGE_MB = 300.0
+MAX_USER_STORAGE_BYTES = int(MAX_USER_STORAGE_MB * 1024 * 1024)
+
 MIN_RESIZE_DIMENSION = max(320, int(os.getenv("MIN_RESIZE_DIMENSION", "640")))
 RESIZE_SCALE_FACTOR = 0.85
 RESIZE_MAX_STEPS = 8
@@ -144,10 +154,82 @@ def _prepare_image_bytes(file_storage, ext_hint=None, max_bytes=None):
     return result
 
 
+class KvotaPrekrocena(Exception):
+    """Účet by uploadem překročil svůj strop. Nese čísla, ať se dá říct o kolik."""
+
+    def __init__(self, zabrano: int, pridavek: int):
+        self.zabrano, self.pridavek = zabrano, pridavek
+        super().__init__("překročena kvóta")
+
+
+def _uzivatel_z_cilove_cesty(dest_path: Path):
+    """Komu se soubor započítá. Veřejné zpěvníky nikomu - ty zakládá jen admin.
+
+    Bere se z cesty, ne z přihlášeného uživatele: cesta je to jediné, co rozhoduje,
+    kam bajty opravdu padnou, takže se kontrola nedá obejít jiným endpointem.
+    """
+    try:
+        rel = dest_path.resolve().relative_to(IMAGES_DIR.resolve())
+    except (ValueError, OSError):
+        return None
+    casti = rel.parts
+    if len(casti) >= 2 and casti[0] == 'uzivatele' and casti[1].isdigit():
+        return int(casti[1])
+    return None
+
+
+def zabrane_misto(user_id: int) -> int:
+    """Kolik bajtů má účet nahraných. Pravdou je disk, ne databáze - sirotek, na který
+    už neukazuje žádný řádek, místo pořád zabírá."""
+    koren = IMAGES_DIR / 'uzivatele' / str(user_id)
+    try:
+        return sum(p.stat().st_size for p in koren.rglob('*') if p.is_file())
+    except OSError:
+        return 0
+
+
+def _zbyva_uzivateli(user_id: int) -> int:
+    """Zbývající místo. V rámci jednoho požadavku se sečte jednou a pak se jen odečítá,
+    ať nahrání deseti stran neprochází složku desetkrát."""
+    try:
+        cache = g._kvota_cache
+    except (AttributeError, RuntimeError):
+        cache = {}
+        try:
+            g._kvota_cache = cache
+        except RuntimeError:
+            pass  # mimo požadavek (CLI, skripty) - jen se necachuje
+    if user_id not in cache:
+        cache[user_id] = MAX_USER_STORAGE_BYTES - zabrane_misto(user_id)
+    return cache[user_id]
+
+
+def _zapocti(user_id: int, bajtu: int, cesta: Path) -> None:
+    try:
+        g._kvota_cache[user_id] -= bajtu
+    except (AttributeError, KeyError, RuntimeError):
+        pass
+    try:
+        g._zapsane_soubory.append(cesta)
+    except (AttributeError, RuntimeError):
+        try:
+            g._zapsane_soubory = [cesta]
+        except RuntimeError:
+            pass
+
+
 def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
     data = _prepare_image_bytes(file_storage, ext_hint=ext_hint)
+    # Jediné místo, kudy obrázek na disk teče, takže i jediné, kde se kvóta musí hlídat.
+    uid = _uzivatel_z_cilove_cesty(dest_path)
+    if uid is not None:
+        zbyva = _zbyva_uzivateli(uid)
+        if len(data) > zbyva:
+            raise KvotaPrekrocena(MAX_USER_STORAGE_BYTES - zbyva, len(data))
     with open(dest_path, 'wb') as fh:
         fh.write(data)
+    if uid is not None:
+        _zapocti(uid, len(data), dest_path)
 
 try:
     # Prefer balíčkové importy pro nasazení (backend.app jako modul)
@@ -327,6 +409,34 @@ def _dopln_chybejici_sloupce():
 
 
 _dopln_chybejici_sloupce()
+
+
+@app.errorhandler(KvotaPrekrocena)
+def _kvota_prekrocena(chyba):
+    """Upload přes strop účtu. Vrátí se to, co se stihlo zapsat, aby po nepovedeném
+    nahrání nezůstaly na disku kusy, které by se do kvóty počítaly."""
+    db.session.rollback()
+    for cesta in getattr(g, '_zapsane_soubory', []):
+        try:
+            Path(cesta).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def mb(bajtu):
+        # Desetinné místo pod 100 MB: se zaokrouhlením na celé psalo "zabráno 10 MB
+        # z 10 MB" i při 9,66 MB, což vypadá jako protimluv.
+        h = bajtu / 1024 / 1024
+        return (f"{h:.1f}".replace('.', ',') if h < 100 else f"{h:.0f}") + " MB"
+
+    zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
+    return jsonify({
+        'ok': False,
+        'error': (f"Nahrávání by překročilo váš limit {mb(MAX_USER_STORAGE_BYTES)}. "
+                  f"Zbývá vám {mb(zbyva)} a tenhle soubor má {mb(chyba.pridavek)}. "
+                  f"Uvolněte místo smazáním zpěvníku, který už nepotřebujete."),
+        'kvota_bytes': MAX_USER_STORAGE_BYTES,
+        'zabrano_bytes': chyba.zabrano,
+    }), 413
 
 # Správa loginu
 login_manager = LoginManager()
