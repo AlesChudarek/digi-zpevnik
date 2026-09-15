@@ -1,7 +1,54 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+from sqlalchemy.ext.associationproxy import association_proxy
 
 db = SQLAlchemy()
+
+
+class Image(db.Model):
+    """Jeden obrázkový soubor. Identitou je řádek, ne řetězec s cestou.
+
+    Dřív byla identitou obrázku jeho cesta, uložená jako text na šesti různých místech
+    (`song_images` a pět sloupců obálek v `songbooks`). Otázka „ukazuje na tenhle soubor
+    ještě někdo?" se pak musela ptát šestkrát a porovnávat řetězce, nic nehlídalo, že
+    cesta vůbec existuje, a přesun souboru znamenal přepsat šest sloupců.
+
+    Sdílení vychází samo: strana se dvěma písněmi je jeden řádek `images` a dva řádky
+    `song_images`; táž strana ve dvou zpěvnících je pořád jeden řádek `images`.
+
+    Kód dál pracuje s `image_path` a `img_path_cover_*` jako s textem - drží to
+    `association_proxy` níž, takže se kvůli téhle změně nemuselo přepsat 227 míst.
+    """
+
+    __tablename__ = "images"
+
+    id = db.Column(db.Integer, primary_key=True)
+    cesta = db.Column(db.String, unique=True, nullable=False, index=True)
+
+    @classmethod
+    def ziskej(cls, cesta):
+        """Řádek pro danou cestu; když není, založí ho.
+
+        Hledá i mezi ještě nezapsanými objekty v session. Bez toho by dvě strany nahrané
+        v jednom požadavku pod stejnou cestou založily dva řádky a unikátní index by to
+        shodil až při commitu.
+        """
+        if not cesta:
+            return None
+        radek = cls.query.filter_by(cesta=cesta).first()
+        if radek is not None:
+            return radek
+        for cekajici in db.session.new:
+            if isinstance(cekajici, cls) and cekajici.cesta == cesta:
+                return cekajici
+        radek = cls(cesta=cesta)
+        db.session.add(radek)
+        return radek
+
+
+def _cesta_obrazku(cesta):
+    """Tvůrce pro association_proxy: z textu udělá řádek `images`."""
+    return Image.ziskej(cesta)
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
@@ -68,8 +115,12 @@ class SongImage(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
-    image_path = db.Column(db.String, nullable=False)
+    image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
     poradi = db.Column(db.Integer, nullable=False, default=1)
+
+    image = db.relationship("Image")
+    # Kód dál čte i zapisuje `image_path` jako text, jen pod tím leží řádek v `images`.
+    image_path = association_proxy("image", "cesta", creator=_cesta_obrazku)
 
 class Songbook(db.Model):
     __tablename__ = "songbooks"
@@ -79,11 +130,27 @@ class Songbook(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     first_page_side = db.Column(db.String, default="right")
     color = db.Column(db.String, default="#FFFFFF")
-    img_path_cover_preview = db.Column(db.String, nullable=True)
-    img_path_cover_front_outer = db.Column(db.String, nullable=True)
-    img_path_cover_front_inner = db.Column(db.String, nullable=True)
-    img_path_cover_back_inner = db.Column(db.String, nullable=True)
-    img_path_cover_back_outer = db.Column(db.String, nullable=True)
+    # Čtyři obálky plus `preview`, což není pátý obrázek, ale ukazatel na tu z nich,
+    # která se zobrazuje v přehledech.
+    cover_preview_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
+    cover_front_outer_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
+    cover_front_inner_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
+    cover_back_inner_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
+    cover_back_outer_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
+
+    cover_preview = db.relationship("Image", foreign_keys=[cover_preview_id])
+    cover_front_outer = db.relationship("Image", foreign_keys=[cover_front_outer_id])
+    cover_front_inner = db.relationship("Image", foreign_keys=[cover_front_inner_id])
+    cover_back_inner = db.relationship("Image", foreign_keys=[cover_back_inner_id])
+    cover_back_outer = db.relationship("Image", foreign_keys=[cover_back_outer_id])
+
+    # Jména `img_path_cover_*` zůstávají, aby se kvůli téhle změně nepřepisovaly šablony
+    # a sto dalších míst; pod nimi je teď řádek v `images` místo textu.
+    img_path_cover_preview = association_proxy("cover_preview", "cesta", creator=_cesta_obrazku)
+    img_path_cover_front_outer = association_proxy("cover_front_outer", "cesta", creator=_cesta_obrazku)
+    img_path_cover_front_inner = association_proxy("cover_front_inner", "cesta", creator=_cesta_obrazku)
+    img_path_cover_back_inner = association_proxy("cover_back_inner", "cesta", creator=_cesta_obrazku)
+    img_path_cover_back_outer = association_proxy("cover_back_outer", "cesta", creator=_cesta_obrazku)
     is_public = db.Column(db.Integer, default=0)
     pages = db.relationship("SongbookPage", backref="songbook", cascade="all, delete-orphan")
     intros_outros = db.relationship("SongbookIntroOutroImage", backref="songbook", cascade="all, delete-orphan")
@@ -94,8 +161,11 @@ class SongbookIntroOutroImage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False)
     type = db.Column(db.String, nullable=False)  # 'intro' nebo 'outro'
-    image_path = db.Column(db.String, nullable=False)
+    image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
     sort_order = db.Column(db.Integer, default=0)
+
+    image = db.relationship("Image")
+    image_path = association_proxy("image", "cesta", creator=_cesta_obrazku)
 
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
