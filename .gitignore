@@ -9,6 +9,8 @@ venv/
 
 # Databáze a nahrávky
 backend/instance/*.db
+# Zálohy databáze před zásahem (zpevnik.db.pred-necim) - patří na disk, ne do gitu.
+backend/instance/*.db.*
 data/private/users/
 backend/static/uploads/
 
