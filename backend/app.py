@@ -405,7 +405,11 @@ def _dopln_chybejici_sloupce():
                 db.session.commit()
                 app.logger.warning("song_images.poradi doplněn; spusť migrace_poradi_stran.py")
         except Exception as chyba:  # noqa: BLE001 - chybějící DB při startu není důvod spadnout
-            app.logger.warning("kontrola sloupců neproběhla: %s", chyba)
+            # Gunicorn startuje víc workerů naráz, takže se o sloupec pokusí každý z nich
+            # a všichni kromě prvního dostanou "duplicate column". Výsledek je správný,
+            # není důvod to hlásit jako problém.
+            if 'duplicate column' not in str(chyba).lower():
+                app.logger.warning("kontrola sloupců neproběhla: %s", chyba)
 
 
 _dopln_chybejici_sloupce()
