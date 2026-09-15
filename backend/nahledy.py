@@ -99,8 +99,14 @@ def vyrob(zdroj: Path, cil: Path, profil: Profil = OBALKA) -> bool:
         # společným jménem si dva workeři přepsali rozepsaný soubor navzájem a ten druhý
         # pak přejmenovával něco, co už neexistovalo.
         docasny = cil.with_name(f"{cil.stem}.{os.getpid()}-{uuid4().hex[:8]}.rozepsany")
-        nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=6)
-        docasny.replace(cil)
+        try:
+            nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=6)
+            docasny.replace(cil)
+        except Exception:
+            # Ať po nepovedeném pokusu nezůstane rozepsaný soubor ležet. Úklid starých
+            # náhledů ho nesmaže, protože hledá jen .webp, takže by tam zůstal navždy.
+            docasny.unlink(missing_ok=True)
+            raise
         return True
     except Exception as chyba:  # noqa: BLE001 - náhled nesmí shodit stránku
         log.error("Náhled %s se nepodařilo vyrobit: %s", zdroj, chyba)
