@@ -1,4 +1,5 @@
 import os
+import mimetypes
 import sys
 import json
 import click
@@ -31,6 +32,10 @@ PRIVATE_USER_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'private' / 'u
 # Nový strom podle docs/ukladani-obrazku.md. Dva kořeny nad ním zůstávají jen jako
 # dědictví, dokud se starý strom nesmaže - nic nového se do nich nezapisuje.
 IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'images'
+
+# Ubuntu 22.04 nemá .webp ve své tabulce typů, takže Flask posílal náhledy jako
+# application/octet-stream. Prohlížeč si obsah domyslí, ale proxy ani cache nemusí.
+mimetypes.add_type('image/webp', '.webp')
 
 try:
     MAX_IMAGE_UPLOAD_MB = max(0.5, float(os.getenv("MAX_IMAGE_UPLOAD_MB", "2.0")))
@@ -3175,6 +3180,12 @@ def nahledy_warm(jen):
         # zařídí, že se obrázek zmenšuje jednou.
         cesty = {r.image_path for r in SongImage.query.all() if r.image_path}
         cesty |= {r.image_path for r in SongbookIntroOutroImage.query.all() if r.image_path}
+        # Obálky patří do obou skupin. Nahoře dostaly malý náhled do přehledů, ale čtečka
+        # je ukazuje jako běžné strany, takže potřebují i variantu v šířce strany. Bez
+        # tohohle se čtyři obálky každého zpěvníku dogenerovávaly až za provozu.
+        for sb in Songbook.query.all():
+            cesty |= {c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
+                                  sb.img_path_cover_back_inner, sb.img_path_cover_back_outer) if c}
         hotovo = preskoceno = chyb = 0
         for i, rel in enumerate(sorted(cesty), 1):
             zdroj = _abs_image_path(rel)
