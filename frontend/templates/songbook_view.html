@@ -781,8 +781,9 @@
             {% set page_obj = page %}
           {% endif %}
           {% if page_obj.file != 'none' and page_obj.file != 'blank' %}
-            <img src="/songbooks/{{ page_obj.file }}"
+            <img src="{{ url_strany(page_obj.file) }}"
                  data-file="{{ page_obj.file }}"
+                 data-full="/songbooks/{{ page_obj.file }}"
                  data-kind="{{ page_obj.kind or 'content' }}"
                  {% if page_obj.page_number %}data-page-number="{{ page_obj.page_number }}"{% endif %}
                  id="scroll-page-{{ loop.index }}">
@@ -936,6 +937,14 @@
 
 <script>
   const pageFiles = {{ page_files | tojson | safe }};
+  // Čtečka standardně kreslí zmenšenou stranu (proč a o kolik: backend/nahledy.py) a plnou
+  // si dotáhne až při přiblížení. Adresu náhledu si prohlížeč složit nedokáže, protože
+  // v sobě nese otisk originálu - přijde tedy hotová ze serveru.
+  const NAHLEDY_STRAN = {{ mapa_stran(page_files) | tojson | safe }};
+  const SIRKA_NAHLEDU = 1100; // musí souhlasit s nahledy.STRANA.sirka
+  function adresaStrany(file) {
+    return NAHLEDY_STRAN[file] || `/songbooks/${file}`;
+  }
   const BOOK_COLOR = {{ (book_color or '#FFFFFF') | tojson | safe }};
   const AUTO_SCROLL_ICON_CLOCK = {{ static_bust('img/icons/auto_scroll.svg') | tojson }};
   const AUTO_SCROLL_ICON_PAUSE = {{ static_bust('img/icons/auto_scroll_pause.svg') | tojson }};
@@ -1166,7 +1175,8 @@
 
     if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
       leftPage.style.display = 'block';
-      leftPage.src = `/songbooks/${leftPageFile.file}`;
+      leftPage.dataset.full = `/songbooks/${leftPageFile.file}`;
+      leftPage.src = adresaStrany(leftPageFile.file);
       stylePageImg(leftPage, leftPageFile);
       // Hide blank canvas if present
       const blank = document.getElementById('left-page-blank');
@@ -1175,6 +1185,9 @@
       // Hide IMG entirely to avoid UA borders
       leftPage.style.display = 'none';
       leftPage.removeAttribute('src');
+      // Ať po prázdné straně nezůstane viset adresa předchozí - jinak by si ji
+      // zajistiOstrost dotáhla do rámečku, který nikdo nevidí.
+      delete leftPage.dataset.full;
       // Show color canvas instead
       const blank = getOrCreateBlank('left');
       blank.style.display = 'block';
@@ -1182,25 +1195,31 @@
     } else {
       leftPage.style.display = 'none';
       leftPage.src = '';
+      delete leftPage.dataset.full;
       const blank = document.getElementById('left-page-blank');
       if (blank) blank.style.display = 'none';
     }
 
     if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
       rightPage.style.display = 'block';
-      rightPage.src = `/songbooks/${rightPageFile.file}`;
+      rightPage.dataset.full = `/songbooks/${rightPageFile.file}`;
+      rightPage.src = adresaStrany(rightPageFile.file);
       stylePageImg(rightPage, rightPageFile);
       const blank = document.getElementById('right-page-blank');
       if (blank) blank.style.display = 'none';
     } else if (rightPageFile.file === 'blank') {
       rightPage.style.display = 'none';
       rightPage.removeAttribute('src');
+      // Ať po prázdné straně nezůstane viset adresa předchozí - jinak by si ji
+      // zajistiOstrost dotáhla do rámečku, který nikdo nevidí.
+      delete rightPage.dataset.full;
       const blank = getOrCreateBlank('right');
       blank.style.display = 'block';
       blank.style.background = (rightPageFile.kind === 'cover') ? BOOK_COLOR : 'white';
     } else {
       rightPage.style.display = 'none';
       rightPage.src = '';
+      delete rightPage.dataset.full;
       const blank = document.getElementById('right-page-blank');
       if (blank) blank.style.display = 'none';
     }
@@ -1830,6 +1849,73 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     return Math.max(160, Math.min(SCROLL_PAGE_BASE_PX, usable));
   }
 
+  // --- Ostrost: náhled na obrazovku, originál na zoom ---
+  //
+  // Strana se do čtečky posílá zmenšená (1100 px, viz backend/nahledy.py), protože na
+  // telefonu se kreslí na zhruba 400 CSS px a plné 1748 px se stejně zahodí. Jakmile ale
+  // uživatel přiblíží natolik, že by náhled musel být natahovaný, dotáhne se originál.
+  // Na akordy se zoomuje a tam plné rozlišení není plýtvání, ale funkce.
+  //
+  // Výměna nesmí probliknout do prázdna, takže se originál nejdřív načte a dekóduje
+  // stranou a teprve hotový se nasadí do src. V ten okamžik ho prohlížeč má v paměti
+  // dekódovaný, takže se překreslí ve stejném snímku. (Skládat dva <img> přes sebe by
+  // fungovalo taky, ale čtečka si na několika místech sahá na strany přes
+  // querySelectorAll('#scroll-mode img') a druhý obrázek v každém rámečku by jí ty
+  // výběry rozbil.)
+  const viditelneStrany = new Set();
+
+  function zajistiOstrost(img) {
+    const plna = img.dataset.full;
+    if (!plna) return;
+    const plnaAbs = new URL(plna, location.href).href;
+    // Stav se nečte z vlastní značky, ale z toho, co v obrázku opravdu je - po přelistování
+    // se totiž tentýž <img> použije pro jinou stranu a značka by lhala.
+    if (img.src === plnaAbs || img.dataset.ostri === plnaAbs) return;
+
+    // Šířku bere ze style, ne z getBoundingClientRect - applyZoom ji tam právě nastavil
+    // a čtení rozměru by v cyklu přes všechny strany vynutilo přepočet layoutu.
+    const sirkaCss = parseFloat(img.style.width || '0');
+    if (!sirkaCss) return;
+    if (sirkaCss * (window.devicePixelRatio || 1) <= SIRKA_NAHLEDU) return;
+
+    img.dataset.ostri = plnaAbs;
+    const hotovo = () => {
+      // Mezitím se mohlo přelistovat. Ať se do rámečku nedostane cizí strana.
+      if (img.dataset.ostri === plnaAbs && img.dataset.full === plna) img.src = plnaAbs;
+      if (img.dataset.ostri === plnaAbs) delete img.dataset.ostri;
+    };
+    const vzdej = () => {
+      // Originál nedorazil - náhled v rámečku zůstane a zkusí se to zas při dalším zoomu.
+      if (img.dataset.ostri === plnaAbs) delete img.dataset.ostri;
+    };
+    const prednacteni = new Image();
+    prednacteni.src = plnaAbs;
+    if (prednacteni.decode) prednacteni.decode().then(hotovo).catch(vzdej);
+    else { prednacteni.onload = hotovo; prednacteni.onerror = vzdej; }
+  }
+
+  // Ve svitkovém režimu visí v DOM všechny strany zpěvníku najednou. Bez tohohle omezení
+  // by jedno přiblížení stáhlo celý zpěvník v plném rozlišení, což je horší než stav před
+  // náhledy. Dotahují se tedy jen strany, které jsou zrovna na obrazovce nebo hned za
+  // jejím okrajem.
+  const hlidacViditelnosti = ('IntersectionObserver' in window)
+    ? new IntersectionObserver((zaznamy) => {
+        zaznamy.forEach(z => {
+          if (z.isIntersecting) { viditelneStrany.add(z.target); zajistiOstrost(z.target); }
+          else viditelneStrany.delete(z.target);
+        });
+      }, { rootMargin: '200% 0px' })
+    : null;
+
+  function sledujStranySvitku() {
+    if (!hlidacViditelnosti) return;
+    document.querySelectorAll('#scroll-mode img').forEach(img => {
+      if (img.dataset.sledovana === '1') return;
+      img.dataset.sledovana = '1';
+      hlidacViditelnosti.observe(img);
+    });
+  }
+
   function applyZoom() {
     const doublePage = document.querySelectorAll('#double-page img');
     const scrollPages = document.querySelectorAll('#scroll-mode img');
@@ -1852,6 +1938,7 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     const w = parseFloat(img.style.width || '0');
     if (w > 0) img.style.height = (w * ar) + 'px';
     img.style.objectFit = 'contain';
+    zajistiOstrost(img);
   });
   // Size blank canvases to match images
   [blankLeft, blankRight].forEach(el => {
@@ -1871,7 +1958,10 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     // Scroll images: if cover kind, paint book color; else white
     const kind = (img.dataset && img.dataset.kind) || 'content';
     img.style.background = (kind === 'cover') ? BOOK_COLOR : 'white';
+    // Jen co je na obrazovce; hlídač viditelnosti dotáhne zbytek, až se k němu doscrolluje.
+    if (!hlidacViditelnosti || viditelneStrany.has(img)) zajistiOstrost(img);
   });
+  sledujStranySvitku();
 }
 
 // Helpers to auto-fit double page to viewport height (with small UI reserves)

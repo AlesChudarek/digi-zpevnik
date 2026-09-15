@@ -781,7 +781,8 @@ def url_nahledu(songbook):
     zdroj = _abs_image_path(rel)
     if not zdroj:
         return None
-    k = _nahledy().klic(zdroj)
+    n = _nahledy()
+    k = n.klic(zdroj, n.OBALKA)
     if not k:
         return None
     return url_for('nahled_obalky', book_id=songbook.id, klic=k)
@@ -800,18 +801,96 @@ def nahled_obalky(book_id, klic):
     rel = songbook.img_path_cover_preview
     zdroj = _abs_image_path(rel) if rel else None
     n = _nahledy()
-    if not zdroj or n.klic(zdroj) != klic:
+    if not zdroj or n.klic(zdroj, n.OBALKA) != klic:
         # Klíč nesedí na dnešní obálku - odkaz je z dřívějška. Ať si prohlížeč vyzvedne
         # aktuální adresu, místo aby dostal cizí obrázek.
         return ("Not Found", 404)
 
     cil = n.soubor_nahledu(NAHLEDY_DIR, book_id, klic)
-    if not cil.exists() and not n.vyrob(zdroj, cil):
+    if not cil.exists() and not n.vyrob(zdroj, cil, n.OBALKA):
         # Když se náhled nepovede, ať stránka nezůstane bez obrázku.
         return redirect(url_for('serve_songbook_image', filename=rel))
     n.uklid_starych(NAHLEDY_DIR, book_id, klic)
 
     odpoved = send_from_directory(str(NAHLEDY_DIR), cil.name)
+    # Ta adresa už nikdy neponese jiný obsah, protože klíč je z obsahu originálu.
+    odpoved.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+    return odpoved
+
+
+def url_strany(rel):
+    """Adresa zmenšené strany pro čtečku, nebo původní obrázek, když se klíč nedá spočítat.
+
+    Vrací se vždycky něco použitelného - když se na náhled nedostane (chybějící soubor,
+    nečitelný stat), čtečka dostane originál a jen se nic neušetří.
+    """
+    if not rel:
+        return None
+    zdroj = _abs_image_path(rel)
+    n = _nahledy()
+    k = n.klic(zdroj, n.STRANA) if zdroj else None
+    if not k:
+        return url_for('serve_songbook_image', filename=rel)
+    return url_for('nahled_strany', klic=k, filename=rel)
+
+
+app.jinja_env.globals['url_strany'] = url_strany
+
+
+def mapa_stran(page_files):
+    """Pro každou stranu ve zpěvníku adresa jejího náhledu: {cesta: adresa}.
+
+    Čtečka si adresu náhledu nemůže složit sama, protože v sobě nese otisk originálu.
+    Počítá se tedy jednou na serveru a do stránky se pošle hotová mapa.
+    """
+    mapa = {}
+    for pair in page_files or []:
+        for page in pair or []:
+            if not page:
+                continue
+            rel = page if isinstance(page, str) else page.get('file')
+            if not rel or rel in ('none', 'blank') or rel in mapa:
+                continue
+            adresa = url_strany(rel)
+            if adresa:
+                mapa[rel] = adresa
+    return mapa
+
+
+app.jinja_env.globals['mapa_stran'] = mapa_stran
+
+
+
+def _je_pod(cesta: Path, koren: Path) -> bool:
+    """Leží soubor opravdu pod povoleným kořenem? Jméno přichází z adresy, takže se na
+    jeho nevinnost nedá spoléhat."""
+    try:
+        return koren.resolve() in cesta.resolve().parents
+    except OSError:
+        return False
+
+
+@app.route('/strana/<klic>/<path:filename>')
+@login_required
+def nahled_strany(klic, filename):
+    """Zmenšená strana pro čtečku. Originál zůstává na /songbooks/<filename>."""
+    zdroj = _abs_image_path(filename)
+    n = _nahledy()
+    if not zdroj or not (_je_pod(zdroj, SONGBOOK_IMAGES_DIR) or _je_pod(zdroj, PRIVATE_USER_IMAGES_DIR)):
+        return ("Not Found", 404)
+    if n.klic(zdroj, n.STRANA) != klic:
+        # Klíč nesedí na dnešní podobu obrázku - odkaz je z dřívějška. Ať si prohlížeč
+        # vyzvedne aktuální adresu, místo aby dostal cizí obrázek.
+        return ("Not Found", 404)
+
+    otisk = n.otisk_cesty(filename)
+    cil = n.soubor_strany(NAHLEDY_DIR, otisk, klic)
+    if not cil.exists() and not n.vyrob(zdroj, cil, n.STRANA):
+        # Když se náhled nepovede, ať čtečka nezůstane bez strany.
+        return redirect(url_for('serve_songbook_image', filename=filename))
+    n.uklid_starych_stran(NAHLEDY_DIR, otisk, klic)
+
+    odpoved = send_from_directory(str(NAHLEDY_DIR / 'strany'), cil.name)
     # Ta adresa už nikdy neponese jiný obsah, protože klíč je z obsahu originálu.
     odpoved.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
     return odpoved
@@ -3022,29 +3101,56 @@ def migrace_overeni(overit_stavajici):
 
 
 @app.cli.command("nahledy-warm")
+@click.option("--jen", type=click.Choice(['obalky', 'strany']), default=None,
+              help="udělat jen jednu skupinu (výchozí obě)")
 @with_appcontext
-def nahledy_warm():
-    """Předpřipraví náhledy obálek, ať na ně první návštěvník nečeká."""
+def nahledy_warm(jen):
+    """Předpřipraví náhledy obálek a stran, ať na ně první návštěvník nečeká."""
     n = _nahledy()
-    hotovo = preskoceno = chyb = 0
-    for sb in Songbook.query.all():
-        rel = sb.img_path_cover_preview
-        zdroj = _abs_image_path(rel) if rel else None
-        k = n.klic(zdroj) if zdroj else None
-        if not k:
-            preskoceno += 1
-            continue
-        cil = n.soubor_nahledu(NAHLEDY_DIR, sb.id, k)
-        if cil.exists():
-            hotovo += 1
-        elif n.vyrob(zdroj, cil):
-            hotovo += 1
-        else:
-            chyb += 1
-        n.uklid_starych(NAHLEDY_DIR, sb.id, k)
-    velikost = sum(f.stat().st_size for f in NAHLEDY_DIR.glob('*.webp')) if NAHLEDY_DIR.exists() else 0
-    click.echo(f"náhledů: {hotovo}, bez obálky: {preskoceno}, chyb: {chyb}, "
-               f"celkem {velikost / 1e6:.2f} MB")
+
+    if jen != 'strany':
+        hotovo = preskoceno = chyb = 0
+        for sb in Songbook.query.all():
+            rel = sb.img_path_cover_preview
+            zdroj = _abs_image_path(rel) if rel else None
+            k = n.klic(zdroj, n.OBALKA) if zdroj else None
+            if not k:
+                preskoceno += 1
+                continue
+            cil = n.soubor_nahledu(NAHLEDY_DIR, sb.id, k)
+            if cil.exists() or n.vyrob(zdroj, cil, n.OBALKA):
+                hotovo += 1
+            else:
+                chyb += 1
+            n.uklid_starych(NAHLEDY_DIR, sb.id, k)
+        velikost = sum(f.stat().st_size for f in NAHLEDY_DIR.glob('*.webp')) if NAHLEDY_DIR.exists() else 0
+        click.echo(f"obálky: {hotovo} hotovo, {preskoceno} bez obálky, {chyb} chyb, "
+                   f"celkem {velikost / 1e6:.2f} MB")
+
+    if jen != 'obalky':
+        # Tatáž písnička může být ve dvou zpěvnících, takže se cesty opakují; množina
+        # zařídí, že se obrázek zmenšuje jednou.
+        cesty = {r.image_path for r in SongImage.query.all() if r.image_path}
+        cesty |= {r.image_path for r in SongbookIntroOutroImage.query.all() if r.image_path}
+        hotovo = preskoceno = chyb = 0
+        for i, rel in enumerate(sorted(cesty), 1):
+            zdroj = _abs_image_path(rel)
+            k = n.klic(zdroj, n.STRANA) if zdroj else None
+            if not k:
+                preskoceno += 1
+                continue
+            cil = n.soubor_strany(NAHLEDY_DIR, n.otisk_cesty(rel), k)
+            if cil.exists() or n.vyrob(zdroj, cil, n.STRANA):
+                hotovo += 1
+            else:
+                chyb += 1
+            n.uklid_starych_stran(NAHLEDY_DIR, n.otisk_cesty(rel), k)
+            if i % 100 == 0:
+                click.echo(f"  ... {i}/{len(cesty)}")
+        strany_dir = NAHLEDY_DIR / 'strany'
+        velikost = sum(f.stat().st_size for f in strany_dir.glob('*.webp')) if strany_dir.exists() else 0
+        click.echo(f"strany: {hotovo} hotovo, {preskoceno} bez souboru, {chyb} chyb, "
+                   f"celkem {velikost / 1e6:.2f} MB")
 
 
 @app.cli.command("mesicni-hlaseni")
