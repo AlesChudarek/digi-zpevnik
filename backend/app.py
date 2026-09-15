@@ -859,7 +859,10 @@ def url_strany(rel):
     k = n.klic(zdroj, n.STRANA) if zdroj else None
     if not k:
         return url_for('serve_songbook_image', filename=rel)
-    return url_for('nahled_strany', klic=k, filename=rel)
+    # `.webp` na konci schválně: adresa nese cestu k originálu, aby se z ní dal náhled
+    # vyrobit, ale obsah je WebP. Bez té přípony vypadá v inspektoru jako plné PNG
+    # a není jak poznat, že zmenšování vůbec funguje.
+    return url_for('nahled_strany', klic=k, filename=rel + '.webp')
 
 
 app.jinja_env.globals['url_strany'] = url_strany
@@ -902,6 +905,9 @@ def _je_pod(cesta: Path, koren: Path) -> bool:
 @login_required
 def nahled_strany(klic, filename):
     """Zmenšená strana pro čtečku. Originál zůstává na /songbooks/<filename>."""
+    if not filename.endswith('.webp'):
+        return ("Not Found", 404)
+    filename = filename[:-len('.webp')]
     zdroj = _abs_image_path(filename)
     n = _nahledy()
     if not zdroj or not any(_je_pod(zdroj, k) for k in (IMAGES_DIR, SONGBOOK_IMAGES_DIR, PRIVATE_USER_IMAGES_DIR)):
