@@ -139,9 +139,11 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       (1093 souborů v každém), v DB nezbyla jediná cesta mimo nový strom a data jsou
       i v záloze na Macu. `data/private/seeds` a `data/public/seeds` zůstávají — to jsou
       podklady pro generování zpěvníků, ne úložiště.
-- [ ] **odstranit z kódu čtení staré struktury.** `_abs_image_path` a
-      `serve_songbook_image` pořád umí `users/…` a holé `<id>/page1.png`. Po smazání
-      starého stromu na to nic neukazuje; je to mrtvá větev, která jen mate.
+- [X] **odstranit z kódu čtení staré struktury.** `SONGBOOK_IMAGES_DIR` ani
+      `PRIVATE_USER_IMAGES_DIR` v kódu nejsou. `_abs_image_path` teď na cestu mimo nový
+      tvar vrátí `None` místo aby ji potichu poskládal do něčeho, co nikam nevede, a
+      `/songbooks/<stará cesta>` vrací 404. `kontrola_zpevniku.py` hledá osiřelé soubory
+      v `data/images`.
 - [ ] **tabulka `images`.** Zbylá část návrhu: strana má dnes identitu danou cestou, což
       funguje, ale `smaz_osirele_obrazky` kvůli tomu porovnává řetězce místo `image_id`.
       Čistě databázová změna, souborů se netýká.

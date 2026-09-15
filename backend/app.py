@@ -27,10 +27,9 @@ from io import BytesIO
 from PIL import Image, ImageOps
 
 # Cesty k obrázkům zpěvníků
-SONGBOOK_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'public' / 'images' / 'songbooks'
-PRIVATE_USER_IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'private' / 'users'
-# Nový strom podle docs/ukladani-obrazku.md. Dva kořeny nad ním zůstávají jen jako
-# dědictví, dokud se starý strom nesmaže - nic nového se do nich nezapisuje.
+# Jediný kořen obrázků, viz docs/ukladani-obrazku.md. Starý strom
+# (data/public/images/songbooks, data/private/users) byl smazán 15. 9. 2026 poté, co
+# se ověřilo, že má v novém stromu přesnou kopii - proto se už nikde nečte.
 IMAGES_DIR = Path(__file__).parent.parent / 'data' / 'images'
 
 # Ubuntu 22.04 nemá .webp ve své tabulce typů, takže Flask posílal náhledy jako
@@ -471,11 +470,9 @@ app.jinja_env.globals['static_bust'] = static_bust
 def serve_songbook_image(filename):
     # If path starts with 'users/', serve from private users directory; otherwise from public songbooks
     try:
-        if _je_nova_cesta(filename):
-            return send_from_directory(str(IMAGES_DIR), filename)
-        if filename.startswith('users/'):
-            return send_from_directory(str(PRIVATE_USER_IMAGES_DIR), filename.replace('users/', '', 1))
-        return send_from_directory(str(SONGBOOK_IMAGES_DIR), filename)
+        if not _je_nova_cesta(filename):
+            return ("Not Found", 404)
+        return send_from_directory(str(IMAGES_DIR), filename)
     except Exception:
         # Fallback 404-like behavior without exposing internals
         return ("Not Found", 404)
@@ -509,19 +506,13 @@ def _je_nova_cesta(rel_path) -> bool:
 def _abs_image_path(rel_path: str):
     """Z uložené cesty udělá soubor na disku.
 
-    Nové cesty (`verejne/…`, `uzivatele/<uid>/…`) vedou do `data/images`. Dva staré tvary
-    se čtou dál, dokud starý strom leží na disku; zapisovat se do nich přestalo.
+    Cesta musí začínat `verejne/` nebo `uzivatele/<uid>/`. Cokoliv jiného je pozůstatek
+    starého tvaru nebo překlep a vrací se None - dřív se to potichu poskládalo do cesty,
+    která nikam nevedla.
     """
-    try:
-        if not rel_path or not isinstance(rel_path, str):
-            return None
-        if _je_nova_cesta(rel_path):
-            return IMAGES_DIR / rel_path
-        if rel_path.startswith('users/'):
-            return PRIVATE_USER_IMAGES_DIR / Path(rel_path).relative_to('users')
-        return SONGBOOK_IMAGES_DIR / rel_path
-    except Exception:
+    if not _je_nova_cesta(rel_path):
         return None
+    return IMAGES_DIR / rel_path
 
 
 ROLE_OBALEK = {'coverfrontout': 'front-out', 'coverfrontin': 'front-in',
@@ -1029,7 +1020,7 @@ def nahled_strany(klic, filename):
     filename = filename[:-len('.webp')]
     zdroj = _abs_image_path(filename)
     n = _nahledy()
-    if not zdroj or not any(_je_pod(zdroj, k) for k in (IMAGES_DIR, SONGBOOK_IMAGES_DIR, PRIVATE_USER_IMAGES_DIR)):
+    if not zdroj or not _je_pod(zdroj, IMAGES_DIR):
         return ("Not Found", 404)
     if n.klic(zdroj, n.STRANA) != klic:
         # Klíč nesedí na dnešní podobu obrázku - odkaz je z dřívějška. Ať si prohlížeč

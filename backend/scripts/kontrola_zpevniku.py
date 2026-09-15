@@ -43,7 +43,7 @@ def main():
 
     from backend.app import (app, Songbook, build_songbook_export_sequence,  # noqa: E402
                              build_songbook_content_pages, _abs_image_path,
-                             SONGBOOK_IMAGES_DIR, PRIVATE_USER_IMAGES_DIR)
+                             IMAGES_DIR)
 
     def abs_cesta(rel):
         return _abs_image_path(rel)
@@ -129,17 +129,13 @@ def main():
 
         # --- soubory, na které nikdo neukazuje ---
         osirele = []
-        for koren in (SONGBOOK_IMAGES_DIR, PRIVATE_USER_IMAGES_DIR):
-            if not koren.exists():
-                continue
-            for dirpath, _, names in os.walk(koren):
+        if IMAGES_DIR.exists():
+            for dirpath, _, names in os.walk(IMAGES_DIR):
                 for n in names:
                     if not n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
                         continue
                     p = Path(dirpath) / n
-                    rel = str(p.relative_to(koren))
-                    if koren == PRIVATE_USER_IMAGES_DIR:
-                        rel = 'users/' + rel
+                    rel = str(p.relative_to(IMAGES_DIR))
                     if rel not in pouzite:
                         osirele.append((rel, p.stat().st_size))
         if osirele:
