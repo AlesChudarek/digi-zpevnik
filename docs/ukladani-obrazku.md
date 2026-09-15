@@ -1,6 +1,10 @@
 # Kam ukládat obrázky
 
-Dnes v datech žijí čtyři různé tvary cest. Vznikly postupně a každý dává smysl sám o sobě,
+**Stav: migrace proběhla lokálně, na serveru zatím ne.** Nový strom leží v `data/images`,
+starý (`data/public/images/songbooks`, `data/private/users`) zůstal ležet jako záchranná
+síť a smaže se, až si provoz sedne.
+
+Do migrace žily v datech čtyři různé tvary cest. Vznikly postupně a každý dává smysl sám o sobě,
 ale dohromady se v nich nedá vyznat a některé nesou věci, které nejsou pravda. Tenhle
 dokument navrhuje cílový tvar a cestu k němu.
 
@@ -154,7 +158,23 @@ se nic nepřehodilo.
 která obálka se zobrazuje v přehledech, ne samostatný obrázek. Patří to do DB jako volba,
 ne jako pátá cesta, kterou je potřeba držet v souladu se čtyřmi ostatními.
 
-## Migrace
+## Jak migrace dopadla
+
+Spuštěno `backend/scripts/migrace_uloziste.py --provest` nad lokální kopií:
+
+- **1093 souborů** přeneseno, 88 obálkových odkazů a 1005 stran
+- **12 sirotčích písní** smazáno (nebyly v žádném zpěvníku a soubory stejně neměly)
+- suchý běh prošel bez nálezu: každý zdroj existoval, žádné dva soubory nemířily na
+  týž cíl, a **na disku nezbyl soubor, který by v mapě nebyl**
+- `kontrola_zpevniku.py` hlásí jedinou věc — 1093 souborů starého stromu, na které už
+  nikdo neukazuje. To je přesně to, co tam po kopii má zůstat
+- struktura stran ve všech 33 zpěvnících je před i po migraci **totožná**
+- všech 1023 stran a 88 obálek se servíruje přes HTTP se 200
+
+Náhledy se musely vyrobit znovu, protože klíč obsahuje cestu. To je u odvozených dat
+v pořádku a řeší to `flask nahledy-warm`.
+
+## Postup migrace
 
 833 + 26 + 176 řádků a k tomu sloupce obálek. Mechanické to je, ale nevratné, takže postup
 je stavěný tak, aby se v každém kroku dalo couvnout.
