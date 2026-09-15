@@ -130,11 +130,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       `kontrola_zpevniku.py` hlásí jen starý strom, který schválně zůstal ležet.
       Vypadlo tím i to, co existovalo jen kvůli měnitelným cestám: stěhování souborů při
       odebrání písně, při změně vlastníka a celé `rewrite_path`.
-- [ ] **nasadit nové úložiště na server** (`migrace_uloziste.py --provest` + `nahledy-warm`).
-      Přibude tam `data/images` vedle starého stromu, tedy dočasně dvojnásobek místa —
-      ověřit, že se tam vejde, než se to pustí.
-- [ ] **smazat starý strom** (`data/public/images/songbooks`, `data/private/users`) —
-      až si provoz sedne. Do té doby je to záchranná síť, aplikace z nich umí číst.
+- [X] **nasadit nové úložiště na server** — hotovo 15. 9. 2026. Pořadí i úložiště,
+      1093 souborů, 12 sirotků pryč, po migraci 1023 stran a 33 čteček vrací 200.
+- [X] **smazat starý strom** — na serveru smazáno. Nedrželo se to „až si provoz sedne",
+      protože se dalo ověřit rovnou: seřazené seznamy md5 obou stromů jsou identické
+      (1093 souborů v každém), v DB nezbyla jediná cesta mimo nový strom a data jsou
+      i v záloze na Macu. `data/private/seeds` a `data/public/seeds` zůstávají — to jsou
+      podklady pro generování zpěvníků, ne úložiště.
+- [ ] **odstranit z kódu čtení staré struktury.** `_abs_image_path` a
+      `serve_songbook_image` pořád umí `users/…` a holé `<id>/page1.png`. Po smazání
+      starého stromu na to nic neukazuje; je to mrtvá větev, která jen mate.
 - [ ] **tabulka `images`.** Zbylá část návrhu: strana má dnes identitu danou cestou, což
       funguje, ale `smaz_osirele_obrazky` kvůli tomu porovnává řetězce místo `image_id`.
       Čistě databázová změna, souborů se netýká.
