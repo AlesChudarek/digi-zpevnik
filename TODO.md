@@ -201,9 +201,17 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       obrázek — a cesta obsahuje e-mail uživatele, takže není nijak zvlášť tajná.
       Náhledová routa `nahled_obalky` ([app.py:791](backend/app.py#L791)) kontrolu má,
       tahle ne.
-- [ ] **omezit, kolik toho jeden účet nahraje.** Dnes žádný strop není. Jeden obrázek smí
-      2 MB, ale počet nikdo nehlídá — při 38 GB volných to je asi 19 000 obrázků do
-      zaplnění disku. Ověření e-mailu to ztížilo, ale nezavřelo.
+- [X] **omezit, kolik toho jeden účet nahraje** — `MAX_USER_STORAGE_MB`, výchozí 300 MB.
+      Kontrola sedí v `_save_image_with_limit`, což je jediné místo, kudy obrázek na disk
+      teče, takže se nedá obejít jiným endpointem. Komu se soubor započítá, se bere
+      z cílové cesty (`uzivatele/<id>/…`), ne z přihlášeného uživatele — veřejné zpěvníky
+      se nezapočítávají nikomu. Při překročení se vrací 413 se srozumitelnou hláškou,
+      transakce se vrátí zpět a rozepsané soubory se smažou, takže po nepovedeném nahrání
+      nezůstane nic, co by se do kvóty počítalo.
+      Pro orientaci: dnešní největší uživatel má 50 MB (17 % kvóty), běžný zpěvník ~12 MB.
+- [ ] **ukázat uživateli, kolik místa zabral.** Dnes to zjistí, až narazí na strop.
+      Číslo je k dispozici (`zabrane_misto(user_id)`), chce to jen pruh nebo řádek
+      v „Moje zpěvníky" nebo v profilu.
 - [ ] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
       s někým a pak si je smažu" (zaplním mu schránku bordelem)
 - [ ] **lepší hosting kvůli rychlosti odezvy.** Dnešní Oracle free tier má 1 GB RAM a
