@@ -144,9 +144,18 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       tvar vrátí `None` místo aby ji potichu poskládal do něčeho, co nikam nevede, a
       `/songbooks/<stará cesta>` vrací 404. `kontrola_zpevniku.py` hledá osiřelé soubory
       v `data/images`.
-- [ ] **tabulka `images`.** Zbylá část návrhu: strana má dnes identitu danou cestou, což
-      funguje, ale `smaz_osirele_obrazky` kvůli tomu porovnává řetězce místo `image_id`.
-      Čistě databázová změna, souborů se netýká.
+- [X] **tabulka `images`** (`backend/scripts/migrace_tabulka_images.py`). Identitou obrázku
+      byl text s cestou uložený na šesti místech; teď je to řádek a všude se na něj ukazuje
+      cizím klíčem. 1093 řádků nahradilo 1144 odkazů, z toho 51 byly duplicitní řetězce.
+      Čtecí kód se nemusel přepisovat — `association_proxy` drží `image_path`
+      i `img_path_cover_*` dál jako text, takže se nesáhlo na 227 míst ani na šablony.
+- [ ] **smazat mrtvé skripty v `backend/scripts/`.** `seed_db.py`,
+      `rebuild_private_from_fs.py`, `povysit_obalky.py`, `odebrat_prazdne_obalky.py`
+      a `migrate_non_song_pages.py` hardcodují `data/public/images/songbooks`, prefix
+      `users/` nebo tabulku `songbook_intro_outro_images` (dnes prázdnou) — všechno
+      struktury, které po migraci úložiště neexistují. Tři z nich jsou navíc jednorázové
+      migrace, které už proběhly. Buď smazat, nebo přepsat na dnešní tvar; nechávat je
+      spustitelné je past.
 - [X] **`song_images.poradi`** (`backend/scripts/migrace_poradi_stran.py`). Muselo jít před
       migrací úložiště: pořadí stran vícestránkové písně bylo dané jen pořadím `id` a jedinou
       nezávislou kontrolou bylo číslo v názvu souboru, které nový standard odstraňuje.

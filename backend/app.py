@@ -239,6 +239,7 @@ try:
     # Prefer balíčkové importy pro nasazení (backend.app jako modul)
     from .models import (
         Song,
+        Image,
         SongImage,
         SongbookPage,
         SongbookIntroOutroImage,
@@ -251,7 +252,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
+    from models import Song, Image, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -608,11 +609,9 @@ def smaz_osirele_obrazky(kandidati):
     se jen zrušil odkaz a soubor zůstal ležet - tak vznikly ty, které se musely uklízet
     ručně. Tohle to dodělává pro obě cesty.
 
-    Rozhoduje se podle databáze, ne podle toho, kdo mazání vyvolal: cesta se smí smazat
-    teprve tehdy, když na ni neukazuje žádný SongImage ani žádný sloupec obálky. V layoutu
-    veřejných zpěvníků totiž obrázek leží pod složkou toho zpěvníku, ze kterého pochází, a
-    ukazovat na něj může i druhý zpěvník - smazat ho po odebrání v jednom by rozbilo ten
-    druhý. Sedmdesát písniček je dnes ve dvou zpěvnících naráz.
+    Smazat se smí teprve tehdy, když na řádek v `images` neukazuje žádná píseň, obálka ani
+    intro. Tutéž stranu totiž může nést druhá píseň a týž zpěvník může být ve dvou
+    zpěvnících - sedmdesát písniček dnes je.
 
     Volat až po commitu, jinak dotazy uvidí ještě neodstraněné řádky.
     """
@@ -620,32 +619,38 @@ def smaz_osirele_obrazky(kandidati):
     if not kandidati:
         return 0
 
-    stale_pouzite = {
-        p for (p,) in db.session.query(SongImage.image_path)
-        .filter(SongImage.image_path.in_(kandidati)).all()
-    }
-    for sloupec in (Songbook.img_path_cover_preview, Songbook.img_path_cover_front_outer,
-                    Songbook.img_path_cover_front_inner, Songbook.img_path_cover_back_inner,
-                    Songbook.img_path_cover_back_outer):
-        stale_pouzite.update(
-            p for (p,) in db.session.query(sloupec).filter(sloupec.in_(kandidati)).all())
-
     smazano = 0
-    for rel in kandidati - stale_pouzite:
+    osirele = []
+    for obraz in Image.query.filter(Image.cesta.in_(kandidati)).all():
+        pouzity = (
+            db.session.query(SongImage.id).filter_by(image_id=obraz.id).first()
+            or db.session.query(SongbookIntroOutroImage.id).filter_by(image_id=obraz.id).first()
+            or db.session.query(Songbook.id).filter(db.or_(
+                Songbook.cover_preview_id == obraz.id,
+                Songbook.cover_front_outer_id == obraz.id,
+                Songbook.cover_front_inner_id == obraz.id,
+                Songbook.cover_back_inner_id == obraz.id,
+                Songbook.cover_back_outer_id == obraz.id)).first()
+        )
+        if pouzity:
+            continue
+        cesta = _abs_image_path(obraz.cesta)
         try:
-            p = _abs_image_path(rel)
-            if p and p.exists():
-                p.unlink()
+            if cesta and cesta.is_file():
+                cesta.unlink()
                 smazano += 1
-                # Prázdná složka po písničce nemá důvod zůstat, ale mazat se smí jen ta
-                # její vlastní - výš už je složka zpěvníku se zbytkem stran.
-                rodic = p.parent
-                if rodic.name.startswith('custom_') and not any(rodic.iterdir()):
-                    rodic.rmdir()
-        except OSError:
+        except OSError as chyba:
             # Nepodařené smazání nesmí shodit požadavek, který uživatel poslal. Nejhorší
             # následek je soubor navíc na disku, což kontrola_zpevniku.py stejně najde.
-            pass
+            app.logger.warning("obrázek %s se nepodařilo smazat: %s", obraz.cesta, chyba)
+        # Řádek jde pryč i tehdy, když soubor na disku nebyl - jinak by v images
+        # zůstával odkaz na nic.
+        osirele.append(obraz)
+
+    if osirele:
+        for obraz in osirele:
+            db.session.delete(obraz)
+        db.session.commit()
     return smazano
 
 
@@ -1999,9 +2004,11 @@ def get_songbook_structure(songbook_id):
     song_ids = [r[0] for r in rows]
     private_set = set()
     if song_ids:
-        priv_rows = db.session.query(SongImage.song_id).filter(
-            SongImage.song_id.in_(song_ids), SongImage.image_path.like('users/%')
-        ).distinct().all()
+        priv_rows = (db.session.query(SongImage.song_id)
+                     .join(Image, Image.id == SongImage.image_id)
+                     .filter(SongImage.song_id.in_(song_ids),
+                             Image.cesta.like('uzivatele/%'))
+                     .distinct().all())
         private_set = {sid for (sid,) in priv_rows}
 
     def filename_or_none(path):
@@ -2336,7 +2343,8 @@ def update_songbook_structure(songbook_id):
             # ještě vedou řádky v databázi. Smazat se smí až po commitu a jen ty, na které
             # už nikdo neukazuje - viz smaz_osirele_obrazky.
             ke_smazani_soubory.update(
-                p for (p,) in db.session.query(SongImage.image_path)
+                p for (p,) in db.session.query(Image.cesta)
+                .join(SongImage, SongImage.image_id == Image.id)
                 .filter(SongImage.song_id.in_(list(to_delete))).all())
             # Delete all pages for songs that are no longer present in the submitted order
             (db.session.query(SongbookPage)
