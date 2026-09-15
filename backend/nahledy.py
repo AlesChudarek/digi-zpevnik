@@ -49,7 +49,7 @@ STRANA = Profil('strana', 1100, 80)
 
 # Mění se, když se změní způsob kódování. Ať se náhledy vyrobené starým kódem samy
 # nahradí, místo aby zůstaly viset s platnou adresou.
-VERZE = 2
+VERZE = 3
 
 
 def klic(cesta: Path, profil: Profil = OBALKA) -> str | None:
@@ -58,7 +58,11 @@ def klic(cesta: Path, profil: Profil = OBALKA) -> str | None:
         st = cesta.stat()
     except OSError:
         return None
-    podpis = f"{st.st_mtime_ns}|{st.st_size}|{profil.sirka}|{profil.kvalita}|{VERZE}"
+    # Celé sekundy, ne nanosekundy. Nanosekundy nepřežijí rsync ani zálohu, takže se
+    # klíč pro tentýž soubor lišil mezi Macem a serverem - a hotové náhledy se pak nedaly
+    # nahrát místo generování. Na rozlišování verzí souboru sekundy bohatě stačí, zvlášť
+    # když je v podpisu i velikost.
+    podpis = f"{int(st.st_mtime)}|{st.st_size}|{profil.sirka}|{profil.kvalita}|{VERZE}"
     return hashlib.sha1(podpis.encode()).hexdigest()[:12]
 
 
