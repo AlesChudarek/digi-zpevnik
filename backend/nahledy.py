@@ -25,8 +25,10 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 from typing import NamedTuple
+from uuid import uuid4
 
 from PIL import Image
 
@@ -93,8 +95,10 @@ def vyrob(zdroj: Path, cil: Path, profil: Profil = OBALKA) -> bool:
             nahled = im.convert('RGBA' if ma_alfu else 'RGB')
             nahled.thumbnail((profil.sirka, profil.sirka * 4), Image.LANCZOS)
         # Zápis přes dočasný soubor: kdyby dva požadavky dorazily zároveň, ať se nikomu
-        # nepodstrčí polovina souboru.
-        docasny = cil.with_suffix('.rozepsany')
+        # nepodstrčí polovina souboru. Jméno musí být jedinečné pro každý pokus - se
+        # společným jménem si dva workeři přepsali rozepsaný soubor navzájem a ten druhý
+        # pak přejmenovával něco, co už neexistovalo.
+        docasny = cil.with_name(f"{cil.stem}.{os.getpid()}-{uuid4().hex[:8]}.rozepsany")
         nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=6)
         docasny.replace(cil)
         return True
