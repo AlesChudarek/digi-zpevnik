@@ -1,6 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
-from sqlalchemy.ext.associationproxy import association_proxy
 
 db = SQLAlchemy()
 
@@ -17,7 +16,7 @@ class Image(db.Model):
     `song_images`; táž strana ve dvou zpěvnících je pořád jeden řádek `images`.
 
     Kód dál pracuje s `image_path` a `img_path_cover_*` jako s textem - drží to
-    `association_proxy` níž, takže se kvůli téhle změně nemuselo přepsat 227 míst.
+    vlastnost `cesta_obrazku` níž, takže se kvůli téhle změně nemuselo přepsat 227 míst.
     """
 
     __tablename__ = "images"
@@ -46,9 +45,24 @@ class Image(db.Model):
         return radek
 
 
-def _cesta_obrazku(cesta):
-    """Tvůrce pro association_proxy: z textu udělá řádek `images`."""
-    return Image.ziskej(cesta)
+def cesta_obrazku(vztah):
+    """Vlastnost, která se tváří jako text s cestou, ale sahá na vazbu do `images`.
+
+    Dřív to byl `association_proxy`. Ten ale při přiřazení `None` nezrušil vazbu, nýbrž
+    přepsal `cesta` na NULL v samotném řádku `images` - tedy i pro všechny ostatní, kdo
+    na tentýž obrázek ukazují. Odebrání jedné obálky tak skončilo na NOT NULL a při
+    troše smůly by poškodilo cizí data. Proto vlastní vlastnost: prázdná hodnota ruší
+    vazbu, řádku `images` se nedotkne.
+    """
+
+    def cti(self):
+        obraz = getattr(self, vztah)
+        return obraz.cesta if obraz is not None else None
+
+    def zapis(self, cesta):
+        setattr(self, vztah, Image.ziskej(cesta) if cesta else None)
+
+    return property(cti, zapis)
 
 class User(db.Model, UserMixin):
     __tablename__ = "users"
@@ -120,7 +134,7 @@ class SongImage(db.Model):
 
     image = db.relationship("Image")
     # Kód dál čte i zapisuje `image_path` jako text, jen pod tím leží řádek v `images`.
-    image_path = association_proxy("image", "cesta", creator=_cesta_obrazku)
+    image_path = cesta_obrazku("image")
 
 class Songbook(db.Model):
     __tablename__ = "songbooks"
@@ -146,11 +160,11 @@ class Songbook(db.Model):
 
     # Jména `img_path_cover_*` zůstávají, aby se kvůli téhle změně nepřepisovaly šablony
     # a sto dalších míst; pod nimi je teď řádek v `images` místo textu.
-    img_path_cover_preview = association_proxy("cover_preview", "cesta", creator=_cesta_obrazku)
-    img_path_cover_front_outer = association_proxy("cover_front_outer", "cesta", creator=_cesta_obrazku)
-    img_path_cover_front_inner = association_proxy("cover_front_inner", "cesta", creator=_cesta_obrazku)
-    img_path_cover_back_inner = association_proxy("cover_back_inner", "cesta", creator=_cesta_obrazku)
-    img_path_cover_back_outer = association_proxy("cover_back_outer", "cesta", creator=_cesta_obrazku)
+    img_path_cover_preview = cesta_obrazku("cover_preview")
+    img_path_cover_front_outer = cesta_obrazku("cover_front_outer")
+    img_path_cover_front_inner = cesta_obrazku("cover_front_inner")
+    img_path_cover_back_inner = cesta_obrazku("cover_back_inner")
+    img_path_cover_back_outer = cesta_obrazku("cover_back_outer")
     is_public = db.Column(db.Integer, default=0)
     pages = db.relationship("SongbookPage", backref="songbook", cascade="all, delete-orphan")
     intros_outros = db.relationship("SongbookIntroOutroImage", backref="songbook", cascade="all, delete-orphan")
@@ -165,7 +179,7 @@ class SongbookIntroOutroImage(db.Model):
     sort_order = db.Column(db.Integer, default=0)
 
     image = db.relationship("Image")
-    image_path = association_proxy("image", "cesta", creator=_cesta_obrazku)
+    image_path = cesta_obrazku("image")
 
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
