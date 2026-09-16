@@ -189,10 +189,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
-- [ ] **předělat okno pro stažení zpěvníku.** Dnes nabídne tři možnosti a hotovo. Místo
-      toho otevřít celé okno, kde si uživatel nastaví, co má stažený zpěvník obsahovat:
-      jestli chce obálku zvlášť, jestli ji chce vůbec, jestli mají být prázdné strany,
-      a v jakém formátu to chce.
+- [ ] **do okna pro stažení přidat volby obsahu.** Okno se skládáním už existuje
+      (postup, odhad, značka „✓ hned" u variant v cache). Chybí v něm to druhé: nechat
+      uživatele vybrat, co má stažený zpěvník obsahovat — jestli obálku zvlášť, jestli
+      vůbec, jestli prázdné strany.
 
 ## Mobil a vzhled
 

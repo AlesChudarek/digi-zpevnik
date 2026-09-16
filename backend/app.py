@@ -2764,7 +2764,7 @@ def render_songbook_pdf(sequence, out_path, variant, on_page=None):
         Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
 
 
-def render_songbook_zip(sequence, out_path):
+def render_songbook_zip(sequence, out_path, on_page=None):
     """Pack the original page files, without touching the pixels.
 
     This is the lossless route: the PDF re-encodes to JPEG, the ZIP does not.
@@ -2787,6 +2787,8 @@ def render_songbook_zip(sequence, out_path):
                 popis = {'cover': 'obalka', 'intro': 'uvod', 'outro': 'zaver'}.get(
                     item['kind'], item['kind'])
             archive.write(abs_path, f"{index:04d}-{popis}{abs_path.suffix.lower()}")
+            if on_page:
+                on_page(index)
 
 
 def _prune_exports(keep_path, sibling_glob):
@@ -2850,6 +2852,27 @@ def _export_paths(book_id, variant, kind, key):
     }
 
 
+def _zapis_postup(lock_path: Path, hotovo: int, celkem: int, zacatek: float) -> None:
+    """Kolik stran je hotových, do zámku.
+
+    Do zámku schválně: workerů jsou čtyři a nesdílejí paměť, takže na stav se ptá jiný
+    proces, než ten, co soubor staví - proměnná by mu byla k ničemu. Zámek už existuje,
+    je per build a mizí s ním, takže se nemá jak rozejít.
+    """
+    try:
+        lock_path.write_text(f"{hotovo}|{celkem}|{zacatek:.0f}")
+    except OSError:
+        pass  # postup je pohodlí, ne podmínka
+
+
+def _precti_postup(lock_path: Path):
+    try:
+        hotovo, celkem, zacatek = lock_path.read_text().split('|')
+        return int(hotovo), int(celkem), float(zacatek)
+    except (OSError, ValueError):
+        return None
+
+
 def _build_export_file(book_id, variant, kind, paths):
     """Run one export to completion. Runs in a thread, so it must not raise."""
     try:
@@ -2858,10 +2881,19 @@ def _build_export_file(book_id, variant, kind, paths):
             if songbook is None:
                 raise RuntimeError(f"zpěvník {book_id} mezitím zmizel")
             sequence = build_songbook_export_sequence(songbook)
+            celkem = len(sequence)
+            zacatek = time.time()
+            hotovo = [0]
+
+            def krok(*_):
+                hotovo[0] += 1
+                _zapis_postup(paths['lock'], hotovo[0], celkem, zacatek)
+
+            _zapis_postup(paths['lock'], 0, celkem, zacatek)
             if kind == 'pdf':
-                render_songbook_pdf(sequence, paths['part'], variant)
+                render_songbook_pdf(sequence, paths['part'], variant, on_page=krok)
             else:
-                render_songbook_zip(sequence, paths['part'])
+                render_songbook_zip(sequence, paths['part'], on_page=krok)
         # Až tady je soubor hotový. Přejmenování je atomické, takže hotový export se
         # nikdy neobjeví rozepsaný - kdo ho najde, najde ho celý.
         os.replace(paths['part'], paths['final'])
@@ -2909,8 +2941,12 @@ def _start_export_build(book_id, variant, kind, paths):
     return 'building'
 
 
-def _resolve_export_request(book_id, kind):
-    """Shared by the download and the status route: authorise, then locate the file."""
+def _resolve_export_request(book_id, kind, variant=None):
+    """Shared by the download and the status route: authorise, then locate the file.
+
+    `variant` se dá předat natvrdo; jinak se bere z adresy. Potřebuje to routa, která se
+    ptá na všechny tři varianty naráz.
+    """
     songbook = Songbook.query.get_or_404(book_id)
     if not can_view_songbook(current_user, songbook):
         return None, ("Access denied", 403)
@@ -2924,7 +2960,7 @@ def _resolve_export_request(book_id, kind):
         return None, (jsonify({'error': zprava}), 403)
 
     if kind == 'pdf':
-        variant = request.args.get('q', 'small')
+        variant = variant or request.args.get('q', 'small')
         if variant not in EXPORT_VARIANTS:
             return None, (jsonify({'error': 'neznámá varianta'}), 400)
     else:
@@ -2989,8 +3025,42 @@ def songbook_export_status(book_id, kind):
     if paths['err'].exists():
         return jsonify({'state': 'error'})
     if paths['lock'].exists():
-        return jsonify({'state': 'building'})
+        odpoved = {'state': 'building'}
+        postup = _precti_postup(paths['lock'])
+        if postup:
+            hotovo, celkem, zacatek = postup
+            odpoved.update(hotovo=hotovo, celkem=celkem)
+            uplynulo = time.time() - zacatek
+            if hotovo > 0 and celkem > hotovo:
+                # Odhad z průměru dosud hotových stran. Zaokrouhluje se nahoru na pět
+                # vteřin, ať číslo neposkakuje o jednotky při každém dotazu.
+                zbyva = uplynulo / hotovo * (celkem - hotovo)
+                odpoved['zbyva_s'] = max(5, int(round(zbyva / 5.0)) * 5)
+        return jsonify(odpoved)
     return jsonify({'state': 'idle'})
+
+
+@app.route('/songbook/<book_id>/export-hotove')
+@login_required
+def songbook_export_hotove(book_id):
+    """Které varianty už leží v cache, aby nabídka mohla říct 'stáhne se hned'.
+
+    Ptá se to jedním dotazem za všechny tři, ne třemi - nabídka je jedna a otevře se
+    naráz celá.
+    """
+    songbook = Songbook.query.get_or_404(book_id)
+    if not can_view_songbook(current_user, songbook) or not smi_tvorit(current_user):
+        return jsonify({})
+
+    # Sekvence se staví jednou pro všechny tři: je to ta dražší část a pro PDF i ZIP
+    # je stejná.
+    sequence = build_songbook_export_sequence(songbook)
+    hotove = {}
+    for kind, variant in (('pdf', 'small'), ('pdf', 'high'), ('zip', 'orig')):
+        key = songbook_export_key(sequence, variant)
+        paths = _export_paths(book_id, variant, kind, key)
+        hotove[f"{kind}-{variant}"] = paths['final'].exists()
+    return jsonify(hotove)
 
 
 @app.route('/songbook/<book_id>')
