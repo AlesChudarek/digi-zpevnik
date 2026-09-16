@@ -47,3 +47,13 @@ ke-kontrole/
 
 # Zmenšené náhledy obálek - odvozená data, generují se samy.
 data/nahledy/
+
+# Dosloužené nástroje. Jednorázové migrace, které proběhly a znovu se pustit nedají, plus
+# povysit_obalky.py, které hledá varianty coverXT.png - tak se soubory po migraci úložiště
+# nejmenují. Lokálně zůstávají, do gitu ani na server nepatří; co dělaly, je v historii.
+backend/scripts/migrate_non_song_pages.py
+backend/scripts/migrace_poradi_stran.py
+backend/scripts/migrace_uloziste.py
+backend/scripts/migrace_tabulka_images.py
+backend/scripts/rebuild_private_from_fs.py
+backend/scripts/povysit_obalky.py

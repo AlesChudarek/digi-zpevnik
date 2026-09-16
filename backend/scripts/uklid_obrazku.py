@@ -15,8 +15,8 @@ Co dělá:
 Každý zápis se ověřuje: soubor se znovu načte a porovná s originálem. Když se pixely
 nesejdou nebo by nový soubor nebyl menší, originál zůstává. Bez --apply se nic nezapisuje.
 
-    python backend/scripts/uklid_obrazku.py data/public/images/songbooks
-    python backend/scripts/uklid_obrazku.py data/public/images/songbooks --apply
+    python backend/scripts/uklid_obrazku.py data/images
+    python backend/scripts/uklid_obrazku.py data/images --apply
 """
 
 from __future__ import annotations

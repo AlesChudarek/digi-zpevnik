@@ -33,9 +33,11 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent
 
 sys.path.insert(0, str(SCRIPT_DIR))
-from _obalky import SLOTY as SLOTY_PARY, rozbor_zpevniku  # noqa: E402
+from _obalky import SLOTY, rozbor_zpevniku  # noqa: E402
 
-SLOTY = [s[0] for s in SLOTY_PARY]
+# Role -> sloupec s cizím klíčem do images. Od migrace schématu už v songbooks není text
+# s cestou, ale odkaz na řádek.
+SLOUPEC = {r: f'cover_{r}_id' for r in SLOTY}
 
 
 def main():
@@ -46,16 +48,11 @@ def main():
     ap.add_argument('--apply', action='store_true')
     args = ap.parse_args()
 
-    # Dva kořeny, stejně jako _abs_image_path v app.py: cesta s prefixem users/ míří do
-    # soukromých dat, všechno ostatní do veřejných. Bez tohohle by skript soukromé
-    # zpěvníky tiše přeskočil.
-    verejne = Path(args.data) / 'public' / 'images' / 'songbooks'
-    soukrome = Path(args.data) / 'private' / 'users'
+    # Jediný kořen, stejně jako _abs_image_path v app.py.
+    obrazky = Path(args.data) / 'images'
 
     def abs_cesta(rel: str) -> Path:
-        if rel.startswith('users/'):
-            return soukrome / rel[len('users/'):]
-        return verejne / rel
+        return obrazky / rel
 
     db = Path(args.db)
     if not db.exists():
@@ -64,8 +61,12 @@ def main():
 
     con = sqlite3.connect(str(db))
     con.row_factory = sqlite3.Row
+    # Cesty se tahají joinem přes images, ať zbytek skriptu pracuje s cestami jako dřív.
+    vybery = ", ".join(f"i_{r}.cesta AS {r}" for r in SLOTY)
+    joiny = " ".join(f"LEFT JOIN images i_{r} ON i_{r}.id = s.{SLOUPEC[r]}" for r in SLOTY)
     knihy = con.execute(
-        f"SELECT id, color, img_path_cover_preview, {', '.join(SLOTY)} FROM songbooks").fetchall()
+        f"SELECT s.id, s.color, i_prev.cesta AS preview, {vybery} FROM songbooks s "
+        f"LEFT JOIN images i_prev ON i_prev.id = s.cover_preview_id {joiny}").fetchall()
 
     ke_smazani = []      # (kniha, slot, rel_cesta)
     preview_fix = []     # (kniha, nova_hodnota)
@@ -73,32 +74,33 @@ def main():
 
     for kniha in knihy:
         try:
-            stav, menitelny = rozbor_zpevniku(kniha, abs_cesta)
+            cesty = {r: kniha[r] for r in SLOTY}
+            stav, menitelny = rozbor_zpevniku(cesty, abs_cesta, kniha['color'])
         except Exception as exc:  # noqa: BLE001
             preskoceno.append((kniha['id'], '-', str(exc)))
             continue
         if not menitelny:
-            spatne = [f"{s.replace('img_path_cover_', '')}={stav[s]}" for s in stav
-                      if stav[s] in ('neprůhledná', 'chybí soubor')]
+            spatne = [f"{r}={stav[r]}" for r in stav
+                      if stav[r] in ('neprůhledná', 'chybí soubor')]
             preskoceno.append((kniha['id'], 'celý zpěvník',
                                'barva nebude měnitelná: ' + ', '.join(spatne)))
             continue
         mizi = set()
-        for slot in SLOTY:
-            if stav[slot] == 'prázdná':
-                ke_smazani.append((kniha['id'], slot, kniha[slot]))
-                mizi.add(kniha[slot])
+        for role in SLOTY:
+            if stav[role] == 'prázdná':
+                ke_smazani.append((kniha['id'], role, kniha[role]))
+                mizi.add(kniha[role])
 
-        nahled = kniha['img_path_cover_preview']
+        nahled = kniha['preview']
         if nahled and nahled in mizi:
-            zbyva = kniha['img_path_cover_front_outer']
+            zbyva = kniha['front_outer']
             preview_fix.append((kniha['id'], None if zbyva in mizi else zbyva))
 
     print(f"prázdných obálek k odebrání: {len(ke_smazani)}"
           f"{'' if args.apply else '   (NANEČISTO)'}\n")
     podle = {}
-    for kid, slot, rel in ke_smazani:
-        podle.setdefault(kid, []).append(slot.replace('img_path_cover_', ''))
+    for kid, role, rel in ke_smazani:
+        podle.setdefault(kid, []).append(role)
     for kid in sorted(podle):
         print(f"  {kid}: {', '.join(podle[kid])}")
 
@@ -120,20 +122,27 @@ def main():
         con.close()
         return 0
 
-    for kid, slot, _rel in ke_smazani:
-        con.execute(f"UPDATE songbooks SET {slot} = NULL WHERE id = ?", (kid,))
+    for kid, role, _rel in ke_smazani:
+        con.execute(f"UPDATE songbooks SET {SLOUPEC[role]} = NULL WHERE id = ?", (kid,))
     for kid, nova in preview_fix:
-        con.execute("UPDATE songbooks SET img_path_cover_preview = ? WHERE id = ?", (nova, kid))
+        con.execute("UPDATE songbooks SET cover_preview_id = "
+                    "(SELECT id FROM images WHERE cesta = ?) WHERE id = ?", (nova, kid))
     con.commit()
 
     # Soubor se maže až po commitu a jen tehdy, když na něj už nikdo neukazuje. Cesty se
     # mezi zpěvníky sdílet nemají, ale mazat obrázek, na který někde zbyl odkaz, by bylo
     # horší než nechat na disku pár kilobajtů navíc.
+    # Odkaz může vést i ze song_images nebo z jiného zpěvníku, proto se ptáme přes images.
     zbyle = set()
-    for r in con.execute(f"SELECT img_path_cover_preview, {', '.join(SLOTY)} FROM songbooks"):
-        zbyle.update(x for x in r if x)
+    for (cesta,) in con.execute(
+            "SELECT DISTINCT i.cesta FROM images i WHERE EXISTS "
+            "(SELECT 1 FROM song_images si WHERE si.image_id = i.id) OR EXISTS "
+            "(SELECT 1 FROM songbooks s WHERE i.id IN (s.cover_preview_id, "
+            "s.cover_front_outer_id, s.cover_front_inner_id, s.cover_back_inner_id, "
+            "s.cover_back_outer_id))"):
+        zbyle.add(cesta)
     smazano = 0
-    for _kid, _slot, rel in ke_smazani:
+    for _kid, _role, rel in ke_smazani:
         if rel in zbyle:
             print(f"  ponechán soubor {rel}, ještě na něj vede odkaz")
             continue
