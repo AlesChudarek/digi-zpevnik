@@ -220,16 +220,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       drží živý klíč u Brevo a jeho nepřítomnost sama o sobě něco znamená
       (`scripts/mesicni-hlaseni.sh`, spouští cron na serveru — **ověřit, že ten záznam
       v cronu na serveru opravdu je**)
-- [ ] **obrázky se servírují bez kontroly práv — a migrace úložiště to zhoršila.**
-      `serve_songbook_image` ([app.py:470](backend/app.py#L470)) nemá `@login_required`
-      ani `can_view_songbook`. Ověřeno 16. 9. 2026: **nepřihlášený návštěvník dostane 200**
-      na `/songbooks/uzivatele/2/pages/000001.png`, tedy na stranu cizího soukromého
-      zpěvníku. Dřív musel uhodnout slug e-mailu, slug názvu zpěvníku, id písně a náhodné
-      jméno souboru; dnes stačí počítat od jedničky. Náhledová routa `nahled_strany`
-      kontrolu má (aspoň `@login_required`), tahle ne.
-      Správný tvar podle [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md): o právech
-      rozhoduje zpěvník, ne umístění souboru — routa se zeptá, jestli uživatel vidí aspoň
-      jeden zpěvník, který ten obrázek obsahuje. Přes `images.id` je to jeden dotaz.
+- [X] **obrázky se servírují bez kontroly práv** — opraveno. `serve_songbook_image` má
+      `@login_required` a ptá se `smi_videt_obrazek`: vidí uživatel aspoň jeden zpěvník,
+      ve kterém ten obrázek je? O právech tak rozhoduje zpěvník, ne umístění souboru —
+      strana veřejného zpěvníku běžně visí i v něčím soukromém a naopak. Táž kontrola
+      přibyla u `/strana/`, kde dosud stačilo přihlášení.
+      Při odepření se vrací 404, ne 403: 403 by potvrdilo, že soubor existuje, a cesty
+      jsou očíslované od jedničky.
+      Ověřeno napříč všemi 14 účty: veřejnou stranu vidí každý přihlášený, soukromou
+      přesně vlastník, admin a pět lidí, se kterými je zpěvník sdílený — nikdo jiný.
+      Stojí to 1,4 ms na obrázek, celý požadavek 2,5-4 ms.
 - [X] **omezit, kolik toho jeden účet nahraje** — `MAX_USER_STORAGE_MB`, výchozí 300 MB.
       Kontrola sedí v `_save_image_with_limit`, což je jediné místo, kudy obrázek na disk
       teče, takže se nedá obejít jiným endpointem. Komu se soubor započítá, se bere
