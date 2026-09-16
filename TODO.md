@@ -98,8 +98,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       varianty pro něj leží v `~/Downloads/zpevnik-unikatni-obalky/`; čtvrtá (zadní
       vnitřní) chybí, a bez ní bude barva pořád neměnitelná — aplikace to vyžaduje
       u všech čtyř stran naráz.
-- [ ] 00022: v `~/Downloads/zpevnik-00022-originaly/` leží originály 1748×2480, ze kterých
-      by šlo udělat průhlednou variantu lepší než dnešní 1072×1522
+- [X] ~~00022: originály v `~/Downloads/zpevnik-00022-originaly/`~~ — složka neexistuje,
+      úkol zanikl. Kdyby se originály někdy našly, průhledná varianta 00022 by za to stála.
 - [X] aplikace maže staré obrázky stran (`smaz_osirele_obrazky`) — smaže se jen soubor,
       na který už neukazuje žádný `SongImage` ani sloupec obálky
 - [X] 00016 dostal průhledné obálky, prázdné vnitřní odebrány
@@ -122,13 +122,9 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       desítek minut na jednom jádře. Aby to šlo, musel se klíč přestat počítat
       z nanosekund — ty rsync nepřenese, takže tentýž soubor měl na každém stroji jiný
       klíč. Ověřeno, že po nahrání se na serveru nic nedogenerovalo.
-- [ ] **mazání zpěvníku nechává za sebou písně.** V DB je 12 písní, které nejsou v žádném
-      zpěvníku, a jejich 12 řádků v `song_images` ukazuje na soubory, které na disku nejsou.
-      Deset z nich je po smazaném soukromém zpěvníku `u8-1779984405_muj-zpevnik` (složka je
-      pryč, `songs` a `song_images` zůstaly), zbylé dva jsou `00022/page7.png` a
-      `00025/page12.png`. **Žádný zpěvník to nerozbíjí** — jsou to sirotci, které nikdo
-      nezobrazuje, takže se o ty soubory ani nikdo neptá. Chce to dvě věci: doplnit úklid
-      písní při mazání zpěvníku a jednorázově těch 12 řádků smazat.
+- [X] **mazání zpěvníku nechává za sebou písně** — opraveno. Mazání zpěvníku teď uklidí
+      i písně, které po něm nezůstanou v žádném jiném, a těch 12 sirotků smazala migrace
+      úložiště. Ověřeno: 0 písní bez zpěvníku, 0 řádků `song_images` bez zpěvníku.
 - [X] **zjednodušit úložiště obrázků a jeho strukturu** — lokálně hotovo,
       `backend/scripts/migrace_uloziste.py`, popsáno v
       [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md). Ze čtyř tvarů cest je jeden a
@@ -224,12 +220,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       drží živý klíč u Brevo a jeho nepřítomnost sama o sobě něco znamená
       (`scripts/mesicni-hlaseni.sh`, spouští cron na serveru — **ověřit, že ten záznam
       v cronu na serveru opravdu je**)
-- [ ] **obrázky se servírují bez kontroly práv.** `serve_songbook_image`
-      ([app.py:322](backend/app.py#L322)) nemá `@login_required` ani `can_view_songbook`,
-      a přitom obsluhuje i větev `users/` se soukromými obrázky. Kdo zná cestu, dostane
-      obrázek — a cesta obsahuje e-mail uživatele, takže není nijak zvlášť tajná.
-      Náhledová routa `nahled_obalky` ([app.py:791](backend/app.py#L791)) kontrolu má,
-      tahle ne.
+- [ ] **obrázky se servírují bez kontroly práv — a migrace úložiště to zhoršila.**
+      `serve_songbook_image` ([app.py:470](backend/app.py#L470)) nemá `@login_required`
+      ani `can_view_songbook`. Ověřeno 16. 9. 2026: **nepřihlášený návštěvník dostane 200**
+      na `/songbooks/uzivatele/2/pages/000001.png`, tedy na stranu cizího soukromého
+      zpěvníku. Dřív musel uhodnout slug e-mailu, slug názvu zpěvníku, id písně a náhodné
+      jméno souboru; dnes stačí počítat od jedničky. Náhledová routa `nahled_strany`
+      kontrolu má (aspoň `@login_required`), tahle ne.
+      Správný tvar podle [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md): o právech
+      rozhoduje zpěvník, ne umístění souboru — routa se zeptá, jestli uživatel vidí aspoň
+      jeden zpěvník, který ten obrázek obsahuje. Přes `images.id` je to jeden dotaz.
 - [X] **omezit, kolik toho jeden účet nahraje** — `MAX_USER_STORAGE_MB`, výchozí 300 MB.
       Kontrola sedí v `_save_image_with_limit`, což je jediné místo, kudy obrázek na disk
       teče, takže se nedá obejít jiným endpointem. Komu se soubor započítá, se bere
