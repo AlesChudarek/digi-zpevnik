@@ -57,3 +57,17 @@ backend/scripts/migrace_uloziste.py
 backend/scripts/migrace_tabulka_images.py
 backend/scripts/rebuild_private_from_fs.py
 backend/scripts/povysit_obalky.py
+
+# Seedování zaniklo. Reprodukovatelnost veřejných zpěvníků z gitu skončila ve chvíli, kdy
+# je začal zakládat web - seedy nikdy neuměly zpěvník vytvořený přes UI. Obnovu dnes dělá
+# denní záloha, která je úplná. seed_db.py navíc potřeboval obrázky ve staré struktuře,
+# a ty už nejsou; init_db.py na něm stál a mazal přitom DB i data/private/users;
+# create_songbook_db.sql drží schéma bez tabulky images.
+backend/scripts/seed_db.py
+backend/scripts/generate_public_seed.py
+backend/scripts/create_songbook_db.sql
+backend/init_db.py
+
+# Pipeline pro úklid obrázků a nahrání na server. Pracovala s data/public/images/songbooks
+# a volala povysit_obalky.py - obojí zaniklo migrací úložiště.
+scripts/uklid-a-nahrat.sh

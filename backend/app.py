@@ -396,9 +396,7 @@ def _dopln_chybejici_sloupce():
     Kdyby se nasadil kód dřív než migrační skript, každý dotaz na `song_images` by spadl.
     Tohle je ta pojistka; je to jedno PRAGMA při startu a po doplnění už nic nedělá.
 
-    Hodnoty se tady nedopočítávají. Prázdné `poradi` naplní
-    `backend/scripts/migrace_poradi_stran.py`, který u toho umí i zkontrolovat, že se
-    strany vícestránkových písní nepřehodily.
+    Hodnoty se tady nedopočítávají, jen se sloupec doplní s výchozí hodnotou.
     """
     from sqlalchemy import text
     with app.app_context():
@@ -408,7 +406,7 @@ def _dopln_chybejici_sloupce():
                 db.session.execute(text(
                     "ALTER TABLE song_images ADD COLUMN poradi INTEGER NOT NULL DEFAULT 1"))
                 db.session.commit()
-                app.logger.warning("song_images.poradi doplněn; spusť migrace_poradi_stran.py")
+                app.logger.warning("song_images.poradi doplněn s výchozí hodnotou")
         except Exception as chyba:  # noqa: BLE001 - chybějící DB při startu není důvod spadnout
             # Gunicorn startuje víc workerů naráz, takže se o sloupec pokusí každý z nich
             # a všichni kromě prvního dostanou "duplicate column". Výsledek je správný,

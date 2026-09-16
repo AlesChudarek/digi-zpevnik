@@ -74,17 +74,19 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ## Data, obrázky a export
 
+> Odškrtnuté položky níž místy jmenují skripty, které už v repozitáři nejsou. Dosloužené
+> nástroje se z gitu odebíraly, ne mazaly z disku — viz `.gitignore` a položka
+> „smazat mrtvé skripty".
+
 - [X] měnit velikost obrázků při nahrání, aby nebyly příliš velké - sekalo se načítání
 - [X] odstraňovat obrázky po změně coveru
 - [X] denní zálohy dat ze serveru na Mac (`scripts/zaloha-ze-serveru.sh`, launchd)
 - [X] **úklid obrázků**: prázdná alfa pryč, šedé skeny na 8bit L. `data/public` 764 → 491 MB
 - [X] **průhledné obálky**: 27 z 30 veřejných zpěvníků má barvu měnitelnou
 - [X] barva zpěvníku 00005 opravena na `#c69c7c` (v DB byla bílá)
-- [ ] **detekce barvy zpěvníku bere rohy z `coverfrontin`**
-      ([generate_public_seed.py:180](backend/scripts/generate_public_seed.py#L180),
-      [seed_db.py:119](backend/scripts/seed_db.py#L119)), má brát `coverfrontout` — ten mají
-      všichni. Kvůli tomu měl 00005 v DB bílou místo hnědé. Audit zbytku: 27 barev sedí,
-      u 00020 nejdou rohy použít (grafika až do krajů).
+- [X] ~~detekce barvy zpěvníku bere rohy z `coverfrontin`~~ — odpadlo se zrušením
+      seedování. Barvu dnes zadává admin ve webovém UI, nedetekuje se z obrázku.
+      Konkrétní chyba u 00005 byla opravena už dřív ručně.
 - [X] barva zpěvníku se propisuje do PDF (`_flatten_to_rgb` skládala alfu natvrdo na bílou)
 - [X] export doplní chybějící stranu obálky místo aby ji vynechal, stejně jako čtečka
 - [X] nasadit úklid na server
@@ -149,13 +151,15 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       cizím klíčem. 1093 řádků nahradilo 1144 odkazů, z toho 51 byly duplicitní řetězce.
       Čtecí kód se nemusel přepisovat — `association_proxy` drží `image_path`
       i `img_path_cover_*` dál jako text, takže se nesáhlo na 227 míst ani na šablony.
-- [ ] **smazat mrtvé skripty v `backend/scripts/`.** `seed_db.py`,
-      `rebuild_private_from_fs.py`, `povysit_obalky.py`, `odebrat_prazdne_obalky.py`
-      a `migrate_non_song_pages.py` hardcodují `data/public/images/songbooks`, prefix
-      `users/` nebo tabulku `songbook_intro_outro_images` (dnes prázdnou) — všechno
-      struktury, které po migraci úložiště neexistují. Tři z nich jsou navíc jednorázové
-      migrace, které už proběhly. Buď smazat, nebo přepsat na dnešní tvar; nechávat je
-      spustitelné je past.
+- [X] **smazat mrtvé skripty.** Z gitu ven a jen lokálně: čtyři jednorázové migrace,
+      `rebuild_private_from_fs.py` (jména souborů dnes nenesou informaci, z disku DB
+      složit nejde), `povysit_obalky.py` (hledá `coverXT.png`), `seed_db.py`
+      a `generate_public_seed.py` (seedy nikdy neuměly zpěvník založený přes web
+      a obrázky ve staré struktuře už nejsou — obnovu dělá denní záloha),
+      `init_db.py` (stál na seed_db a mazal přitom DB i `data/private/users`),
+      `create_songbook_db.sql` (schéma bez tabulky `images`) a `scripts/uklid-a-nahrat.sh`
+      (pracoval se smazaným stromem). Opravené a dál živé: `_obalky.py`,
+      `odebrat_prazdne_obalky.py`, `uklid_obrazku.py`, `kontrola_zpevniku.py`.
 - [X] **`song_images.poradi`** (`backend/scripts/migrace_poradi_stran.py`). Muselo jít před
       migrací úložiště: pořadí stran vícestránkové písně bylo dané jen pořadím `id` a jedinou
       nezávislou kontrolou bylo číslo v názvu souboru, které nový standard odstraňuje.

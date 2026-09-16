@@ -160,6 +160,10 @@ ne jako pátá cesta, kterou je potřeba držet v souladu se čtyřmi ostatními
 
 ## Jak migrace dopadla
 
+> Migrační skripty (`migrace_uloziste.py`, `migrace_poradi_stran.py`,
+> `migrace_tabulka_images.py`) už v repozitáři nejsou — proběhly a znovu se pustit nedají.
+> Zůstaly lokálně a v historii gitu. Jména níž jsou tedy záznam, ne odkaz.
+
 Spuštěno `backend/scripts/migrace_uloziste.py --provest` nad lokální kopií:
 
 - **1093 souborů** přeneseno, 88 obálkových odkazů a 1005 stran
