@@ -184,6 +184,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       ležící soubor není ani jeden.
 - [X] velký check čtečka vs. PDF — `backend/scripts/kontrola_zpevniku.py`, pouští se kdykoliv
 - [ ] ZIP balí originály, takže po povýšení obálek v něm budou průhledné PNG bez barvy
+- [X] **exporty veřejných zpěvníků se z cache nevyhazují** — stažení veřejného zpěvníku
+      má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
+      změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
+      Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
 - [ ] **předělat okno pro stažení zpěvníku.** Dnes nabídne tři možnosti a hotovo. Místo
       toho otevřít celé okno, kde si uživatel nastaví, co má stažený zpěvník obsahovat:
@@ -238,9 +242,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       transakce se vrátí zpět a rozepsané soubory se smažou, takže po nepovedeném nahrání
       nezůstane nic, co by se do kvóty počítalo.
       Pro orientaci: dnešní největší uživatel má 50 MB (17 % kvóty), běžný zpěvník ~12 MB.
-- [ ] **ukázat uživateli, kolik místa zabral.** Dnes to zjistí, až narazí na strop.
-      Číslo je k dispozici (`zabrane_misto(user_id)`), chce to jen pruh nebo řádek
-      v „Moje zpěvníky" nebo v profilu.
+- [X] **ukázat uživateli, kolik místa zabral** — v panelu účtu, nad „Změnit heslo".
+      Číslo, tenký pruh a od poloviny barevný vykřičník s vysvětlením pod myší; nad 85 %
+      červeně. Adminovi a hostovi se neukazuje: admin zakládá veřejné zpěvníky, které se
+      nikomu nezapočítávají, takže by mu svítila pořád nula.
+      Změřeno v Chromiu ve všech třech stavech na 1280 i 390 px — na úzké obrazovce je
+      panel pod burgerem, ale ukazatel je v něm stejný a nikde nepřečuhuje.
 - [ ] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
       s někým a pak si je smažu" (zaplním mu schránku bordelem)
 - [ ] **lepší hosting kvůli rychlosti odezvy.** Dnešní Oracle free tier má 1 GB RAM a
