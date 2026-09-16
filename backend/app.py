@@ -464,12 +464,50 @@ def static_bust(filename: str) -> str:
 
 app.jinja_env.globals['static_bust'] = static_bust
 
-# Route pro servírování obrázků zpěvníků z data/public/images/songbooks/
+def zpevniky_s_obrazkem(cesta: str):
+    """Zpěvníky, ve kterých ten obrázek je - jako strana, obálka nebo intro.
+
+    O právech nerozhoduje, kde soubor leží, ale komu patří zpěvník, který ho ukazuje.
+    Umístění to říct nemůže: strana veřejného zpěvníku běžně visí i v něčím soukromém
+    (dnes 70 písniček) a naopak. Od zavedení tabulky `images` je to pár dotazů na
+    `image_id` místo porovnávání řetězců v šesti sloupcích.
+    """
+    obraz = Image.query.filter_by(cesta=cesta).first()
+    if obraz is None:
+        return []
+    ids = {r[0] for r in db.session.query(SongbookPage.songbook_id)
+           .join(SongImage, SongImage.song_id == SongbookPage.song_id)
+           .filter(SongImage.image_id == obraz.id).distinct()}
+    ids |= {r[0] for r in db.session.query(SongbookIntroOutroImage.songbook_id)
+            .filter_by(image_id=obraz.id).distinct()}
+    ids |= {r[0] for r in db.session.query(Songbook.id).filter(db.or_(
+        Songbook.cover_preview_id == obraz.id,
+        Songbook.cover_front_outer_id == obraz.id,
+        Songbook.cover_front_inner_id == obraz.id,
+        Songbook.cover_back_inner_id == obraz.id,
+        Songbook.cover_back_outer_id == obraz.id))}
+    return Songbook.query.filter(Songbook.id.in_(ids)).all() if ids else []
+
+
+def smi_videt_obrazek(user, cesta: str) -> bool:
+    """Vidí uživatel aspoň jeden zpěvník, ve kterém ten obrázek je?
+
+    Obrázek, na který neukazuje žádný zpěvník, nevidí nikdo. Je to buď sirotek před
+    úklidem, nebo uhodnutá cesta.
+    """
+    return any(can_view_songbook(user, sb) for sb in zpevniky_s_obrazkem(cesta))
+
+
+# Originální obrázky zpěvníků. Zmenšené varianty servírují /nahled/ a /strana/.
 @app.route('/songbooks/<path:filename>')
+@login_required
 def serve_songbook_image(filename):
-    # If path starts with 'users/', serve from private users directory; otherwise from public songbooks
     try:
         if not _je_nova_cesta(filename):
+            return ("Not Found", 404)
+        if not smi_videt_obrazek(current_user, filename):
+            # Schválně 404, ne 403: 403 by potvrdilo, že takový soubor existuje, a cesty
+            # jsou dnes očíslované od jedničky, takže by se daly procházet.
             return ("Not Found", 404)
         return send_from_directory(str(IMAGES_DIR), filename)
     except Exception:
@@ -1028,6 +1066,8 @@ def nahled_strany(klic, filename):
     if n.klic(zdroj, n.STRANA) != klic:
         # Klíč nesedí na dnešní podobu obrázku - odkaz je z dřívějška. Ať si prohlížeč
         # vyzvedne aktuální adresu, místo aby dostal cizí obrázek.
+        return ("Not Found", 404)
+    if not smi_videt_obrazek(current_user, filename):
         return ("Not Found", 404)
 
     otisk = n.otisk_cesty(filename)
