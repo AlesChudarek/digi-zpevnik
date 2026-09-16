@@ -4,8 +4,12 @@ from flask_login import UserMixin
 db = SQLAlchemy()
 
 
-class Image(db.Model):
+class Obrazek(db.Model):
     """Jeden obrázkový soubor. Identitou je řádek, ne řetězec s cestou.
+
+    Jmenuje se česky schválně. Jako `Image` přebíral jméno PIL `Image`, protože se
+    v `app.py` importuje až po něm - a tiše tím rozbil všechno, co kreslí: export do PDF
+    i zmenšování nahraných obrázků nad 2 MB. Tabulka se dál jmenuje `images`.
 
     Dřív byla identitou obrázku jeho cesta, uložená jako text na šesti různých místech
     (`song_images` a pět sloupců obálek v `songbooks`). Otázka „ukazuje na tenhle soubor
@@ -60,7 +64,7 @@ def cesta_obrazku(vztah):
         return obraz.cesta if obraz is not None else None
 
     def zapis(self, cesta):
-        setattr(self, vztah, Image.ziskej(cesta) if cesta else None)
+        setattr(self, vztah, Obrazek.ziskej(cesta) if cesta else None)
 
     return property(cti, zapis)
 
@@ -132,7 +136,7 @@ class SongImage(db.Model):
     image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
     poradi = db.Column(db.Integer, nullable=False, default=1)
 
-    image = db.relationship("Image")
+    image = db.relationship("Obrazek")
     # Kód dál čte i zapisuje `image_path` jako text, jen pod tím leží řádek v `images`.
     image_path = cesta_obrazku("image")
 
@@ -152,11 +156,11 @@ class Songbook(db.Model):
     cover_back_inner_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
     cover_back_outer_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True)
 
-    cover_preview = db.relationship("Image", foreign_keys=[cover_preview_id])
-    cover_front_outer = db.relationship("Image", foreign_keys=[cover_front_outer_id])
-    cover_front_inner = db.relationship("Image", foreign_keys=[cover_front_inner_id])
-    cover_back_inner = db.relationship("Image", foreign_keys=[cover_back_inner_id])
-    cover_back_outer = db.relationship("Image", foreign_keys=[cover_back_outer_id])
+    cover_preview = db.relationship("Obrazek", foreign_keys=[cover_preview_id])
+    cover_front_outer = db.relationship("Obrazek", foreign_keys=[cover_front_outer_id])
+    cover_front_inner = db.relationship("Obrazek", foreign_keys=[cover_front_inner_id])
+    cover_back_inner = db.relationship("Obrazek", foreign_keys=[cover_back_inner_id])
+    cover_back_outer = db.relationship("Obrazek", foreign_keys=[cover_back_outer_id])
 
     # Jména `img_path_cover_*` zůstávají, aby se kvůli téhle změně nepřepisovaly šablony
     # a sto dalších míst; pod nimi je teď řádek v `images` místo textu.
@@ -178,7 +182,7 @@ class SongbookIntroOutroImage(db.Model):
     image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
     sort_order = db.Column(db.Integer, default=0)
 
-    image = db.relationship("Image")
+    image = db.relationship("Obrazek")
     image_path = cesta_obrazku("image")
 
 class UserSongbookAccess(db.Model):

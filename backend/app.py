@@ -239,7 +239,7 @@ try:
     # Prefer balíčkové importy pro nasazení (backend.app jako modul)
     from .models import (
         Song,
-        Image,
+        Obrazek,
         SongImage,
         SongbookPage,
         SongbookIntroOutroImage,
@@ -252,7 +252,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Image, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
+    from models import Song, Obrazek, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -466,7 +466,7 @@ def zpevniky_s_obrazkem(cesta: str):
     (dnes 70 písniček) a naopak. Od zavedení tabulky `images` je to pár dotazů na
     `image_id` místo porovnávání řetězců v šesti sloupcích.
     """
-    obraz = Image.query.filter_by(cesta=cesta).first()
+    obraz = Obrazek.query.filter_by(cesta=cesta).first()
     if obraz is None:
         return []
     ids = {r[0] for r in db.session.query(SongbookPage.songbook_id)
@@ -651,7 +651,7 @@ def smaz_osirele_obrazky(kandidati):
 
     smazano = 0
     osirele = []
-    for obraz in Image.query.filter(Image.cesta.in_(kandidati)).all():
+    for obraz in Obrazek.query.filter(Obrazek.cesta.in_(kandidati)).all():
         pouzity = (
             db.session.query(SongImage.id).filter_by(image_id=obraz.id).first()
             or db.session.query(SongbookIntroOutroImage.id).filter_by(image_id=obraz.id).first()
@@ -2068,9 +2068,9 @@ def get_songbook_structure(songbook_id):
     private_set = set()
     if song_ids:
         priv_rows = (db.session.query(SongImage.song_id)
-                     .join(Image, Image.id == SongImage.image_id)
+                     .join(Obrazek, Obrazek.id == SongImage.image_id)
                      .filter(SongImage.song_id.in_(song_ids),
-                             Image.cesta.like('uzivatele/%'))
+                             Obrazek.cesta.like('uzivatele/%'))
                      .distinct().all())
         private_set = {sid for (sid,) in priv_rows}
 
@@ -2406,8 +2406,8 @@ def update_songbook_structure(songbook_id):
             # ještě vedou řádky v databázi. Smazat se smí až po commitu a jen ty, na které
             # už nikdo neukazuje - viz smaz_osirele_obrazky.
             ke_smazani_soubory.update(
-                p for (p,) in db.session.query(Image.cesta)
-                .join(SongImage, SongImage.image_id == Image.id)
+                p for (p,) in db.session.query(Obrazek.cesta)
+                .join(SongImage, SongImage.image_id == Obrazek.id)
                 .filter(SongImage.song_id.in_(list(to_delete))).all())
             # Delete all pages for songs that are no longer present in the submitted order
             (db.session.query(SongbookPage)
