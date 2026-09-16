@@ -92,8 +92,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] nasadit úklid na server
 - [X] nasadit lepší rozlišení z archivu: 4 průhledné obálky (00011, 00015), 3 obálky bez
       průhlednosti (00016, 00026) a 36 vnitřních stran
-- [ ] dodat průhlednou přední obálku, kde chybí: 00016, 00020, 00026 — jediné tři, kterým
-      barvu měnit nejde
+- [ ] **dodat průhledné obálky, kde chybí.** Změřeno 16. 9. 2026
+      (`odebrat_prazdne_obalky.py`): barvu nejde měnit u 00026 a 00101. U 00101 mají
+      všechny čtyři obálky alfa kanál, ale 0,0 % průhledných pixelů. Tři průhledné
+      varianty pro něj leží v `~/Downloads/zpevnik-unikatni-obalky/`; čtvrtá (zadní
+      vnitřní) chybí, a bez ní bude barva pořád neměnitelná — aplikace to vyžaduje
+      u všech čtyř stran naráz.
 - [ ] 00022: v `~/Downloads/zpevnik-00022-originaly/` leží originály 1748×2480, ze kterých
       by šlo udělat průhlednou variantu lepší než dnešní 1072×1522
 - [X] aplikace maže staré obrázky stran (`smaz_osirele_obrazky`) — smaže se jen soubor,
@@ -139,8 +143,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] **smazat starý strom** — na serveru smazáno. Nedrželo se to „až si provoz sedne",
       protože se dalo ověřit rovnou: seřazené seznamy md5 obou stromů jsou identické
       (1093 souborů v každém), v DB nezbyla jediná cesta mimo nový strom a data jsou
-      i v záloze na Macu. `data/private/seeds` a `data/public/seeds` zůstávají — to jsou
-      podklady pro generování zpěvníků, ne úložiště.
+      i v záloze na Macu. Seedy (`data/private/seeds`, `data/public/seeds`) padly spolu
+      se seedovacími skripty: 170 ze 174 obrázků byly bajtově shodné duplikáty živých dat
+      a JSONy byly zastaralé — 9 z 29 se rozcházelo s databází, vždy tak, že DB měla víc
+      stran a opravenější barvy. Obnova z nich by práci mazala, ne vracela. Čtyři unikátní
+      obálky jsou v zálohách a v `~/Downloads/zpevnik-unikatni-obalky/`.
+      V `data/` tak zůstávají jen `images`, `nahledy` a `exports`.
 - [X] **odstranit z kódu čtení staré struktury.** `SONGBOOK_IMAGES_DIR` ani
       `PRIVATE_USER_IMAGES_DIR` v kódu nejsou. `_abs_image_path` teď na cestu mimo nový
       tvar vrátí `None` místo aby ji potichu poskládal do něčeho, co nikam nevede, a
