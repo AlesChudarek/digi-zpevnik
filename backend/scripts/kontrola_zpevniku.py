@@ -32,7 +32,8 @@ sys.path.insert(0, str(SCRIPT_DIR.parent.parent))
 
 from PIL import Image  # noqa: E402
 
-from _obalky import SLOTY, hex_na_rgb, podil_pruhlednych, rozbor_zpevniku  # noqa: E402
+from _obalky import (SLOTY, NASLEDUJE_BARVU, hex_na_rgb, podil_pruhlednych,  # noqa: E402
+                     rozbor_zpevniku)
 
 
 def main():
@@ -59,7 +60,7 @@ def main():
             barva = hex_na_rgb(barva_hex)
 
             # --- cesty v DB ukazují na existující soubory ---
-            for sloupec, _zaklad in SLOTY + [('img_path_cover_preview', None)]:
+            for sloupec in [f'img_path_cover_{r}' for r in SLOTY] + ['img_path_cover_preview']:
                 rel = getattr(kniha, sloupec, None)
                 if not rel:
                     continue
@@ -87,7 +88,7 @@ def main():
 
             # --- obálka má v exportu všechny čtyři strany, nebo žádnou ---
             obalky = [i for i in sekvence if i['kind'] == 'cover']
-            ma_nejakou = any(getattr(kniha, s) for s, _ in SLOTY)
+            ma_nejakou = any(getattr(kniha, f'img_path_cover_{r}') for r in SLOTY)
             ocekavano = 4 if ma_nejakou else 0
             if len(obalky) != ocekavano:
                 nalezy.append(f"obálka má v exportu {len(obalky)} stran místo {ocekavano}")
@@ -99,20 +100,14 @@ def main():
                                   f"({i.get('bg')} místo {barva_hex})")
 
             # --- měnitelnost je celá, ne poloviční ---
-            radek = {s: getattr(kniha, s) for s, _ in SLOTY}
+            radek = {r: getattr(kniha, f'img_path_cover_{r}') for r in SLOTY}
             radek['color'] = barva_hex
-            stav, menitelny = rozbor_zpevniku(radek, abs_cesta)
-            nasleduje = [s for s in stav if stav[s] in
-                         ('kreslená', 'prázdná', 'průhledná', 'půjde průhledná')]
+            stav, menitelny = rozbor_zpevniku(radek, abs_cesta, kniha.color)
+            nasleduje = [r for r in stav if stav[r] in NASLEDUJE_BARVU]
             if not menitelny and len(nasleduje) == 4:
                 nalezy.append("nekonzistence v klasifikaci obálky")
             if menitelny:
-                zbyva = [s.replace('img_path_cover_', '') for s in stav
-                         if stav[s] == 'půjde průhledná']
-                if zbyva:
-                    nalezy.append(f"nepovýšené průhledné obálky: {', '.join(zbyva)}")
-                prazdne = [s.replace('img_path_cover_', '') for s in stav
-                           if stav[s] == 'prázdná']
+                prazdne = [r for r in stav if stav[r] == 'prázdná']
                 if prazdne:
                     nalezy.append(f"neodebrané prázdné obálky: {', '.join(prazdne)}")
 

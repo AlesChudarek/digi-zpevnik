@@ -63,10 +63,24 @@ def insert_song(cursor, song_id, title, author_id):
         (song_id, title, author_id)
     )
 
-def insert_song_image(cursor, song_id, image_path):
+def image_id(cursor, cesta):
+    """Řádek v `images` pro danou cestu; když není, založí ho.
+
+    Od migrace schématu se cesty neukládají jako text na šesti místech, ale jednou tady
+    a všude jinde se na ně ukazuje cizím klíčem. Sdílená strana tak vyjde sama: druhý
+    INSERT nic nepřidá a vrátí se totéž id.
+    """
+    if not cesta:
+        return None
+    cursor.execute("INSERT OR IGNORE INTO images (cesta) VALUES (?)", (cesta,))
+    row = cursor.execute("SELECT id FROM images WHERE cesta = ?", (cesta,)).fetchone()
+    return row[0] if row else None
+
+
+def insert_song_image(cursor, song_id, image_path, poradi=1):
     cursor.execute(
-        "INSERT INTO song_images (song_id, image_path) VALUES (?, ?)",
-        (song_id, image_path)
+        "INSERT INTO song_images (song_id, image_id, poradi) VALUES (?, ?, ?)",
+        (song_id, image_id(cursor, image_path), poradi)
     )
 
 def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
@@ -78,11 +92,11 @@ def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
         INSERT OR REPLACE INTO songbooks (
             id, title, is_public, owner_id,
             first_page_side,
-            img_path_cover_preview,
-            img_path_cover_front_outer,
-            img_path_cover_front_inner,
-            img_path_cover_back_inner,
-            img_path_cover_back_outer,
+            cover_preview_id,
+            cover_front_outer_id,
+            cover_front_inner_id,
+            cover_back_inner_id,
+            cover_back_outer_id,
             color
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -90,14 +104,28 @@ def insert_songbook(cursor, songbook_id, title, is_public=1, owner_id=None,
         (
             songbook_id, title, is_public, owner_id,
             first_page_side,
-            cover_preview,
-            cover_front_out,
-            cover_front_in,
-            cover_back_in,
-            cover_back_out,
+            image_id(cursor, cover_preview),
+            image_id(cursor, cover_front_out),
+            image_id(cursor, cover_front_in),
+            image_id(cursor, cover_back_in),
+            image_id(cursor, cover_back_out),
             color
         )
     )
+
+def insert_intro_outro(cursor, songbook_id, typ, cesta, sort_order=0):
+    """Intro/outro obrázek, když už tam stejný není. Cesta jde přes tabulku images."""
+    iid = image_id(cursor, cesta)
+    if iid is None:
+        return
+    uz_je = cursor.execute(
+        "SELECT 1 FROM songbook_intro_outro_images "
+        "WHERE songbook_id=? AND type=? AND image_id=?", (songbook_id, typ, iid)).fetchone()
+    if not uz_je:
+        cursor.execute(
+            "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_id, sort_order) "
+            "VALUES (?, ?, ?, ?)", (songbook_id, typ, iid, sort_order))
+
 
 def insert_songbook_page(cursor, songbook_id, song_id, page_number):
     cursor.execute(
@@ -226,16 +254,7 @@ def seed_from_public_seed_folder(seed_path, db_path, image_base_path):
                 # Handle intro/outro pages
                 if page_type in ["intro", "outro"]:
                     # Check if already inserted to avoid duplicates
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM songbook_intro_outro_images WHERE songbook_id=? AND type=? AND image_path=?",
-                        (songbook_id, page_type, image_path)
-                    )
-                    count = cursor.fetchone()[0]
-                    if count == 0:
-                        cursor.execute(
-                            "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, ?, ?, ?)",
-                            (songbook_id, page_type, image_path, 0)  # sort_order can be adjusted if needed
-                        )
+                    insert_intro_outro(cursor, songbook_id, page_type, image_path)
                 else:
                     dummy_song_id = f"{songbook_id}_page_{page_number or 'none'}"
                     dummy_title = f"Non-song page {page_number or 'none'}"
@@ -263,29 +282,11 @@ def seed_from_public_seed_folder(seed_path, db_path, image_base_path):
 
             for i, image_path in enumerate(intros):
                 full_path = f"{int(songbook_id):05d}/{image_path}"
-                cursor.execute(
-                    "SELECT COUNT(*) FROM songbook_intro_outro_images WHERE songbook_id=? AND type=? AND image_path=?",
-                    (songbook_id, 'intro', full_path)
-                )
-                count = cursor.fetchone()[0]
-                if count == 0:
-                    cursor.execute(
-                        "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'intro', ?, ?)",
-                        (songbook_id, full_path, i)
-                    )
+                insert_intro_outro(cursor, songbook_id, 'intro', full_path, i)
 
             for i, image_path in enumerate(outros):
                 full_path = f"{int(songbook_id):05d}/{image_path}"
-                cursor.execute(
-                    "SELECT COUNT(*) FROM songbook_intro_outro_images WHERE songbook_id=? AND type=? AND image_path=?",
-                    (songbook_id, 'outro', full_path)
-                )
-                count = cursor.fetchone()[0]
-                if count == 0:
-                    cursor.execute(
-                        "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, 'outro', ?, ?)",
-                        (songbook_id, full_path, i)
-                    )
+                insert_intro_outro(cursor, songbook_id, 'outro', full_path, i)
 
         total_songs += len(data.get("songs", []))
 
@@ -452,16 +453,7 @@ def seed_from_private_seed_folder(seed_root, db_path):
 
             if not song_ids:
                 if page_type in ["intro", "outro"]:
-                    cursor.execute(
-                        "SELECT COUNT(*) FROM songbook_intro_outro_images WHERE songbook_id=? AND type=? AND image_path=?",
-                        (songbook_id, page_type, image_path)
-                    )
-                    count = cursor.fetchone()[0]
-                    if count == 0:
-                        cursor.execute(
-                            "INSERT INTO songbook_intro_outro_images (songbook_id, type, image_path, sort_order) VALUES (?, ?, ?, ?)",
-                            (songbook_id, page_type, image_path, 0)
-                        )
+                    insert_intro_outro(cursor, songbook_id, page_type, image_path)
                 else:
                     dummy_song_id = f"{songbook_id}_page_{page_number or 'none'}"
                     dummy_title = f"Non-song page {page_number or 'none'}"
