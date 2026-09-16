@@ -429,12 +429,6 @@ def _kvota_prekrocena(chyba):
         except OSError:
             pass
 
-    def mb(bajtu):
-        # Desetinné místo pod 100 MB: se zaokrouhlením na celé psalo "zabráno 10 MB
-        # z 10 MB" i při 9,66 MB, což vypadá jako protimluv.
-        h = bajtu / 1024 / 1024
-        return (f"{h:.1f}".replace('.', ',') if h < 100 else f"{h:.0f}") + " MB"
-
     zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
     return jsonify({
         'ok': False,
@@ -1017,6 +1011,37 @@ def url_strany(rel):
 
 
 app.jinja_env.globals['url_strany'] = url_strany
+
+
+def misto_uzivatele(user):
+    """Kolik místa účet zabral, pro zobrazení v panelu účtu.
+
+    Vrací None u hosta a admina - admin zakládá veřejné zpěvníky, které se nikomu
+    nezapočítávají, takže by mu ukazatel pořád svítil nulu a jen mátl.
+    """
+    if not getattr(user, 'is_authenticated', False) or getattr(user, 'role', None) in ('guest', 'admin'):
+        return None
+    zabrano = zabrane_misto(user.id)
+    podil = zabrano / MAX_USER_STORAGE_BYTES if MAX_USER_STORAGE_BYTES else 0
+    return {
+        'zabrano': zabrano,
+        'kvota': MAX_USER_STORAGE_BYTES,
+        'procent': min(100, round(podil * 100)),
+        # Dva prahy: nad polovinou stojí za to o tom vědět, nad 85 % už je potřeba
+        # něco udělat, než nahrávání spadne na strop.
+        'stav': 'kriticky' if podil >= 0.85 else ('varovani' if podil >= 0.5 else 'ok'),
+    }
+
+
+def mb(bajtu):
+    """Velikost pro člověka. Desetinné místo jen pod 100 MB, ať to neskáče."""
+    h = (bajtu or 0) / 1024 / 1024
+    return (f"{h:.1f}".replace('.', ',') if h < 100 else f"{h:.0f}") + " MB"
+
+
+app.jinja_env.globals['misto_uzivatele'] = misto_uzivatele
+app.jinja_env.globals['mb'] = mb
+
 
 
 def mapa_stran(page_files):
@@ -2776,13 +2801,29 @@ def _prune_exports(keep_path, sibling_glob):
         for path in EXPORTS_DIR.glob(sibling_glob):
             if path.is_file() and path != keep_path:
                 path.unlink(missing_ok=True)
-        files = [p for p in EXPORTS_DIR.glob('*') if p.is_file() and p.suffix in ('.pdf', '.zip')]
     except OSError:
         return
 
     files = [p for p in EXPORTS_DIR.glob('*') if p.is_file() and p.suffix in ('.pdf', '.zip')]
     total = sum(p.stat().st_size for p in files if p.exists())
-    for path in sorted(files, key=lambda p: p.stat().st_mtime if p.exists() else 0):
+
+    # Exporty veřejných zpěvníků se z cache nevyhazují. Stažení veřejného zpěvníku má být
+    # vždycky hned a aktuální; nahrazuje je jedině změna v samotném zpěvníku, kdy se změní
+    # klíč a starou verzi smaže glob výš. Kdyby je vytlačil někdo, kdo si vyexportoval
+    # hodně svých, čekal by další návštěvník 12-25 s na přegenerování.
+    try:
+        verejne = {re.sub(r'[^A-Za-z0-9_]', '_', sid) for (sid,) in
+                   db.session.query(Songbook.id).filter(Songbook.is_public == 1).all()}
+    except Exception:  # noqa: BLE001 - úklid nesmí shodit export
+        verejne = set()
+
+    def je_verejny(path: Path) -> bool:
+        # Jméno je "<id>-<varianta>-<klíč>", a id samo může obsahovat pomlčky, takže se
+        # porovnává prefix, ne první díl.
+        return any(path.name.startswith(v + '-') for v in verejne)
+
+    vyhoditelne = [p for p in files if not je_verejny(p)]
+    for path in sorted(vyhoditelne, key=lambda p: p.stat().st_mtime if p.exists() else 0):
         if total <= EXPORTS_TOTAL_LIMIT_BYTES:
             break
         if path == keep_path:
