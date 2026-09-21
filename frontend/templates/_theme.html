@@ -50,6 +50,34 @@
     --muted-border:  #dbeadf;
     --muted-text:    #1b5e20;
   }
+
+  /* Plochy oken a panelů. Nejsou to barvy motivu, ale podklad, na kterém motiv leží:
+     ve všech světlých motivech bílá, v tmavém tmavá. Proto se definují jen jednou tady
+     a přebíjí je jedině .theme-dark - jinak by je musel opakovat každý ze dvanácti
+     motivů a jedenáct z nich stejně. */
+  :root {
+    --panel-bg:        #ffffff;
+    --panel-text:      #222222;
+    --panel-muted:     #666666;
+    --panel-border:    #eeeeee;
+    --panel-track:     #ececec;
+    --panel-btn-bg:    #f0f0f0;
+    --panel-btn-hover: #e2e2e2;
+    --panel-btn-text:  #333333;
+    --panel-error:     #b3261e;
+  }
+  html.theme-dark {
+    --panel-bg:        #161c2b;
+    --panel-text:      #e6eaf2;
+    --panel-muted:     #9aa4b8;
+    --panel-border:    #2a3347;
+    --panel-track:     #2a3347;
+    --panel-btn-bg:    #2a3347;
+    --panel-btn-hover: #38435c;
+    --panel-btn-text:  #e6eaf2;
+    --panel-error:     #ff8a80;
+  }
+
   /* Blue (aligned with brand #00B0D5) */
   html.theme-blue {
     --bg-grad-start: #00B0D5;  /* brand cyan */
