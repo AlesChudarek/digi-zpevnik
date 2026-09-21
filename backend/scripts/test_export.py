@@ -409,7 +409,61 @@ def main():
                        "a rovnou se předgeneruje nová verze PDF, nečeká se na stažení",
                        ", ".join(sorted(nove)) or "nic nevzniklo")
 
+        print("\n── strop cache počítá jen soukromé exporty ──")
+        # Strop umí vyhodit jen soukromé exporty, veřejné jsou z úklidu vyňaté. Dokud se
+        # do něj počítaly i ty, ujídaly rozpočet, na který úklid nesmí sáhnout: při
+        # 402 MB předgenerovaných veřejných zbývalo z pětistovky na všechna soukromá
+        # stažení necelých 98 MB a cache se mlela pořád dokola.
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+        for p in EXPORTS_DIR.glob("*"):
+            p.unlink(missing_ok=True)
+
+        env_strop = dict(env)
+        env_strop["EXPORTS_PRIVATE_LIMIT_MB"] = "50"
+        uklid = subprocess.run(
+            [str(VENV_PY), "-c",
+             'import os, sys, time\n'
+             'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
+             'from backend.app import app, EXPORTS_DIR, _prune_exports\n'
+             'def uloz(jmeno, mb, stari):\n'
+             '    p = EXPORTS_DIR / jmeno\n'
+             '    p.write_bytes(b"\\0" * (mb * 1024 * 1024))\n'
+             '    os.utime(p, (time.time() - stari, time.time() - stari))\n'
+             '    return p\n'
+             'with app.app_context():\n'
+             # 70 MB veřejných je nad stropem 50 MB - samo o sobě nesmí nic spustit
+             f'    uloz("{BOOK}-small-verejny1.pdf", 40, 300)\n'
+             f'    uloz("{BOOK}-high-verejny2.pdf", 30, 200)\n'
+             '    stary = uloz("00101-small-soukromy-stary.pdf", 20, 100)\n'
+             '    novy = uloz("00102-small-soukromy-novy.pdf", 20, 10)\n'
+             '    _prune_exports(novy, "nic-se-netrefi-*")\n'
+             '    print("PO_PRVNIM", sorted(p.name for p in EXPORTS_DIR.glob("*.pdf")))\n'
+             # teď soukromých 60 MB, tedy nad stropem: musí odejít ten nejstarší
+             '    uloz("00101-high-soukromy-tretie.pdf", 20, 50)\n'
+             '    _prune_exports(novy, "nic-se-netrefi-*")\n'
+             '    print("PO_DRUHEM", sorted(p.name for p in EXPORTS_DIR.glob("*.pdf")))\n'
+             '    print("STARY_ZBYL", stary.exists())\n'],
+            env=env_strop, capture_output=True, text=True)
+        vystup = uklid.stdout
+        prvni = next((r for r in vystup.splitlines() if r.startswith("PO_PRVNIM")), "")
+        druhy = next((r for r in vystup.splitlines() if r.startswith("PO_DRUHEM")), "")
+        zkontroluj("verejny1" in prvni and "verejny2" in prvni and "soukromy-stary" in prvni,
+                   "70 MB veřejných nad stropem 50 MB samo o sobě nic nevyhodí",
+                   prvni or uklid.stderr[-200:])
+        zkontroluj("verejny1" in druhy and "verejny2" in druhy,
+                   "veřejné přežijí i překročení stropu soukromými", druhy)
+        zkontroluj("soukromy-stary" not in druhy,
+                   "a přes strop odejde nejstarší soukromý", druhy)
+        zkontroluj("soukromy-novy" in druhy, "ten nejnovější zůstane", druhy)
+        for p in EXPORTS_DIR.glob("*"):
+            p.unlink(missing_ok=True)
+
         print("\n── exporty leží mimo veřejně servírované adresáře ──")
+        # Poslední sekce potřebuje nějaký hotový soubor; vlastní úklid o pár řádků výš
+        # adresář vyprázdnil, tak jeden znovu postavit.
+        admin.get(f"/songbook/{BOOK}/export.pdf?q=small")
+        pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf?q=small")
         hotovy = next(EXPORTS_DIR.glob("*.pdf"), None)
         zkontroluj(hotovy is not None, "existuje vygenerovaný soubor")
         if hotovy:

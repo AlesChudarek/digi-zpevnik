@@ -186,7 +186,7 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [ ] ZIP balí originály, takže po povýšení obálek v něm budou průhledné PNG bez barvy
 - [X] **exporty veřejných zpěvníků se z cache nevyhazují** — stažení veřejného zpěvníku
       má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
-      změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
+      změní klíč v názvu souboru. Strop se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká.
       Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
@@ -217,6 +217,15 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       dvě, takže po upgradu paměti dává souběh smysl — proto je to proměnná prostředí
       a ne konstanta v kódu. Pozor: po dobu, kdy `export-warm` něco opravdu staví,
       dostane stažení jiného zpěvníku z webu 429 „server je zaneprázdněn".
+- [X] **strop cache počítal i to, co neumí vyhodit.** Do 500 MB se sčítaly všechny
+      exporty, ale úklid smí mazat jen soukromé — veřejné jsou z vyhazování vyňaté
+      schválně. Předgenerováním 30 veřejných zpěvníků narostla ta nevyhoditelná část na
+      402 MB, takže na všechna soukromá stažení zbývalo z pětistovky necelých 98 MB
+      a cache se mlela pořád dokola: naměřeno 576 MB v adresáři, z toho 174 MB
+      soukromých, tedy 76 MB k okamžitému smazání. Do stropu se teď počítají jen
+      soukromé exporty a je zvednutý na 2 GB (`EXPORTS_PRIVATE_LIMIT_MB`, přepsatelné
+      z prostředí). Disk má 45 GB, z toho 38 volných, takže 2 GB je 5 %.
+      Hlídá `test_export.py`, sekce „strop cache počítá jen soukromé exporty".
 - [ ] **paralelizace uvnitř jednoho skládání** — zatím ne, ale je změřeno, kdyby se to
       hodilo po upgradu serveru. Na zpěvníku 00006: u varianty `small` je 89 % času
       načtení a zmenšení stran, což jsou na sobě nezávislé kusy práce, a jen 11 % je

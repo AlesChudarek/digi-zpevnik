@@ -82,7 +82,14 @@ EXPORT_MAX_PAGES = 400
 # dvě, takže po upgradu paměti dává souběh smysl; proto se to dá zvednout z prostředí
 # a ne přepsáním kódu.
 MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
-EXPORTS_TOTAL_LIMIT_BYTES = 500 * 1024 * 1024
+# Kolik místa smí zabrat cache soukromých stažení, než se začne uklízet od nejstaršího.
+# Počítají se jen soukromé exporty, protože jen ty úklid umí vyhodit - veřejné jsou
+# z vyhazování vyňaté schválně, aby stažení veřejného zpěvníku bylo vždycky hned.
+# Kdyby se do stropu počítaly i ty, ujídaly by rozpočet, na který úklid nesmí sáhnout:
+# při 402 MB předgenerovaných veřejných zbývalo ze staré pětistovky na všechna soukromá
+# stažení necelých 98 MB a cache se kvůli tomu mlela pořád dokola.
+EXPORTS_PRIVATE_LIMIT_MB = max(50, int(os.getenv("EXPORTS_PRIVATE_LIMIT_MB", "2048")))
+EXPORTS_PRIVATE_LIMIT_BYTES = EXPORTS_PRIVATE_LIMIT_MB * 1024 * 1024
 EXPORT_LOCK_STALE_SECONDS = 600
 # v2: strany se na A4 doplňují, místo aby se na ni roztahovaly, a klíč cache se počítá
 # z celých sekund. Obojí mění výsledek, takže starší buildy musí přestat platit.
@@ -2858,7 +2865,6 @@ def _prune_exports(keep_path, sibling_glob):
         return
 
     files = [p for p in EXPORTS_DIR.glob('*') if p.is_file() and p.suffix in ('.pdf', '.zip')]
-    total = sum(p.stat().st_size for p in files if p.exists())
 
     # Exporty veřejných zpěvníků se z cache nevyhazují. Stažení veřejného zpěvníku má být
     # vždycky hned a aktuální; nahrazuje je jedině změna v samotném zpěvníku, kdy se změní
@@ -2875,9 +2881,12 @@ def _prune_exports(keep_path, sibling_glob):
         # porovnává prefix, ne první díl.
         return any(path.name.startswith(v + '-') for v in verejne)
 
+    # Do stropu se počítá jen to, co úklid umí vyhodit. Sčítat i veřejné by znamenalo
+    # měřit rozpočet věcmi, které z něj nejde ubrat.
     vyhoditelne = [p for p in files if not je_verejny(p)]
+    total = sum(p.stat().st_size for p in vyhoditelne if p.exists())
     for path in sorted(vyhoditelne, key=lambda p: p.stat().st_mtime if p.exists() else 0):
-        if total <= EXPORTS_TOTAL_LIMIT_BYTES:
+        if total <= EXPORTS_PRIVATE_LIMIT_BYTES:
             break
         if path == keep_path:
             continue
@@ -3684,9 +3693,6 @@ def export_warm(variant, public_only, songbook_ids):
     print(f"\npostaveno {postaveno}, už bylo {preskoceno}, "
           f"celkem {celkem_bytu / 1024 / 1024:.0f} MB, "
           f"trvalo {time.time() - zacatek:.0f} s")
-    if celkem_bytu > EXPORTS_TOTAL_LIMIT_BYTES:
-        print(f"⚠️  strop na adresář je {EXPORTS_TOTAL_LIMIT_BYTES / 1024 / 1024:.0f} MB, "
-              f"úklid začne předpřipravené soubory mazat")
 
 
 @app.cli.command("init-db")
