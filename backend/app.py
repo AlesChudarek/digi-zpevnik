@@ -86,8 +86,9 @@ MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
 # Počítají se jen soukromé exporty, protože jen ty úklid umí vyhodit - veřejné jsou
 # z vyhazování vyňaté schválně, aby stažení veřejného zpěvníku bylo vždycky hned.
 # Kdyby se do stropu počítaly i ty, ujídaly by rozpočet, na který úklid nesmí sáhnout:
-# při 402 MB předgenerovaných veřejných zbývalo ze staré pětistovky na všechna soukromá
-# stažení necelých 98 MB a cache se kvůli tomu mlela pořád dokola.
+# po předgenerování 30 veřejných zpěvníků jich na serveru leží 201 MB, takže ze staré
+# pětistovky zbývalo na všechna soukromá stažení jen 299 MB - a ten zbytek by se dál
+# zmenšoval s každým veřejným zpěvníkem, který přibude.
 EXPORTS_PRIVATE_LIMIT_MB = max(50, int(os.getenv("EXPORTS_PRIVATE_LIMIT_MB", "2048")))
 EXPORTS_PRIVATE_LIMIT_BYTES = EXPORTS_PRIVATE_LIMIT_MB * 1024 * 1024
 EXPORT_LOCK_STALE_SECONDS = 600

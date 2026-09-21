@@ -219,12 +219,13 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       dostane stažení jiného zpěvníku z webu 429 „server je zaneprázdněn".
 - [X] **strop cache počítal i to, co neumí vyhodit.** Do 500 MB se sčítaly všechny
       exporty, ale úklid smí mazat jen soukromé — veřejné jsou z vyhazování vyňaté
-      schválně. Předgenerováním 30 veřejných zpěvníků narostla ta nevyhoditelná část na
-      402 MB, takže na všechna soukromá stažení zbývalo z pětistovky necelých 98 MB
-      a cache se mlela pořád dokola: naměřeno 576 MB v adresáři, z toho 174 MB
-      soukromých, tedy 76 MB k okamžitému smazání. Do stropu se teď počítají jen
-      soukromé exporty a je zvednutý na 2 GB (`EXPORTS_PRIVATE_LIMIT_MB`, přepsatelné
-      z prostředí). Disk má 45 GB, z toho 38 volných, takže 2 GB je 5 %.
+      schválně. Rozpočet se tak měřil věcmi, které z něj nejde ubrat: předgenerovaných
+      30 veřejných zpěvníků zabírá 201 MB, takže na všechna soukromá stažení zbývalo
+      z pětistovky 299 MB, a ten zbytek by se dál zmenšoval s každým veřejným zpěvníkem,
+      který přibude. Do stropu se teď počítají jen soukromé exporty a je zvednutý na
+      2 GB (`EXPORTS_PRIVATE_LIMIT_MB`, přepsatelné z prostředí). Disk má 45 GB, z toho
+      38 volných, takže 2 GB je 5 %. Stav při opravě: 201 MB veřejných, 174 MB
+      soukromých, 375 MB celkem — tedy pod starým stropem, nic se zrovna nemazalo.
       Hlídá `test_export.py`, sekce „strop cache počítá jen soukromé exporty".
 - [ ] **paralelizace uvnitř jednoho skládání** — zatím ne, ale je změřeno, kdyby se to
       hodilo po upgradu serveru. Na zpěvníku 00006: u varianty `small` je 89 % času

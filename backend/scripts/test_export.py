@@ -411,9 +411,9 @@ def main():
 
         print("\n── strop cache počítá jen soukromé exporty ──")
         # Strop umí vyhodit jen soukromé exporty, veřejné jsou z úklidu vyňaté. Dokud se
-        # do něj počítaly i ty, ujídaly rozpočet, na který úklid nesmí sáhnout: při
-        # 402 MB předgenerovaných veřejných zbývalo z pětistovky na všechna soukromá
-        # stažení necelých 98 MB a cache se mlela pořád dokola.
+        # do něj počítaly i ty, ujídaly rozpočet, na který úklid nesmí sáhnout: 201 MB
+        # předgenerovaných veřejných nechávalo z pětistovky na všechna soukromá stažení
+        # jen 299 MB, a ten zbytek se zmenšoval s každým přibylým veřejným zpěvníkem.
         while list(EXPORTS_DIR.glob("*.lock")):
             time.sleep(0.3)
         for p in EXPORTS_DIR.glob("*"):
