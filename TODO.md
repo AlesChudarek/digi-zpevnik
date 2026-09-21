@@ -204,6 +204,25 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] **`kontrola_exportu.py --overit-obsah`** otevře hotové soubory a ověří je (hlavička,
       `%%EOF`, počet stran z posledního `/Count`, u ZIPu `testzip`). Rozbitý export
       veřejného zpěvníku se z cache sám nevyhodí, takže ho musí najít někdo jiný.
+- [X] **přidání písně nepředgenerovalo.** `schedule_export_warm` se volalo jen při uložení
+      struktury a při smazání písně. Přidání písně ze seznamu (`add-song`) i založení
+      vlastní písně (`custom-song`) přitom taky přidávají strany, takže klíč se změnil
+      a předpřipravené PDF přestalo platit — další stažení čekalo na skládání. Stará
+      verze se nikdy neservírovala, o to nešlo: cache je klíčovaná obsahem, takže
+      neaktuální soubor je nedosažitelný, jen se muselo znovu čekat. Hlídá
+      `test_export.py`, sekce „předgenerování po přidání písně".
+- [X] **souběžná skládání omezená na jedno** (`MAX_CONCURRENT_EXPORTS`, přepsatelné
+      z prostředí). Nebrzdí to procesor, ale paměť: jedno skládání má vrchol 170-250 MB
+      a server má 979 MB bez swapu, takže při jednom běžícím zbývá ~310 MB. Jádra jsou
+      dvě, takže po upgradu paměti dává souběh smysl — proto je to proměnná prostředí
+      a ne konstanta v kódu. Pozor: po dobu, kdy `export-warm` něco opravdu staví,
+      dostane stažení jiného zpěvníku z webu 429 „server je zaneprázdněn".
+- [ ] **paralelizace uvnitř jednoho skládání** — zatím ne, ale je změřeno, kdyby se to
+      hodilo po upgradu serveru. Na zpěvníku 00006: u varianty `small` je 89 % času
+      načtení a zmenšení stran, což jsou na sobě nezávislé kusy práce, a jen 11 % je
+      zápis do PDF, který sekvenční zůstat musí. Na dvou jádrech by to dalo až ~1,8×.
+      Důvod, proč to nechat být: ta dvě jádra zároveň obsluhují web, takže skládání,
+      které si vezme obě, udělá stránku na tu dobu trhanou pro všechny.
 - [X] **předgenerovaná PDF byla na serveru nedosažitelná.** 29 z 31 veřejných zpěvníků
       mělo v `data/exports` hotové `small` PDF, na které se klíč netrefil, takže nabídka
       správně hlásila „není hned" a stahování je skládalo znovu. Nešlo o chybu v klíči:
