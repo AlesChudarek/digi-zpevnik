@@ -113,8 +113,11 @@
         align-items: center;
     }
 
+    /* Jen kolečka v samotném sloupci, ne cokoliv, co v něm leží. Dokud tu stálo
+       `.mode-buttons button`, dosáhlo to i na položky vysunuté nabídky a na tlačítko
+       ve vyskakovacím okně - a ty pak musely tvar i velikost přebíjet zpátky. */
     .nav-buttons button,
-    .mode-buttons button {
+    .mode-buttons > .button-container > button {
         background: white;
         border: none;
         border-radius: 50%;
@@ -170,7 +173,7 @@
     }
 
     .nav-buttons button:hover,
-    .mode-buttons button:not(.mode-toggle-button):hover {
+    .mode-buttons > .button-container > button:not(.mode-toggle-button):hover {
         transform: scale(1.1);
     }
 
@@ -602,22 +605,22 @@
     opacity: 1;
     pointer-events: auto;
   }
-  /* Položky nabídky jsou obdélníky, ne kolečka jako zbytek sloupce - proto se
-     pravidlům pro .mode-buttons button musí přebít tvar i velikost. */
-  .mode-buttons .download-menu button {
+  /* Položky nabídky jsou obdélníky, ne kolečka jako zbytek sloupce. Od zúžení
+     pravidel na `.mode-buttons > .button-container > button` to není přebíjení, ale
+     prostý popis - proto tu není height, box-shadow ani transform. */
+  .download-menu button {
     width: 100%;
-    height: auto;
+    border: none;
     border-radius: 10px;
     background: transparent;
-    box-shadow: none;
     text-align: left;
     padding: 8px 12px;
     display: block;
     cursor: pointer;
+    font-family: inherit;
   }
-  .mode-buttons .download-menu button:hover {
+  .download-menu button:hover {
     background: var(--muted-bg, #e8f5e9);
-    transform: none;
   }
   .download-menu strong {
     display: block;
@@ -675,7 +678,7 @@
       .zoom-buttons { top: calc(var(--navbar-h, 56px) + 18px); left: 4px; gap: 8px; }
       .mode-buttons { top: calc(var(--navbar-h, 56px) + 18px); right: 4px; gap: 8px; }
       .zoom-buttons button,
-      .mode-buttons button {
+      .mode-buttons > .button-container > button {
         width: 40px;
         height: 40px;
         opacity: 0.82;
