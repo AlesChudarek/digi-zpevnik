@@ -195,8 +195,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       ty soubory jsou z 25. 8. 2026, tedy z doby **před migrací úložiště**, a ta změnila
       cesty k obrázkům, ze kterých se klíč počítá. `_drop_stale_exports` je neuklidil,
       protože běží až při uložení zpěvníku a veřejné se od té doby needitovaly.
-      Zkontroluje se to skriptem, který spočítá klíč a porovná ho s diskem; po nasazení
-      to srovná `flask export-warm --public-only`.
+      Zkontroluje to `backend/scripts/kontrola_exportu.py` (spočítá klíč stejně jako
+      aplikace a porovná ho s diskem); doplní `flask export-warm --public-only`.
 - [X] **klíč exportu z celých sekund, ne z nanosekund** — tatáž lekce jako u náhledů.
       Nanosekundy nepřežijí rsync ani obnovu ze zálohy, takže by tentýž obrázek dal na
       Macu a na serveru jiný klíč a předpřipravené PDF by se nedalo nahrát. Zatím to
