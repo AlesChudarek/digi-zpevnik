@@ -64,18 +64,13 @@
 .stahovani-rada[hidden] { display: none; }
 
 .stahovani-tlacitka { margin-top: 16px; display: flex; justify-content: flex-end; }
-/* Rozměry natvrdo, ne z okolí: okno se otevírá i nad sloupcem kulatých 60px tlačítek
-   čtečky a nad dlaždicemi zpěvníků, a z obojího by si jinak něco přitáhlo. */
 .stahovani-tlacitka button {
-  width: auto; height: auto; min-width: 0;
   background: var(--panel-btn-bg, #f0f0f0); border: 0; border-radius: 8px;
   padding: 8px 18px;
   font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
-  color: var(--panel-btn-text, #333); box-shadow: none; transform: none;
+  color: var(--panel-btn-text, #333);
 }
-.stahovani-tlacitka button:hover {
-  background: var(--panel-btn-hover, #e2e2e2); transform: none;
-}
+.stahovani-tlacitka button:hover { background: var(--panel-btn-hover, #e2e2e2); }
 /* Když je soubor hotový, je Zavřít jediná věc, kterou má smysl udělat.
    Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
    motivech, takže na něm bílý text drží čitelnost všude. U --brand-contrast to
