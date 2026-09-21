@@ -223,10 +223,21 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       30 veřejných zpěvníků zabírá 201 MB, takže na všechna soukromá stažení zbývalo
       z pětistovky 299 MB, a ten zbytek by se dál zmenšoval s každým veřejným zpěvníkem,
       který přibude. Do stropu se teď počítají jen soukromé exporty a je zvednutý na
-      2 GB (`EXPORTS_PRIVATE_LIMIT_MB`, přepsatelné z prostředí). Disk má 45 GB, z toho
-      38 volných, takže 2 GB je 5 %. Stav při opravě: 201 MB veřejných, 174 MB
-      soukromých, 375 MB celkem — tedy pod starým stropem, nic se zrovna nemazalo.
+      1 GB (`EXPORTS_CACHE_LIMIT_MB`, přepsatelné z prostředí). Stav při opravě: 201 MB
+      veřejných, 174 MB soukromých, 375 MB celkem — tedy pod starým stropem, nic se
+      zrovna nemazalo.
       Hlídá `test_export.py`, sekce „strop cache počítá jen soukromé exporty".
+- [X] **chráněná je jen předgenerovaná varianta, ne všechno veřejné.** Úklid poznával
+      chráněný soubor podle prefixu s id zpěvníku, takže veřejnému zpěvníku byly vyňaté
+      i `high` a ZIP — a ty se nepředgenerovávají, takže se do cache dostanou až něčím
+      stažením a pak už tam zůstaly navždycky. Změřený strop toho hromadění: kdyby si
+      někdo postupně stáhl všechny tři varianty u všech 30 veřejných zpěvníků, leželo by
+      v cache **977 MB**, které by nikdy nic neuvolnilo (175 MB small + 332 MB high
+      + 470 MB ZIP). Chráněný je teď jen `PREDGENEROVANA_VARIANTA` veřejného zpěvníku,
+      tedy `small` — jediná, u které platí slib „stažení veřejného zpěvníku je hned".
+      U ZIPu to bylo nejabsurdnější: skládá se pod sekundu, ale zabral by nejvíc.
+      Nevyhoditelná část je tím omezená na ~175 MB a roste jen s počtem veřejných
+      zpěvníků, zhruba o 6 MB na zpěvník.
 - [ ] **paralelizace uvnitř jednoho skládání** — zatím ne, ale je změřeno, kdyby se to
       hodilo po upgradu serveru. Na zpěvníku 00006: u varianty `small` je 89 % času
       načtení a zmenšení stran, což jsou na sobě nezávislé kusy práce, a jen 11 % je

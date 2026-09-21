@@ -82,15 +82,14 @@ EXPORT_MAX_PAGES = 400
 # dvě, takže po upgradu paměti dává souběh smysl; proto se to dá zvednout z prostředí
 # a ne přepsáním kódu.
 MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
-# Kolik místa smí zabrat cache soukromých stažení, než se začne uklízet od nejstaršího.
-# Počítají se jen soukromé exporty, protože jen ty úklid umí vyhodit - veřejné jsou
-# z vyhazování vyňaté schválně, aby stažení veřejného zpěvníku bylo vždycky hned.
-# Kdyby se do stropu počítaly i ty, ujídaly by rozpočet, na který úklid nesmí sáhnout:
-# po předgenerování 30 veřejných zpěvníků jich na serveru leží 201 MB, takže ze staré
-# pětistovky zbývalo na všechna soukromá stažení jen 299 MB - a ten zbytek by se dál
-# zmenšoval s každým veřejným zpěvníkem, který přibude.
-EXPORTS_PRIVATE_LIMIT_MB = max(50, int(os.getenv("EXPORTS_PRIVATE_LIMIT_MB", "2048")))
-EXPORTS_PRIVATE_LIMIT_BYTES = EXPORTS_PRIVATE_LIMIT_MB * 1024 * 1024
+# Varianta, která se po každé úpravě předgeneruje. Jediná, u které platí slib, že
+# stažení veřejného zpěvníku je hned - a proto taky jediná, která se z cache nevyhazuje.
+PREDGENEROVANA_VARIANTA = 'small'
+# Kolik místa smí zabrat vyhoditelná část cache, než se začne uklízet od nejstaršího.
+# Počítá se jen to, co úklid opravdu umí vyhodit; sčítat do stropu i chráněné soubory by
+# znamenalo měřit rozpočet věcmi, které z něj nejde ubrat.
+EXPORTS_CACHE_LIMIT_MB = max(50, int(os.getenv("EXPORTS_CACHE_LIMIT_MB", "1024")))
+EXPORTS_CACHE_LIMIT_BYTES = EXPORTS_CACHE_LIMIT_MB * 1024 * 1024
 EXPORT_LOCK_STALE_SECONDS = 600
 # v2: strany se na A4 doplňují, místo aby se na ni roztahovaly, a klíč cache se počítá
 # z celých sekund. Obojí mění výsledek, takže starší buildy musí přestat platit.
@@ -2557,7 +2556,7 @@ def schedule_export_warm(book_id):
                 sequence = build_songbook_export_sequence(songbook)
                 if not sequence or len(sequence) > EXPORT_MAX_PAGES:
                     return
-                variant = 'small'
+                variant = PREDGENEROVANA_VARIANTA
                 key = songbook_export_key(sequence, variant)
                 paths = _export_paths(book_id, variant, 'pdf', key)
                 if paths['final'].exists() or paths['lock'].exists():
@@ -2877,17 +2876,27 @@ def _prune_exports(keep_path, sibling_glob):
     except Exception:  # noqa: BLE001 - úklid nesmí shodit export
         verejne = set()
 
-    def je_verejny(path: Path) -> bool:
-        # Jméno je "<id>-<varianta>-<klíč>", a id samo může obsahovat pomlčky, takže se
-        # porovnává prefix, ne první díl.
-        return any(path.name.startswith(v + '-') for v in verejne)
+    def je_chraneny(path: Path) -> bool:
+        """Předgenerovaný export veřejného zpěvníku - jediné, co se z cache nevyhazuje.
 
-    # Do stropu se počítá jen to, co úklid umí vyhodit. Sčítat i veřejné by znamenalo
-    # měřit rozpočet věcmi, které z něj nejde ubrat.
-    vyhoditelne = [p for p in files if not je_verejny(p)]
+        Ne všechno veřejné. Slib zní, že stažení veřejného zpěvníku je hned, a ten drží
+        jen ta varianta, která se po každé úpravě předgeneruje. Plné rozlišení ani ZIP
+        se nepředgenerovávají, takže první stažení na ně čeká tak jako tak - držet je
+        pak navždycky nic nešetří, jen hromadí. U ZIPu nejvíc: skládá se pod sekundu,
+        ale u třiceti veřejných zpěvníků by zabral 470 MB, které by už nikdy nic
+        neuvolnilo. Naměřený strop toho hromadění byl 977 MB.
+
+        Jméno je "<id>-<varianta>-<klíč>", a id samo může obsahovat pomlčky, takže se
+        porovnává prefix i s variantou, ne první díl.
+        """
+        if path.suffix != '.pdf':
+            return False
+        return any(path.name.startswith(f"{v}-{PREDGENEROVANA_VARIANTA}-") for v in verejne)
+
+    vyhoditelne = [p for p in files if not je_chraneny(p)]
     total = sum(p.stat().st_size for p in vyhoditelne if p.exists())
     for path in sorted(vyhoditelne, key=lambda p: p.stat().st_mtime if p.exists() else 0):
-        if total <= EXPORTS_PRIVATE_LIMIT_BYTES:
+        if total <= EXPORTS_CACHE_LIMIT_BYTES:
             break
         if path == keep_path:
             continue
