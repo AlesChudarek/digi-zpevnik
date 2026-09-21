@@ -59,6 +59,11 @@ window.Stahovani = (function () {
       zavrit: zaclona.querySelector('#stahovani-zavrit'),
     };
     okno.zavrit.addEventListener('click', zavri);
+    // Klik na záclonu vedle panelu zavírá taky. Modální okno, které jde zavřít jedině
+    // tlačítkem, je past na dotykové obrazovce, kde se Escape nemačká.
+    zaclona.addEventListener('click', (e) => {
+      if (e.target === zaclona) zavri();
+    });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !zaclona.hidden) zavri();
     });

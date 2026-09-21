@@ -29,17 +29,22 @@
 .stahovani-zaclona[hidden] { display: none; }
 
 .stahovani-panel {
-  background: #fff; color: #222; border-radius: 14px; padding: 22px 24px;
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+  border-radius: 14px; padding: 22px 24px;
   width: min(420px, 100%); box-shadow: 0 10px 40px rgba(0,0,0,0.35);
   text-align: left; box-sizing: border-box;
 }
-.stahovani-panel h2 { margin: 0 0 4px; font-size: 18px; color: #222; font-weight: 700; }
-.stahovani-co { margin: 0 0 16px; font-size: 13px; color: #666; }
+.stahovani-panel h2 {
+  margin: 0 0 4px; font-size: 18px; color: var(--panel-text, #222); font-weight: 700;
+}
+.stahovani-co { margin: 0 0 16px; font-size: 13px; color: var(--panel-muted, #666); }
 .stahovani-pruh {
-  height: 8px; border-radius: 999px; background: #ececec; overflow: hidden;
+  height: 8px; border-radius: 999px; background: var(--panel-track, #ececec);
+  overflow: hidden;
 }
 .stahovani-pruh > span {
-  display: block; height: 100%; width: 0; background: #2f7d4f;
+  display: block; height: 100%; width: 0;
+  background: var(--brand-strong, #2f7d4f);
   transition: width 0.4s ease;
 }
 /* Než přijde první strana, není co ukazovat - pruh se místo toho pohybuje, ať je
@@ -50,11 +55,11 @@
 @keyframes stahovani-posun {
   0% { margin-left: -30%; } 100% { margin-left: 100%; }
 }
-.stahovani-cislo { margin: 8px 0 0; font-size: 13px; color: #333; }
-.stahovani-chyba { color: #b3261e; }
+.stahovani-cislo { margin: 8px 0 0; font-size: 13px; color: var(--panel-text, #333); }
+.stahovani-chyba { color: var(--panel-error, #b3261e); }
 .stahovani-rada {
-  margin: 14px 0 0; font-size: 12px; color: #666; line-height: 1.5;
-  border-top: 1px solid #eee; padding-top: 12px;
+  margin: 14px 0 0; font-size: 12px; color: var(--panel-muted, #666); line-height: 1.5;
+  border-top: 1px solid var(--panel-border, #eee); padding-top: 12px;
 }
 .stahovani-rada[hidden] { display: none; }
 
@@ -63,11 +68,19 @@
    čtečky a nad dlaždicemi zpěvníků, a z obojího by si jinak něco přitáhlo. */
 .stahovani-tlacitka button {
   width: auto; height: auto; min-width: 0;
-  background: #f0f0f0; border: 0; border-radius: 8px; padding: 8px 18px;
+  background: var(--panel-btn-bg, #f0f0f0); border: 0; border-radius: 8px;
+  padding: 8px 18px;
   font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
-  color: #333; box-shadow: none; transform: none;
+  color: var(--panel-btn-text, #333); box-shadow: none; transform: none;
 }
-.stahovani-tlacitka button:hover { background: #e2e2e2; transform: none; }
-/* Když je soubor hotový, je Zavřít jediná věc, kterou má smysl udělat. */
-.stahovani-tlacitka button.hlavni { background: #2f7d4f; color: #fff; }
-.stahovani-tlacitka button.hlavni:hover { background: #276741; }
+.stahovani-tlacitka button:hover {
+  background: var(--panel-btn-hover, #e2e2e2); transform: none;
+}
+/* Když je soubor hotový, je Zavřít jediná věc, kterou má smysl udělat.
+   Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
+   motivech, takže na něm bílý text drží čitelnost všude. U --brand-contrast to
+   neplatí - v motivu amber je stejný jako brand-strong a text by zmizel. */
+.stahovani-tlacitka button.hlavni {
+  background: var(--brand-dark, #2f7d4f); color: #fff;
+}
+.stahovani-tlacitka button.hlavni:hover { filter: brightness(1.25); }

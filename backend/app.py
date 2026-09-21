@@ -79,7 +79,9 @@ EXPORT_MAX_PAGES = 400
 MAX_CONCURRENT_EXPORTS = 2
 EXPORTS_TOTAL_LIMIT_BYTES = 500 * 1024 * 1024
 EXPORT_LOCK_STALE_SECONDS = 600
-EXPORT_GENERATOR_VERSION = b'v1'
+# v2: strany se na A4 doplňují, místo aby se na ni roztahovaly, a klíč cache se počítá
+# z celých sekund. Obojí mění výsledek, takže starší buildy musí přestat platit.
+EXPORT_GENERATOR_VERSION = b'v2'
 
 
 def _ext_to_format(ext_hint, detected):
@@ -2703,7 +2705,11 @@ def songbook_export_key(sequence, variant):
             stat = abs_path.stat() if abs_path else None
         except OSError:
             stat = None
-        digest.update(f"|{stat.st_mtime_ns if stat else 0}|{stat.st_size if stat else 0}\n".encode())
+        # Celé sekundy, ne nanosekundy - tatáž lekce jako u náhledů (nahledy.klic).
+        # Nanosekundy nepřežijí rsync ani obnovu ze zálohy, takže by tentýž obrázek dal
+        # na Macu a na serveru jiný klíč a předpřipravené PDF by se nedalo nahrát.
+        # Na rozlišení verzí souboru sekundy stačí, zvlášť když je v podpisu i velikost.
+        digest.update(f"|{int(stat.st_mtime) if stat else 0}|{stat.st_size if stat else 0}\n".encode())
         # Barva se propisuje do pixelů průhledné obálky, takže její změna musí dát jiný
         # klíč. Bez tohohle by po přebarvení zpěvníku zůstalo viset staré PDF.
         digest.update(f"|{item.get('bg') or ''}\n".encode())
@@ -2725,6 +2731,38 @@ def _open_export_page(item):
         return _flatten_to_rgb(raw, pozadi)
 
 
+# Pod tolik pixelů se strana nedoplňuje. Skeny jsou 1748x2480, což je proti A4 o 0,3 %
+# vedle, tedy tři pixely na stranu - nepoznatelné v tisku a nestojí za to sahat na
+# jedenáct set stran. Čtvercová obálka, která se roztahovala o 41 %, je nad tím řádově.
+A4_PADDING_TOLERANCE_PX = 8
+
+
+def _fit_to_a4(page, pozadi):
+    """Doplnit stranu na poměr A4 beze změny poměru jejích vlastních pixelů.
+
+    PDF se ukládá tak, že se DPI odvodí zvlášť pro šířku a zvlášť pro výšku, takže
+    strana vyjde přesně na A4 - ale co nemělo poměr A4, se na ni natáhlo. Čtvercová
+    obálka 1536x1536 se tím roztáhla o 41 % do výšky. Doplněním okrajů vyjde strana na
+    A4 taky, jen bez deformace.
+
+    Doplňuje se barvou strany: u obálky barvou zpěvníku, u vnitřní strany bílou. Pruh
+    tak splyne s tím, co kolem něj je, místo aby vypadal jako chyba.
+    """
+    sirka, vyska = page.size
+    cil = A4_INCHES[0] / A4_INCHES[1]
+    if sirka / vyska > cil:
+        nova = (sirka, round(sirka / cil))     # širší než A4, přidat nahoru a dolů
+    else:
+        nova = (round(vyska * cil), vyska)     # užší, přidat po stranách
+    if (nova[0] - sirka <= A4_PADDING_TOLERANCE_PX
+            and nova[1] - vyska <= A4_PADDING_TOLERANCE_PX):
+        return page
+    platno = Image.new('RGB', nova, pozadi)
+    platno.paste(page, ((nova[0] - sirka) // 2, (nova[1] - vyska) // 2))
+    page.close()
+    return platno
+
+
 def render_songbook_pdf(sequence, out_path, variant, on_page=None):
     """Write the songbook to a PDF, one page at a time.
 
@@ -2735,7 +2773,8 @@ def render_songbook_pdf(sequence, out_path, variant, on_page=None):
 
     The physical size is pinned to A4 by deriving DPI from each page's own pixel size,
     so scans at other resolutions still come out A4 and no bitmap is rescaled unless the
-    variant asks for it.
+    variant asks for it. Strana, která poměr A4 nemá, se předtím doplní okraji - jinak
+    by ji to odvození DPI na A4 natáhlo.
     """
     settings = EXPORT_VARIANTS[variant]
     quality, max_edge = settings['quality'], settings['max_edge']
@@ -2744,6 +2783,9 @@ def render_songbook_pdf(sequence, out_path, variant, on_page=None):
     for item in sequence:
         started = time.time()
         page = _open_export_page(item)
+        # Doplnit dřív než zmenšit, ať doplněná strana skončí na téže výšce jako
+        # ostatní. Obráceně by se přes max_edge přetáhla o výšku doplněných okrajů.
+        page = _fit_to_a4(page, _hex_to_rgb(item.get('bg')))
         if max_edge and max(page.size) > max_edge:
             page.thumbnail((max_edge, max_edge), Image.LANCZOS)
         width, height = page.size

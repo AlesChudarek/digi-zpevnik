@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hodinky pro automaticke sjizdeni. Kresleno ve stejnem duchu jako ostatni ikony:
+     jednobarevne cerne, viewBox 0 0 20 20, bez obrysu a stinu. -->
+<svg width="800px" height="800px" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none">
+  <path fill="#000000" fill-rule="evenodd" d="M10 2a8 8 0 100 16 8 8 0 000-16zM4 10a6 6 0 1112 0 6 6 0 01-12 0z"/>
+  <path fill="#000000" d="M10.75 5.75a.75.75 0 00-1.5 0v4.5c0 .284.16.544.415.67l3 1.5a.75.75 0 10.67-1.34l-2.585-1.293V5.75z"/>
+</svg>

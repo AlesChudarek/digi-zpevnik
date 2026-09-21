@@ -11,6 +11,7 @@ tlačítko a `pointer-events: none`; z kódu to vidět nebylo, z naměřeného r
 Vyžaduje playwright (viz measure_reader.py). Běží proti KOPII databáze.
 """
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -27,6 +28,15 @@ PASSWORD = "export-ui"
 BOOK = "00006"
 
 selhani = []
+
+
+def jas(css_barva):
+    """Světlost barvy z computed style, 0 (černá) az 1 (bílá)."""
+    cisla = [float(c) for c in re.findall(r"[\d.]+", css_barva)[:3]]
+    if len(cisla) < 3:
+        return None
+    r, g, b = [c / 255 for c in cisla]
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
 
 
 def zkontroluj(podminka, popis, detail=""):
@@ -194,10 +204,45 @@ def main():
                 "() => document.getElementById('stahovani-nadpis').textContent") == "Dokončeno",
                 "a ukáže stav Dokončeno",
                 page.evaluate("() => document.getElementById('stahovani-nadpis').textContent"))
-            page.evaluate("() => document.getElementById('stahovani-zavrit').click()")
+
+            print("\n── motiv a zavírání ──")
+            # Panel byl natvrdo bílý s tmavým textem, takže v tmavém motivu svítil.
+            # Barvy teď stojí na --panel-* z _theme.html; měří se, ne čte.
+            def barvy_panelu():
+                return page.evaluate("""() => {
+                  const p = document.querySelector('.stahovani-panel');
+                  const cs = getComputedStyle(p);
+                  return {panel: cs.backgroundColor, text: cs.color,
+                          rada: getComputedStyle(document.getElementById('stahovani-rada')).color,
+                          pruh: getComputedStyle(document.querySelector('.stahovani-pruh')).backgroundColor,
+                          tlacitko: getComputedStyle(document.getElementById('stahovani-zavrit')).backgroundColor};
+                }""")
+
+            svetly = barvy_panelu()
+            page.evaluate("() => setDzTheme('dark')")
             page.wait_for_timeout(200)
+            tmavy = barvy_panelu()
+            zkontroluj(jas(svetly["panel"]) > 0.8,
+                       "ve světlém motivu je panel světlý", svetly["panel"])
+            zkontroluj(jas(tmavy["panel"]) < 0.25,
+                       "v tmavém motivu je panel tmavý", tmavy["panel"])
+            zkontroluj(jas(tmavy["text"]) > 0.6,
+                       "a text na něm světlý", tmavy["text"])
+            zkontroluj(jas(tmavy["text"]) - jas(tmavy["panel"]) > 0.5,
+                       "s dostatečným kontrastem",
+                       f"text {jas(tmavy['text']):.2f} vs panel {jas(tmavy['panel']):.2f}")
+            zkontroluj(tmavy["tlacitko"] != svetly["tlacitko"],
+                       "a tlačítko se převléklo taky",
+                       f"{svetly['tlacitko']} -> {tmavy['tlacitko']}")
+            page.evaluate("() => setDzTheme('blue')")
+            page.wait_for_timeout(200)
+
+            # Zavřít klikem mimo panel. Na dotykové obrazovce se Escape nemačká, takže
+            # okno, které jde zavřít jedině tlačítkem, je past.
+            page.mouse.click(20, 20)
+            page.wait_for_timeout(250)
             zkontroluj(page.evaluate("() => document.getElementById('stahovani-okno').hidden"),
-                       "a Zavřít ho zavře")
+                       "klik na záclonu vedle panelu okno zavře")
 
             print("\n── značky ✓ hned ──")
             # Past, na kterou tenhle projekt naráží popáté: vlastní `display` přebíjí
@@ -264,6 +309,11 @@ def main():
             zkontroluj(Path(plne.path()).read_bytes()[:5] == b"%PDF-",
                        "plná varianta se nakonec stáhne",
                        f"{Path(plne.path()).stat().st_size // 1024} kB")
+            page.wait_for_timeout(2000)
+            page.evaluate("() => document.getElementById('stahovani-zavrit').click()")
+            page.wait_for_timeout(250)
+            zkontroluj(page.evaluate("() => document.getElementById('stahovani-okno').hidden"),
+                       "a tlačítko Zavřít okno zavře")
 
             print("\n── stažení ze seznamu Moje zpěvníky ──")
             page.goto(base + "/my-songbooks")

@@ -189,6 +189,29 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
+- [X] **předgenerovaná PDF byla na serveru nedosažitelná.** 29 z 31 veřejných zpěvníků
+      mělo v `data/exports` hotové `small` PDF, na které se klíč netrefil, takže nabídka
+      správně hlásila „není hned" a stahování je skládalo znovu. Nešlo o chybu v klíči:
+      ty soubory jsou z 25. 8. 2026, tedy z doby **před migrací úložiště**, a ta změnila
+      cesty k obrázkům, ze kterých se klíč počítá. `_drop_stale_exports` je neuklidil,
+      protože běží až při uložení zpěvníku a veřejné se od té doby needitovaly.
+      Zkontroluje se to skriptem, který spočítá klíč a porovná ho s diskem; po nasazení
+      to srovná `flask export-warm --public-only`.
+- [X] **klíč exportu z celých sekund, ne z nanosekund** — tatáž lekce jako u náhledů.
+      Nanosekundy nepřežijí rsync ani obnovu ze zálohy, takže by tentýž obrázek dal na
+      Macu a na serveru jiný klíč a předpřipravené PDF by se nedalo nahrát. Zatím to
+      neuhodilo jen proto, že se exporty na Mac nekopírují.
+- [X] **strany se na A4 doplňují, ne roztahují.** Export odvozoval DPI zvlášť pro šířku
+      a zvlášť pro výšku, takže každá strana vyšla přesně na A4 — a co nemělo poměr A4,
+      se na ni natáhlo. Změřeno na všech 1164 stranách: 1163 je do 0,3 % (skeny
+      1748×2480), ale obálka „Fildova a Aldova zpěvníku" je čtverec 1536×1536 a
+      roztahovala se o **41,4 %**. Doplňuje se teď okraji v barvě strany — u obálky
+      barvou zpěvníku, u vnitřní strany bílou. Pod 8 px se nedoplňuje, ať se kvůli třem
+      pixelům nesahá na jedenáct set stran. Ověřeno: MediaBox 595,3×841,9 bodů
+      (210,0×297,0 mm) a obrázek uvnitř má týž poměr jako stránka, tedy nulové roztažení.
+- [X] **okno se skládáním respektuje motiv** a zavře se i klikem vedle panelu. Barvy
+      stojí na nových `--panel-*` v `_theme.html` (jednou pro světlé motivy, přebíjí je
+      jen `theme-dark`) — panel byl natvrdo bílý s tmavým textem.
 - [X] **okno se skládáním sjednocené do všech tří míst** (čtečka, Moje zpěvníky, správa
       veřejných zpěvníků). Logika i vzhled jsou v `frontend/static/js/stahovani.js`
       a `frontend/static/css/stahovani.css`, šablony jen volají `Stahovani.spust`
