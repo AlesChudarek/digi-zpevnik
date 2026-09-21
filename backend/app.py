@@ -3586,8 +3586,10 @@ def export_bench(book_id, variant, keep):
 @click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
 @click.option("--public-only/--all", default=True,
               help="jen naše veřejné zpěvníky, nebo i uživatelské")
+@click.option("--songbook", "songbook_ids", multiple=True,
+              help="jen tyhle zpěvníky podle id, dá se opakovat")
 @with_appcontext
-def export_warm(variant, public_only):
+def export_warm(variant, public_only, songbook_ids):
     """Předpřipraví PDF, aby první stažení nečekalo na skládání.
 
     Cache je klíčovaná obsahem, takže tenhle příkaz nedělá nic zvláštního - postaví
@@ -3599,9 +3601,17 @@ def export_warm(variant, public_only):
     sekundu), zatímco uložený by zabral tolik místa jako všechny obrázky dohromady.
     """
     query = Songbook.query
-    if public_only:
+    if songbook_ids:
+        # Vyjmenované zpěvníky se berou tak, jak jsou: kdo si řekne o konkrétní id,
+        # nechce ho ztratit na tom, že není veřejné.
+        query = query.filter(Songbook.id.in_(songbook_ids))
+    elif public_only:
         query = query.filter(Songbook.is_public == 1)
     songbooks = query.order_by(Songbook.id.asc()).all()
+    if songbook_ids:
+        chybi = set(songbook_ids) - {s.id for s in songbooks}
+        if chybi:
+            print(f"  ⚠️  neznámé zpěvníky: {sorted(chybi)}")
 
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     zacatek = time.time()
@@ -3621,9 +3631,40 @@ def export_warm(variant, public_only):
             print(f"  {songbook.id}  už hotové")
             continue
 
+        # Zámek, stejný jako u stažení z webu. Bez něj se dal tenhle příkaz potkat
+        # s návštěvníkem, který si o týž zpěvník řekl přes web: webová cesta nenašla
+        # hotový soubor ani zámek, spustila druhé skládání, a obě se pak prokládala
+        # ve stejném `.part` souboru. Výsledkem bylo rozbité PDF, které se přejmenovalo
+        # na hotové - a u veřejného zpěvníku by tam zůstalo, protože ty se z cache
+        # nevyhazují.
+        try:
+            fd = os.open(str(paths['lock']), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            preskoceno += 1
+            print(f"  {songbook.id}  staví ho zrovna někdo jiný, přeskočeno")
+            continue
+        os.close(fd)
+
         t0 = time.time()
-        render_songbook_pdf(sequence, paths['part'], variant)
-        os.replace(paths['part'], paths['final'])
+        try:
+            # Postup do zámku, aby ho viděl i ten, kdo na týž soubor čeká v prohlížeči.
+            # Jinak by u zpěvníku, který zrovna staví tenhle příkaz, koukal na okno bez
+            # jediného čísla.
+            hotovo = [0]
+            _zapis_postup(paths['lock'], 0, len(sequence), t0)
+
+            def krok(*_, _paths=paths, _celkem=len(sequence), _t0=t0, _hotovo=hotovo):
+                _hotovo[0] += 1
+                _zapis_postup(_paths['lock'], _hotovo[0], _celkem, _t0)
+
+            render_songbook_pdf(sequence, paths['part'], variant, on_page=krok)
+            os.replace(paths['part'], paths['final'])
+        except BaseException:
+            paths['part'].unlink(missing_ok=True)
+            raise
+        finally:
+            paths['lock'].unlink(missing_ok=True)
+
         _prune_exports(paths['final'], paths['siblings'])
         velikost = paths['final'].stat().st_size
         celkem_bytu += velikost

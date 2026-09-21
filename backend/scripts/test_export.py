@@ -278,6 +278,70 @@ def main():
         zkontroluj(not casti, "po dokončení nezůstal žádný rozepsaný soubor")
         zkontroluj(not list(EXPORTS_DIR.glob("*.lock")), "ani žádný zámek")
 
+        print("\n── export-warm se nepotká se stahováním z webu ──")
+        # Tohle se stalo naostro: příkaz export-warm si nebral zámek, takže webová cesta
+        # nenašla ani hotový soubor, ani zámek, a spustila druhé skládání téhož zpěvníku.
+        # Obě pak zapisovala do stejného `.part` souboru a výsledkem bylo rozbité PDF,
+        # které se přejmenovalo na hotové - a u veřejného zpěvníku by tam zůstalo ležet,
+        # protože ty se z cache nevyhazují.
+        pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf")
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+        for p in EXPORTS_DIR.glob("*"):
+            p.unlink(missing_ok=True)
+
+        warm = subprocess.Popen(
+            [str(VENV_PY), "-m", "flask", "--app", "backend.app", "export-warm",
+             "--songbook", BOOK, "--variant", "small"],
+            cwd=str(PROJECT_ROOT), env=env,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        zamek_nasel = False
+        for _ in range(200):
+            if list(EXPORTS_DIR.glob("*.lock")):
+                zamek_nasel = True
+                break
+            if warm.poll() is not None:
+                break
+            time.sleep(0.1)
+        zkontroluj(zamek_nasel, "export-warm si vezme zámek, než začne stavět")
+
+        if zamek_nasel:
+            stav_kod = admin.get(f"/songbook/{BOOK}/export.pdf?q=small")[0]
+            zkontroluj(stav_kod == 202,
+                       "stažení z webu mezitím nezačne stavět podruhé, jen se zařadí",
+                       f"status {stav_kod}")
+            stav = admin.get(f"/songbook/{BOOK}/export-status/pdf?q=small")[1]
+            zkontroluj(b'"building"' in stav,
+                       "a čekající prohlížeč vidí postup z toho běžícího skládání",
+                       stav.decode()[:90])
+
+        vystup = warm.communicate(timeout=300)[0]
+        zkontroluj("staví ho zrovna někdo jiný" not in vystup,
+                   "export-warm zpěvník opravdu postavil, nepřeskočil ho",
+                   vystup.strip().splitlines()[-1] if vystup.strip() else "")
+        # Po doběhnutí příkazu nesmí nic dalšího stavět. Kdyby se webová cesta pustila
+        # do druhého skládání, drží tu teď zámek a za chvíli přepíše hotový soubor.
+        for _ in range(30):
+            if not list(EXPORTS_DIR.glob("*.lock")):
+                break
+            time.sleep(0.1)
+        zkontroluj(not list(EXPORTS_DIR.glob("*.lock")),
+                   "po doběhnutí příkazu už nikdo nestaví")
+        zkontroluj(not list(EXPORTS_DIR.glob("*.part")),
+                   "a nezůstal rozepsaný soubor")
+
+        hotove = list(EXPORTS_DIR.glob(f"{BOOK}-small-*.pdf"))
+        zkontroluj(len(hotove) == 1, "vzniklo právě jedno hotové PDF",
+                   f"{[h.name for h in hotove]}")
+        if hotove:
+            data = hotove[0].read_bytes()
+            v_pdf = pocet_stran_pdf(data)
+            zkontroluj(data.startswith(b"%PDF-") and b"%%EOF" in data[-2048:],
+                       "a je celé, ne uříznuté")
+            zkontroluj(v_pdf == ocekavano_stran,
+                       "a má správný počet stran, ne dvojitě zapsaný obsah",
+                       f"čekáno {ocekavano_stran}, v PDF {v_pdf}")
+
         print("\n── autorizace ──")
         # Samotné 200 nic neříká: @login_required posílá 302 na přihlášení a urllib
         # přesměrování následuje, takže se musí koukat, kde se to zastavilo a co přišlo.

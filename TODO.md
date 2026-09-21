@@ -188,7 +188,22 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
       změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
-- [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
+- [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká.
+      Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
+      zpěvníků × ~8 MB je zhruba 260 MB, takže by se muselo zvednout `EXPORTS_TOTAL_LIMIT_BYTES`
+      z 500 MB (volného místa je 38 GB, takže to jde).
+- [X] **`export-warm` si nebral zámek.** Webová cesta pak u téhož zpěvníku nenašla ani
+      hotový soubor, ani zámek, a spustila druhé skládání — obě zapisovala do stejného
+      `.part` souboru. Výsledkem bylo rozbité PDF, které se přejmenovalo na hotové,
+      a u veřejného zpěvníku by tam zůstalo ležet, protože ty se z cache nevyhazují.
+      Vidět to bylo na serveru přímo: rozepsaný `.part` a k němu žádný `.lock`.
+      Příkaz teď bere týž `O_EXCL` zámek jako web, zapisuje do něj postup (takže čekající
+      prohlížeč vidí čísla stran i u zpěvníku, který staví příkaz) a při chybě po sobě
+      uklidí. Hlídá `test_export.py`, sekce „export-warm se nepotká se stahováním z webu".
+- [X] **`export-warm --songbook ID`** na přestavění jednoho zpěvníku.
+- [X] **`kontrola_exportu.py --overit-obsah`** otevře hotové soubory a ověří je (hlavička,
+      `%%EOF`, počet stran z posledního `/Count`, u ZIPu `testzip`). Rozbitý export
+      veřejného zpěvníku se z cache sám nevyhodí, takže ho musí najít někdo jiný.
 - [X] **předgenerovaná PDF byla na serveru nedosažitelná.** 29 z 31 veřejných zpěvníků
       mělo v `data/exports` hotové `small` PDF, na které se klíč netrefil, takže nabídka
       správně hlásila „není hned" a stahování je skládalo znovu. Nešlo o chybu v klíči:
