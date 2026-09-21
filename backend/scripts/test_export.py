@@ -11,6 +11,7 @@ přímo v souboru.
 Použití:
     python backend/scripts/test_export.py
 """
+import json
 import os
 import re
 import shutil
@@ -89,6 +90,16 @@ class Klient:
     def prihlas(self, email, heslo):
         data = urllib.parse.urlencode({"email": email, "password": heslo}).encode()
         self.opener.open(self.base + "/login", data)
+
+    def post_json(self, cesta, data):
+        req = urllib.request.Request(
+            self.base + cesta, data=json.dumps(data).encode(),
+            headers={'Content-Type': 'application/json'}, method='POST')
+        try:
+            odpoved = self.opener.open(req)
+            return odpoved.status, odpoved.read()
+        except urllib.error.HTTPError as e:
+            return e.code, e.read()
 
     def get(self, cesta):
         try:
@@ -361,6 +372,42 @@ def main():
         status, telo, _, url = bezprav.get(f"/songbook/{BOOK}/export.pdf?q=small")
         zkontroluj(telo[:5] != b"%PDF-",
                    "kdo se nepřihlásí, nestáhne ani veřejný zpěvník")
+
+        print("\n── předgenerování po přidání písně ──")
+        # Editor volal předgenerování jen při uložení struktury a při smazání písně.
+        # Přidání písně ze seznamu přitom taky přidává strany, takže klíč se změnil
+        # a předpřipravené PDF přestalo platit - další stažení čekalo na skládání.
+        pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf")
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+        cizi = subprocess.run(
+            [str(VENV_PY), "-c",
+             'import os, sys\n'
+             'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
+             'from backend.app import app\n'
+             'from backend.models import Song, SongbookPage, db\n'
+             'with app.app_context():\n'
+             f'    v_knize = {{r.song_id for r in SongbookPage.query.filter_by(songbook_id="{BOOK}")}}\n'
+             '    volna = [s.id for s in Song.query.all() if s.id not in v_knize]\n'
+             '    print(volna[0] if volna else "")\n'],
+            env=env, capture_output=True, text=True).stdout.strip()
+
+        if not cizi:
+            zkontroluj(False, "je z čeho přidat píseň", "žádná píseň mimo zpěvník")
+        else:
+            pred = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-small-*.pdf")}
+            kod, telo = admin.post_json(
+                f"/api/songbooks/{BOOK}/add-song", {"song_id": cizi})
+            zkontroluj(kod == 200, "píseň se přidá", f"status {kod} {telo[:80]}")
+            nove = set()
+            for _ in range(600):
+                nove = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-small-*.pdf")} - pred
+                if nove and not list(EXPORTS_DIR.glob("*.lock")):
+                    break
+                time.sleep(0.1)
+            zkontroluj(bool(nove),
+                       "a rovnou se předgeneruje nová verze PDF, nečeká se na stažení",
+                       ", ".join(sorted(nove)) or "nic nevzniklo")
 
         print("\n── exporty leží mimo veřejně servírované adresáře ──")
         hotovy = next(EXPORTS_DIR.glob("*.pdf"), None)

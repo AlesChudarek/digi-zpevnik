@@ -76,7 +76,12 @@ EXPORT_VARIANTS = {
     'high': {'quality': 85, 'max_edge': 0},
 }
 EXPORT_MAX_PAGES = 400
-MAX_CONCURRENT_EXPORTS = 2
+# Kolik skládání smí běžet naráz. Omezuje to paměť, ne procesor: jedno skládání má
+# vrchol 170-250 MB a server má 979 MB bez swapu, takže když jedno běží, zbývá kolem
+# 310 MB - druhé by se dostalo pod strop a OOM killer by sebral gunicorn. Jader jsou
+# dvě, takže po upgradu paměti dává souběh smysl; proto se to dá zvednout z prostředí
+# a ne přepsáním kódu.
+MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
 EXPORTS_TOTAL_LIMIT_BYTES = 500 * 1024 * 1024
 EXPORT_LOCK_STALE_SECONDS = 600
 # v2: strany se na A4 doplňují, místo aby se na ni roztahovaly, a klíč cache se počítá
@@ -1611,6 +1616,9 @@ def add_song_to_songbook(songbook_id):
         added += 1
 
     db.session.commit()
+    # Přibyly strany, takže se změnila sekvence a s ní klíč exportu. Bez tohohle by
+    # předpřipravené PDF přestalo platit a další stažení by na skládání čekalo.
+    schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'added_pages': added})
 
 # API: Create a new custom song with uploaded page images and append to songbook
@@ -1689,6 +1697,7 @@ def create_custom_song(songbook_id):
         next_page += 1
 
     db.session.commit()
+    schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'song_id': new_song_id, 'added_pages': saved})
 
 # API: Delete song from songbook with origin/reference logic for private songs
