@@ -409,18 +409,19 @@ def main():
                        "a rovnou se předgeneruje nová verze PDF, nečeká se na stažení",
                        ", ".join(sorted(nove)) or "nic nevzniklo")
 
-        print("\n── strop cache počítá jen soukromé exporty ──")
-        # Strop umí vyhodit jen soukromé exporty, veřejné jsou z úklidu vyňaté. Dokud se
-        # do něj počítaly i ty, ujídaly rozpočet, na který úklid nesmí sáhnout: 201 MB
-        # předgenerovaných veřejných nechávalo z pětistovky na všechna soukromá stažení
-        # jen 299 MB, a ten zbytek se zmenšoval s každým přibylým veřejným zpěvníkem.
+        print("\n── z cache se nevyhazuje jen předgenerovaná varianta ──")
+        # Chráněný je jen předgenerovaný `small` veřejného zpěvníku, protože jen u něj
+        # platí slib "stažení veřejného zpěvníku je hned". Dřív byl chráněný prefix id,
+        # tedy i veřejné `high` a ZIP - ty se ale nepředgenerovávají, takže první
+        # stažení na ně čeká tak jako tak a držet je navždycky jen hromadilo. Naměřený
+        # strop toho hromadění byl 977 MB, které by už nikdy nic neuvolnilo.
         while list(EXPORTS_DIR.glob("*.lock")):
             time.sleep(0.3)
         for p in EXPORTS_DIR.glob("*"):
             p.unlink(missing_ok=True)
 
         env_strop = dict(env)
-        env_strop["EXPORTS_PRIVATE_LIMIT_MB"] = "50"
+        env_strop["EXPORTS_CACHE_LIMIT_MB"] = "50"
         uklid = subprocess.run(
             [str(VENV_PY), "-c",
              'import os, sys, time\n'
@@ -432,30 +433,34 @@ def main():
              '    os.utime(p, (time.time() - stari, time.time() - stari))\n'
              '    return p\n'
              'with app.app_context():\n'
-             # 70 MB veřejných je nad stropem 50 MB - samo o sobě nesmí nic spustit
-             f'    uloz("{BOOK}-small-verejny1.pdf", 40, 300)\n'
-             f'    uloz("{BOOK}-high-verejny2.pdf", 30, 200)\n'
-             '    stary = uloz("00101-small-soukromy-stary.pdf", 20, 100)\n'
-             '    novy = uloz("00102-small-soukromy-novy.pdf", 20, 10)\n'
+             # 60 MB chráněných je nad stropem 50 MB - samo o sobě nesmí nic spustit
+             f'    uloz("{BOOK}-small-chraneny1.pdf", 30, 400)\n'
+             '    uloz("00002-small-chraneny2.pdf", 30, 390)\n'
+             '    novy = uloz("00101-small-soukromy-novy.pdf", 50, 10)\n'
              '    _prune_exports(novy, "nic-se-netrefi-*")\n'
-             '    print("PO_PRVNIM", sorted(p.name for p in EXPORTS_DIR.glob("*.pdf")))\n'
-             # teď soukromých 60 MB, tedy nad stropem: musí odejít ten nejstarší
-             '    uloz("00101-high-soukromy-tretie.pdf", 20, 50)\n'
+             '    print("PO_PRVNIM", sorted(p.name for p in EXPORTS_DIR.glob("*")))\n'
+             # Vyhoditelných je teď 130 MB (50 soukromý + 40 veřejný high + 40 veřejný
+             # zip) proti stropu 50 MB, takže musí odejít oba veřejné. Kdyby jich bylo
+             # 90, stačilo by smazat jeden a o druhém by test nic neřekl.
+             f'    uloz("{BOOK}-high-verejny-high.pdf", 40, 300)\n'
+             f'    uloz("{BOOK}-orig-verejny-zip.zip", 40, 200)\n'
              '    _prune_exports(novy, "nic-se-netrefi-*")\n'
-             '    print("PO_DRUHEM", sorted(p.name for p in EXPORTS_DIR.glob("*.pdf")))\n'
-             '    print("STARY_ZBYL", stary.exists())\n'],
+             '    print("PO_DRUHEM", sorted(p.name for p in EXPORTS_DIR.glob("*")))\n'],
             env=env_strop, capture_output=True, text=True)
         vystup = uklid.stdout
         prvni = next((r for r in vystup.splitlines() if r.startswith("PO_PRVNIM")), "")
         druhy = next((r for r in vystup.splitlines() if r.startswith("PO_DRUHEM")), "")
-        zkontroluj("verejny1" in prvni and "verejny2" in prvni and "soukromy-stary" in prvni,
-                   "70 MB veřejných nad stropem 50 MB samo o sobě nic nevyhodí",
-                   prvni or uklid.stderr[-200:])
-        zkontroluj("verejny1" in druhy and "verejny2" in druhy,
-                   "veřejné přežijí i překročení stropu soukromými", druhy)
-        zkontroluj("soukromy-stary" not in druhy,
-                   "a přes strop odejde nejstarší soukromý", druhy)
-        zkontroluj("soukromy-novy" in druhy, "ten nejnovější zůstane", druhy)
+        zkontroluj("chraneny1" in prvni and "chraneny2" in prvni and "soukromy-novy" in prvni,
+                   "60 MB chráněných nad stropem 50 MB samo o sobě nic nevyhodí",
+                   prvni or uklid.stderr[-300:])
+        zkontroluj("chraneny1" in druhy and "chraneny2" in druhy,
+                   "předgenerované veřejné PDF přežije i překročení stropu", druhy)
+        zkontroluj("verejny-zip" not in druhy,
+                   "ale veřejný ZIP je vyhoditelný jako každý jiný", druhy)
+        zkontroluj("verejny-high" not in druhy,
+                   "a veřejné plné rozlišení taky", druhy)
+        zkontroluj("soukromy-novy" in druhy,
+                   "nejnovější se nemaže, i když je soukromý", druhy)
         for p in EXPORTS_DIR.glob("*"):
             p.unlink(missing_ok=True)
 
