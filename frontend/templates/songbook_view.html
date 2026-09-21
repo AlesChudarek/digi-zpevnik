@@ -596,56 +596,6 @@
     width: 230px;
     z-index: 600;
   }
-  /* Značka u variant, které už leží v cache a stáhnou se bez čekání. */
-  .download-menu .hotovo-znak {
-    font-size: 10px; font-weight: 600; color: #1d6f42; background: #e4f3ea;
-    border-radius: 999px; padding: 1px 6px; margin-left: 4px; white-space: nowrap;
-  }
-
-  /* Okno se skládáním. Modální schválně: než se soubor složí, nemá uživatel v nabídce
-     co dělat, a bez záclony by se dalo spustit skládání podruhé. */
-  .stahovani-zaclona {
-    position: fixed; inset: 0; z-index: 3000;
-    background: rgba(0,0,0,0.45);
-    display: flex; align-items: center; justify-content: center; padding: 16px;
-  }
-  /* Bez tohohle přebije `display: flex` atribut `hidden` a zavřené okno dál leží přes
-     celou obrazovku - neviditelné, ale pohlcuje každé kliknutí ve čtečce. */
-  .stahovani-zaclona[hidden] { display: none; }
-  .stahovani-panel {
-    background: #fff; color: #222; border-radius: 14px; padding: 22px 24px;
-    width: min(420px, 100%); box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-    text-align: left;
-  }
-  .stahovani-panel h2 { margin: 0 0 4px; font-size: 18px; color: #222; }
-  .stahovani-co { margin: 0 0 16px; font-size: 13px; color: #666; }
-  .stahovani-pruh {
-    height: 8px; border-radius: 999px; background: #ececec; overflow: hidden;
-  }
-  .stahovani-pruh span {
-    display: block; height: 100%; width: 0; background: #2f7d4f;
-    transition: width 0.4s ease;
-  }
-  /* Než přijde první strana, není co ukazovat - pruh se místo toho pohybuje, ať je
-     vidět, že se něco děje. */
-  .stahovani-pruh span.ceka {
-    width: 30% !important; animation: stahovani-posun 1.2s ease-in-out infinite;
-  }
-  @keyframes stahovani-posun {
-    0% { margin-left: -30%; } 100% { margin-left: 100%; }
-  }
-  .stahovani-cislo { margin: 8px 0 0; font-size: 13px; color: #333; }
-  .stahovani-rada {
-    margin: 14px 0 0; font-size: 12px; color: #666; line-height: 1.5;
-    border-top: 1px solid #eee; padding-top: 12px;
-  }
-  .stahovani-tlacitka { margin-top: 16px; display: flex; justify-content: flex-end; }
-  .stahovani-tlacitka button {
-    background: #f0f0f0; border: 0; border-radius: 8px; padding: 8px 18px;
-    font-size: 14px; cursor: pointer; color: #333;
-  }
-  .stahovani-tlacitka button:hover { background: #e2e2e2; }
-  .stahovani-chyba { color: #b3261e; }
 
   .download-menu.open {
     transform: translateX(0);
@@ -674,11 +624,15 @@
     font-size: 14px;
     color: var(--brand-dark, #1b5e20);
   }
-  .download-menu span {
+  /* Jen popisek pod názvem varianty, tedy přímý potomek tlačítka. Dokud tu stálo
+     `.download-menu span`, přebíjelo to `display` i značce „✓ hned" uvnitř <strong>
+     a ta se ukazovala u všech variant bez ohledu na atribut `hidden`. */
+  .download-menu button > span {
     display: block;
     font-size: 12px;
     color: #666;
   }
+  .download-menu button > span[hidden] { display: none; }
 
   /* Shared fade behaviour for side UI groups */
   .zoom-buttons { opacity: 1; transition: opacity 0.25s ease; }
@@ -804,6 +758,10 @@
       top: 20px;
     }
 </style>
+
+{# Okno se skládáním souboru je sdílené se seznamem zpěvníků, viz static/js/stahovani.js. #}
+<link rel="stylesheet" href="{{ static_bust('css/stahovani.css') }}">
+<script src="{{ static_bust('js/stahovani.js') }}"></script>
 
 <div class="zoom-scroll-wrapper">
   {# Double is the starting mode, but the class that trims the bottom padding was only
@@ -972,25 +930,6 @@
         <strong>Obrázky v ZIP <span class="hotovo-znak" hidden>✓ hned</span></strong>
         <span>původní kvalita beze změny</span>
       </button>
-    </div>
-
-    {# Okno se skládáním. Leží mimo .download-menu schválně: nabídka se zavírá klikem
-       vedle, a okno se tím zavírat nesmí. #}
-    <div class="stahovani-zaclona" id="stahovani-okno" hidden>
-      <div class="stahovani-panel" role="dialog" aria-modal="true"
-           aria-labelledby="stahovani-nadpis">
-        <h2 id="stahovani-nadpis">Připravuji soubor</h2>
-        <p class="stahovani-co" id="stahovani-co"></p>
-        <div class="stahovani-pruh"><span id="stahovani-vypln"></span></div>
-        <p class="stahovani-cislo" id="stahovani-cislo">Začínám…</p>
-        <p class="stahovani-rada">
-          Můžeš počkat a soubor se stáhne sám. Nebo okno zavřít a vrátit se později —
-          skládání poběží dál a příště bude ke stažení hned.
-        </p>
-        <div class="stahovani-tlacitka">
-          <button type="button" id="stahovani-zavrit" onclick="zavriStahovani()">Zavřít</button>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -2155,137 +2094,20 @@ function toggleDownloadMenu(event) {
   if (open) oznacHotoveVarianty();
 }
 
-const POPIS_VARIANTY = {
-  'pdf-small': 'PDF, menší soubor',
-  'pdf-high': 'PDF, plné rozlišení',
-  'zip-orig': 'Obrázky v ZIP',
-};
-
-let stahovaniBezi = null;   // klíč varianty, která se zrovna staví
-
-function zobrazStahovani(klic) {
-  document.getElementById('stahovani-co').textContent =
-    POPIS_VARIANTY[klic] || '';
-  document.getElementById('stahovani-nadpis').textContent = 'Připravuji soubor';
-  document.getElementById('stahovani-cislo').textContent = 'Začínám…';
-  document.getElementById('stahovani-cislo').classList.remove('stahovani-chyba');
-  const vypln = document.getElementById('stahovani-vypln');
-  vypln.style.width = '0';
-  vypln.classList.add('ceka');
-  document.getElementById('stahovani-okno').hidden = false;
+/* Okno se skládáním, dotazování na průběh i značky „✓ hned" jsou ve sdíleném
+   static/js/stahovani.js - stejné okno používá i seznam v Mých zpěvnících. */
+function oznacHotoveVarianty() {
+  Stahovani.oznacHotove(DOWNLOAD_BOOK_ID, document.getElementById('download-menu'));
 }
 
-function zavriStahovani() {
-  document.getElementById('stahovani-okno').hidden = true;
-  // Skládání běží dál na serveru. Jen se na ně přestaneme ptát.
-  stahovaniBezi = null;
+function startDownload(kind, variant) {
+  // Nabídku zavřít: okno se skládáním ji stejně překryje a po zavření okna by pod ním
+  // jinak zůstala viset otevřená.
+  const menu = document.getElementById('download-menu');
+  if (menu.classList.contains('open')) toggleDownloadMenu();
+  Stahovani.spust(DOWNLOAD_BOOK_ID, kind, variant, menu);
 }
 
-function stahovaniChyba(text) {
-  document.getElementById('stahovani-nadpis').textContent = 'Nepovedlo se';
-  const cislo = document.getElementById('stahovani-cislo');
-  cislo.textContent = text;
-  cislo.classList.add('stahovani-chyba');
-  document.getElementById('stahovani-vypln').classList.remove('ceka');
-}
-
-function cas(sekundy) {
-  if (sekundy < 60) return `${sekundy} s`;
-  const m = Math.floor(sekundy / 60), s = sekundy % 60;
-  return s ? `${m} min ${s} s` : `${m} min`;
-}
-
-function vykresliPostup(j) {
-  const vypln = document.getElementById('stahovani-vypln');
-  const cislo = document.getElementById('stahovani-cislo');
-  if (!j.celkem) { cislo.textContent = 'Začínám…'; return; }
-  vypln.classList.remove('ceka');
-  const procent = Math.round(j.hotovo / j.celkem * 100);
-  vypln.style.width = `${procent}%`;
-  const zbyva = j.zbyva_s ? `, zbývá asi ${cas(j.zbyva_s)}` : '';
-  cislo.textContent = `Strana ${j.hotovo} z ${j.celkem}${zbyva}`;
-}
-
-async function oznacHotoveVarianty() {
-  try {
-    const r = await fetch(`/songbook/${encodeURIComponent(DOWNLOAD_BOOK_ID)}/export-hotove`);
-    const hotove = await r.json();
-    document.querySelectorAll('.download-menu [data-varianta]').forEach(b => {
-      const znak = b.querySelector('.hotovo-znak');
-      if (znak) znak.hidden = !hotove[b.dataset.varianta];
-    });
-  } catch (e) { /* nabídka funguje i bez značek */ }
-}
-
-async function startDownload(kind, variant) {
-  const query = kind === 'pdf' ? `?q=${variant}` : '';
-  const url = `/songbook/${encodeURIComponent(DOWNLOAD_BOOK_ID)}/export.${kind}${query}`;
-  const klic = `${kind}-${variant || 'orig'}`;
-
-  let response;
-  try {
-    response = await fetch(url, { headers: { 'Accept': 'application/pdf, application/zip' } });
-  } catch (e) {
-    zobrazStahovani(klic); stahovaniChyba('Nepodařilo se spojit se serverem.');
-    return;
-  }
-
-  // Výhradně 200, ne response.ok: to je pravdivé i pro 202, tedy "začal jsem to
-  // skládat" - a na tom se dá odnavigovat na JSON místo stažení souboru.
-  if (response.status === 200) {
-    window.location = url;   // hotové, server ho vydá ze své cache
-    return;
-  }
-  if (response.status !== 202) {
-    zobrazStahovani(klic);
-    stahovaniChyba({
-      429: 'Server teď skládá jiný zpěvník, zkus to za chvíli.',
-      413: 'Zpěvník je na stažení příliš velký.',
-    }[response.status] || 'Stažení se nepovedlo.');
-    return;
-  }
-
-  zobrazStahovani(klic);
-  stahovaniBezi = klic;
-
-  const statusUrl = `/songbook/${encodeURIComponent(DOWNLOAD_BOOK_ID)}/export-status/${kind}${query}`;
-  const zacatek = Date.now();
-  const dotaz = async () => {
-    // Zavřené okno znamená "nečekám" - ptát se dál by nemělo komu co ukázat.
-    if (stahovaniBezi !== klic) return;
-    if (Date.now() - zacatek > 10 * 60 * 1000) {
-      stahovaniChyba('Trvá to podezřele dlouho. Zkus to prosím znovu.');
-      return;
-    }
-    let j = { state: 'error' };
-    try {
-      j = await (await fetch(statusUrl)).json();
-    } catch (e) { /* výpadek sítě bereme jako chybu níž */ }
-
-    if (j.state === 'ready') {
-      document.getElementById('stahovani-nadpis').textContent = 'Hotovo, stahuji';
-      document.getElementById('stahovani-vypln').classList.remove('ceka');
-      document.getElementById('stahovani-vypln').style.width = '100%';
-      document.getElementById('stahovani-cislo').textContent = 'Soubor je připravený.';
-      window.location = url;
-      setTimeout(zavriStahovani, 1500);
-      oznacHotoveVarianty();
-      return;
-    }
-    if (j.state === 'error') { stahovaniChyba('Skládání souboru selhalo.'); return; }
-    if (j.state === 'idle') {
-      // Nikdo to nestaví a hotové to není - soubor mezitím zmizel z cache. Zkusíme znovu.
-      startDownload(kind, variant);
-      return;
-    }
-    vykresliPostup(j);
-    // Zprvu se ptáme často, po chvíli řidčeji: u velkého zpěvníku nemá smysl bušit na
-    // server každou vteřinu několik minut v kuse.
-    const uplynulo = Date.now() - zacatek;
-    setTimeout(dotaz, uplynulo < 20000 ? 1000 : (uplynulo < 60000 ? 2000 : 5000));
-  };
-  setTimeout(dotaz, 700);
-}
 
 document.addEventListener('click', (event) => {
   if (event.target.closest('#download-button')) return;

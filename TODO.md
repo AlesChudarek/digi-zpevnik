@@ -189,6 +189,19 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       změní klíč v názvu souboru. Strop 500 MB se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká
+- [X] **okno se skládáním sjednocené do všech tří míst** (čtečka, Moje zpěvníky, správa
+      veřejných zpěvníků). Logika i vzhled jsou v `frontend/static/js/stahovani.js`
+      a `frontend/static/css/stahovani.css`, šablony jen volají `Stahovani.spust`
+      a `Stahovani.oznacHotove`. V seznamech tím zmizel holý text s uběhlými sekundami;
+      ukazuje se stejný postup jako ve čtečce („Strana 9 z 28, zbývá asi 5 s").
+      Okno po stažení nezmizí samo, ale zůstane na stavu **Dokončeno** se zvýrazněným
+      Zavřít. Tři opravy, které k tomu patřily:
+      `.download-menu span` a `.download-chooser span` přebíjely atribut `hidden`, takže
+      značka „✓ hned" svítila u všech variant — zúženo na `button > span` a doplněn
+      `[hidden]` guard; okno leželo uvnitř `.mode-buttons` a dědilo odtud kulaté 60px
+      tlačítko i `pointer-events: none`, kterým se ten sloupec schovává, takže Zavřít
+      nešlo kliknout — visí teď na `<body>`.
+      Hlídá to `backend/scripts/test_export_ui.py`: měří rámečky, ne screenshoty.
 - [ ] **do okna pro stažení přidat volby obsahu.** Okno se skládáním už existuje
       (postup, odhad, značka „✓ hned" u variant v cache). Chybí v něm to druhé: nechat
       uživatele vybrat, co má stažený zpěvník obsahovat — jestli obálku zvlášť, jestli
