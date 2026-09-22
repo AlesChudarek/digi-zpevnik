@@ -326,7 +326,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
         cache nezměnily** — ověřeno A/B proti předchozímu commitu ve worktree, všech
         99 klíčů (33 zpěvníků × 3 předvolby) identických, nic se nepřestavovalo.
         Neznámý parametr v adrese vrací 400, ne tiše výchozí nastavení.
-      - [ ] fáze 2: okno s volbami
+      - [X] **fáze 2 hotová.** Klik na stažení (ve čtečce i u dlaždice) otevře rovnou
+        jedno okno: tři předvolby se značkou „✓ hned", pod nimi zašedlé vlastní
+        nastavení (kvalita, formát, co stáhnout, prázdné strany, černobíle) a tlačítko
+        **Stáhnout** / **Připravit** podle toho, jestli to leží v cache. Po spuštění se
+        okno překlopí do průběhu, po dostavění na „Dokončeno".
+        U vlastního nastavení se rovnou píše, na kolik stran to vyjde — `export-hotove`
+        umí odpovědět i na jeden konkrétní recept, takže se to zjistí bez skládání.
+        Nápovědy „i“ u kvality, obsahu, prázdných stran a černobílé.
+        Zanikly tím dvě různé nabídky formátů (`.download-menu` ve čtečce
+        a `.download-chooser` v Mých zpěvnících) — šablony se zkrátily o ~240 řádků.
       - [ ] fáze 3: rozsah stran a brožura
 - [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
       vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —

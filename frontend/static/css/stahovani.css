@@ -33,7 +33,14 @@
   border-radius: 14px; padding: 22px 24px;
   width: min(420px, 100%); box-shadow: 0 10px 40px rgba(0,0,0,0.35);
   text-align: left; box-sizing: border-box;
+  /* S rozbalenou nápovědou okno vyroste, a na telefonu na šířku je výšky málo.
+     Přetéká proto uvnitř, ne ven z obrazovky. Roluje ale jen prostředek: nadpis
+     a tlačítka zůstávají vidět, jinak by se na telefonu na šířku otevřelo okno,
+     ve kterém není vidět, čím ho potvrdit. */
+  max-height: calc(100vh - 32px); overflow: hidden;
+  display: flex; flex-direction: column;
 }
+.stahovani-telo { overflow-y: auto; flex: 1 1 auto; min-height: 0; }
 .stahovani-panel h2 {
   margin: 0 0 4px; font-size: 18px; color: var(--panel-text, #222); font-weight: 700;
 }
@@ -79,3 +86,72 @@
   background: var(--brand-dark, #2f7d4f); color: #fff;
 }
 .stahovani-tlacitka button.hlavni:hover { filter: brightness(1.25); }
+
+/* --- Nastavení stažení ---------------------------------------------------------- */
+.stahovani-skryty {
+  position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap;
+}
+
+.stahovani-predvolby { display: flex; flex-direction: column; gap: 2px; margin: 0 0 4px; }
+.stahovani-predvolba {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 8px 10px; border-radius: 10px; cursor: pointer;
+}
+.stahovani-predvolba:hover { background: var(--panel-btn-bg, #f0f0f0); }
+.stahovani-predvolba input { margin: 3px 0 0; flex: none; }
+.stahovani-predvolba-text { display: block; }
+.stahovani-predvolba-text strong {
+  display: block; font-size: 14px; font-weight: 600; color: var(--panel-text, #222);
+}
+.stahovani-predvolba-text > span {
+  display: block; font-size: 12px; color: var(--panel-muted, #666);
+}
+
+/* Vlastní volby jsou zašedlé, dokud není vybráno „Vlastní nastavení". Zašedlé, ne
+   schované: uživatel má vidět, co si může nastavit, ještě než se pro to rozhodne. */
+.stahovani-vlastni {
+  border: 0; border-top: 1px solid var(--panel-border, #eee);
+  margin: 6px 0 0; padding: 10px 10px 2px;
+}
+.stahovani-vlastni[disabled] { opacity: 0.45; }
+.stahovani-radek {
+  display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; flex-wrap: wrap;
+}
+/* Volby, které pro zvolený formát nic nedělají (kvalita a černobílá u ZIPu). */
+.stahovani-radek.nedostupne { display: none; }
+.stahovani-popisek {
+  flex: 0 0 96px; font-size: 12px; color: var(--panel-muted, #666);
+}
+.stahovani-volby { display: flex; gap: 12px; flex-wrap: wrap; flex: 1 1 180px; }
+.stahovani-volba {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 13px; color: var(--panel-text, #222); cursor: pointer;
+}
+.stahovani-vlastni[disabled] .stahovani-volba,
+.stahovani-vlastni[disabled] .napoveda-znak { cursor: default; }
+.stahovani-souhrn {
+  margin: 4px 0 0; font-size: 12px; color: var(--panel-muted, #666); min-height: 16px;
+}
+
+/* Nápověda „i“ u slovních voleb. Zatím žije tady; až se sjednotí nápovědy v celém
+   projektu, přestěhuje se do sdíleného souboru (viz TODO). */
+.napoveda-znak {
+  width: 15px; height: 15px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-muted, #666);
+  font: 600 10px/15px Georgia, serif; cursor: pointer; vertical-align: text-top;
+}
+.napoveda-znak:hover { background: var(--panel-btn-hover, #e2e2e2); }
+.napoveda-znak[aria-expanded="true"] {
+  background: var(--brand-dark, #2f7d4f); color: #fff;
+}
+.napoveda-text {
+  flex-basis: 100%; order: 9;
+  margin: 2px 0 0; padding: 8px 10px; border-radius: 8px;
+  background: var(--panel-btn-bg, #f0f0f0);
+  font-size: 12px; line-height: 1.45; color: var(--panel-text, #333);
+}
+
+@media (max-width: 480px) {
+  .stahovani-popisek { flex-basis: 100%; }
+}
