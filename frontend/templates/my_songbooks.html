@@ -180,32 +180,6 @@
   .add-card .plus-icon { -webkit-mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; }
   .add-card:hover .cover { background: #eaeaea; }
 
-  /* Nabídka stahování u dlaždice zpěvníku. Visí na body, ne v dlaždici: karty mají
-     overflow a nabídka by se v nich ořízla. */
-  .download-chooser {
-    position: absolute;
-    z-index: 3000;
-    width: 240px;
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-    padding: 6px;
-  }
-  .download-chooser-title {
-    font-size: 12px; color: #666; padding: 4px 10px 6px;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .download-chooser button {
-    display: block; width: 100%; text-align: left; border: none; background: transparent;
-    padding: 8px 10px; border-radius: 8px; cursor: pointer;
-  }
-  .download-chooser button:hover { background: var(--muted-bg, #e8f5e9); }
-  .download-chooser strong { display: block; font-size: 14px; color: var(--brand-dark, #1b5e20); }
-  /* Jen popisek pod názvem varianty, tedy přímý potomek tlačítka. Širší
-     `.download-chooser span` by přebilo `display` i značce „✓ hned" uvnitř <strong>
-     a ta by svítila i u variant, které předgenerované nejsou. */
-  .download-chooser button > span { display: block; font-size: 12px; color: #666; }
-  .download-chooser button > span[hidden] { display: none; }
 </style>
 
 <!-- Reusable confirm modal -->
@@ -1505,63 +1479,16 @@ function openCreateModal() {
       });
     });
 
-    /* Stažení zpěvníku rovnou ze seznamu, bez otevírání čtečky.
-       Průběh ukazuje totéž okno jako čtečka (static/js/stahovani.js). Tady dřív býval
-       jen holý text s uběhlými sekundami - o tom, kolik stran z kolika je hotových,
-       neřekl nic. */
+    /* Stažení zpěvníku rovnou ze seznamu, bez otevírání čtečky. Nastavení i průběh
+       ukazuje totéž okno jako čtečka, viz static/js/stahovani.js. Tady dřív bývala
+       vlastní nabídka formátů a k ní holý text s uběhlými sekundami. */
     document.querySelectorAll('.btn-download').forEach(btn => {
       btn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        openDownloadChooser(btn.dataset.bookId, btn.dataset.bookTitle || '', btn);
+        Stahovani.otevri(btn.dataset.bookId, btn.dataset.bookTitle || '');
       });
     });
-
-    function openDownloadChooser(bookId, title, anchor) {
-      document.querySelectorAll('.download-chooser').forEach(el => el.remove());
-
-      const box = document.createElement('div');
-      box.className = 'download-chooser';
-      box.innerHTML = `
-        <div class="download-chooser-title">${title ? title : 'Stáhnout zpěvník'}</div>
-        <button type="button" data-kind="pdf" data-q="small" data-varianta="pdf-small">
-          <strong>PDF, menší soubor <span class="hotovo-znak" hidden>✓ hned</span></strong>
-          <span>pro čtení na telefonu</span></button>
-        <button type="button" data-kind="pdf" data-q="high" data-varianta="pdf-high">
-          <strong>PDF, plné rozlišení <span class="hotovo-znak" hidden>✓ hned</span></strong>
-          <span>pro tisk</span></button>
-        <button type="button" data-kind="zip" data-q="" data-varianta="zip-orig">
-          <strong>Obrázky v ZIP <span class="hotovo-znak" hidden>✓ hned</span></strong>
-          <span>původní kvalita beze změny</span></button>`;
-      document.body.appendChild(box);
-      // Až teď, ne při vykreslení seznamu: dotaz staví sekvenci exportu, a ta by se
-      // u stránky s třiceti dlaždicemi počítala třicetkrát pro nic.
-      Stahovani.oznacHotove(bookId, box);
-
-      const rect = anchor.getBoundingClientRect();
-      // Ukotvit k tlačítku, ale nepustit za okraj okna
-      const sirka = 240;
-      box.style.top = `${window.scrollY + rect.bottom + 8}px`;
-      box.style.left = `${Math.max(8, Math.min(
-        window.scrollX + rect.left, window.scrollX + window.innerWidth - sirka - 8))}px`;
-
-      box.querySelectorAll('button').forEach(b => {
-        b.addEventListener('click', (e) => {
-          e.stopPropagation();
-          // Nabídku zavřít: okno se skládáním ji překryje a pod ním by zůstala viset.
-          box.remove();
-          Stahovani.spust(bookId, b.dataset.kind, b.dataset.q || null, null);
-        });
-      });
-
-      setTimeout(() => {
-        document.addEventListener('click', function zavri(ev) {
-          if (box.contains(ev.target)) return;
-          box.remove();
-          document.removeEventListener('click', zavri);
-        });
-      }, 0);
-    }
 
     if (shareCancelBtn) {
       shareCancelBtn.addEventListener('click', (event) => {

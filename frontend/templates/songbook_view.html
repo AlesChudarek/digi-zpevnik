@@ -577,65 +577,10 @@
   }
 
   /* --- Stažení zpěvníku ------------------------------------------------------
-     Vysouvá se doleva, protože tenhle sloupec sedí u pravého kraje okna. */
+     Nastavení i postup jsou ve sdíleném okně, viz static/js/stahovani.js. */
   /* Zašedlá ikona stahování pro hosty a neověřené účty. */
   #download-toggle.zakazano { opacity: .4; cursor: not-allowed; }
 
-  .download-menu {
-    position: absolute;
-    right: calc(100% + 12px);
-    top: 0;
-    transform: translateX(8px);
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 0.18s ease, opacity 0.18s ease;
-    background: white;
-    border-radius: 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    width: 230px;
-    z-index: 600;
-  }
-
-  .download-menu.open {
-    transform: translateX(0);
-    opacity: 1;
-    pointer-events: auto;
-  }
-  /* Položky nabídky jsou obdélníky, ne kolečka jako zbytek sloupce. Od zúžení
-     pravidel na `.mode-buttons > .button-container > button` to není přebíjení, ale
-     prostý popis - proto tu není height, box-shadow ani transform. */
-  .download-menu button {
-    width: 100%;
-    border: none;
-    border-radius: 10px;
-    background: transparent;
-    text-align: left;
-    padding: 8px 12px;
-    display: block;
-    cursor: pointer;
-    font-family: inherit;
-  }
-  .download-menu button:hover {
-    background: var(--muted-bg, #e8f5e9);
-  }
-  .download-menu strong {
-    display: block;
-    font-size: 14px;
-    color: var(--brand-dark, #1b5e20);
-  }
-  /* Jen popisek pod názvem varianty, tedy přímý potomek tlačítka. Dokud tu stálo
-     `.download-menu span`, přebíjelo to `display` i značce „✓ hned" uvnitř <strong>
-     a ta se ukazovala u všech variant bez ohledu na atribut `hidden`. */
-  .download-menu button > span {
-    display: block;
-    font-size: 12px;
-    color: #666;
-  }
-  .download-menu button > span[hidden] { display: none; }
 
   /* Shared fade behaviour for side UI groups */
   .zoom-buttons { opacity: 1; transition: opacity 0.25s ease; }
@@ -907,12 +852,12 @@
     <div class="tooltip-text">Zobrazit obsah</div>
   </div>
 
-  {# Stažení celého zpěvníku. Nabídka se vysouvá doleva, protože tenhle sloupec sedí
-     u pravého kraje - doprava by neměla kam. #}
+  {# Stažení celého zpěvníku. Otevře sdílené okno s nastavením, stejné jako v seznamu
+     zpěvníků. #}
   <div class="button-container" id="download-button">
-    {# Kdo stahovat nesmí, nemá dostat rozbalovací nabídku tří možností, ze kterých ani
-       jedna nezafunguje. Ikona je zašedlá a rovnou řekne proč. #}
-    <button onclick="toggleDownloadMenu(event)" id="download-toggle" aria-expanded="false"
+    {# Kdo stahovat nesmí, nemá dostat okno s volbami, ze kterých ani jedna
+       nezafunguje. Ikona je zašedlá a rovnou řekne proč. #}
+    <button onclick="otevriStahovani(event)" id="download-toggle"
             {% if not smi_stahovat %}class="zakazano" aria-disabled="true"{% endif %}>
       <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
     </button>
@@ -920,20 +865,6 @@
       'Stáhnout zpěvník' if smi_stahovat
       else ('Stahování je jen pro přihlášené uživatele' if guest
             else 'Stahování bude dostupné po ověření e-mailové adresy') }}</div>
-    <div class="download-menu" id="download-menu" aria-hidden="true">
-      <button type="button" onclick="startDownload('pdf', 'small')" data-varianta="pdf-small">
-        <strong>PDF, menší soubor <span class="hotovo-znak" hidden>✓ hned</span></strong>
-        <span>pro čtení na telefonu</span>
-      </button>
-      <button type="button" onclick="startDownload('pdf', 'high')" data-varianta="pdf-high">
-        <strong>PDF, plné rozlišení <span class="hotovo-znak" hidden>✓ hned</span></strong>
-        <span>pro tisk</span>
-      </button>
-      <button type="button" onclick="startDownload('zip', null)" data-varianta="zip-orig">
-        <strong>Obrázky v ZIP <span class="hotovo-znak" hidden>✓ hned</span></strong>
-        <span>původní kvalita beze změny</span>
-      </button>
-    </div>
   </div>
 </div>
 
@@ -2076,47 +2007,23 @@ async function fitDoublePageToViewport() {
    nejde: gunicorn hlásí životnost workeru až mezi požadavky, takže dlouhý zpěvník by
    spadl na třicetisekundovém timeoutu ještě před dokončením. Klient se proto ptá. */
 const DOWNLOAD_BOOK_ID = {{ book_id | tojson }};
+const SONGBOOK_TITLE = {{ songbook_title | tojson }};
 
 const SMI_STAHOVAT = {{ smi_stahovat | tojson }};
 const DUVOD_ZAKAZU = {{ ('Stahování je jen pro přihlášené uživatele' if guest
     else 'Stahování bude dostupné po ověření e-mailové adresy') | tojson }};
 
-function toggleDownloadMenu(event) {
+/* Okno s nastavením i se skládáním je ve sdíleném static/js/stahovani.js - stejné
+   okno používá seznam v Mých zpěvnících a správa veřejných zpěvníků. */
+function otevriStahovani(event) {
   if (event) event.stopPropagation();
   if (!SMI_STAHOVAT) {
-    // Rovnou důvod, ne nabídka tří možností, ze kterých žádná nezafunguje.
+    // Rovnou důvod, ne okno s volbami, ze kterých žádná nezafunguje.
     alert(DUVOD_ZAKAZU);
     return;
   }
-  const menu = document.getElementById('download-menu');
-  const open = menu.classList.toggle('open');
-  menu.setAttribute('aria-hidden', open ? 'false' : 'true');
-  document.getElementById('download-toggle').setAttribute('aria-expanded', open ? 'true' : 'false');
-  // Až při otevření, ne při načtení stránky: nabídka se většinou neotevře vůbec a ptát
-  // se zbytečně by znamenalo stavět sekvenci exportu pro každého návštěvníka.
-  if (open) oznacHotoveVarianty();
+  Stahovani.otevri(DOWNLOAD_BOOK_ID, SONGBOOK_TITLE);
 }
-
-/* Okno se skládáním, dotazování na průběh i značky „✓ hned" jsou ve sdíleném
-   static/js/stahovani.js - stejné okno používá i seznam v Mých zpěvnících. */
-function oznacHotoveVarianty() {
-  Stahovani.oznacHotove(DOWNLOAD_BOOK_ID, document.getElementById('download-menu'));
-}
-
-function startDownload(kind, variant) {
-  // Nabídku zavřít: okno se skládáním ji stejně překryje a po zavření okna by pod ním
-  // jinak zůstala viset otevřená.
-  const menu = document.getElementById('download-menu');
-  if (menu.classList.contains('open')) toggleDownloadMenu();
-  Stahovani.spust(DOWNLOAD_BOOK_ID, kind, variant, menu);
-}
-
-
-document.addEventListener('click', (event) => {
-  if (event.target.closest('#download-button')) return;
-  const menu = document.getElementById('download-menu');
-  if (menu && menu.classList.contains('open')) toggleDownloadMenu();
-});
 
 /* --- Automatické sjíždění v rolovacím módu ----------------------------------------
    Rychlost se drží v sekundách na stranu, ne v pixelech za sekundu. Pixely by po

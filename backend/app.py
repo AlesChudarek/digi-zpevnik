@@ -2679,21 +2679,30 @@ def token_receptu(recept):
     return 'c' + hashlib.sha256(kanonicky.encode()).hexdigest()[:12]
 
 
-def recept_z_parametru(args, kind):
+def recept_z_parametru(args, kind=None):
     """Recept z parametrů adresy.
 
     Samotné `q=<předvolba>` je celý dosavadní tvar adresy a musí dál fungovat beze
     změny. Jakmile přijde kterákoliv jiná volba, skládá se recept z ní.
+
+    `kind` dává routa se stahováním z přípony v adrese. Kde přípona není (dotaz na to,
+    co už leží v cache), se formát bere z parametrů.
     """
     # Neznámý parametr je chyba, ne něco k přehlédnutí. Kdyby se ignoroval, dostal by
     # člověk s překlepem v `?prazdn=0` výchozí nastavení a soubor, o který nežádal,
-    # a nic by mu to neřeklo. `format` se bere z přípony v adrese, ne z dotazu.
-    povolene = {'q'} | (set(RECEPT_VYCHOZI) - {'format'})
+    # a nic by mu to neřeklo.
+    povolene = {'q'} | set(RECEPT_VYCHOZI)
+    if kind is not None:
+        povolene.discard('format')   # ten je v příponě, v dotazu by si mohly odporovat
     for klic in args.keys():
         if klic not in povolene:
             raise ReceptChyba(f"neznámá volba „{klic}“")
 
+    if kind is None:
+        kind = args.get('format') or 'pdf'
     zaklad = {'format': 'pdf' if kind == 'pdf' else 'zip'}
+    if args.get('format') not in (None, 'pdf', 'zip'):
+        raise ReceptChyba("formát musí být pdf nebo zip")
     vlastni = {k: args.get(k) for k in ('kvalita', 'obsah') if args.get(k) is not None}
     for k in ('prazdne', 'cernobile'):
         if args.get(k) is not None:
@@ -3271,6 +3280,21 @@ def songbook_export_hotove(book_id):
     # Sekvence je ta dražší část, tak jednou na každou podobu, ne jednou na předvolbu.
     # Dnes všechny tři předvolby berou celý zpěvník, takže se staví jedna jediná; až
     # budou předvolby s jiným obsahem, přibude jich přesně tolik, kolik jich je potřeba.
+    # S volbami v dotazu je otázka jiná: „je hotový tenhle jeden recept?" Okno se tak
+    # ptá na vlastní nastavení, které si člověk poskládal, a rovnou se dozví i to,
+    # na kolik stran vyjde - to jde říct bez skládání.
+    if any(k in request.args for k in (set(RECEPT_VYCHOZI) | {'q'})):
+        try:
+            recept = recept_z_parametru(request.args)
+        except ReceptChyba as chyba:
+            return jsonify({'error': str(chyba)}), 400
+        sekvence = build_songbook_export_sequence(songbook, recept)
+        if not sekvence or len(sekvence) > EXPORT_MAX_PAGES:
+            return jsonify({'hotovo': False, 'stran': len(sekvence)})
+        cesty = _export_paths(book_id, token_receptu(recept), recept['format'],
+                              songbook_export_key(sekvence, token_receptu(recept)))
+        return jsonify({'hotovo': cesty['final'].exists(), 'stran': len(sekvence)})
+
     sekvence_podle_tvaru = {}
     hotove = {}
     for jmeno, predvolba in PREDVOLBY.items():
@@ -3437,6 +3461,7 @@ def songbook_detail(book_id):
     return render_template(
         'songbook_view.html',
         book_id=book_id,
+        songbook_title=songbook.title or '',
         toc_entries=toc_entries,
         page_files=page_files,
         first_page_side=first_page_side,
