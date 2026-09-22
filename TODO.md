@@ -318,6 +318,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
         k předvolbě pojmenované podle záměru, ne jako zaškrtávátko vedle „na tisk".
       Postup: (1) backend z „varianty" na „recept" bez změny UI, (2) nové okno
       s kompresí, obálkou/obsahem a prázdnými stranami, (3) rozsah stran a brožura.
+      - [X] **fáze 1 hotová.** `normalizuj_recept` / `token_receptu` / `recept_z_parametru`
+        v `app.py`; předvolby `small`, `high`, `orig` jsou jen pojmenované recepty.
+        Backend už umí `obsah` (vše / jen obsah / jen obálka), `prazdne` a `cernobile`,
+        adresa je `…/export.pdf?obsah=jen-obsah&prazdne=0`. UI zatím beze změny.
+        Předvolby si nechaly svá jména jako tokeny v názvech souborů, takže se **klíče
+        cache nezměnily** — ověřeno A/B proti předchozímu commitu ve worktree, všech
+        99 klíčů (33 zpěvníků × 3 předvolby) identických, nic se nepřestavovalo.
+        Neznámý parametr v adrese vrací 400, ne tiše výchozí nastavení.
+      - [ ] fáze 2: okno s volbami
+      - [ ] fáze 3: rozsah stran a brožura
 - [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
       vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —
       návštěvnost je řádu jednoho člověka za měsíc. Číslo je potřeba promyslet.
