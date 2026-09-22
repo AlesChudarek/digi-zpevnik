@@ -152,6 +152,24 @@ def main():
                            f"{z['v']}: značka {'svítí' if z['cekame'] else 'nesvítí'}",
                            f"vidět={z['videt']} display={z['display']}")
 
+            print("\n── dvě tlačítka nesmí splývat ──")
+            tlacitka = page.evaluate("""() => {
+              const z = document.getElementById('stahovani-zavrit');
+              const s = document.getElementById('stahovani-spustit');
+              const rz = z.getBoundingClientRect(), rs = s.getBoundingClientRect();
+              const cz = getComputedStyle(z), cs = getComputedStyle(s);
+              return {mezera: Math.round(rs.left - rz.right),
+                      stejna_barva: cz.backgroundColor === cs.backgroundColor,
+                      hlavni_vetsi: parseFloat(cs.fontSize) >= parseFloat(cz.fontSize),
+                      hlavni_tucne: parseInt(cs.fontWeight, 10) > parseInt(cz.fontWeight, 10)};
+            }""")
+            zkontroluj(tlacitka["mezera"] >= 8,
+                       "mezi Zavřít a Stáhnout je mezera", f"{tlacitka['mezera']} px")
+            zkontroluj(not tlacitka["stejna_barva"],
+                       "a nemají stejnou barvu pozadí")
+            zkontroluj(tlacitka["hlavni_vetsi"] and tlacitka["hlavni_tucne"],
+                       "hlavní akce je výraznější, ne stejná jako Zavřít")
+
             print("\n── vlastní nastavení ──")
             page.evaluate("() => document.querySelector('input[name=predvolba][value=vlastni]').click()")
             page.wait_for_timeout(800)
@@ -374,6 +392,17 @@ def main():
                 page.wait_for_timeout(250)
                 zkontroluj(page.evaluate("() => document.getElementById('stahovani-okno').hidden"),
                            "a Zavřít ho zavře")
+
+                # Na stavu Dokončeno je zvýrazněné Zavřít. Po znovuotevření mělo to
+                # zvýraznění zůstat oběma tlačítkům a nebylo poznat, které je hlavní.
+                page.evaluate("() => document.getElementById('download-toggle').click()")
+                page.wait_for_timeout(700)
+                zkontroluj(not page.evaluate("""() => {
+                  const z = document.getElementById('stahovani-zavrit');
+                  const s = document.getElementById('stahovani-spustit');
+                  return getComputedStyle(z).backgroundColor ===
+                         getComputedStyle(s).backgroundColor;
+                }"""), "a po znovuotevření nesplynou ani po dokončeném stažení")
 
             print("\n── motiv ──")
             page.evaluate("() => document.getElementById('download-toggle').click()")

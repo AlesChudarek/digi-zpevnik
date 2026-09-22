@@ -70,22 +70,33 @@
 }
 .stahovani-rada[hidden] { display: none; }
 
-.stahovani-tlacitka { margin-top: 16px; display: flex; justify-content: flex-end; }
-.stahovani-tlacitka button {
-  background: var(--panel-btn-bg, #f0f0f0); border: 0; border-radius: 8px;
-  padding: 8px 18px;
-  font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
-  color: var(--panel-btn-text, #333);
+/* Mezera mezi tlačítky je nutná, ne kosmetická: bez ní na sebe nalepená splývají
+   v jeden pruh a nepoznáš, kde jedno končí. */
+.stahovani-tlacitka {
+  margin-top: 16px; display: flex; justify-content: flex-end; gap: 10px;
+  align-items: center;
 }
-.stahovani-tlacitka button:hover { background: var(--panel-btn-hover, #e2e2e2); }
-/* Když je soubor hotový, je Zavřít jediná věc, kterou má smysl udělat.
-   Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
+/* Druhotné tlačítko je tiché - bez výplně. Hlavní akce má být na první pohled jasná
+   a dvě stejně vypadající tlačítka vedle sebe nutí číst, než se dá kliknout. */
+.stahovani-tlacitka button {
+  background: transparent; border: 0; border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
+  color: var(--panel-muted, #666);
+}
+.stahovani-tlacitka button:hover {
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
+}
+/* Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
    motivech, takže na něm bílý text drží čitelnost všude. U --brand-contrast to
    neplatí - v motivu amber je stejný jako brand-strong a text by zmizel. */
 .stahovani-tlacitka button.hlavni {
   background: var(--brand-dark, #2f7d4f); color: #fff;
+  padding: 10px 24px; font-size: 15px; font-weight: 600;
 }
-.stahovani-tlacitka button.hlavni:hover { filter: brightness(1.25); }
+.stahovani-tlacitka button.hlavni:hover {
+  background: var(--brand-dark, #2f7d4f); color: #fff; filter: brightness(1.25);
+}
 
 /* --- Nastavení stažení ---------------------------------------------------------- */
 .stahovani-skryty {

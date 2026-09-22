@@ -402,6 +402,9 @@ window.Stahovani = (function () {
     o.nastaveni.hidden = false;
     o.postup.hidden = true;
     o.spustit.hidden = false;
+    // Po dokončeném stažení zdědilo Zavřít zvýraznění. Bez tohohle měla po
+    // znovuotevření obě tlačítka stejnou barvu a nebylo poznat, které je to hlavní.
+    o.zavrit.classList.remove('hlavni');
     o.zaclona.querySelectorAll('.napoveda-text').forEach(n => n.remove());
     o.zaclona.querySelector('#stahovani-strany').value = '';
     melRozsah = false;
