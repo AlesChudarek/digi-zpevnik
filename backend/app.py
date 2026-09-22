@@ -71,10 +71,35 @@ A4_INCHES = (8.268, 11.693)
 # Kvalita 95 se nepoužívá schválně: vyšla na 73,6 MB, tedy víc než originály, a přitom
 # ztrátově. Bezztrátovou cestu plní stažení obrázků v ZIP, ne PDF - Pillow vkládá RGB do
 # PDF vždycky jako JPEG, takže bezztrátové PDF by chtělo další závislost.
-EXPORT_VARIANTS = {
+EXPORT_KVALITY = {
     'small': {'quality': 75, 'max_edge': 1754},
     'high': {'quality': 85, 'max_edge': 0},
+    # ZIP se nepřekóduje, jen zabalí originály - kvalita pro něj nemá význam.
+    'originaly': {'quality': 0, 'max_edge': 0},
 }
+
+# --- Recept stažení ---------------------------------------------------------------
+# Co přesně se má stáhnout. Dřív to byla jedna ze tří zadrátovaných variant; recept je
+# totéž zobecněné na sadu voleb, aby šlo přidávat další (rozsah stran, brožura,
+# rejstřík), aniž by se sahalo na cache, na názvy souborů nebo na předgenerování.
+#
+# Předvolby jsou pojmenované recepty, nic víc. Jejich jména jsou zároveň tokeny v názvech
+# souborů, takže se jmenují stejně jako dřívější varianty - hotová cache tím zůstala
+# platná a nic se po téhle změně nepřestavovalo.
+RECEPT_VYCHOZI = {
+    'format': 'pdf',        # pdf | zip
+    'kvalita': 'small',     # small | high | originaly
+    'obsah': 'vse',         # vse | jen-obsah | jen-obalka
+    'prazdne': True,        # nechat prázdné strany (u tisku nutné, obálka je složený list)
+    'cernobile': False,
+}
+PREDVOLBY = {
+    'small': {'format': 'pdf', 'kvalita': 'small'},
+    'high': {'format': 'pdf', 'kvalita': 'high'},
+    'orig': {'format': 'zip', 'kvalita': 'originaly'},
+}
+# CLI příkazy skládají jen PDF, ZIPová předvolba mezi jejich volby nepatří.
+PREDVOLBY_PDF = sorted(j for j, p in PREDVOLBY.items() if p['format'] == 'pdf')
 EXPORT_MAX_PAGES = 400
 # Kolik skládání smí běžet naráz. Omezuje to paměť, ne procesor: jedno skládání má
 # vrchol 170-250 MB a server má 979 MB bez swapu, takže když jedno běží, zbývá kolem
@@ -82,7 +107,7 @@ EXPORT_MAX_PAGES = 400
 # dvě, takže po upgradu paměti dává souběh smysl; proto se to dá zvednout z prostředí
 # a ne přepsáním kódu.
 MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
-# Varianta, která se po každé úpravě předgeneruje. Jediná, u které platí slib, že
+# Předvolba, která se po každé úpravě předgeneruje. Jediná, u které platí slib, že
 # stažení veřejného zpěvníku je hned - a proto taky jediná, která se z cache nevyhazuje.
 PREDGENEROVANA_VARIANTA = 'small'
 # Kolik místa smí zabrat vyhoditelná část cache, než se začne uklízet od nejstaršího.
@@ -2503,20 +2528,25 @@ def update_songbook_structure(songbook_id):
     schedule_export_warm(songbook_id)
     return jsonify({'ok': True})
 
-def _drop_stale_exports(songbook, sequence):
+def _drop_stale_exports(songbook):
     """Delete every download of this songbook that no longer matches its content.
 
     The cache key already makes a stale file unreachable, so this is not needed for
     correctness - but leaving old builds around until the size cap sweeps them means
     paying disk for versions nobody can ever ask for again.
+
+    Smaže i hotové exporty vlastních receptů, a je to tak správně: tohle běží po uložení
+    zpěvníku, takže se změnil obsah a neplatí po něm žádný z nich. Recept se z tokenu
+    zpátky nesloží (je to otisk), takže se jejich nový klíč nedá spočítat a nechat je
+    ležet by znamenalo držet soubory, o které si už nikdo neřekne.
     """
     safe_id = re.sub(r'[^A-Za-z0-9_]', '_', songbook.id)
     platne = set()
-    for variant in EXPORT_VARIANTS:
-        platne.add(_export_paths(songbook.id, variant, 'pdf',
-                                 songbook_export_key(sequence, variant))['final'].name)
-    platne.add(_export_paths(songbook.id, 'orig', 'zip',
-                             songbook_export_key(sequence, 'orig'))['final'].name)
+    for jmeno, predvolba in PREDVOLBY.items():
+        recept = normalizuj_recept(**predvolba)
+        seq = build_songbook_export_sequence(songbook, recept)
+        platne.add(_export_paths(songbook.id, jmeno, recept['format'],
+                                 songbook_export_key(seq, jmeno))['final'].name)
     try:
         for path in EXPORTS_DIR.glob(f"{safe_id}-*"):
             if path.is_file() and path.suffix in ('.pdf', '.zip') and path.name not in platne:
@@ -2542,19 +2572,20 @@ def schedule_export_warm(book_id):
                 songbook = Songbook.query.get(book_id)
                 if songbook is None:
                     return
-                sequence = build_songbook_export_sequence(songbook)
+                recept = normalizuj_recept(**PREDVOLBY[PREDGENEROVANA_VARIANTA])
+                sequence = build_songbook_export_sequence(songbook, recept)
                 if not sequence or len(sequence) > EXPORT_MAX_PAGES:
                     return
-                variant = PREDGENEROVANA_VARIANTA
-                key = songbook_export_key(sequence, variant)
-                paths = _export_paths(book_id, variant, 'pdf', key)
+                token = PREDGENEROVANA_VARIANTA
+                key = songbook_export_key(sequence, token)
+                paths = _export_paths(book_id, token, 'pdf', key)
                 if paths['final'].exists() or paths['lock'].exists():
                     return
                 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-                render_songbook_pdf(sequence, paths['part'], variant)
+                render_songbook_pdf(sequence, paths['part'], recept)
                 os.replace(paths['part'], paths['final'])
                 _prune_exports(paths['final'], paths['siblings'])
-                _drop_stale_exports(songbook, sequence)
+                _drop_stale_exports(songbook)
         except Exception:  # noqa: BLE001 - uložení zpěvníku tím nesmí být dotčené
             pass
 
@@ -2597,7 +2628,89 @@ def build_songbook_content_pages(book_id):
     ]
 
 
-def build_songbook_export_sequence(songbook):
+class ReceptChyba(ValueError):
+    """Nesmyslný recept. Nese hlášku, která smí ven k uživateli."""
+
+
+def normalizuj_recept(**volby):
+    """Doplní výchozí hodnoty, ověří je a srovná recept do kanonického tvaru.
+
+    Kanonický tvar je důležitý: z receptu se počítá token, ze kterého je název souboru
+    v cache. Dva zápisy téhož přání musí dát tentýž token, jinak by se tentýž soubor
+    skládal dvakrát a ležel v cache dvakrát.
+    """
+    recept = dict(RECEPT_VYCHOZI)
+    for klic, hodnota in volby.items():
+        if hodnota is None:
+            continue
+        if klic not in RECEPT_VYCHOZI:
+            raise ReceptChyba(f"neznámá volba „{klic}“")
+        recept[klic] = hodnota
+
+    if recept['format'] not in ('pdf', 'zip'):
+        raise ReceptChyba("formát musí být pdf nebo zip")
+    if recept['obsah'] not in ('vse', 'jen-obsah', 'jen-obalka'):
+        raise ReceptChyba("neznámá volba obsahu")
+    recept['prazdne'] = bool(recept['prazdne'])
+    recept['cernobile'] = bool(recept['cernobile'])
+
+    if recept['format'] == 'zip':
+        # ZIP balí originály, takže kvalita ani černobílá pro něj neznamenají nic.
+        # Srovnat je na jednu hodnotu, ať se cache netříští o volby bez účinku.
+        recept['kvalita'] = 'originaly'
+        recept['cernobile'] = False
+    elif recept['kvalita'] not in ('small', 'high'):
+        raise ReceptChyba("kvalita musí být small nebo high")
+
+    return recept
+
+
+def token_receptu(recept):
+    """Krátký název receptu do jména souboru v cache.
+
+    U předvoleb je to jejich jméno („small“), aby šly soubory v `data/exports` přečíst
+    očima a aby chráněná předgenerovaná varianta zůstala poznatelná. Cokoliv jiného
+    dostane „c“ a otisk - recept se z něj zpátky nesloží, a nemusí.
+    """
+    for jmeno, predvolba in PREDVOLBY.items():
+        if recept == normalizuj_recept(**predvolba):
+            return jmeno
+    kanonicky = json.dumps(recept, sort_keys=True, ensure_ascii=False)
+    return 'c' + hashlib.sha256(kanonicky.encode()).hexdigest()[:12]
+
+
+def recept_z_parametru(args, kind):
+    """Recept z parametrů adresy.
+
+    Samotné `q=<předvolba>` je celý dosavadní tvar adresy a musí dál fungovat beze
+    změny. Jakmile přijde kterákoliv jiná volba, skládá se recept z ní.
+    """
+    # Neznámý parametr je chyba, ne něco k přehlédnutí. Kdyby se ignoroval, dostal by
+    # člověk s překlepem v `?prazdn=0` výchozí nastavení a soubor, o který nežádal,
+    # a nic by mu to neřeklo. `format` se bere z přípony v adrese, ne z dotazu.
+    povolene = {'q'} | (set(RECEPT_VYCHOZI) - {'format'})
+    for klic in args.keys():
+        if klic not in povolene:
+            raise ReceptChyba(f"neznámá volba „{klic}“")
+
+    zaklad = {'format': 'pdf' if kind == 'pdf' else 'zip'}
+    vlastni = {k: args.get(k) for k in ('kvalita', 'obsah') if args.get(k) is not None}
+    for k in ('prazdne', 'cernobile'):
+        if args.get(k) is not None:
+            vlastni[k] = args.get(k) not in ('0', 'false', 'ne', '')
+
+    if not vlastni:
+        jmeno = args.get('q') or ('small' if kind == 'pdf' else 'orig')
+        if jmeno not in PREDVOLBY:
+            raise ReceptChyba("neznámá varianta")
+        zaklad.update(PREDVOLBY[jmeno])
+        return normalizuj_recept(**zaklad)
+
+    zaklad.update(vlastni)
+    return normalizuj_recept(**zaklad)
+
+
+def build_songbook_export_sequence(songbook, recept=None):
     """Physical pages of a songbook in print order, for PDF and ZIP export.
 
     Deliberately different from what the reader renders:
@@ -2647,6 +2760,24 @@ def build_songbook_export_sequence(songbook):
     add(songbook.img_path_cover_back_inner, "cover")
     add(songbook.img_path_cover_back_outer, "cover")
 
+    return _uprav_sekvenci(sequence, recept)
+
+
+def _uprav_sekvenci(sequence, recept):
+    """Vyřízne ze sekvence to, co si recept nepřeje.
+
+    Obojí je volba pro čtení na displeji, ne pro tisk: prázdné strany a všechny čtyři
+    strany obálky tam jsou schválně, protože obálka je složený list a vynechaná strana
+    posune všechny dvoustrany. Proto to není zaškrtávátko u tiskové předvolby.
+    """
+    if not recept:
+        return sequence
+    if recept['obsah'] == 'jen-obsah':
+        sequence = [p for p in sequence if p['kind'] != 'cover']
+    elif recept['obsah'] == 'jen-obalka':
+        sequence = [p for p in sequence if p['kind'] == 'cover']
+    if not recept['prazdne']:
+        sequence = [p for p in sequence if p['file'] != 'blank']
     return sequence
 
 
@@ -2682,7 +2813,7 @@ def _flatten_to_rgb(image, background=(255, 255, 255)):
     return canvas
 
 
-def songbook_export_key(sequence, variant):
+def songbook_export_key(sequence, token):
     """Cache key derived from what the export actually reads.
 
     Content-addressed on purpose: no invalidation hook anywhere in the editor, nothing
@@ -2691,7 +2822,9 @@ def songbook_export_key(sequence, variant):
     """
     digest = hashlib.sha256()
     digest.update(EXPORT_GENERATOR_VERSION)
-    digest.update(variant.encode())
+    # Token, ne celý recept: u předvoleb je to jejich jméno, takže se klíč nezměnil
+    # zavedením receptů a hotová cache zůstala platná.
+    digest.update(token.encode())
     for item in sequence:
         rel = item['file']
         digest.update(rel.encode())
@@ -2711,10 +2844,22 @@ def songbook_export_key(sequence, variant):
     return digest.hexdigest()[:16]
 
 
-def _open_export_page(item):
+def _pozadi_strany(item, recept=None):
+    """Barva, na kterou se skládá průhledná strana.
+
+    U černobílého exportu bílá, ne barva zpěvníku: z červené obálky by jinak byla
+    celoplošná tmavá šedá přes celou stránku. U neprůhledných obálek se s tím nedá
+    dělat nic, ta barva je natištěná v pixelech.
+    """
+    if recept and recept.get('cernobile'):
+        return (255, 255, 255)
+    return _hex_to_rgb(item.get('bg'))
+
+
+def _open_export_page(item, recept=None):
     """One page as an RGB image. A missing file must not sink the whole export."""
     rel_path = item['file']
-    pozadi = _hex_to_rgb(item.get('bg'))
+    pozadi = _pozadi_strany(item, recept)
     abs_path = None if rel_path == 'blank' else _abs_image_path(rel_path)
     if abs_path is None or not abs_path.exists():
         return Image.new('RGB', PAGE_PX, pozadi)
@@ -2758,7 +2903,7 @@ def _fit_to_a4(page, pozadi):
     return platno
 
 
-def render_songbook_pdf(sequence, out_path, variant, on_page=None):
+def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     """Write the songbook to a PDF, one page at a time.
 
     Streamed deliberately. Pillow's save_all with append_images holds every page decoded
@@ -2771,18 +2916,21 @@ def render_songbook_pdf(sequence, out_path, variant, on_page=None):
     variant asks for it. Strana, která poměr A4 nemá, se předtím doplní okraji - jinak
     by ji to odvození DPI na A4 natáhlo.
     """
-    settings = EXPORT_VARIANTS[variant]
+    settings = EXPORT_KVALITY[recept['kvalita']]
     quality, max_edge = settings['quality'], settings['max_edge']
 
     first = True
     for item in sequence:
         started = time.time()
-        page = _open_export_page(item)
+        page = _open_export_page(item, recept)
         # Doplnit dřív než zmenšit, ať doplněná strana skončí na téže výšce jako
         # ostatní. Obráceně by se přes max_edge přetáhla o výšku doplněných okrajů.
-        page = _fit_to_a4(page, _hex_to_rgb(item.get('bg')))
+        page = _fit_to_a4(page, _pozadi_strany(item, recept))
         if max_edge and max(page.size) > max_edge:
             page.thumbnail((max_edge, max_edge), Image.LANCZOS)
+        if recept['cernobile']:
+            # Až teď, po doplnění okrajů: ty se skládají v RGB na barvu strany.
+            page = page.convert('L')
         width, height = page.size
         page.save(
             out_path,
@@ -2924,14 +3072,15 @@ def _precti_postup(lock_path: Path):
         return None
 
 
-def _build_export_file(book_id, variant, kind, paths):
+def _build_export_file(book_id, recept, paths):
     """Run one export to completion. Runs in a thread, so it must not raise."""
+    kind = recept['format']
     try:
         with app.app_context():
             songbook = Songbook.query.get(book_id)
             if songbook is None:
                 raise RuntimeError(f"zpěvník {book_id} mezitím zmizel")
-            sequence = build_songbook_export_sequence(songbook)
+            sequence = build_songbook_export_sequence(songbook, recept)
             celkem = len(sequence)
             zacatek = time.time()
             hotovo = [0]
@@ -2942,7 +3091,7 @@ def _build_export_file(book_id, variant, kind, paths):
 
             _zapis_postup(paths['lock'], 0, celkem, zacatek)
             if kind == 'pdf':
-                render_songbook_pdf(sequence, paths['part'], variant, on_page=krok)
+                render_songbook_pdf(sequence, paths['part'], recept, on_page=krok)
             else:
                 render_songbook_zip(sequence, paths['part'], on_page=krok)
         # Až tady je soubor hotový. Přejmenování je atomické, takže hotový export se
@@ -2960,7 +3109,7 @@ def _build_export_file(book_id, variant, kind, paths):
         paths['lock'].unlink(missing_ok=True)
 
 
-def _start_export_build(book_id, variant, kind, paths):
+def _start_export_build(book_id, recept, paths):
     """Claim the build and start it. Returns the state to report back."""
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -2987,16 +3136,16 @@ def _start_export_build(book_id, variant, kind, paths):
         return 'busy'
 
     threading.Thread(
-        target=_build_export_file, args=(book_id, variant, kind, paths), daemon=False
+        target=_build_export_file, args=(book_id, recept, paths), daemon=False
     ).start()
     return 'building'
 
 
-def _resolve_export_request(book_id, kind, variant=None):
+def _resolve_export_request(book_id, kind, recept=None):
     """Shared by the download and the status route: authorise, then locate the file.
 
-    `variant` se dá předat natvrdo; jinak se bere z adresy. Potřebuje to routa, která se
-    ptá na všechny tři varianty naráz.
+    `recept` se dá předat natvrdo; jinak se poskládá z adresy. Potřebuje to routa, která
+    se ptá na všechny předvolby naráz.
     """
     songbook = Songbook.query.get_or_404(book_id)
     if not can_view_songbook(current_user, songbook):
@@ -3010,23 +3159,30 @@ def _resolve_export_request(book_id, kind, variant=None):
                   else 'Stahování bude dostupné po ověření e-mailové adresy')
         return None, (jsonify({'error': zprava}), 403)
 
-    if kind == 'pdf':
-        variant = variant or request.args.get('q', 'small')
-        if variant not in EXPORT_VARIANTS:
-            return None, (jsonify({'error': 'neznámá varianta'}), 400)
-    else:
-        variant = 'orig'  # ZIP se nepřekóduje, varianta kvality pro něj nedává smysl
+    if recept is None:
+        try:
+            recept = recept_z_parametru(request.args, kind)
+        except ReceptChyba as chyba:
+            return None, (jsonify({'error': str(chyba)}), 400)
+    if recept['format'] != kind:
+        return None, (jsonify({'error': 'formát v adrese nesedí na recept'}), 400)
 
-    sequence = build_songbook_export_sequence(songbook)
+    token = token_receptu(recept)
+    sequence = build_songbook_export_sequence(songbook, recept)
     if len(sequence) > EXPORT_MAX_PAGES:
         return None, (jsonify({'error': 'zpěvník je příliš velký'}), 413)
+    if not sequence:
+        # Dá se nastavit tak, že nezbude jediná strana (jen obálka u zpěvníku bez
+        # obálky). Prázdné PDF je matoucí odpověď na „stáhni mi tohle".
+        return None, (jsonify({'error': 'z tohohle nastavení nevyjde ani jedna strana'}), 400)
 
-    key = songbook_export_key(sequence, variant)
+    key = songbook_export_key(sequence, token)
     return {
         'songbook': songbook,
-        'variant': variant,
+        'recept': recept,
+        'token': token,
         'kind': kind,
-        'paths': _export_paths(book_id, variant, kind, key),
+        'paths': _export_paths(book_id, token, kind, key),
     }, None
 
 
@@ -3065,7 +3221,7 @@ def songbook_export(book_id, kind):
             conditional=True,
         )
 
-    state = _start_export_build(book_id, resolved['variant'], kind, paths)
+    state = _start_export_build(book_id, resolved['recept'], paths)
     return jsonify({'state': state}), 429 if state == 'busy' else 202
 
 
@@ -3112,14 +3268,20 @@ def songbook_export_hotove(book_id):
     if not can_view_songbook(current_user, songbook) or not smi_tvorit(current_user):
         return jsonify({})
 
-    # Sekvence se staví jednou pro všechny tři: je to ta dražší část a pro PDF i ZIP
-    # je stejná.
-    sequence = build_songbook_export_sequence(songbook)
+    # Sekvence je ta dražší část, tak jednou na každou podobu, ne jednou na předvolbu.
+    # Dnes všechny tři předvolby berou celý zpěvník, takže se staví jedna jediná; až
+    # budou předvolby s jiným obsahem, přibude jich přesně tolik, kolik jich je potřeba.
+    sekvence_podle_tvaru = {}
     hotove = {}
-    for kind, variant in (('pdf', 'small'), ('pdf', 'high'), ('zip', 'orig')):
-        key = songbook_export_key(sequence, variant)
-        paths = _export_paths(book_id, variant, kind, key)
-        hotove[f"{kind}-{variant}"] = paths['final'].exists()
+    for jmeno, predvolba in PREDVOLBY.items():
+        recept = normalizuj_recept(**predvolba)
+        tvar = (recept['obsah'], recept['prazdne'])
+        if tvar not in sekvence_podle_tvaru:
+            sekvence_podle_tvaru[tvar] = build_songbook_export_sequence(songbook, recept)
+        sequence = sekvence_podle_tvaru[tvar]
+        paths = _export_paths(book_id, jmeno, recept['format'],
+                              songbook_export_key(sequence, jmeno))
+        hotove[f"{recept['format']}-{jmeno}"] = paths['final'].exists()
     return jsonify(hotove)
 
 
@@ -3522,7 +3684,7 @@ def posli_test(adresa):
 
 @app.cli.command("export-bench")
 @click.argument("book_id")
-@click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
+@click.option("--variant", default="small", type=click.Choice(PREDVOLBY_PDF))
 @click.option("--keep", is_flag=True, help="nechat vygenerovaný soubor na disku")
 @with_appcontext
 def export_bench(book_id, variant, keep):
@@ -3538,7 +3700,8 @@ def export_bench(book_id, variant, keep):
     if not songbook:
         raise SystemExit(f"❌ zpěvník {book_id} neexistuje")
 
-    sequence = build_songbook_export_sequence(songbook)
+    recept = normalizuj_recept(**PREDVOLBY[variant])
+    sequence = build_songbook_export_sequence(songbook, recept)
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     out_path = EXPORTS_DIR / f"bench-{book_id}-{variant}.pdf"
     out_path.unlink(missing_ok=True)
@@ -3547,7 +3710,7 @@ def export_bench(book_id, variant, keep):
     # dřív nebo později rozešla a měřilo by se něco jiného, než co dělá server.
     casy = []
     zacatek = time.time()
-    render_songbook_pdf(sequence, out_path, variant, on_page=casy.append)
+    render_songbook_pdf(sequence, out_path, recept, on_page=casy.append)
     celkem = time.time() - zacatek
     casy_ms = sorted(round(c * 1000) for c in casy)
     velikost = out_path.stat().st_size
@@ -3555,7 +3718,7 @@ def export_bench(book_id, variant, keep):
     maxrss = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     maxrss_mb = maxrss / 1024 / 1024 if sys.platform == 'darwin' else maxrss / 1024
 
-    nastaveni = EXPORT_VARIANTS[variant]
+    nastaveni = EXPORT_KVALITY[recept['kvalita']]
     print(f"zpěvník {book_id}: {len(sequence)} stran, varianta {variant} "
           f"(q{nastaveni['quality']}, delší hrana "
           f"{nastaveni['max_edge'] or 'beze změny'})")
@@ -3578,7 +3741,7 @@ def export_bench(book_id, variant, keep):
 
 
 @app.cli.command("export-warm")
-@click.option("--variant", default="small", type=click.Choice(sorted(EXPORT_VARIANTS)))
+@click.option("--variant", default="small", type=click.Choice(PREDVOLBY_PDF))
 @click.option("--public-only/--all", default=True,
               help="jen naše veřejné zpěvníky, nebo i uživatelské")
 @click.option("--songbook", "songbook_ids", multiple=True,
@@ -3608,18 +3771,19 @@ def export_warm(variant, public_only, songbook_ids):
         if chybi:
             print(f"  ⚠️  neznámé zpěvníky: {sorted(chybi)}")
 
+    recept = normalizuj_recept(**PREDVOLBY[variant])
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     zacatek = time.time()
     postaveno = preskoceno = 0
     celkem_bytu = 0
 
     for songbook in songbooks:
-        sequence = build_songbook_export_sequence(songbook)
+        sequence = build_songbook_export_sequence(songbook, recept)
         if not sequence or len(sequence) > EXPORT_MAX_PAGES:
             print(f"  {songbook.id}  přeskočeno ({len(sequence)} stran)")
             continue
         key = songbook_export_key(sequence, variant)
-        paths = _export_paths(songbook.id, variant, 'pdf', key)
+        paths = _export_paths(songbook.id, variant, recept['format'], key)
         if paths['final'].exists():
             preskoceno += 1
             celkem_bytu += paths['final'].stat().st_size
@@ -3652,7 +3816,7 @@ def export_warm(variant, public_only, songbook_ids):
                 _hotovo[0] += 1
                 _zapis_postup(_paths['lock'], _hotovo[0], _celkem, _t0)
 
-            render_songbook_pdf(sequence, paths['part'], variant, on_page=krok)
+            render_songbook_pdf(sequence, paths['part'], recept, on_page=krok)
             os.replace(paths['part'], paths['final'])
         except BaseException:
             paths['part'].unlink(missing_ok=True)

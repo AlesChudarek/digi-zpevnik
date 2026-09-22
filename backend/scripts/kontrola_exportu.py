@@ -33,11 +33,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path[:0] = [str(PROJECT_ROOT), str(PROJECT_ROOT / "backend")]
 
 from backend.app import (  # noqa: E402
-    app, db, Songbook, EXPORTS_DIR, _export_paths,
-    build_songbook_export_sequence, songbook_export_key,
+    app, db, Songbook, EXPORTS_DIR, PREDVOLBY, _export_paths,
+    build_songbook_export_sequence, normalizuj_recept, songbook_export_key,
 )
-
-VARIANTY = (('pdf', 'small'), ('pdf', 'high'), ('zip', 'orig'))
 
 
 def vada_pdf(cesta, cekano_stran):
@@ -93,20 +91,23 @@ def main():
         vadne = []
         print(f"{'zpěvník':15s} {'veřejný':8s} {'stran':>5s}  small  high   zip")
         for kniha in knihy:
-            sekvence = build_songbook_export_sequence(kniha)
             stav = {}
-            for kind, varianta in VARIANTY:
-                cesty = _export_paths(kniha.id, varianta, kind,
-                                      songbook_export_key(sekvence, varianta))
+            stran = 0
+            for jmeno, predvolba in PREDVOLBY.items():
+                recept = normalizuj_recept(**predvolba)
+                sekvence = build_songbook_export_sequence(kniha, recept)
+                stran = max(stran, len(sekvence))
+                cesty = _export_paths(kniha.id, jmeno, recept['format'],
+                                      songbook_export_key(sekvence, jmeno))
                 ocekavane.add(cesty['final'].name)
-                stav[varianta] = cesty['final'].exists()
-                if stav[varianta] and args.overit_obsah:
-                    vada = (vada_zip if kind == 'zip' else vada_pdf)(
+                stav[jmeno] = cesty['final'].exists()
+                if stav[jmeno] and args.overit_obsah:
+                    vada = (vada_zip if recept['format'] == 'zip' else vada_pdf)(
                         cesty['final'], len(sekvence))
                     if vada:
                         vadne.append((cesty['final'].name, vada))
             print(f"{kniha.id:15s} {'ano' if kniha.is_public else 'ne':8s} "
-                  f"{len(sekvence):5d}  "
+                  f"{stran:5d}  "
                   f"{'✓' if stav['small'] else '·':6s} "
                   f"{'✓' if stav['high'] else '·':6s} "
                   f"{'✓' if stav['orig'] else '·'}")

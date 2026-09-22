@@ -409,6 +409,75 @@ def main():
                        "a rovnou se předgeneruje nová verze PDF, nečeká se na stažení",
                        ", ".join(sorted(nove)) or "nic nevzniklo")
 
+        print("\n── recept: vlastní nastavení stažení ──")
+        # Varianty už nejsou tři zadrátované, ale pojmenované předvolby nad obecným
+        # receptem. Adresa `?q=small` je celý dosavadní tvar a musí fungovat beze změny;
+        # cokoliv navíc skládá vlastní recept s vlastním souborem v cache.
+        pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf?q=small")
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+
+        def stahni(dotaz, timeout=300):
+            """Vyžádá si export, počká na dostavění a vrátí (status, obsah)."""
+            adresa = f"/songbook/{BOOK}/export.pdf{dotaz}"
+            kod = admin.get(adresa)[0]
+            if kod == 202:
+                pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf{dotaz}")
+                kod = admin.get(adresa)[0]
+            return kod, admin.get(adresa)[1]
+
+        ocekavane = {}
+        for popis, dotaz in (("jen obálka", "?obsah=jen-obalka"),
+                             ("jen obsah", "?obsah=jen-obsah"),
+                             ("bez prázdných stran", "?prazdne=0"),
+                             ("černobíle", "?cernobile=1")):
+            kolik = subprocess.run(
+                [str(VENV_PY), "-c",
+                 'import os, sys\n'
+                 'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
+                 'from backend.app import (app, build_songbook_export_sequence,\n'
+                 '                         recept_z_parametru)\n'
+                 'from urllib.parse import parse_qs\n'
+                 'from backend.models import Songbook\n'
+                 'with app.app_context():\n'
+                 f'    args = {{k: v[0] for k, v in parse_qs("{dotaz[1:]}").items()}}\n'
+                 '    class A(dict):\n'
+                 '        def get(self, k, d=None): return dict.get(self, k, d)\n'
+                 f'    r = recept_z_parametru(A(args), "pdf")\n'
+                 f'    sb = Songbook.query.get("{BOOK}")\n'
+                 '    print(len(build_songbook_export_sequence(sb, r)))\n'],
+                env=env, capture_output=True, text=True)
+            cekano = int(kolik.stdout.strip() or 0)
+            ocekavane[dotaz] = cekano
+            kod, data = stahni(dotaz)
+            v_pdf = pocet_stran_pdf(data)
+            zkontroluj(kod == 200 and data[:5] == b"%PDF-",
+                       f"{popis}: stáhne se platné PDF", f"status {kod}")
+            zkontroluj(v_pdf == cekano and cekano > 0,
+                       f"{popis}: má tolik stran, kolik z nastavení vychází",
+                       f"čekáno {cekano}, v PDF {v_pdf}")
+
+        zkontroluj(ocekavane["?obsah=jen-obalka"] < ocekavane["?obsah=jen-obsah"],
+                   "jen obálka je kratší než jen obsah",
+                   f"{ocekavane['?obsah=jen-obalka']} vs {ocekavane['?obsah=jen-obsah']}")
+
+        # Dva zápisy téhož přání nesmí dát dva soubory v cache.
+        pred = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        stahni("?cernobile=1&obsah=vse")
+        po = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        zkontroluj(po == pred,
+                   "týž recept zapsaný jinak trefí tentýž soubor v cache",
+                   f"přibylo {sorted(po - pred)}")
+
+        vlastni = sorted(EXPORTS_DIR.glob(f"{BOOK}-c*.pdf"))
+        zkontroluj(len(vlastni) == 4,
+                   "každý jiný recept má vlastní soubor", f"{len(vlastni)} souborů")
+
+        for dotaz, kde in (("?kvalita=ultra", "kvalita"), ("?obsah=neco", "obsah"),
+                           ("?neznama=1", "neznámá volba")):
+            kod = admin.get(f"/songbook/{BOOK}/export.pdf{dotaz}")[0]
+            zkontroluj(kod == 400, f"nesmysl v {kde} se odmítne", f"status {kod}")
+
         print("\n── úklid řadí podle posledního stažení, ne podle postavení ──")
         # Bez tohohle byl mtime čas postavení, takže soubor stahovaný každý týden pět let
         # vypadal jako nejstarší v adresáři a odešel dřív než něco, co si nikdo nevyžádal
