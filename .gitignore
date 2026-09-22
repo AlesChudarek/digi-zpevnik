@@ -66,3 +66,8 @@ backend/init_db.py
 # Pipeline pro úklid obrázků a nahrání na server. Pracovala s data/public/images/songbooks
 # a volala povysit_obalky.py - obojí zaniklo migrací úložiště.
 scripts/uklid-a-nahrat.sh
+
+# Ikony, na které v aplikaci nic neukazuje. Na disku zůstávají, ať je Aleš má po ruce,
+# ale do repozitáře nepatří - většinou jde o odložené verze (edit_old, jump_up_old)
+# nebo o návrhy, které se nakonec nepoužily.
+frontend/static/img/icons/nepouzite/
