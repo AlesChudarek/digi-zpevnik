@@ -21,6 +21,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func
 import shutil
+import tempfile
 from uuid import uuid4
 from io import BytesIO
 
@@ -92,6 +93,8 @@ RECEPT_VYCHOZI = {
     'obsah': 'vse',         # vse | jen-obsah | jen-obalka
     'prazdne': True,        # nechat prázdné strany (u tisku nutné, obálka je složený list)
     'cernobile': False,
+    'strany': '',           # '' = celý zpěvník, jinak '12,24-31,50' čísly stran zpěvníku
+    'brozura': False,       # dvě strany na list A4 na šířku, v pořadí na složení
 }
 PREDVOLBY = {
     'small': {'format': 'pdf', 'kvalita': 'small'},
@@ -2632,6 +2635,50 @@ class ReceptChyba(ValueError):
     """Nesmyslný recept. Nese hlášku, která smí ven k uživateli."""
 
 
+def cisla_rozsahu(zapis):
+    """Z „12, 24-31, 50“ udělá množinu čísel stran.
+
+    Čísla jsou ta, která zpěvník ukazuje ve čtečce a v obsahu, ne pořadí v souboru:
+    zpěvník složený z cizích písní má vlastní číslování a uživatel vidí to svoje.
+    """
+    cisla = set()
+    for kus in str(zapis).replace(';', ',').replace('–', '-').split(','):
+        kus = kus.strip()
+        if not kus:
+            continue
+        casti = [c.strip() for c in kus.split('-')]
+        if len(casti) > 2 or not all(c.isdigit() for c in casti):
+            raise ReceptChyba(f"„{kus}“ není číslo strany ani rozsah")
+        od = int(casti[0])
+        do = int(casti[-1])
+        if od < 1 or do < 1 or od > 99999 or do > 99999:
+            raise ReceptChyba("čísla stran musí být od 1 výš")
+        if do < od:
+            raise ReceptChyba(f"rozsah „{kus}“ je pozpátku")
+        if do - od > EXPORT_MAX_PAGES:
+            raise ReceptChyba("rozsah je příliš dlouhý")
+        cisla.update(range(od, do + 1))
+        if len(cisla) > EXPORT_MAX_PAGES:
+            raise ReceptChyba("vybráno je příliš mnoho stran")
+    return cisla
+
+
+def zapis_rozsahu(cisla):
+    """Zpátky do kanonického „12,24-31,50“.
+
+    Kanonický tvar je podmínka, ne kosmetika: z receptu se počítá token a z něj název
+    souboru v cache. „50, 12, 24-31“ a „12,24-31,50“ je totéž přání a musí dát tentýž
+    soubor, ne dva.
+    """
+    useky = []
+    for cislo in sorted(cisla):
+        if useky and cislo == useky[-1][1] + 1:
+            useky[-1][1] = cislo
+        else:
+            useky.append([cislo, cislo])
+    return ','.join(str(a) if a == b else f"{a}-{b}" for a, b in useky)
+
+
 def normalizuj_recept(**volby):
     """Doplní výchozí hodnoty, ověří je a srovná recept do kanonického tvaru.
 
@@ -2653,12 +2700,15 @@ def normalizuj_recept(**volby):
         raise ReceptChyba("neznámá volba obsahu")
     recept['prazdne'] = bool(recept['prazdne'])
     recept['cernobile'] = bool(recept['cernobile'])
+    recept['brozura'] = bool(recept['brozura'])
+    recept['strany'] = zapis_rozsahu(cisla_rozsahu(recept['strany'])) if recept['strany'] else ''
 
     if recept['format'] == 'zip':
-        # ZIP balí originály, takže kvalita ani černobílá pro něj neznamenají nic.
-        # Srovnat je na jednu hodnotu, ať se cache netříští o volby bez účinku.
+        # ZIP balí originály, takže kvalita, černobílá ani brožura pro něj neznamenají
+        # nic. Srovnat je na jednu hodnotu, ať se cache netříští o volby bez účinku.
         recept['kvalita'] = 'originaly'
         recept['cernobile'] = False
+        recept['brozura'] = False
     elif recept['kvalita'] not in ('small', 'high'):
         raise ReceptChyba("kvalita musí být small nebo high")
 
@@ -2703,8 +2753,9 @@ def recept_z_parametru(args, kind=None):
     zaklad = {'format': 'pdf' if kind == 'pdf' else 'zip'}
     if args.get('format') not in (None, 'pdf', 'zip'):
         raise ReceptChyba("formát musí být pdf nebo zip")
-    vlastni = {k: args.get(k) for k in ('kvalita', 'obsah') if args.get(k) is not None}
-    for k in ('prazdne', 'cernobile'):
+    vlastni = {k: args.get(k) for k in ('kvalita', 'obsah', 'strany')
+               if args.get(k) is not None}
+    for k in ('prazdne', 'cernobile', 'brozura'):
         if args.get(k) is not None:
             vlastni[k] = args.get(k) not in ('0', 'false', 'ne', '')
 
@@ -2787,6 +2838,12 @@ def _uprav_sekvenci(sequence, recept):
         sequence = [p for p in sequence if p['kind'] == 'cover']
     if not recept['prazdne']:
         sequence = [p for p in sequence if p['file'] != 'blank']
+    if recept['strany']:
+        # Rozsah vybírá z obsahu, obálku řídí volba `obsah`. Držet to odděleně je
+        # předvídatelnější než hádat, jestli „strany 22-23“ znamená i bez obálky.
+        cisla = cisla_rozsahu(recept['strany'])
+        sequence = [p for p in sequence
+                    if p['kind'] != 'content' or p.get('page_number') in cisla]
     return sequence
 
 
@@ -2912,6 +2969,115 @@ def _fit_to_a4(page, pozadi):
     return platno
 
 
+def poradi_brozury(pocet):
+    """Pořadí stran na listech sešité brožury, po dvojicích (levá, pravá).
+
+    Sešitá vazba: listy se položí na sebe, přeloží napůl a sešijí středem. Vnější list
+    tedy nese poslední a první stranu, další druhou a předposlední a tak dál. Počet se
+    doplní na násobek čtyř, protože jeden list dá čtyři strany; čísla nad `pocet`
+    znamenají prázdnou stranu.
+
+    Vrací dvojice v pořadí tisku: líc listu, rub listu, líc dalšího listu...
+    """
+    celkem = (pocet + 3) // 4 * 4
+    dvojice = []
+    vlevo, vpravo = celkem, 1
+    while vpravo < vlevo:
+        dvojice.append((vlevo, vpravo))          # líc
+        dvojice.append((vpravo + 1, vlevo - 1))  # rub
+        vpravo += 2
+        vlevo -= 2
+    return dvojice
+
+
+def _slozena_dvojstrana(leva, prava, velikost, pozadi):
+    """Dvě strany vedle sebe na jeden list A4 na šířku.
+
+    Obě půlky mají poměr A4 na výšku (`_fit_to_a4` to zařídí u každé strany), takže
+    dvě vedle sebe dají přesně A4 na šířku - není co dopočítávat ani ořezávat.
+    """
+    sirka, vyska = velikost
+    list = Image.new('RGB', (sirka * 2, vyska), pozadi)
+    for posun, strana in ((0, leva), (sirka, prava)):
+        if strana is None:
+            continue
+        if strana.size != velikost:
+            strana = strana.resize(velikost, Image.LANCZOS)
+        list.paste(strana, (posun, 0))
+    return list
+
+
+# Mezikrok brožury se ukládá ve vyšší kvalitě než výsledek. Strana projde JPEGem
+# dvakrát a na q75 by se to na akordových značkách projevilo; q95 je znatelně větší
+# soubor, ale leží jen na disku a po složení se smaže.
+BROZURA_MEZIKROK_QUALITY = 95
+
+
+def _render_brozura(sequence, out_path, recept, on_page=None):
+    """Zpěvník jako sešitá brožura: dvě strany na list A4 na šířku.
+
+    Narozdíl od běžného exportu tohle nejde odbavit stranu po straně: první list nese
+    poslední stranu, takže se musí znát celý zpěvník. Držet ho přitom v paměti nejde -
+    123 stran v plné kvalitě je přes 1,5 GB, což je víc, než kolik má server celkem.
+    Strany se proto odloží na disk a při skládání listů se čtou po dvou; v paměti jsou
+    tak nanejvýš tři obrázky bez ohledu na délku zpěvníku.
+    """
+    settings = EXPORT_KVALITY[recept['kvalita']]
+    quality, max_edge = settings['quality'], settings['max_edge']
+    vyska = max_edge or PAGE_PX[1]
+    velikost = (round(vyska * A4_INCHES[0] / A4_INCHES[1]), vyska)
+
+    with tempfile.TemporaryDirectory(prefix='brozura-') as odkladiste:
+        odkladiste = Path(odkladiste)
+        pocet = 0
+        for poradi, item in enumerate(sequence, start=1):
+            page = _fit_to_a4(_open_export_page(item, recept), _pozadi_strany(item, recept))
+            if page.size != velikost:
+                zmenseny = page.resize(velikost, Image.LANCZOS)
+                page.close()
+                page = zmenseny
+            page.save(odkladiste / f"{poradi:04d}.jpg", 'JPEG',
+                      quality=BROZURA_MEZIKROK_QUALITY)
+            page.close()
+            pocet = poradi
+
+        def nacti(cislo):
+            """Odložená strana, nebo None pro dopsaný prázdný list vazby."""
+            if cislo > pocet:
+                return None
+            obrazek = Image.open(odkladiste / f"{cislo:04d}.jpg")
+            obrazek.load()
+            return obrazek
+
+        first = True
+        for leva, prava in poradi_brozury(pocet):
+            started = time.time()
+            l, p = nacti(leva), nacti(prava)
+            # Doplněné strany jsou bílé: je to přidaný list vazby, ne strana zpěvníku.
+            list_papiru = _slozena_dvojstrana(l, p, velikost, (255, 255, 255))
+            for obrazek in (l, p):
+                if obrazek is not None:
+                    obrazek.close()
+            if recept['cernobile']:
+                list_papiru = list_papiru.convert('L')
+            sirka, vyska_listu = list_papiru.size
+            # A4 na šířku, takže delší rozměr papíru odpovídá šířce obrázku.
+            list_papiru.save(out_path, 'PDF', dpi=(sirka / A4_INCHES[1],
+                                                   vyska_listu / A4_INCHES[0]),
+                             quality=quality, append=not first)
+            list_papiru.close()
+            first = False
+            if on_page:
+                # Postup se počítá ve stranách zpěvníku, ne v listech papíru: čekající
+                # uživatel zná počet stran, ne kolik z nich vyjde listů.
+                for cislo in (leva, prava):
+                    if cislo <= pocet:
+                        on_page(time.time() - started)
+
+        if first:
+            Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
+
+
 def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     """Write the songbook to a PDF, one page at a time.
 
@@ -2925,6 +3091,10 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     variant asks for it. Strana, která poměr A4 nemá, se předtím doplní okraji - jinak
     by ji to odvození DPI na A4 natáhlo.
     """
+    if recept['brozura']:
+        _render_brozura(sequence, out_path, recept, on_page)
+        return
+
     settings = EXPORT_KVALITY[recept['kvalita']]
     quality, max_edge = settings['quality'], settings['max_edge']
 
@@ -3150,6 +3320,34 @@ def _start_export_build(book_id, recept, paths):
     return 'building'
 
 
+def pisne_na_stranach(book_id, cisla):
+    """Písně na vybraných stranách, s poznámkou, kterých se vybral jen kus.
+
+    Pro souhrn pod polem s rozsahem: bez něj člověk netuší, co si to vlastně navolil.
+    Strana, na které začíná další píseň, patří oběma - proto se počítá průnik, ne
+    rozsah od-do. „Nekompletní“ znamená, že píseň má i strany, které vybrané nejsou;
+    typicky když někdo vezme 22-23 a píseň pokračuje na 24.
+    """
+    radky = SongbookPage.query.filter_by(songbook_id=book_id).all()
+    strany_pisne = {}
+    for radek in radky:
+        strany_pisne.setdefault(radek.song_id, set()).add(radek.page_number)
+
+    vybrane = []
+    for song_id, strany in strany_pisne.items():
+        prunik = strany & cisla
+        if not prunik:
+            continue
+        pisen = db.session.get(Song, song_id)
+        vybrane.append({
+            'od': min(prunik),
+            'nazev': (pisen.title if pisen else '') or 'Bez názvu',
+            'nekompletni': prunik != strany,
+        })
+    vybrane.sort(key=lambda p: p['od'])
+    return [{'nazev': p['nazev'], 'nekompletni': p['nekompletni']} for p in vybrane]
+
+
 def _resolve_export_request(book_id, kind, recept=None):
     """Shared by the download and the status route: authorise, then locate the file.
 
@@ -3289,11 +3487,18 @@ def songbook_export_hotove(book_id):
         except ReceptChyba as chyba:
             return jsonify({'error': str(chyba)}), 400
         sekvence = build_songbook_export_sequence(songbook, recept)
+        odpoved = {'hotovo': False, 'stran': len(sekvence)}
+        if recept['strany']:
+            odpoved['pisne'] = pisne_na_stranach(book_id, cisla_rozsahu(recept['strany']))
+        if recept['brozura']:
+            # Listy papíru, ne strany: na tisk je to to číslo, které člověk potřebuje.
+            odpoved['listu'] = (len(sekvence) + 3) // 4 * 2
         if not sekvence or len(sekvence) > EXPORT_MAX_PAGES:
-            return jsonify({'hotovo': False, 'stran': len(sekvence)})
+            return jsonify(odpoved)
         cesty = _export_paths(book_id, token_receptu(recept), recept['format'],
                               songbook_export_key(sekvence, token_receptu(recept)))
-        return jsonify({'hotovo': cesty['final'].exists(), 'stran': len(sekvence)})
+        odpoved['hotovo'] = cesty['final'].exists()
+        return jsonify(odpoved)
 
     sekvence_podle_tvaru = {}
     hotove = {}

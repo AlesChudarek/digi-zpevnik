@@ -336,7 +336,23 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
         Nápovědy „i“ u kvality, obsahu, prázdných stran a černobílé.
         Zanikly tím dvě různé nabídky formátů (`.download-menu` ve čtečce
         a `.download-chooser` v Mých zpěvnících) — šablony se zkrátily o ~240 řádků.
-      - [ ] fáze 3: rozsah stran a brožura
+      - [X] **fáze 3 hotová na backendu.** `strany` a `brozura` v receptu, UI je zatím
+        neukazuje (domluveno, že se doladí potom).
+        Rozsah se zadává jako `12, 24-31, 50` a čísly stran zpěvníku. Zápis se srovnává
+        do kanonického tvaru (`50,12,24-31` → `12,24-31,50`), jinak by totéž přání dalo
+        dva soubory v cache. Rozsah vybírá z obsahu, obálku dál řídí volba `obsah` —
+        držet to odděleně je předvídatelnější než hádat, co „strany 22-23“ znamená.
+        `export-hotove` u rozsahu vrací i seznam písní s příznakem `nekompletni`, takže
+        souhrn pod polem nebude potřebovat další endpoint.
+        Brožura skládá dvě strany na list A4 na šířku v pořadí na sešití. Ověřeno, že po
+        složení jdou strany 1..N pro 4, 8, 12 i 26 stran, a že MediaBox je přesně
+        297×210 mm. **Nejde odbavit stranu po straně** (první list nese poslední stranu),
+        a držet celý zpěvník v paměti nešlo — 123 stran v plné kvalitě je přes 1,5 GB,
+        víc, než kolik má server celkem. Strany se proto odkládají na disk a čtou po
+        dvou; naměřený vrchol paměti 214 MB, tedy stejně jako u běžného exportu.
+        Mezikrok se ukládá v q95, aby strana neprošla dvakrát agresivním JPEGem.
+      - [ ] fáze 4: vystavit rozsah stran a brožuru v okně (souhrn písní pod polem,
+        u nekompletní písně poznámka; u brožury počet listů papíru)
 - [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
       vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —
       návštěvnost je řádu jednoho člověka za měsíc. Číslo je potřeba promyslet.

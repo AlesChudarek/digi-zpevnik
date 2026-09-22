@@ -37,6 +37,15 @@ BOOK_RGB = "00009"      # obsahuje stranu bez alfa kanálu
 selhani = []
 
 
+def rozmery_stranky(data):
+    """Rozměry první stránky PDF v bodech. Na rozlišení na výšku a na šířku to stačí."""
+    m = re.search(rb"/MediaBox\s*\[\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*\]", data)
+    if not m:
+        return None
+    return (round(float(m.group(3)) - float(m.group(1))),
+            round(float(m.group(4)) - float(m.group(2))))
+
+
 def zkontroluj(podminka, popis, detail=""):
     print(f"  {'✅' if podminka else '❌'} {popis}{('  ' + detail) if detail else ''}")
     if not podminka:
@@ -477,6 +486,62 @@ def main():
                            ("?neznama=1", "neznámá volba")):
             kod = admin.get(f"/songbook/{BOOK}/export.pdf{dotaz}")[0]
             zkontroluj(kod == 400, f"nesmysl v {kde} se odmítne", f"status {kod}")
+
+        print("\n── rozsah stran ──")
+        # Čísla jsou ta, která zpěvník ukazuje ve čtečce a v obsahu. Zpěvník složený
+        # z cizích písní má vlastní číslování a uživatel vidí to svoje.
+        stav = json.loads(admin.get(
+            f"/songbook/{BOOK}/export-hotove?strany=3-4&obsah=jen-obsah")[1])
+        zkontroluj(stav.get("stran") == 2, "rozsah 3-4 vybere dvě strany", str(stav))
+        zkontroluj(len(stav.get("pisne") or []) == 2,
+                   "a řekne, které písně na nich jsou",
+                   ", ".join(p["nazev"] for p in stav.get("pisne") or []))
+
+        kod, data = stahni("?strany=3-4&obsah=jen-obsah")
+        zkontroluj(kod == 200 and pocet_stran_pdf(data) == 2,
+                   "a stáhne se PDF právě o těch dvou stranách",
+                   f"status {kod}, stran {pocet_stran_pdf(data)}")
+
+        # Kanonický tvar: „4,3“ je totéž přání jako „3-4“ a nesmí dát druhý soubor.
+        pred = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        stahni("?strany=4,3&obsah=jen-obsah")
+        po = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        zkontroluj(po == pred, "„4,3“ trefí tentýž soubor jako „3-4“",
+                   f"přibylo {sorted(po - pred)}")
+
+        for zapis, proc in (("31-24", "pozpátku"), ("abc", "nečíslo"), ("0", "nula")):
+            kod = admin.get(f"/songbook/{BOOK}/export.pdf?strany={zapis}")[0]
+            zkontroluj(kod == 400, f"rozsah {proc} se odmítne", f"status {kod}")
+
+        print("\n── brožura ──")
+        stav = json.loads(admin.get(f"/songbook/{BOOK}/export-hotove?brozura=1")[1])
+        stran_celkem = stav.get("stran") or 0
+        cekano_listu = (stran_celkem + 3) // 4 * 2
+        zkontroluj(stav.get("listu") == cekano_listu,
+                   "okno se dozví počet listů papíru, ne jen stran",
+                   f"{stran_celkem} stran -> {stav.get('listu')} listů")
+
+        kod, data = stahni("?brozura=1")
+        zkontroluj(kod == 200 and data[:5] == b"%PDF-", "brožura se stáhne",
+                   f"status {kod}")
+        zkontroluj(pocet_stran_pdf(data) == cekano_listu,
+                   "má tolik listů, kolik z počtu stran vychází",
+                   f"čekáno {cekano_listu}, v PDF {pocet_stran_pdf(data)}")
+        rozmer = rozmery_stranky(data)
+        zkontroluj(rozmer is not None and rozmer[0] > rozmer[1],
+                   "a je na šířku, ne na výšku", str(rozmer))
+        zkontroluj(rozmer == (842, 595), "přesně A4 na šířku (297x210 mm)", str(rozmer))
+
+        # ZIP balí originály, takže brožura pro něj neznamená nic a nesmí založit
+        # vlastní soubor v cache.
+        pred_zip = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-*.zip")}
+        kod = admin.get(f"/songbook/{BOOK}/export.zip?brozura=1")[0]
+        if kod == 202:
+            pockej_na_export(admin, f"/songbook/{BOOK}/export-status/zip?brozura=1")
+        po_zip = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-*.zip")}
+        zkontroluj(all(not n.startswith(f"{BOOK}-c") for n in po_zip),
+                   "brožura u ZIPu nezaloží vlastní soubor, spadne do předvolby",
+                   ", ".join(sorted(po_zip)))
 
         print("\n── úklid řadí podle posledního stažení, ne podle postavení ──")
         # Bez tohohle byl mtime čas postavení, takže soubor stahovaný každý týden pět let
