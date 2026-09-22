@@ -351,8 +351,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
         víc, než kolik má server celkem. Strany se proto odkládají na disk a čtou po
         dvou; naměřený vrchol paměti 214 MB, tedy stejně jako u běžného exportu.
         Mezikrok se ukládá v q95, aby strana neprošla dvakrát agresivním JPEGem.
-      - [ ] fáze 4: vystavit rozsah stran a brožuru v okně (souhrn písní pod polem,
-        u nekompletní písně poznámka; u brožury počet listů papíru)
+      - [X] **fáze 4 hotová.** Okno ukazuje všechny volby: formát, kvalita, zahrnout,
+        strany, prázdné strany, barvy, tisk. Pořadí a tvar podle připomínek:
+        formát první (jeho volba schovává řádky pod ním), „Zahrnout" jako seznam místo
+        tří přepínačů (lámaly se dvě plus jedna), barvy jako přepínač originál/černobíle,
+        prázdné strany jako „vynechat" místo „nechat", tlačítko výchozí **Připravit**
+        (výchozí „Stáhnout" probliklo při každé změně něco, co ještě nikdo nevěděl).
+        Vyplnění rozsahu přepne „Zahrnout" na „jen obsah" — jinak vyjde na víc stran,
+        než kdo zadal. Přepíná se jen z výchozího stavu, výslovnou volbu nepřebije.
+        Souhrn pod volbami píše počet stran, u brožury i listů papíru a u rozsahu seznam
+        písní; chybný rozsah se ukáže červeně a tlačítko se vypne.
 - [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
       vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —
       návštěvnost je řádu jednoho člověka za měsíc. Číslo je potřeba promyslet.

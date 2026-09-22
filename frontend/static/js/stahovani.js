@@ -48,12 +48,18 @@ window.Stahovani = (function () {
     cernobile: 'Pro černobílý tisk. Průhledné obálky se složí na bílou, aby z barevné ' +
                'obálky nebyla celoplošná šedá. U neprůhledných obálek s tím nejde nic ' +
                'dělat. Soubor tím nemusí být menší.',
+    strany: 'Čísla stran tak, jak je ukazuje čtečka a obsah. Dá se vypsat po jedné ' +
+            'i rozsahem, třeba 12, 24-31, 50. Prázdné pole znamená celý zpěvník.',
+    brozura: 'Dvě strany vedle sebe na list A4 na šířku, v pořadí, ve kterém se listy ' +
+             'po vytištění položí na sebe, přeloží napůl a sešijí středem. Tiskni ' +
+             'oboustranně a otáčej podél delší hrany.',
   };
 
   let okno = null;          // prvky okna, postavené při prvním otevření
   let bezi = null;          // klíč běhu, na který se zrovna ptáme
   let zpevnik = null;       // id zpěvníku, se kterým je okno otevřené
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
+  let melRozsah = false;    // bylo pole s rozsahem stran vyplněné při minulé změně?
 
   /* ---------- stavba okna ---------- */
 
@@ -92,36 +98,57 @@ window.Stahovani = (function () {
         <div id="stahovani-nastaveni">
           <div class="stahovani-predvolby" id="stahovani-predvolby"></div>
 
+          <!-- Formát je první schválně: jeho volba schová kvalitu, barvy i brožuru,
+               a řádky nemají mizet nad tím, na co se člověk zrovna dívá. Zahrnout je
+               seznam, ne trojice přepínačů: tři možnosti s celými větami se do řádku
+               nevešly a lámaly se dvě plus jedna. -->
           <fieldset class="stahovani-vlastni" id="stahovani-vlastni" disabled>
             <legend class="stahovani-skryty">Vlastní nastavení</legend>
-            ${poleVolby('kvalita', 'Kvalita', [
-              {hodnota: 'small', popisek: 'menší soubor', vychozi: true},
-              {hodnota: 'high', popisek: 'plné rozlišení'},
-            ], 'kvalita')}
             ${poleVolby('format', 'Formát', [
               {hodnota: 'pdf', popisek: 'PDF', vychozi: true},
               {hodnota: 'zip', popisek: 'obrázky v ZIP'},
             ], null)}
-            ${poleVolby('obsah', 'Co stáhnout', [
-              {hodnota: 'vse', popisek: 'obálku i obsah', vychozi: true},
-              {hodnota: 'jen-obsah', popisek: 'jen obsah'},
-              {hodnota: 'jen-obalka', popisek: 'jen obálku'},
-            ], 'obsah')}
-            <div class="stahovani-radek">
-              <div class="stahovani-popisek">Strany${znakNapovedy('prazdne')}</div>
+            ${poleVolby('kvalita', 'Kvalita', [
+              {hodnota: 'small', popisek: 'menší soubor', vychozi: true},
+              {hodnota: 'high', popisek: 'plné rozlišení'},
+            ], 'kvalita')}
+            <div class="stahovani-radek" data-pole="obsah">
+              <div class="stahovani-popisek">Zahrnout${znakNapovedy('obsah')}</div>
+              <div class="stahovani-volby">
+                <select id="stahovani-obsah" class="stahovani-seznam">
+                  <option value="vse" selected>celý zpěvník</option>
+                  <option value="jen-obsah">jen obsah, bez obálky</option>
+                  <option value="jen-obalka">jen obálku</option>
+                </select>
+              </div>
+            </div>
+            <div class="stahovani-radek" data-pole="strany">
+              <div class="stahovani-popisek">Strany${znakNapovedy('strany')}</div>
+              <div class="stahovani-volby">
+                <input type="text" id="stahovani-strany" class="stahovani-text"
+                       placeholder="celý zpěvník, nebo třeba 12, 24-31, 50"
+                       inputmode="numeric" autocomplete="off">
+              </div>
+            </div>
+            <div class="stahovani-radek" data-pole="prazdne">
+              <div class="stahovani-popisek">Prázdné strany${znakNapovedy('prazdne')}</div>
               <div class="stahovani-volby">
                 <label class="stahovani-volba">
-                  <input type="checkbox" id="stahovani-prazdne" checked>
-                  <span>nechat prázdné strany</span>
+                  <input type="checkbox" id="stahovani-bez-prazdnych">
+                  <span>vynechat</span>
                 </label>
               </div>
             </div>
-            <div class="stahovani-radek">
-              <div class="stahovani-popisek">Barvy${znakNapovedy('cernobile')}</div>
+            ${poleVolby('barvy', 'Barvy', [
+              {hodnota: 'original', popisek: 'originál', vychozi: true},
+              {hodnota: 'cernobile', popisek: 'černobíle'},
+            ], 'cernobile')}
+            <div class="stahovani-radek" data-pole="brozura">
+              <div class="stahovani-popisek">Tisk${znakNapovedy('brozura')}</div>
               <div class="stahovani-volby">
                 <label class="stahovani-volba">
-                  <input type="checkbox" id="stahovani-cernobile">
-                  <span>černobíle</span>
+                  <input type="checkbox" id="stahovani-brozura">
+                  <span>brožura, dvě strany na list</span>
                 </label>
               </div>
             </div>
@@ -194,6 +221,10 @@ window.Stahovani = (function () {
       if (e.key === 'Escape' && !zaclona.hidden) zavri();
     });
     okno.nastaveni.addEventListener('change', zmenaVyberu);
+    // `change` u textového pole přijde až při opuštění, to je na živý souhrn pozdě.
+    okno.nastaveni.addEventListener('input', (e) => {
+      if (e.target.type === 'text') { srovnejPodleRozsahu(); obnovStav(); }
+    });
     okno.nastaveni.addEventListener('click', (e) => {
       const znak = e.target.closest('.napoveda-znak');
       if (znak) prepniNapovedu(znak);
@@ -240,13 +271,16 @@ window.Stahovani = (function () {
       return {format: p.format, parametry: {q: p.klic}};
     }
     const format = hodnota('format') || 'pdf';
-    const parametry = {obsah: hodnota('obsah') || 'vse'};
-    if (!okno.zaclona.querySelector('#stahovani-prazdne').checked) parametry.prazdne = '0';
+    const parametry = {obsah: okno.zaclona.querySelector('#stahovani-obsah').value};
+    if (okno.zaclona.querySelector('#stahovani-bez-prazdnych').checked) {
+      parametry.prazdne = '0';
+    }
+    const strany = okno.zaclona.querySelector('#stahovani-strany').value.trim();
+    if (strany) parametry.strany = strany;
     if (format === 'pdf') {
       parametry.kvalita = hodnota('kvalita') || 'small';
-      if (okno.zaclona.querySelector('#stahovani-cernobile').checked) {
-        parametry.cernobile = '1';
-      }
+      if (hodnota('barvy') === 'cernobile') parametry.cernobile = '1';
+      if (okno.zaclona.querySelector('#stahovani-brozura').checked) parametry.brozura = '1';
     }
     return {format, parametry};
   }
@@ -257,16 +291,28 @@ window.Stahovani = (function () {
     return dvojice.length ? '?' + dvojice.join('&') : '';
   }
 
+  /* Kdo si vypíše strany, myslí tím ty strany - ne je i s celou obálkou. Bez tohohle
+     zadal někdo „3-4" a dole mu naskočilo „vyjde na 6 stran", protože čtyři strany
+     obálky zůstaly. Přepíná se jen ve chvíli, kdy se pole poprvé vyplní, takže kdo si
+     obálku vrátí, o ni znovu nepřijde. */
+  function srovnejPodleRozsahu() {
+    const pole = okno.zaclona.querySelector('#stahovani-strany');
+    const maRozsah = pole.value.trim() !== '';
+    const obsah = okno.zaclona.querySelector('#stahovani-obsah');
+    if (maRozsah && !melRozsah && obsah.value === 'vse') obsah.value = 'jen-obsah';
+    melRozsah = maRozsah;
+  }
+
   function zmenaVyberu() {
     const vlastni = vybranaPredvolba() === 'vlastni';
     okno.vlastni.disabled = !vlastni;
     // ZIP balí originály, takže kvalita ani černobílá pro něj neznamenají nic - a server
     // je zahodí. Ať okno neukazuje volby, které nic neudělají.
     const jeZip = hodnota('format') === 'zip';
-    okno.zaclona.querySelectorAll('[data-pole="kvalita"]').forEach(
-      el => el.classList.toggle('nedostupne', jeZip));
-    okno.zaclona.querySelector('#stahovani-cernobile').closest('.stahovani-radek')
-      .classList.toggle('nedostupne', jeZip);
+    ['kvalita', 'barvy', 'brozura'].forEach(pole => {
+      const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
+      if (radek) radek.classList.toggle('nedostupne', jeZip);
+    });
     obnovStav();
   }
 
@@ -283,7 +329,7 @@ window.Stahovani = (function () {
     }
     // U vlastního nastavení se to musí doptat serveru. Odložit, ať se při proklikávání
     // voleb nestřílí dotaz za každé kliknutí.
-    nastavTlacitko(null);
+    nastavTlacitko(false);
     clearTimeout(dotazNaHotovo);
     dotazNaHotovo = setTimeout(async () => {
       const soucasny = dotazRetezec(Object.assign({format}, parametry));
@@ -294,9 +340,10 @@ window.Stahovani = (function () {
         // Mezitím se mohlo překlikat jinam; platí jen odpověď na aktuální výběr.
         const { format: f2, parametry: p2 } = recept();
         if (dotazRetezec(Object.assign({format: f2}, p2)) !== soucasny) return;
+        if (j.error) { chybaVNastaveni(j.error); return; }
         nastavTlacitko(!!j.hotovo);
-        okno.souhrn.textContent = j.stran
-          ? `Vyjde na ${stran(j.stran)}.`
+        okno.souhrn.classList.remove('stahovani-chyba');
+        okno.souhrn.textContent = j.stran ? popisVyberu(j)
           : 'Z tohohle nastavení nevyjde ani jedna strana.';
         okno.spustit.disabled = !j.stran;
       } catch (e) {
@@ -306,15 +353,43 @@ window.Stahovani = (function () {
     }, 250);
   }
 
+  function chybaVNastaveni(text) {
+    okno.souhrn.textContent = text;
+    okno.souhrn.classList.add('stahovani-chyba');
+    okno.spustit.disabled = true;
+  }
+
+  /** Věta pod volbami: kolik stran, kolik listů u brožury, a které písně u rozsahu. */
+  function popisVyberu(j) {
+    let veta = `Vyjde na ${stran(j.stran)}`;
+    if (j.listu) veta += `, tedy ${listu(j.listu)} papíru`;
+    veta += '.';
+    if (j.pisne && j.pisne.length) {
+      const jmena = j.pisne.map(
+        p => p.nekompletni ? `${p.nazev} (nekompletní)` : p.nazev);
+      veta += ' ' + jmena.join(', ') + '.';
+    }
+    return veta;
+  }
+
+  function listu(n) {
+    if (n === 1) return '1 list';
+    if (n >= 2 && n <= 4) return `${n} listy`;
+    return `${n} listů`;
+  }
+
   function stran(n) {
     if (n === 1) return '1 stranu';
     if (n >= 2 && n <= 4) return `${n} strany`;
     return `${n} stran`;
   }
 
+  /* Dokud se neví, jestli soubor leží v cache, je na tlačítku „Připravit". Obráceně to
+     při každé změně nastavení probliklo na „Stáhnout" a zpátky, protože odpověď serveru
+     přijde až za okamžik - a blikání tvrdilo něco, co ještě nikdo nevěděl. */
   function nastavTlacitko(hotovo) {
     okno.spustit.disabled = false;
-    okno.spustit.textContent = hotovo === false ? 'Připravit' : 'Stáhnout';
+    okno.spustit.textContent = hotovo ? 'Stáhnout' : 'Připravit';
   }
 
   /* ---------- otevření a zavření ---------- */
@@ -328,6 +403,9 @@ window.Stahovani = (function () {
     o.postup.hidden = true;
     o.spustit.hidden = false;
     o.zaclona.querySelectorAll('.napoveda-text').forEach(n => n.remove());
+    o.zaclona.querySelector('#stahovani-strany').value = '';
+    melRozsah = false;
+    o.souhrn.classList.remove('stahovani-chyba');
     o.zaclona.hidden = false;
     zmenaVyberu();
     oznacHotove(bookId);

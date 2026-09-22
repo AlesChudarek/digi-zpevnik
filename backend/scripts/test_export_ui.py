@@ -162,7 +162,24 @@ def main():
             zkontroluj("stran" in souhrn or "strany" in souhrn or "stranu" in souhrn,
                        "a rovnou řekne, na kolik stran to vyjde", souhrn)
 
-            page.evaluate("() => document.querySelector('input[name=obsah][value=jen-obalka]').click()")
+            usporadani = page.evaluate("""() => {
+              const radky = [...document.querySelectorAll('#stahovani-vlastni .stahovani-radek')];
+              return {poradi: radky.map(r => r.dataset.pole),
+                      zalomene: radky.filter(r => {
+                        const v = r.querySelector('.stahovani-volby');
+                        return v && v.scrollHeight > 30;
+                      }).map(r => r.dataset.pole)};
+            }""")
+            zkontroluj(usporadani["poradi"][0] == "format",
+                       "formát je první, protože jeho volba schovává řádky pod ním",
+                       ", ".join(usporadani["poradi"]))
+            zkontroluj(not usporadani["zalomene"],
+                       "žádný řádek voleb se neláme na dva",
+                       ", ".join(usporadani["zalomene"]))
+
+            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
+                          "        s.value = 'jen-obalka';"
+                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
             page.wait_for_timeout(900)
             jen_obalka = page.evaluate("""() => ({
               souhrn: document.getElementById('stahovani-souhrn').textContent,
@@ -172,12 +189,91 @@ def main():
             zkontroluj(jen_obalka["tlacitko"] == "Připravit",
                        "co není v cache, se nabízí jako Připravit", jen_obalka["tlacitko"])
 
-            # ZIP balí originály, takže kvalita ani černobílá pro něj nic neznamenají.
+            print("\n── tlačítko neprobliká ──")
+            # Odpověď serveru přijde až za okamžik. Kdyby bylo výchozí „Stáhnout",
+            # probliklo by při každé změně nastavení něco, co ještě nikdo nevěděl.
+            page.evaluate("() => document.getElementById('stahovani-brozura').click()")
+            behem = []
+            for _ in range(10):
+                behem.append(page.evaluate(
+                    "() => document.getElementById('stahovani-spustit').textContent"))
+                page.wait_for_timeout(60)
+            zkontroluj(all(t == "Připravit" for t in behem),
+                       "po změně nastavení tlačítko neblikne na Stáhnout",
+                       ", ".join(sorted(set(behem))))
+            page.wait_for_timeout(800)
+            souhrn_brozura = page.evaluate(
+                "() => document.getElementById('stahovani-souhrn').textContent")
+            zkontroluj("listů" in souhrn_brozura or "listy" in souhrn_brozura,
+                       "u brožury se píše i počet listů papíru", souhrn_brozura)
+            page.evaluate("() => document.getElementById('stahovani-brozura').click()")
+            page.wait_for_timeout(800)
+
+            print("\n── rozsah stran ──")
+            # Zpátky na celý zpěvník: kdo si výslovně zvolil „jen obálku", o ni přijít
+            # nemá, takže se rozsah do volby obsahu plete jen z výchozího stavu.
+            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
+                          "        s.value = 'vse';"
+                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.wait_for_timeout(700)
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '3-4';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(1000)
+            rozsah = page.evaluate("""() => ({
+              souhrn: document.getElementById('stahovani-souhrn').textContent,
+              obsah: document.getElementById('stahovani-obsah').value})""")
+            zkontroluj(rozsah["obsah"] == "jen-obsah",
+                       "vyplnění rozsahu odklikne obálku, ať nevyjde víc stran, než kdo zadal",
+                       rozsah["obsah"])
+            zkontroluj("2 strany" in rozsah["souhrn"],
+                       "rozsah 3-4 vyjde na dvě strany", rozsah["souhrn"])
+            zkontroluj("Aranka" in rozsah["souhrn"] or "Čo bolí" in rozsah["souhrn"],
+                       "a souhrn vypíše, které písně to jsou", rozsah["souhrn"])
+
+            # Ale jen z výchozího stavu. Kdo si obálku vrátí, o ni znovu nepřijde.
+            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
+                          "        s.value = 'vse';"
+                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '3-5';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(900)
+            zkontroluj(page.evaluate("() => document.getElementById('stahovani-obsah').value")
+                       == "vse",
+                       "ale výslovnou volbu obsahu už nepřepíše")
+
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '31-24';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(1000)
+            chybny = page.evaluate("""() => ({
+              souhrn: document.getElementById('stahovani-souhrn').textContent,
+              cervene: document.getElementById('stahovani-souhrn').classList.contains('stahovani-chyba'),
+              vypnute: document.getElementById('stahovani-spustit').disabled})""")
+            zkontroluj(chybny["cervene"] and chybny["vypnute"],
+                       "chybný rozsah se ukáže červeně a tlačítko se vypne",
+                       chybny["souhrn"])
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(900)
+
+            # ZIP balí originály, takže kvalita, barvy ani brožura pro něj nic neznamenají.
             page.evaluate("() => document.querySelector('input[name=format][value=zip]').click()")
-            page.wait_for_timeout(500)
-            zkontroluj(not page.evaluate(
-                "() => document.querySelector('[data-pole=kvalita]').getBoundingClientRect().height > 0"),
-                "u ZIPu zmizí volba kvality, protože by nic neudělala")
+            page.wait_for_timeout(600)
+            u_zipu = page.evaluate("""() => {
+              const videt = p => {
+                const r = document.querySelector(`[data-pole="${p}"]`);
+                return r ? r.getBoundingClientRect().height > 0 : null;
+              };
+              return {kvalita: videt('kvalita'), barvy: videt('barvy'),
+                      brozura: videt('brozura'), strany: videt('strany')};
+            }""")
+            zkontroluj(not u_zipu["kvalita"] and not u_zipu["barvy"] and not u_zipu["brozura"],
+                       "u ZIPu zmizí kvalita, barvy i brožura, protože by nic neudělaly",
+                       str(u_zipu))
+            zkontroluj(u_zipu["strany"], "ale rozsah stran zůstane, ten u ZIPu funguje")
             page.evaluate("() => document.querySelector('input[name=format][value=pdf]').click()")
             page.wait_for_timeout(300)
 
@@ -252,8 +348,10 @@ def main():
             page.wait_for_timeout(900)
             page.evaluate("() => document.querySelector('input[name=predvolba][value=vlastni]').click()")
             page.wait_for_timeout(300)
-            page.evaluate("() => document.querySelector('input[name=obsah][value=jen-obalka]').click()")
-            page.wait_for_timeout(700)
+            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
+                          "        s.value = 'jen-obalka';"
+                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.wait_for_timeout(900)
             with page.expect_download(timeout=300000) as info2:
                 page.evaluate("() => document.getElementById('stahovani-spustit').click()")
                 page.wait_for_timeout(1500)

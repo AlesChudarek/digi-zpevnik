@@ -3344,7 +3344,9 @@ def pisne_na_stranach(book_id, cisla):
             'nazev': (pisen.title if pisen else '') or 'Bez názvu',
             'nekompletni': prunik != strany,
         })
-    vybrane.sort(key=lambda p: p['od'])
+    # I jméno do klíče: na jedné straně můžou začínat dvě písně a pořadí by pak záviselo
+    # na tom, jak zrovna přišly z databáze.
+    vybrane.sort(key=lambda p: (p['od'], p['nazev']))
     return [{'nazev': p['nazev'], 'nekompletni': p['nekompletni']} for p in vybrane]
 
 
