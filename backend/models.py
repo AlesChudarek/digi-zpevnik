@@ -171,19 +171,6 @@ class Songbook(db.Model):
     img_path_cover_back_outer = cesta_obrazku("cover_back_outer")
     is_public = db.Column(db.Integer, default=0)
     pages = db.relationship("SongbookPage", backref="songbook", cascade="all, delete-orphan")
-    intros_outros = db.relationship("SongbookIntroOutroImage", backref="songbook", cascade="all, delete-orphan")
-
-class SongbookIntroOutroImage(db.Model):
-    __tablename__ = "songbook_intro_outro_images"
-
-    id = db.Column(db.Integer, primary_key=True)
-    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False)
-    type = db.Column(db.String, nullable=False)  # 'intro' nebo 'outro'
-    image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
-    sort_order = db.Column(db.Integer, default=0)
-
-    image = db.relationship("Obrazek")
-    image_path = cesta_obrazku("image")
 
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
