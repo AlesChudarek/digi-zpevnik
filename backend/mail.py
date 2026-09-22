@@ -49,14 +49,6 @@ def _nastaveni():
     }
 
 
-def posta_je_nastavena() -> bool:
-    try:
-        _nastaveni()
-        return True
-    except PostaNenastavena:
-        return False
-
-
 def posli_email(komu: str, predmet: str, text: str, html: str | None = None) -> None:
     """Pošle jednu zprávu. Při neúspěchu vyhodí výjimku, nikdy ji nepolyká.
 

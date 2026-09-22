@@ -256,7 +256,6 @@ try:
         Obrazek,
         SongImage,
         SongbookPage,
-        SongbookIntroOutroImage,
         Songbook,
         Author,
         User,
@@ -266,7 +265,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, SongImage, SongbookPage, SongbookIntroOutroImage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
+    from models import Song, Obrazek, SongImage, SongbookPage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -486,8 +485,6 @@ def zpevniky_s_obrazkem(cesta: str):
     ids = {r[0] for r in db.session.query(SongbookPage.songbook_id)
            .join(SongImage, SongImage.song_id == SongbookPage.song_id)
            .filter(SongImage.image_id == obraz.id).distinct()}
-    ids |= {r[0] for r in db.session.query(SongbookIntroOutroImage.songbook_id)
-            .filter_by(image_id=obraz.id).distinct()}
     ids |= {r[0] for r in db.session.query(Songbook.id).filter(db.or_(
         Songbook.cover_preview_id == obraz.id,
         Songbook.cover_front_outer_id == obraz.id,
@@ -536,12 +533,6 @@ def _book_storage_base(book: Songbook):
     koren = _koren_pro_zpevnik(book)
     rel = f"{koren}/songbooks/{book.id}"
     return IMAGES_DIR / rel, rel
-
-
-def _rel_for_stored_file(abs_path: Path, book: Songbook) -> str:
-    """DB path for a file already written somewhere under the book's base dir."""
-    base_abs, rel_prefix = _book_storage_base(book)
-    return str(Path(rel_prefix) / abs_path.relative_to(base_abs))
 
 
 def _je_nova_cesta(rel_path) -> bool:
@@ -668,7 +659,6 @@ def smaz_osirele_obrazky(kandidati):
     for obraz in Obrazek.query.filter(Obrazek.cesta.in_(kandidati)).all():
         pouzity = (
             db.session.query(SongImage.id).filter_by(image_id=obraz.id).first()
-            or db.session.query(SongbookIntroOutroImage.id).filter_by(image_id=obraz.id).first()
             or db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == obraz.id,
                 Songbook.cover_front_outer_id == obraz.id,
@@ -1987,7 +1977,6 @@ def api_delete_songbook(songbook_id):
     kandidati += [c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
                               sb.img_path_cover_back_inner, sb.img_path_cover_back_outer,
                               sb.img_path_cover_preview) if c]
-    kandidati += [io.image_path for io in sb.intros_outros if io.image_path]
 
     # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
     db.session.delete(sb)
@@ -2650,20 +2639,10 @@ def build_songbook_export_sequence(songbook):
     add(songbook.img_path_cover_front_outer, "cover")
     add(songbook.img_path_cover_front_inner, "cover")
 
-    for image in SongbookIntroOutroImage.query.filter_by(
-        songbook_id=songbook.id, type='intro'
-    ).order_by(SongbookIntroOutroImage.sort_order).all():
-        add(image.image_path, "intro")
-
     sequence.extend(
         {"file": page["file"], "kind": "content", "page_number": page["page_number"]}
         for page in build_songbook_content_pages(songbook.id)
     )
-
-    for image in SongbookIntroOutroImage.query.filter_by(
-        songbook_id=songbook.id, type='outro'
-    ).order_by(SongbookIntroOutroImage.sort_order).all():
-        add(image.image_path, "outro")
 
     add(songbook.img_path_cover_back_inner, "cover")
     add(songbook.img_path_cover_back_outer, "cover")
@@ -3145,12 +3124,6 @@ def songbook_detail(book_id):
     # Determine first_page_side from songbook attribute or default
     first_page_side = getattr(songbook, 'first_page_side', 'left')
 
-    # Query intro pages ordered by page_number
-    intros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='intro').order_by(SongbookIntroOutroImage.sort_order).all()
-
-    # Query outro pages ordered by page_number
-    outros = SongbookIntroOutroImage.query.filter_by(songbook_id=book_id, type='outro').order_by(SongbookIntroOutroImage.sort_order).all()
-
     # Build the page list from the stored page numbers, so a songbook numbered from
     # its title page keeps showing what is printed on the scans. Counting positions
     # here made the viewer disagree with the table of contents.
@@ -3161,11 +3134,11 @@ def songbook_detail(book_id):
     # raw_pages above stays: the table of contents further down still walks it.
     pages = build_songbook_content_pages(book_id)
 
-    def pair_pages(intro_images, pages, outro_images, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
+    def pair_pages(pages, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
 
         - With any cover provided: auto-complete missing cover parts with 'blank' and render:
-          none|CFO, then CFI|offset(or content), then intros/pages/outros, then ensure CBI on right,
+          none|CFO, then CFI|offset(or content), then pages, then ensure CBI on right,
           then CBO|none.
         - Without cover: optionally offset start if first page should be right, then content,
           and if total pages end on left, add a trailing blank to show full last spread.
@@ -3193,10 +3166,7 @@ def songbook_detail(book_id):
                 list_of_pages.append({"file": "blank", "page_number": None, "kind": "content"})
 
             # Main content
-            list_of_pages.extend([{"file": img, "page_number": None, "kind": "intro"} for img in intro_images])
-            # Ensure kinds for content pages
             list_of_pages.extend([{**p, "kind": p.get("kind", "content")} for p in pages])
-            list_of_pages.extend([{"file": img, "page_number": None, "kind": "outro"} for img in outro_images])
 
             # Ensure back inner cover (CBI) lands on right page
             if len(list_of_pages) % 2 == 0:
@@ -3214,9 +3184,7 @@ def songbook_detail(book_id):
                 # Add blank so first content appears on right
                 list_of_pages.append({"file": "blank", "page_number": None, "kind": "content"})
 
-            list_of_pages.extend([{"file": img, "page_number": None, "kind": "intro"} for img in intro_images])
             list_of_pages.extend([{**p, "kind": p.get("kind", "content")} for p in pages])
-            list_of_pages.extend([{"file": img, "page_number": None, "kind": "outro"} for img in outro_images])
 
             # If we end on a single left page (odd count), add a trailing blank
             if len(list_of_pages) % 2 != 0:
@@ -3224,15 +3192,9 @@ def songbook_detail(book_id):
 
         return list(zip(list_of_pages[::2], list_of_pages[1::2]))
 
-    # Získej obrázky intro a outro stran
-    intro_images = [img.image_path for img in intros]
-    outro_images = [img.image_path for img in outros]
-
     # Sestav page_files přes pomocnou funkci
     page_files = pair_pages(
-        intro_images,
         pages,
-        outro_images,
         first_page_side,
         getattr(songbook, 'img_path_cover_front_outer', None),
         getattr(songbook, 'img_path_cover_front_inner', None),
@@ -3240,8 +3202,6 @@ def songbook_detail(book_id):
         getattr(songbook, 'img_path_cover_back_outer', None)
     )
 
-    # Pro scroll mód stačí seznam všech obrázků kromě blank
-    scroll_page_files = [img for img in pages if img["file"] != "blank"]
 
     # Build toc_entries: one entry per song with correct page numbering
     toc_entries = []
@@ -3306,10 +3266,7 @@ def songbook_detail(book_id):
         book_id=book_id,
         toc_entries=toc_entries,
         page_files=page_files,
-        scroll_page_files=scroll_page_files,
         first_page_side=first_page_side,
-        intros=intros,
-        outros=outros,
         book_color=book_color,
         songbook_type=book_type,
         songbook_is_private=(not is_public),
@@ -3397,7 +3354,6 @@ def nahledy_warm(jen):
         # Tatáž písnička může být ve dvou zpěvnících, takže se cesty opakují; množina
         # zařídí, že se obrázek zmenšuje jednou.
         cesty = {r.image_path for r in SongImage.query.all() if r.image_path}
-        cesty |= {r.image_path for r in SongbookIntroOutroImage.query.all() if r.image_path}
         # Obálky patří do obou skupin. Nahoře dostaly malý náhled do přehledů, ale čtečka
         # je ukazuje jako běžné strany, takže potřebují i variantu v šířce strany. Bez
         # tohohle se čtyři obálky každého zpěvníku dogenerovávaly až za provozu.
