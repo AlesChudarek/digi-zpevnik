@@ -238,6 +238,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       U ZIPu to bylo nejabsurdnější: skládá se pod sekundu, ale zabral by nejvíc.
       Nevyhoditelná část je tím omezená na ~175 MB a roste jen s počtem veřejných
       zpěvníků, zhruba o 6 MB na zpěvník.
+- [X] **úklid cache řadí podle posledního stažení.** `mtime` hotového exportu byl čas
+      postavení, takže soubor stahovaný každý týden pět let vypadal jako nejstarší
+      v adresáři. Stačilo na něj sáhnout `os.utime` při každém vydání a je z toho
+      poctivé LRU. Odpadla tím potřeba dělit soubory na předvolby a vlastní a mazat
+      jedny přednostně — to by vedlo k tomu, že cache plná předvoleb smaže každý
+      vlastní export hned po prvním použití.
 - [ ] **paralelizace uvnitř jednoho skládání** — zatím ne, ale je změřeno, kdyby se to
       hodilo po upgradu serveru. Na zpěvníku 00006: u varianty `small` je 89 % času
       načtení a zmenšení stran, což jsou na sobě nezávislé kusy práce, a jen 11 % je
@@ -280,6 +286,47 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       tlačítko i `pointer-events: none`, kterým se ten sloupec schovává, takže Zavřít
       nešlo kliknout — visí teď na `<body>`.
       Hlídá to `backend/scripts/test_export_ui.py`: měří rámečky, ne screenshoty.
+- [ ] **předělat stahování na „recept" místo tří variant.** Dnes jsou varianty tři
+      a jsou zadrátované. Cílem je jedno okno, které se otevře hned po kliknutí na
+      stažení (na všech třech místech), nabídne pojmenované předvolby a pod nimi
+      sbalené vlastní nastavení, a skončí tlačítkem **Stáhnout** (když to leží v cache)
+      nebo **Připravit** (když ne) s dnešním ukazatelem postupu.
+      Rozhodnuté:
+      - Předvolby jsou jen pojmenované recepty. Ta předgenerovaná (dnešní `small`)
+        zůstane jedna a jediná chráněná před úklidem cache.
+      - Volby musí být **diskrétní** (3-4 pojmenované stupně, ne posuvník s libovolným
+        číslem), ať se prostor receptů nerozpadne a opakované stažení trefí cache.
+        Validovat se musí **na serveru**, ne jen v prohlížeči.
+      - Základní stav okna je jedno mrknutí a jedno kliknutí. Vlastní volby sbalené.
+      - Pojmenování podle toho, co uživatel čeká; kde to není jisté, ⓘ nápověda.
+      - Obsah (generovaný rejstřík) jen ve vlastním nastavení, ne v předvolbách.
+      - Rozsah stran se zadává jako `12, 24-31, 50` a **čísly stran daného zpěvníku**
+        (tedy tím, co je vidět ve čtečce a v obsahu), ne pořadím v souboru. Pod polem
+        živý souhrn vybraných písní; u písně, ze které je vybraná jen část stran,
+        poznámka „nekompletní". Prázdné strany se tudy dostat můžou.
+      - Černobíle: neslibovat menší soubor (vnitřní strany jsou často 8bit šedé už teď),
+        ale nabídnout to kvůli tisku. Průhledné obálky se v něm musí skládat na bílou,
+        ne na barvu zpěvníku, jinak z červené obálky bude celoplošná tmavá šedá.
+        U neprůhledných obálek se nedá dělat nic.
+      - Brožura (dvě strany na list A4 s přeskládáním pořadí) ano.
+      - **A4/A5 zahozeno**: fyzická velikost se v našem PDF nastavuje dopočítaným DPI,
+        takže „A5" by znamenalo tytéž pixely a stejně velký soubor, jen menší tiskovou
+        stranu. Co z toho lidi opravdu chtějí, dělá brožura.
+      - Pozor při návrhu receptu: export **schválně** nechává prázdné strany a doplňuje
+        chybějící části obálky, protože obálka je složený list. „Bez prázdných stran"
+        a „jen obsah" jsou volby pro čtení na displeji a tisk rozbíjejí — proto patří
+        k předvolbě pojmenované podle záměru, ne jako zaškrtávátko vedle „na tisk".
+      Postup: (1) backend z „varianty" na „recept" bez změny UI, (2) nové okno
+      s kompresí, obálkou/obsahem a prázdnými stranami, (3) rozsah stran a brožura.
+- [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
+      vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —
+      návštěvnost je řádu jednoho člověka za měsíc. Číslo je potřeba promyslet.
+- [ ] **sjednotit nápovědy v UI.** Dnes jsou dvě různé implementace tooltipů:
+      `.tooltip-text` ve čtečce a `.tooltip` s `data-tooltip` v Mých zpěvnících.
+      Chtěné jsou dva druhy: klasický hover tooltip pro ikony, tlačítka a jiné
+      netextové objekty, a ⓘ nápověda u slovních věcí (typicky volby v okně stahování).
+      Udělat jedno sdílené řešení a projít s ním zbytek projektu, stejně jako se to
+      udělalo s oknem stahování.
 - [ ] **do okna pro stažení přidat volby obsahu.** Okno se skládáním už existuje
       (postup, odhad, značka „✓ hned" u variant v cache). Chybí v něm to druhé: nechat
       uživatele vybrat, co má stažený zpěvník obsahovat — jestli obálku zvlášť, jestli
