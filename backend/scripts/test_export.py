@@ -409,6 +409,27 @@ def main():
                        "a rovnou se předgeneruje nová verze PDF, nečeká se na stažení",
                        ", ".join(sorted(nove)) or "nic nevzniklo")
 
+        print("\n── úklid řadí podle posledního stažení, ne podle postavení ──")
+        # Bez tohohle byl mtime čas postavení, takže soubor stahovaný každý týden pět let
+        # vypadal jako nejstarší v adresáři a odešel dřív než něco, co si nikdo nevyžádal
+        # podruhé. Díky tomu nemusí úklid dělit soubory podle toho, z jaké předvolby vznikly.
+        pockej_na_export(admin, f"/songbook/{BOOK}/export-status/pdf?q=small")
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+        hotovy = next(EXPORTS_DIR.glob(f"{BOOK}-small-*.pdf"), None)
+        if hotovy is None:
+            zkontroluj(False, "je co stáhnout")
+        else:
+            os.utime(hotovy, (time.time() - 90 * 86400, time.time() - 90 * 86400))
+            pred = hotovy.stat().st_mtime
+            stav = admin.get(f"/songbook/{BOOK}/export.pdf?q=small")[0]
+            zkontroluj(stav == 200, "hotový soubor se vydá rovnou", f"status {stav}")
+            po = hotovy.stat().st_mtime
+            zkontroluj(po > pred + 80 * 86400,
+                       "a stažení mu omladí čas, takže ho úklid bere jako čerstvý",
+                       f"z {(time.time() - pred) / 86400:.0f} dní na "
+                       f"{(time.time() - po) / 86400:.1f} dní")
+
         print("\n── z cache se nevyhazuje jen předgenerovaná varianta ──")
         # Chráněný je jen předgenerovaný `small` veřejného zpěvníku, protože jen u něj
         # platí slib "stažení veřejného zpěvníku je hned". Dřív byl chráněný prefix id,

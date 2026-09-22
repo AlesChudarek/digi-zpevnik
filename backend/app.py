@@ -2874,6 +2874,8 @@ def _prune_exports(keep_path, sibling_glob):
 
     vyhoditelne = [p for p in files if not je_chraneny(p)]
     total = sum(p.stat().st_size for p in vyhoditelne if p.exists())
+    # Od nejstaršího, a mtime je čas posledního vydání (viz os.utime v songbook_export),
+    # takže „nejstarší" znamená „nejdéle nikoho nezajímal", ne „nejdřív postavený".
     for path in sorted(vyhoditelne, key=lambda p: p.stat().st_mtime if p.exists() else 0):
         if total <= EXPORTS_CACHE_LIMIT_BYTES:
             break
@@ -3046,6 +3048,15 @@ def songbook_export(book_id, kind):
 
     paths, songbook = resolved['paths'], resolved['songbook']
     if paths['final'].exists():
+        # Sáhnout na čas souboru při každém vydání. Úklid řadí podle mtime, a to byl
+        # dosud čas postavení, ne posledního použití - soubor stahovaný každý týden pět
+        # let vypadal jako nejstarší v adresáři a odešel dřív než něco, co si nikdo
+        # nevyžádal podruhé. Takhle je z toho poctivé LRU a nepotřebuje to dělit soubory
+        # na skupiny podle toho, z jaké předvolby vznikly.
+        try:
+            os.utime(paths['final'])
+        except OSError:
+            pass  # pořadí úklidu je pohodlí, ne podmínka
         return send_file(
             paths['final'],
             as_attachment=True,
