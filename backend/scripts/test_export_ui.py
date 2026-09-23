@@ -307,9 +307,9 @@ def main():
             page.hover('[data-pole=kvalita]')
             page.wait_for_timeout(400)
             zkontroluj("ZIP" in page.evaluate(
-                "() => document.getElementById('stahovani-napoveda').textContent"),
+                "() => document.querySelector('.napoveda-bublina').textContent"),
                 "a najetí na zamčený řádek řekne proč",
-                page.evaluate("() => document.getElementById('stahovani-napoveda').textContent"))
+                page.evaluate("() => document.querySelector('.napoveda-bublina').textContent"))
             page.evaluate("() => document.querySelector('input[name=format][value=pdf]').click()")
             page.wait_for_timeout(300)
 
@@ -332,7 +332,7 @@ def main():
             page.hover('.stahovani-dalsi')
             page.wait_for_timeout(400)
             bublina = page.evaluate("""() => {
-              const b = document.getElementById('stahovani-napoveda');
+              const b = document.querySelector('.napoveda-bublina');
               if (b.hidden) return null;
               const r = b.getBoundingClientRect();
               return {jmen: b.innerHTML.split('<br>').length,
@@ -351,7 +351,7 @@ def main():
             page.hover('#stahovani-nadpis')
             page.wait_for_timeout(500)
             zkontroluj(page.evaluate(
-                "() => document.getElementById('stahovani-napoveda').hidden"),
+                "() => document.querySelector('.napoveda-bublina').hidden"),
                 "a po odjetí zmizí")
 
             print("\n── otevřený rozsah ──")
@@ -395,7 +395,7 @@ def main():
               return {videt: r.getBoundingClientRect().height > 0,
                       zamcene: r.classList.contains('zamcene'),
                       vypnute: [...r.querySelectorAll('input')].every(i => i.disabled),
-                      duvod: r.dataset.duvod || ''};
+                      duvod: r.dataset.napoveda || ''};
             }""")
             zkontroluj(zamek["videt"] and zamek["zamcene"] and zamek["vypnute"],
                        "u jen obálky se rozsah stran zamkne, ale zůstane na místě",
@@ -436,10 +436,10 @@ def main():
             vyska_pred = page.evaluate(
                 "() => Math.round(document.querySelector('.stahovani-panel')"
                 ".getBoundingClientRect().height)")
-            page.hover('.napoveda-znak[data-napoveda=prazdne]')
+            page.hover('#stahovani-vlastni [data-pole=prazdne] .napoveda-znak')
             page.wait_for_timeout(400)
             napoveda = page.evaluate("""() => {
-              const n = document.getElementById('stahovani-napoveda');
+              const n = document.querySelector('.napoveda-bublina');
               if (!n || n.hidden) return null;
               const r = n.getBoundingClientRect();
               return {text: n.textContent, sirka: Math.round(r.width),
@@ -463,7 +463,7 @@ def main():
             page.hover('#stahovani-nadpis')
             page.wait_for_timeout(400)
             zkontroluj(page.evaluate(
-                "() => document.getElementById('stahovani-napoveda').hidden"),
+                "() => document.querySelector('.napoveda-bublina').hidden"),
                 "a po odjetí myši sama zmizí")
 
             print("\n── okno se vejde i na nízkou obrazovku ──")

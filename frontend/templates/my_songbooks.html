@@ -99,52 +99,12 @@
     z-index: 2;
   }
   .shared-indicator img { width: 80%; height: 80%; display: block; }
-  
-  .shared-indicator .shared-tooltip {
-    position: absolute;
-    top: 46px;
-    /* Anchored to the indicator's right edge, not centred on it. Centred, this 200px
-       popup stuck 54px past a 390px screen even while invisible, which let the whole
-       page be dragged sideways - and with the page dragged, the fixed navbar stayed
-       put and looked as if it had lost its burger and arrow. */
-    right: 0;
-    left: auto;
-    transform: none;
-    max-width: calc(100vw - 24px);
-    background: rgba(0,0,0,0.9);
-    color: #ffffff;
-    font-size: 0.75em;
-    padding: 8px 10px;
-    border-radius: 6px;
-    white-space: normal;
-    min-width: 180px;
-    text-align: left;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s ease-in-out;
-    z-index: 5000;
-  }
-  .shared-indicator:hover .shared-tooltip,
-  .shared-indicator:focus-within .shared-tooltip {
-    opacity: 1;
-    pointer-events: auto;
-  }
-  .shared-tooltip strong {
-    display: block;
-    margin-bottom: 4px;
-  }
-  .shared-tooltip ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-  .shared-tooltip li {
-    line-height: 1.4;
-  }
-  .shared-tooltip li.owner { font-weight: 600; }
-  .shared-tooltip .owner-tag { font-weight: 400; color: rgba(255,255,255,0.7); margin-left: 4px; }
 
+  /* Obsah nápovědy u ikony sdílení. Kreslí ji sdílená bublina (napoveda.js),
+     která visí na <body>, proto bez vnořování pod .shared-indicator. */
+  .napoveda-bublina li.owner { font-weight: 600; }
+  .napoveda-bublina .owner-tag { font-weight: 400; opacity: 0.7; margin-left: 4px; }
+  
   .songbook-title {
     margin: 10px;
     padding: 0;
@@ -283,9 +243,9 @@
           {% endif %}
           {% set share_users = shared_users_map.get(book.id, []) if shared_users_map is defined else [] %}
           {% if share_users %}
-            <span class="shared-indicator" tabindex="0">
+            <span class="shared-indicator napoveda-kotva" tabindex="0">
               <img src="{{ static_bust('img/icons/group.svg') }}" alt="Sdíleno s dalšími uživateli">
-              <div class="shared-tooltip" role="tooltip">
+              <div class="napoveda-obsah" hidden>
                 <strong>Sdíleno s:</strong>
                 <ul>
                   {% for user in share_users %}
@@ -299,25 +259,25 @@
         <p style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ book.title }}">{{ book.title }}</p>
       </a>
       <div class="songbook-actions">
-        <span class="tooltip" data-tooltip="Upravit zpěvník">
+        <span class="s-napovedou" data-napoveda="Upravit zpěvník">
           <button class="icon-btn btn-edit" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation(); window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
             <img src="{{ static_bust('img/icons/edit.svg') }}" alt="Upravit">
           </button>
         </span>
         {% if not manage_public %}
           {# Public songbooks are visible to everyone, so sharing is meaningless #}
-          <span class="tooltip" data-tooltip="Sdílet zpěvník">
+          <span class="s-napovedou" data-napoveda="Sdílet zpěvník">
             <button class="icon-btn btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
               <img src="{{ static_bust('img/icons/share.svg') }}" alt="Sdílet">
             </button>
           </span>
         {% endif %}
-        <span class="tooltip" data-tooltip="Stáhnout zpěvník">
+        <span class="s-napovedou" data-napoveda="Stáhnout zpěvník">
           <button class="icon-btn btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
           </button>
         </span>
-        <span class="tooltip" data-tooltip="Smazat zpěvník">
+        <span class="s-napovedou" data-napoveda="Smazat zpěvník">
           <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
           </button>
@@ -378,7 +338,7 @@
       </div>
       <div id="ns-extra-songs"></div>
       <div id="ns-add-song-wrap" style="margin-top:6px;">
-        <span class="tooltip" data-tooltip="Přidat další písničku na tuto stejnou stránku">
+        <span class="s-napovedou" data-napoveda="Přidat další písničku na tuto stejnou stránku">
           <button type="button" id="ns-add-song"
                   style="width:28px; height:28px; border-radius:50%; border:1px solid var(--muted-border, #a7d7b0);
                          background: var(--muted-bg, #e8f5e9); color: var(--brand-dark, #1b5e20);
@@ -546,7 +506,7 @@
           <label class="dropzone" id="dz-front-outer">
             <span class="dz-label">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="file-front-outer">
-            <button class="dz-clear" id="clear-front-outer" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="clear-front-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -554,7 +514,7 @@
           <label class="dropzone" id="dz-back-outer">
             <span class="dz-label">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="file-back-outer">
-            <button class="dz-clear" id="clear-back-outer" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="clear-back-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -562,7 +522,7 @@
           <label class="dropzone" id="dz-front-inner">
             <span class="dz-label">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="file-front-inner">
-            <button class="dz-clear" id="clear-front-inner" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="clear-front-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -570,7 +530,7 @@
           <label class="dropzone" id="dz-back-inner">
             <span class="dz-label">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="file-back-inner">
-            <button class="dz-clear" id="clear-back-inner" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="clear-back-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         </div>
@@ -720,7 +680,7 @@
           <label class="dropzone" id="edz-front-outer">
             <span class="dz-label" id="elab-front-outer">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="efile-front-outer">
-            <button class="dz-clear" id="eclear-front-outer" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="eclear-front-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -728,7 +688,7 @@
           <label class="dropzone" id="edz-back-outer">
             <span class="dz-label" id="elab-back-outer">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="efile-back-outer">
-            <button class="dz-clear" id="eclear-back-outer" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="eclear-back-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -736,7 +696,7 @@
           <label class="dropzone" id="edz-front-inner">
             <span class="dz-label" id="elab-front-inner">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="efile-front-inner">
-            <button class="dz-clear" id="eclear-front-inner" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="eclear-front-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
         <div class="field-file">
@@ -744,7 +704,7 @@
           <label class="dropzone" id="edz-back-inner">
             <span class="dz-label" id="elab-back-inner">Klikni nebo přetáhni obrázek sem</span>
             <input type="file" accept="image/*" id="efile-back-inner">
-            <button class="dz-clear" id="eclear-back-inner" title="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
+            <button class="dz-clear" id="eclear-back-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
           </label>
         </div>
       </div>
@@ -1752,7 +1712,8 @@ function openCreateModal() {
         <div class=\"songs-toolbar\" style=\"margin-top:8px; display:flex; align-items:center; gap:8px;\">
           <label for=\"nb-first-page\">Číslo první strany</label>
           <input type=\"number\" id=\"nb-first-page\" min=\"1\" value=\"1\" style=\"width:80px;\">
-          <span class=\"tooltip\" data-tooltip=\"Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.\" style=\"cursor:help;\">?</span>
+          <button type=\"button\" class=\"napoveda-znak\" aria-label=\"Co to znamená\"
+                  data-napoveda=\"Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.\">i</button>
         </div>
         <div class="songs-list" style="margin-top:12px; border:1px solid var(--muted-border, #dbeadf); border-radius:10px; overflow:visible;">
           <table style="width:100%; border-collapse:collapse;">
@@ -1814,12 +1775,12 @@ function openCreateModal() {
                         + nonSongPill + sharedPill + pendingPill;
       const authorHtml = members.map(m => m.author || '').join('<br>');
       tr.innerHTML = `
-        <td class="drag-handle" title="Přetáhnout">≡</td>
+        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
         <td>${titleHtml}</td>
         <td>${authorHtml}</td>
         <td class="page-span"></td>
         <td class="action-cell">
-          <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
             <button class="row-action btn-row-delete" aria-label="Odstranit">
               <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
             </button>
@@ -1836,12 +1797,12 @@ function openCreateModal() {
       tr.setAttribute('draggable', 'true');
       tr.setAttribute('data-temp-id', generateTempRowId('blank'));
       tr.innerHTML = `
-        <td class="drag-handle" title="Přetáhnout">≡</td>
+        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
         <td>&lt;Prázdná strana&gt;</td>
         <td>-</td>
         <td class="page-span"></td>
         <td class="action-cell">
-          <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
             <button class="row-action btn-row-delete" aria-label="Odstranit">
               <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
             </button>
@@ -2063,7 +2024,7 @@ function openCreateModal() {
         </div>
         <button type="button" class="ns-extra-remove"
                 style="align-self:end; background:none; border:none; cursor:pointer; font-size:18px;"
-                title="Odebrat tuto písničku">&times;</button>`;
+                data-napoveda="Odebrat tuto písničku">&times;</button>`;
       row.querySelector('.ns-extra-remove').addEventListener('click', () => row.remove());
       if (window.__nsNonSong) {
         row.querySelector('.ns-extra-author-wrap').style.display = 'none';
@@ -2438,13 +2399,13 @@ function openCreateModal() {
             if (ebSongs) {
               (sb.songs || []).forEach(function(s){
                 var tr = document.createElement('tr');
-                tr.innerHTML = '<td title="Přetáhnout">≡</td>'+
+                tr.innerHTML = '<td data-napoveda="Přetáhnout">≡</td>'+
                                '<td>'+(s.title||'')+'</td>'+
                                '<td>'+(s.author||'')+'</td>'+
                                '<td class="center"><input class="page-input eb-start" type="number" min="1" value="'+(s.start_page||1)+'"></td>'+
                                '<td>'+(s.page_count||1)+'</td>'+
                                '<td class="action-cell">'+
-                                 '<span class="tooltip" data-tooltip="Odstranit ze zpěvníku">'+
+                                 '<span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">'+
                                    '<button class="row-action btn-row-delete" aria-label="Odstranit">'+
                                    '<img src="{{ static_bust('"'"'img/icons/remove-song.svg'"'"') }}" alt="Odebrat">'+
                                    '</button>'+
@@ -2614,13 +2575,13 @@ function openCreateModal() {
       tr.setAttribute('data-page-count', String(s.page_count || 1));
       tr.setAttribute('draggable', 'true');
       tr.innerHTML = `
-        <td class="drag-handle" title="Přetáhnout">≡</td>
+        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
         <td>${s.title || ''}</td>
         <td>${s.author || ''}</td>
         <td class="center"><input class="page-input eb-start" type="number" min="1" value="${s.start_page||1}" disabled></td>
         <td>${s.page_count||1}</td>
         <td class="action-cell">
-          <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
             <button class="row-action btn-row-delete" aria-label="Odstranit">
               <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
             </button>
@@ -2654,13 +2615,13 @@ function openCreateModal() {
       tr.setAttribute('draggable', 'true');
       tr.setAttribute('data-temp-id', generateTempRowId('blank'));
       tr.innerHTML = `
-        <td class="drag-handle" title="Přetáhnout">≡</td>
+        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
         <td>&lt;Prázdná strana&gt;</td>
         <td>-</td>
         <td class="center"><input class="page-input eb-start" type="number" min="1" value="1" disabled></td>
         <td>1</td>
         <td class="action-cell">
-          <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
             <button class="row-action btn-row-delete" aria-label="Odstranit">
               <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
             </button>

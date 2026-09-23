@@ -375,12 +375,22 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       se nepletlo se zaneprázdněným serverem.
       Pozor, `db.create_all()` se pod gunicornem nikde nevolalo, takže nová tabulka
       by na serveru sama nevznikla — doplněno do `_dopln_chybejici_sloupce`.
-- [ ] **sjednotit nápovědy v UI.** Dnes jsou dvě různé implementace tooltipů:
-      `.tooltip-text` ve čtečce a `.tooltip` s `data-tooltip` v Mých zpěvnících.
-      Chtěné jsou dva druhy: klasický hover tooltip pro ikony, tlačítka a jiné
-      netextové objekty, a ⓘ nápověda u slovních věcí (typicky volby v okně stahování).
-      Udělat jedno sdílené řešení a projít s ním zbytek projektu, stejně jako se to
-      udělalo s oknem stahování.
+- [X] **sjednotit nápovědy v UI.** Implementací bylo nakonec šest: `.tooltip`
+      s `data-tooltip`, `.tooltip-text` ve čtečce, plovoucí `#toc-fly-tooltip`
+      v obsahu, `.shared-tooltip` u ikony sdílení, `.napoveda-znak` v okně stahování
+      a na patnácti místech nativní `title`. Teď je jedna:
+      `frontend/static/js/napoveda.js` + `css/napoveda.css`, načtená v `dashboard_base`,
+      takže je všude.
+      Dva druhy, obojí kreslí táž bublina: `data-napoveda="text"` na ikoně nebo
+      tlačítku a `<button class="napoveda-znak" data-napoveda="…">` u slovních voleb.
+      Delší HTML (seznam, s kým je zpěvník sdílený) se píše do `.napoveda-obsah`
+      uvnitř kotvy označené `.napoveda-kotva`.
+      Jedna plovoucí bublina na `<body>` místo `::after` u každého prvku: ta se ořízla
+      o první nadřazený `overflow: hidden` (v tabulce hledání to dělalo 66 px
+      neviditelného sloupce, o který šlo táhnout celou stránkou, u ikony sdílení 54 px
+      za okrajem telefonu) a na dotykové obrazovce se neukázala vůbec. Teď umí najetí,
+      dotyk i klávesnici a sama uhne okraji obrazovky.
+      Hlídá to `backend/scripts/test_napovedy.py`, 40 kontrol v prohlížeči.
 
 ## Mobil a vzhled
 
