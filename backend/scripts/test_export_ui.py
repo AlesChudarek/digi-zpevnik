@@ -246,18 +246,16 @@ def main():
                        "rozsah 3-4 vyjde na dvě strany", rozsah["souhrn"])
             pisne = page.evaluate("""() => ({
               videt: !document.getElementById('stahovani-pisne').hidden,
-              popisek: document.getElementById('stahovani-pisne-prepinac').textContent,
-              seznam_skryty: document.getElementById('stahovani-pisne-seznam').hidden})""")
-            zkontroluj(pisne["videt"] and "2" in pisne["popisek"],
-                       "sekce s písněmi řekne, kolik jich ve výběru je", str(pisne))
-            zkontroluj(pisne["seznam_skryty"],
-                       "ale seznam se sám nerozbalí, u dlouhého zpěvníku by zabral celé okno")
-            page.evaluate("() => document.getElementById('stahovani-pisne-prepinac').click()")
-            page.wait_for_timeout(300)
+              text: document.getElementById('stahovani-pisne').innerText,
+              ma_dalsi: !!document.querySelector('.stahovani-dalsi')})""")
+            zkontroluj(pisne["videt"] and ("Aranka" in pisne["text"]
+                                           or "Čo bolí" in pisne["text"]),
+                       "písně se vypíšou rovnou jménem", pisne["text"])
             zkontroluj(page.evaluate(
-                "() => document.querySelectorAll('#stahovani-pisne-seznam li').length") == 2,
-                "klik seznam rozbalí")
-            page.evaluate("() => document.getElementById('stahovani-pisne-prepinac').click()")
+                "() => document.querySelectorAll('.stahovani-pisen').length") == 2,
+                "obě, když jsou jen dvě")
+            zkontroluj(not pisne["ma_dalsi"],
+                       "u dvou písní není co schovávat pod „a dalších“")
 
             # Ale jen z výchozího stavu. Kdo si obálku vrátí, o ni znovu nepřijde.
             page.evaluate("() => document.querySelector("
@@ -314,6 +312,47 @@ def main():
                 page.evaluate("() => document.getElementById('stahovani-napoveda').textContent"))
             page.evaluate("() => document.querySelector('input[name=format][value=pdf]').click()")
             page.wait_for_timeout(300)
+
+            print("\n── dlouhý seznam písní ──")
+            # U stodvacetistránkového zpěvníku by vypsaný seznam zabral víc místa než
+            # celé okno, takže se vypíšou tři jména a zbytek je pod najetím.
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(1000)
+            dlouhy = page.evaluate("""() => ({
+              text: document.getElementById('stahovani-pisne').innerText,
+              jmen_rovnou: document.querySelectorAll('.stahovani-pisen').length,
+              dalsi: document.querySelector('.stahovani-dalsi')?.textContent})""")
+            zkontroluj(dlouhy["jmen_rovnou"] == 3,
+                       "rovnou se vypíšou tři jména", dlouhy["text"][:70])
+            zkontroluj(dlouhy["dalsi"] and "dalších" in dlouhy["dalsi"],
+                       "a zbytek je pod „a dalších X“", str(dlouhy["dalsi"]))
+
+            page.hover('.stahovani-dalsi')
+            page.wait_for_timeout(400)
+            bublina = page.evaluate("""() => {
+              const b = document.getElementById('stahovani-napoveda');
+              if (b.hidden) return null;
+              const r = b.getBoundingClientRect();
+              return {jmen: b.innerHTML.split('<br>').length,
+                      roluje: b.scrollHeight > r.height + 1,
+                      v_obrazovce: r.top >= 0 && r.bottom <= window.innerHeight,
+                      panel: Math.round(document.querySelector('.stahovani-panel')
+                                        .getBoundingClientRect().height)};
+            }""")
+            zkontroluj(bublina is not None, "najetí na „a dalších“ ukáže zbylá jména")
+            if bublina:
+                zkontroluj(bublina["jmen"] > 3, "a je jich tam víc než tři",
+                           f"{bublina['jmen']} jmen")
+                zkontroluj(bublina["v_obrazovce"] and bublina["roluje"],
+                           "dlouhý seznam se vejde do obrazovky a roluje v sobě",
+                           str(bublina))
+            page.hover('#stahovani-nadpis')
+            page.wait_for_timeout(500)
+            zkontroluj(page.evaluate(
+                "() => document.getElementById('stahovani-napoveda').hidden"),
+                "a po odjetí zmizí")
 
             print("\n── otevřený rozsah ──")
             page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
