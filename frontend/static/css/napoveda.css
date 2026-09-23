@@ -1,0 +1,49 @@
+/* Nápovědy — jedno sdílené řešení pro celý projekt.
+   Dva druhy, obojí kreslí táž bublina:
+     1. tooltip: `data-napoveda="text"` na ikoně, tlačítku nebo jiném netextovém prvku,
+     2. ⓘ nápověda: `<button class="napoveda-znak" data-napoveda="text">` u slovních
+        voleb, kde je potřeba delší vysvětlení.
+   Chování je v js/napoveda.js. */
+
+/* Znak „i" u slovních voleb. */
+.napoveda-znak {
+  width: 15px; height: 15px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-muted, #666);
+  font: 600 10px/15px Georgia, serif; cursor: help; vertical-align: text-top;
+  flex: none;
+}
+.napoveda-znak:hover,
+.napoveda-znak[aria-expanded="true"] {
+  background: var(--brand-dark, #2f7d4f); color: #fff;
+}
+
+/* Jediná bublina na stránku, plovoucí a přilepená na <body>.
+   Plovoucí proto, že bublina v toku roztahovala okno pokaždé, když si ji někdo
+   otevřel; `fixed` proto, že kotva sedí i uvnitř rolovacích panelů, a `body` proto,
+   že vložená vedle kotvy ji ořízne první nadřazený `overflow: hidden`. */
+.napoveda-bublina {
+  position: fixed; z-index: 10000; box-sizing: border-box;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--panel-text, #222); color: var(--panel-bg, #fff);
+  font-size: 12px; line-height: 1.45; text-align: left;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+/* Dlouhý obsah (seznam písní) musí jít rolovat, a k tomu potřebuje přijmout myš. */
+.napoveda-bublina.seznam {
+  pointer-events: auto; max-height: 220px; overflow-y: auto;
+}
+/* Vlastní `display` výše přebíjí atribut `hidden`, takže tohle pravidlo musí být. */
+.napoveda-bublina[hidden] { display: none; }
+
+/* Obal kolem prvku, který sám o sobě není blok — dřív to dělala třída `.tooltip`,
+   protože bublina v `::after` potřebovala `position: relative`. Plovoucí bublina ho
+   nepotřebuje, zbylo jen zarovnání, ať se obal chová jako to, co obaluje. */
+.s-napovedou { display: inline-block; }
+
+/* Bublina může nést i kus HTML (viz `.napoveda-obsah`), a to si nesmí přitáhnout
+   odsazení seznamů ze stránky pod sebou. */
+.napoveda-bublina ul { list-style: none; margin: 0; padding: 0; }
+.napoveda-bublina li { line-height: 1.4; }
+.napoveda-bublina strong { display: block; margin-bottom: 4px; }

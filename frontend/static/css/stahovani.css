@@ -198,36 +198,6 @@
   line-height: 1.45;
 }
 
-/* Nápověda „i“ u slovních voleb. Zatím žije tady; až se sjednotí nápovědy v celém
-   projektu, přestěhuje se do sdíleného souboru (viz TODO). */
-.napoveda-znak {
-  width: 15px; height: 15px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-muted, #666);
-  font: 600 10px/15px Georgia, serif; cursor: help; vertical-align: text-top;
-  flex: none;
-}
-.napoveda-znak:hover,
-.napoveda-znak[aria-expanded="true"] {
-  background: var(--brand-dark, #2f7d4f); color: #fff;
-}
-/* Plovoucí, ne v toku: nápověda vsunutá mezi řádky roztahovala okno pokaždé, když si
-   ji někdo otevřel. `fixed` proto, že panel se roluje a má vlastní přetečení. */
-.napoveda-bublina {
-  position: fixed; z-index: 3100; max-width: min(300px, calc(100vw - 16px));
-  padding: 8px 10px; border-radius: 8px;
-  background: var(--panel-text, #222); color: var(--panel-bg, #fff);
-  font-size: 12px; line-height: 1.45;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-  pointer-events: none;
-}
-/* Seznam písní se dá být dlouhý, takže v něm musí jít rolovat - a k tomu potřebuje
-   myš přijmout, na rozdíl od obyčejné nápovědy. */
-.napoveda-bublina.seznam {
-  pointer-events: auto; max-height: 220px; overflow-y: auto;
-}
-.napoveda-bublina .stahovani-nekompletni { opacity: 0.75; }
-.napoveda-bublina[hidden] { display: none; }
-
 /* Kombinace, která projde, ale výsledek nebude ten, co kdo čeká. */
 .stahovani-varovani {
   margin: 6px 0 0; padding: 7px 10px; border-radius: 8px;

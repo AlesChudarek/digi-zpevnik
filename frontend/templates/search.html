@@ -52,7 +52,7 @@
   /* overscroll-behavior-x: none stops the elastic overscroll itself, not just its
      chaining to the page - that bounce was what exposed the backdrop. The tint is
      safe now: the phantom 66px that used to make it look like a column were the row
-     tooltips, not this background. */
+     tooltips (viz nápovědy výš), not this background. */
   /* No background here: this box has no rounded corners, so its tint was the last
      square layer filling in the corner that everything else rounds away. The card
      underneath now carries the same colour, so overscroll still never shows white. */
@@ -134,12 +134,9 @@
      painted over the card's rounded corner and looked square. Right stays square
      because the counter bubble joins there. */
   #results-table thead th:first-child { border-top-left-radius: 10px; }
-  /* Tooltips are centred with translateX(-50%) and never wrap, so on the last two
-     columns half of one stuck out past the table: 66px of invisible, scrollable
-     emptiness (the "extra column") and enough to let the whole page be dragged
-     sideways. Anchored to the right edge of their own cell they stay inside.
-     Measured: this was the entire cause of both, in the rows rather than the header. */
-  #results-table .tooltip::after { left: auto; right: 0; transform: none; }
+  /* Nápovědy u posledních dvou sloupců kdysi čouhaly 66 px za tabulku: neviditelný
+     „sloupec navíc", o který šlo táhnout celou stránkou. Dnes to řeší sdílená bublina
+     v static/js/napoveda.js - visí na body a sama uhne okraji obrazovky. */
   #results-table th.center, #results-table td.center { text-align: center; }
   #results-table td.icon-cell { text-align: center; }
   @media (max-width: 820px) {
@@ -169,7 +166,8 @@
   .sb-picker-panel h3 { margin: 0 0 8px; color: var(--brand-dark, #1b5e20); font-size: 18px; }
   .sb-picker-list { max-height: 50vh; overflow: auto; margin: 6px 0 10px; }
   .sb-picker-option { display: block; width: 100%; }
-  .sb-picker-option.tooltip { position: relative; display: block; }
+  /* Přebije `inline-block` ze sdílené `.s-napovedou`: tady musí obal držet celou šířku. */
+  .sb-picker-option.s-napovedou { display: block; }
   .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
   .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
   .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
@@ -229,7 +227,7 @@
       {% if guest %}
         {# Host k soukromým zpěvníkům přístup nemá, takže filtr nejen nezaškrtnutý,
            ale ani přepínatelný - jinak by klikal na něco, co nikdy nic neukáže. #}
-        <label class="tooltip" data-tooltip="Pouze pro přihlášené uživatele"
+        <label class="s-napovedou" data-napoveda="Pouze pro přihlášené uživatele"
                style="opacity:.55;cursor:not-allowed;">
           <input type="checkbox" id="t-private" disabled> Soukromé
         </label>
@@ -245,10 +243,10 @@
     <table id="results-table">
       <thead>
         <tr>
-          <th class="th-sortable" data-sort="title"><span class="hdr tooltip" data-tooltip="Řadit podle názvu">Název <span class="sort-indicator"></span></span></th>
-          <th class="th-sortable" data-sort="author"><span class="hdr tooltip" data-tooltip="Řadit podle autora">Autor <span class="sort-indicator"></span></span></th>
-          <th class="th-sortable" data-sort="book"><span class="hdr tooltip" data-tooltip="Řadit podle zpěvníku">Zpěvník <span class="sort-indicator"></span></span></th>
-          <th class="th-sortable center" data-sort="page" style="width:90px;"><span class="hdr tooltip" data-tooltip="Řadit podle strany">Strana <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="title"><span class="hdr s-napovedou" data-napoveda="Řadit podle názvu">Název <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="author"><span class="hdr s-napovedou" data-napoveda="Řadit podle autora">Autor <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable" data-sort="book"><span class="hdr s-napovedou" data-napoveda="Řadit podle zpěvníku">Zpěvník <span class="sort-indicator"></span></span></th>
+          <th class="th-sortable center" data-sort="page" style="width:90px;"><span class="hdr s-napovedou" data-napoveda="Řadit podle strany">Strana <span class="sort-indicator"></span></span></th>
           <th class="center" style="width:52px;">Přidat</th>
           <th class="center" style="width:52px;">Odebrat</th>
         </tr>
@@ -271,7 +269,7 @@
             </td>
             <td class="center">{{ r.page_number }}</td>
             <td class="icon-cell">
-              <span class="tooltip" data-tooltip="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
+              <span class="s-napovedou" data-napoveda="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
                 <button class="action-btn add {% if guest %}disabled{% endif %}" onclick="event.stopPropagation();" {% if guest %}disabled{% endif %}>
                   <img src="{{ static_bust('img/icons/add_song.svg') }}" alt="Přidat" />
                 </button>
@@ -279,19 +277,19 @@
             </td>
             <td class="icon-cell">
               {% if r.book_type == '' %}
-                <span class="tooltip" data-tooltip="Nelze odstranit z veřejného zpěvníku">
+                <span class="s-napovedou" data-napoveda="Nelze odstranit z veřejného zpěvníku">
                   <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
                 </span>
               {% elif r.book_type in ['private', 'shared'] and not guest and r.can_edit %}
-                <span class="tooltip" data-tooltip="Odstranit ze zpěvníku">
+                <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
                   <button class="action-btn remove" onclick="event.stopPropagation();">
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
                 </span>
               {% else %}
-                <span class="tooltip" data-tooltip="Nedostatečná oprávnění">
+                <span class="s-napovedou" data-napoveda="Nedostatečná oprávnění">
                   <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
@@ -523,7 +521,7 @@
       if (btn.dataset.guardDisabled === '1') return;
       btn.dataset.guardDisabled = '1';
       guardEvents.forEach(evt => btn.addEventListener(evt, guardHandler));
-      const wrapper = btn.closest('.tooltip');
+      const wrapper = btn.closest('.s-napovedou');
       if (wrapper && !wrapper.dataset.guardDisabled) {
         wrapper.dataset.guardDisabled = '1';
         guardEvents.forEach(evt => wrapper.addEventListener(evt, guardHandler, true));
@@ -581,7 +579,7 @@
         }
 
         items.forEach(it => {
-          const wrapper = document.createElement('span'); wrapper.className = 'sb-picker-option tooltip';
+          const wrapper = document.createElement('span'); wrapper.className = 'sb-picker-option s-napovedou';
           const b = document.createElement('button'); b.className = 'sb-picker-item';
           const dot = document.createElement('span'); dot.className = 'sb-color-dot'; dot.style.background = it.color || '#ffffff';
           const label = document.createElement('span');
@@ -593,11 +591,11 @@
           b.style.background = bg;
           const addTooltip = 'Přidat písničku do tohoto zpěvníku';
           const alreadyTooltip = 'Zpěvník již písničku obsahuje';
-          wrapper.setAttribute('data-tooltip', addTooltip);
+          wrapper.setAttribute('data-napoveda', addTooltip);
           if (it.has_song) {
             b.classList.add('disabled');
             b.setAttribute('aria-disabled', 'true');
-            wrapper.setAttribute('data-tooltip', alreadyTooltip);
+            wrapper.setAttribute('data-napoveda', alreadyTooltip);
           }
           b.addEventListener('click', async () => {
             if (it.has_song) return;

@@ -5,7 +5,7 @@
 <div class="main-buttons">
   <a href="{{ url_for('public_songbooks') }}" class="active">Naše zpěvníky</a>
   {% if guest is defined and guest %}
-    <span class="tooltip" data-tooltip="Pouze pro přihlášené uživatele">
+    <span class="s-napovedou" data-napoveda="Pouze pro přihlášené uživatele">
       <a href="#" class="disabled" onclick="showGuestAlert(event)" style="cursor:not-allowed; color:#ccc;">Moje zpěvníky</a>
     </span>
   {% else %}

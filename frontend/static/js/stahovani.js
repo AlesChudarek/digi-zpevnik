@@ -69,8 +69,6 @@ window.Stahovani = (function () {
   let zpevnik = null;       // id zpěvníku, se kterým je okno otevřené
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
   let melRozsah = false;    // bylo pole s rozsahem stran vyplněné při minulé změně?
-  let aktivniZnak = null;   // ikonka, jejíž nápověda je zrovna vidět
-  let skryvaciCasovac = null;
 
   /* ---------- stavba okna ---------- */
 
@@ -91,8 +89,17 @@ window.Stahovani = (function () {
 
   function znakNapovedy(klic) {
     if (!klic) return '';
-    return `<button type="button" class="napoveda-znak" data-napoveda="${klic}"
+    return `<button type="button" class="napoveda-znak"
+                    data-napoveda="${doAtributu(NAPOVEDY[klic])}"
                     aria-label="Co to znamená">i</button>`;
+  }
+
+  /* Text jde do atributu v uvozovkách, takže z něj musí zmizet uvozovka i špičatá
+     závorka. */
+  function doAtributu(text) {
+    return String(text || '')
+      .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   function postavOkno() {
@@ -177,8 +184,6 @@ window.Stahovani = (function () {
         </div>
         </div>
 
-        <div class="napoveda-bublina" id="stahovani-napoveda" role="note" hidden></div>
-
         <div class="stahovani-tlacitka">
           <button type="button" id="stahovani-zavrit">Zavřít</button>
           <button type="button" id="stahovani-spustit" class="hlavni">Stáhnout</button>
@@ -204,7 +209,6 @@ window.Stahovani = (function () {
       rada: zaclona.querySelector('#stahovani-rada'),
       zavrit: zaclona.querySelector('#stahovani-zavrit'),
       spustit: zaclona.querySelector('#stahovani-spustit'),
-      napoveda: zaclona.querySelector('#stahovani-napoveda'),
     };
 
     okno.predvolby.innerHTML = PREDVOLBY.map(p => `
@@ -233,8 +237,8 @@ window.Stahovani = (function () {
       if (e.target === zaclona) zavri();
     });
     document.addEventListener('keydown', (e) => {
+      // Escape nad otevřenou nápovědou sem nedojde, zastaví ho napoveda.js.
       if (e.key !== 'Escape' || zaclona.hidden) return;
-      if (aktivniZnak) { skryjNapovedu(); return; }
       zavri();
     });
     okno.nastaveni.addEventListener('change', zmenaVyberu);
@@ -242,93 +246,25 @@ window.Stahovani = (function () {
     okno.nastaveni.addEventListener('input', (e) => {
       if (e.target.type === 'text') { srovnejPodleRozsahu(); obnovStav(); }
     });
-    // Na najetí i na zaměření klávesnicí. Na dotykové obrazovce najetí neexistuje,
-    // takže se to musí dát i ťuknout - a druhé ťuknutí to zase schová.
-    const KOTVY = '.napoveda-znak, .stahovani-radek.zamcene, .stahovani-dalsi';
-    okno.nastaveni.addEventListener('mouseover', (e) => {
-      const kotva = e.target.closest(KOTVY);
-      if (!kotva || kotva === aktivniZnak) return;
-      if (kotva.classList.contains('stahovani-dalsi')) {
-        ukazNapovedu(kotva, okno.pisne.dataset.zbytek || '', true);
-      } else if (kotva.classList.contains('napoveda-znak')) {
-        ukazNapovedu(kotva);
-      } else {
-        ukazNapovedu(kotva, kotva.dataset.duvod);
-      }
+    // Seznam zbylých písní se staví za běhu a je to HTML, takže se do atributu
+    // nevejde a sdílený modul se o něj poprosí ručně. Na dotykové obrazovce najetí
+    // neexistuje, proto i klik.
+    const ukazZbytek = (kotva) => Napoveda.ukaz(
+      kotva, okno.pisne.dataset.zbytek || '', { html: true, seznam: true });
+    const prepniZbytek = (kotva) => {
+      if (Napoveda.jeVidet(kotva)) Napoveda.skryj(); else ukazZbytek(kotva);
+    };
+    okno.pisne.addEventListener('mouseover', (e) => {
+      const kotva = e.target.closest('.stahovani-dalsi');
+      if (kotva) ukazZbytek(kotva);
     });
-    okno.nastaveni.addEventListener('mouseout', (e) => {
-      if (e.target.closest(KOTVY) && !e.relatedTarget?.closest?.(KOTVY)) naplanujSkryti();
-    });
-    okno.napoveda.addEventListener('mouseenter', zrusSkryti);
-    okno.napoveda.addEventListener('mouseleave', naplanujSkryti);
-    okno.nastaveni.addEventListener('focusin', (e) => {
-      const znak = e.target.closest('.napoveda-znak');
-      if (znak) ukazNapovedu(znak); else skryjNapovedu();
-    });
-    okno.nastaveni.addEventListener('click', (e) => {
-      const kotva = e.target.closest('.napoveda-znak, .stahovani-dalsi');
-      if (!kotva) { skryjNapovedu(); return; }
+    okno.pisne.addEventListener('click', (e) => {
+      const kotva = e.target.closest('.stahovani-dalsi');
+      if (!kotva) return;
       e.preventDefault();
-      if (kotva === aktivniZnak) { skryjNapovedu(); return; }
-      if (kotva.classList.contains('stahovani-dalsi')) {
-        ukazNapovedu(kotva, okno.pisne.dataset.zbytek || '', true);
-      } else {
-        ukazNapovedu(kotva);
-      }
+      prepniZbytek(kotva);
     });
-    // Panel se roluje, takže bublina přilepená na souřadnice by odjela od své ikonky.
-    okno.zaclona.querySelector('.stahovani-telo')
-      .addEventListener('scroll', skryjNapovedu, { passive: true });
     return okno;
-  }
-
-  /* ---------- nápověda ----------
-     Jedna plovoucí bublina na celé okno, ne text vsunutý do řádku. Vsunutý text
-     roztahoval okno pokaždé, když si ho někdo otevřel, a zůstával viset, dokud ho
-     člověk netrefil znovu. Tohle se ukáže na najetí a samo zmizí. Plovoucí je i proto,
-     že ikonka sedí v úzkém sloupci s popiskem a text by se do něj zalomil. */
-
-  function ukazNapovedu(znak, text, jakoSeznam) {
-    const bublina = okno.napoveda;
-    zrusSkryti();
-    if (jakoSeznam) bublina.innerHTML = text; else bublina.textContent = text ||
-      NAPOVEDY[znak.dataset.napoveda] || '';
-    bublina.classList.toggle('seznam', !!jakoSeznam);
-    if (!bublina.textContent) return;
-    bublina.hidden = false;
-    // Až po zviditelnění: skrytý prvek nemá rozměry, podle kterých by se dal umístit.
-    const znakRam = znak.getBoundingClientRect();
-    const bublinaRam = bublina.getBoundingClientRect();
-    const okraj = 8;
-    let x = znakRam.left;
-    x = Math.min(x, window.innerWidth - bublinaRam.width - okraj);
-    x = Math.max(okraj, x);
-    let y = znakRam.bottom + 6;
-    if (y + bublinaRam.height > window.innerHeight - okraj) {
-      y = Math.max(okraj, znakRam.top - bublinaRam.height - 6);
-    }
-    bublina.style.left = `${Math.round(x)}px`;
-    bublina.style.top = `${Math.round(y)}px`;
-    znak.setAttribute('aria-expanded', 'true');
-    aktivniZnak = znak;
-  }
-
-  function zrusSkryti() { clearTimeout(skryvaciCasovac); }
-
-  /* Malý odklad, ať se dá přejet z „a dalších X" na samotný seznam a rolovat v něm.
-     Bez něj bublina zmizela v půli cesty. */
-  function naplanujSkryti() {
-    zrusSkryti();
-    skryvaciCasovac = setTimeout(skryjNapovedu, 160);
-  }
-
-  function skryjNapovedu() {
-    zrusSkryti();
-    if (okno) {
-      okno.napoveda.hidden = true;
-      if (aktivniZnak) aktivniZnak.setAttribute('aria-expanded', 'false');
-    }
-    aktivniZnak = null;
   }
 
   /* ---------- nastavení ---------- */
@@ -416,7 +352,7 @@ window.Stahovani = (function () {
     const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
     if (!radek) return;
     radek.classList.toggle('zamcene', !!duvod);
-    if (duvod) radek.dataset.duvod = duvod; else delete radek.dataset.duvod;
+    if (duvod) radek.dataset.napoveda = duvod; else delete radek.dataset.napoveda;
     radek.querySelectorAll('input, select').forEach(prvek => {
       prvek.disabled = !!duvod;
     });
@@ -569,7 +505,7 @@ window.Stahovani = (function () {
     // Po dokončeném stažení zdědilo Zavřít zvýraznění. Bez tohohle měla po
     // znovuotevření obě tlačítka stejnou barvu a nebylo poznat, které je to hlavní.
     o.zavrit.classList.remove('hlavni');
-    skryjNapovedu();
+    Napoveda.skryj();
     o.zaclona.querySelector('#stahovani-strany').value = '';
     const vseObsah = o.zaclona.querySelector('input[name="obsah"][value="vse"]');
     if (vseObsah) vseObsah.checked = true;
