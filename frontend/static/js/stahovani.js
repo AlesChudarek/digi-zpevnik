@@ -47,20 +47,21 @@ window.Stahovani = (function () {
 
   const NAPOVEDY = {
     kvalita: 'Menší soubor se rychleji stahuje a stačí na čtení. Plné rozlišení má ' +
-             'smysl na tisk, kde je vidět každý detail akordových značek.',
+             'smysl na tisk.',
     obsah: 'Obálka je složený list o čtyřech stranách. „Jen strany“ ji vynechá, ' +
            '„jen obálka“ nechá naopak jen ji.',
-    prazdne: 'Prázdné strany drží zpěvník tak, jak se tiskne. Když je vynecháš, může ' +
-             'přestat sedět číslování stran a zpěvník se nemusí dát správně vytisknout ' +
-             'ani složit. Doporučené jen na čtení na displeji.',
+    prazdne: 'Prázdné strany drží zpěvník v podobě, ve které se tiskne. Jejich ' +
+             'vynechání soubor zkrátí, ale posune číslování a zpěvník pak nemusí jít ' +
+             'správně vytisknout ani složit.',
     cernobile: 'Pro černobílý tisk. Průhledné obálky se složí na bílou, aby z barevné ' +
                'obálky nebyla celoplošná šedá. U neprůhledných obálek s tím nejde nic ' +
                'dělat. Soubor tím nemusí být menší.',
-    strany: 'Čísla stran tak, jak je ukazuje čtečka a obsah. Vypsat se dají po jedné ' +
-            'i rozsahem a „50-“ znamená od padesáté dál. Prázdné pole bere vše.',
+    strany: 'Čísla stran tak, jak je ukazuje čtečka a obsah. Prázdné pole bere vše. ' +
+            'Zápis „2, 4, 6-8, 10-“ vybere stranu 2, stranu 4, strany 6 až 8 ' +
+            'a pak stranu 10 a všechny další až do konce zpěvníku.',
     brozura: 'Dvě strany vedle sebe na list A4 na šířku, v pořadí, ve kterém se listy ' +
-             'po vytištění položí na sebe, přeloží napůl a sešijí středem. Tiskni ' +
-             'oboustranně a otáčej podél delší hrany.',
+             'po vytištění položí na sebe, přeloží napůl a sešijí středem. Tisknout ' +
+             'oboustranně, otáčet podél delší hrany.',
   };
 
   let okno = null;          // prvky okna, postavené při prvním otevření
@@ -224,7 +225,7 @@ window.Stahovani = (function () {
         <input type="radio" name="predvolba" value="vlastni">
         <span class="stahovani-predvolba-text">
           <strong>Vlastní nastavení</strong>
-          <span>poskládej si, co má soubor obsahovat</span>
+          <span>vlastní volba kvality, částí a rozsahu</span>
         </span>
       </label>`;
 
@@ -383,13 +384,13 @@ window.Stahovani = (function () {
     let text = '';
     if (bezPrazdnych && brozura) {
       text = 'Vynechané prázdné strany posunou stránkování, takže po složení brožury ' +
-             'nemusí strany vyjít tam, kde je čekáš.';
+             'nebude pořadí stran odpovídat zpěvníku.';
     } else if (bezPrazdnych && obsah === 'jen-obalka') {
-      text = 'Obálka je složený list o čtyřech stranách. Bez prázdných z ní zbydou ' +
-             'jen potištěné, a složit se pak nedá.';
+      text = 'Obálka je složený list o čtyřech stranách. Bez prázdných stran z ní ' +
+             'zbydou jen potištěné a nepůjde složit.';
     } else if (bezPrazdnych) {
-      text = 'Bez prázdných stran se může rozejít číslování a zpěvník nemusí jít ' +
-             'správně vytisknout. Na čtení na displeji to nevadí.';
+      text = 'Vynecháním prázdných stran se posune číslování a zpěvník nemusí jít ' +
+             'správně vytisknout ani složit.';
     }
     okno.varovani.textContent = text;
     okno.varovani.hidden = !text;
