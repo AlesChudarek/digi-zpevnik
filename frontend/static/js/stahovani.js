@@ -60,6 +60,7 @@ window.Stahovani = (function () {
   let zpevnik = null;       // id zpěvníku, se kterým je okno otevřené
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
   let melRozsah = false;    // bylo pole s rozsahem stran vyplněné při minulé změně?
+  let aktivniZnak = null;   // ikonka, jejíž nápověda je zrovna vidět
 
   /* ---------- stavba okna ---------- */
 
@@ -72,14 +73,16 @@ window.Stahovani = (function () {
             </label>`).join('');
     return `<div class="stahovani-radek" data-pole="${id}">
               <div class="stahovani-popisek">${popisek}${znakNapovedy(napoveda)}</div>
-              <div class="stahovani-volby">${volby}</div>
+              <div class="stahovani-volby">
+                <div class="stahovani-prepinac">${volby}</div>
+              </div>
             </div>`;
   }
 
   function znakNapovedy(klic) {
     if (!klic) return '';
-    return ` <button type="button" class="napoveda-znak" data-napoveda="${klic}"
-                     aria-label="Co to znamená">i</button>`;
+    return `<button type="button" class="napoveda-znak" data-napoveda="${klic}"
+                    aria-label="Co to znamená">i</button>`;
   }
 
   function postavOkno() {
@@ -112,16 +115,11 @@ window.Stahovani = (function () {
               {hodnota: 'small', popisek: 'menší soubor', vychozi: true},
               {hodnota: 'high', popisek: 'plné rozlišení'},
             ], 'kvalita')}
-            <div class="stahovani-radek" data-pole="obsah">
-              <div class="stahovani-popisek">Zahrnout${znakNapovedy('obsah')}</div>
-              <div class="stahovani-volby">
-                <select id="stahovani-obsah" class="stahovani-seznam">
-                  <option value="vse" selected>celý zpěvník</option>
-                  <option value="jen-obsah">jen obsah, bez obálky</option>
-                  <option value="jen-obalka">jen obálku</option>
-                </select>
-              </div>
-            </div>
+            ${poleVolby('obsah', 'Obálka', [
+              {hodnota: 'vse', popisek: 's obálkou', vychozi: true},
+              {hodnota: 'jen-obsah', popisek: 'bez obálky'},
+              {hodnota: 'jen-obalka', popisek: 'jen obálka'},
+            ], 'obsah')}
             <div class="stahovani-radek" data-pole="strany">
               <div class="stahovani-popisek">Strany${znakNapovedy('strany')}</div>
               <div class="stahovani-volby">
@@ -155,6 +153,7 @@ window.Stahovani = (function () {
           </fieldset>
 
           <p class="stahovani-souhrn" id="stahovani-souhrn"></p>
+          <p class="stahovani-varovani" id="stahovani-varovani" hidden></p>
         </div>
 
         <div id="stahovani-postup" hidden>
@@ -166,6 +165,8 @@ window.Stahovani = (function () {
           </p>
         </div>
         </div>
+
+        <div class="napoveda-bublina" id="stahovani-napoveda" role="note" hidden></div>
 
         <div class="stahovani-tlacitka">
           <button type="button" id="stahovani-zavrit">Zavřít</button>
@@ -184,12 +185,14 @@ window.Stahovani = (function () {
       predvolby: zaclona.querySelector('#stahovani-predvolby'),
       vlastni: zaclona.querySelector('#stahovani-vlastni'),
       souhrn: zaclona.querySelector('#stahovani-souhrn'),
+      varovani: zaclona.querySelector('#stahovani-varovani'),
       postup: zaclona.querySelector('#stahovani-postup'),
       vypln: zaclona.querySelector('#stahovani-vypln'),
       cislo: zaclona.querySelector('#stahovani-cislo'),
       rada: zaclona.querySelector('#stahovani-rada'),
       zavrit: zaclona.querySelector('#stahovani-zavrit'),
       spustit: zaclona.querySelector('#stahovani-spustit'),
+      napoveda: zaclona.querySelector('#stahovani-napoveda'),
     };
 
     okno.predvolby.innerHTML = PREDVOLBY.map(p => `
@@ -218,37 +221,75 @@ window.Stahovani = (function () {
       if (e.target === zaclona) zavri();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !zaclona.hidden) zavri();
+      if (e.key !== 'Escape' || zaclona.hidden) return;
+      if (aktivniZnak) { skryjNapovedu(); return; }
+      zavri();
     });
     okno.nastaveni.addEventListener('change', zmenaVyberu);
     // `change` u textového pole přijde až při opuštění, to je na živý souhrn pozdě.
     okno.nastaveni.addEventListener('input', (e) => {
       if (e.target.type === 'text') { srovnejPodleRozsahu(); obnovStav(); }
     });
+    // Na najetí i na zaměření klávesnicí. Na dotykové obrazovce najetí neexistuje,
+    // takže se to musí dát i ťuknout - a druhé ťuknutí to zase schová.
+    okno.nastaveni.addEventListener('mouseover', (e) => {
+      const znak = e.target.closest('.napoveda-znak');
+      if (znak && znak !== aktivniZnak) ukazNapovedu(znak);
+    });
+    okno.nastaveni.addEventListener('mouseout', (e) => {
+      const znak = e.target.closest('.napoveda-znak');
+      if (znak && !e.relatedTarget?.closest?.('.napoveda-znak')) skryjNapovedu();
+    });
+    okno.nastaveni.addEventListener('focusin', (e) => {
+      const znak = e.target.closest('.napoveda-znak');
+      if (znak) ukazNapovedu(znak); else skryjNapovedu();
+    });
     okno.nastaveni.addEventListener('click', (e) => {
       const znak = e.target.closest('.napoveda-znak');
-      if (znak) prepniNapovedu(znak);
+      if (!znak) { skryjNapovedu(); return; }
+      e.preventDefault();
+      if (znak === aktivniZnak) skryjNapovedu(); else ukazNapovedu(znak);
     });
+    // Panel se roluje, takže bublina přilepená na souřadnice by odjela od své ikonky.
+    okno.zaclona.querySelector('.stahovani-telo')
+      .addEventListener('scroll', skryjNapovedu, { passive: true });
     return okno;
   }
 
-  /* ---------- nápověda ---------- */
+  /* ---------- nápověda ----------
+     Jedna plovoucí bublina na celé okno, ne text vsunutý do řádku. Vsunutý text
+     roztahoval okno pokaždé, když si ho někdo otevřel, a zůstával viset, dokud ho
+     člověk netrefil znovu. Tohle se ukáže na najetí a samo zmizí. Plovoucí je i proto,
+     že ikonka sedí v úzkém sloupci s popiskem a text by se do něj zalomil. */
 
-  function prepniNapovedu(znak) {
-    const otevrena = znak.nextElementSibling &&
-                     znak.nextElementSibling.classList.contains('napoveda-text');
-    okno.zaclona.querySelectorAll('.napoveda-text').forEach(n => n.remove());
-    okno.zaclona.querySelectorAll('.napoveda-znak').forEach(
-      z => z.setAttribute('aria-expanded', 'false'));
-    if (otevrena) return;
-    const bublina = document.createElement('div');
-    bublina.className = 'napoveda-text';
-    bublina.setAttribute('role', 'note');
+  function ukazNapovedu(znak) {
+    const bublina = okno.napoveda;
     bublina.textContent = NAPOVEDY[znak.dataset.napoveda] || '';
-    // Na konec celého řádku, ne hned za ikonku: ikonka sedí v úzkém sloupci s popiskem
-    // a text by se do něj zalomil do třiceti řádků.
-    (znak.closest('.stahovani-radek') || znak.parentElement).appendChild(bublina);
+    if (!bublina.textContent) return;
+    bublina.hidden = false;
+    // Až po zviditelnění: skrytý prvek nemá rozměry, podle kterých by se dal umístit.
+    const znakRam = znak.getBoundingClientRect();
+    const bublinaRam = bublina.getBoundingClientRect();
+    const okraj = 8;
+    let x = znakRam.left;
+    x = Math.min(x, window.innerWidth - bublinaRam.width - okraj);
+    x = Math.max(okraj, x);
+    let y = znakRam.bottom + 6;
+    if (y + bublinaRam.height > window.innerHeight - okraj) {
+      y = Math.max(okraj, znakRam.top - bublinaRam.height - 6);
+    }
+    bublina.style.left = `${Math.round(x)}px`;
+    bublina.style.top = `${Math.round(y)}px`;
     znak.setAttribute('aria-expanded', 'true');
+    aktivniZnak = znak;
+  }
+
+  function skryjNapovedu() {
+    if (okno) {
+      okno.napoveda.hidden = true;
+      if (aktivniZnak) aktivniZnak.setAttribute('aria-expanded', 'false');
+    }
+    aktivniZnak = null;
   }
 
   /* ---------- nastavení ---------- */
@@ -271,12 +312,15 @@ window.Stahovani = (function () {
       return {format: p.format, parametry: {q: p.klic}};
     }
     const format = hodnota('format') || 'pdf';
-    const parametry = {obsah: okno.zaclona.querySelector('#stahovani-obsah').value};
+    const obsah = hodnota('obsah') || 'vse';
+    const parametry = {obsah};
     if (okno.zaclona.querySelector('#stahovani-bez-prazdnych').checked) {
       parametry.prazdne = '0';
     }
+    // Rozsah se týká stran, takže u „jen obálka" nemá co vybírat. Kdyby se přesto
+    // poslal, dal by jiný token a tentýž soubor by ležel v cache dvakrát.
     const strany = okno.zaclona.querySelector('#stahovani-strany').value.trim();
-    if (strany) parametry.strany = strany;
+    if (strany && obsah !== 'jen-obalka') parametry.strany = strany;
     if (format === 'pdf') {
       parametry.kvalita = hodnota('kvalita') || 'small';
       if (hodnota('barvy') === 'cernobile') parametry.cernobile = '1';
@@ -298,9 +342,33 @@ window.Stahovani = (function () {
   function srovnejPodleRozsahu() {
     const pole = okno.zaclona.querySelector('#stahovani-strany');
     const maRozsah = pole.value.trim() !== '';
-    const obsah = okno.zaclona.querySelector('#stahovani-obsah');
-    if (maRozsah && !melRozsah && obsah.value === 'vse') obsah.value = 'jen-obsah';
+    if (maRozsah && !melRozsah && hodnota('obsah') === 'vse') {
+      const bezObalky = okno.zaclona.querySelector(
+        'input[name="obsah"][value="jen-obsah"]');
+      if (bezObalky) { bezObalky.checked = true; zmenaVyberu(); }
+    }
     melRozsah = maRozsah;
+  }
+
+  /* Kombinace, které projdou, ale výsledek nebude ten, co člověk čeká. Nezakazují se -
+     někdo je chtít může - ale nemá se na ně přijít až u tiskárny. */
+  function zkontrolujKombinace() {
+    const bezPrazdnych = okno.zaclona.querySelector('#stahovani-bez-prazdnych').checked;
+    const brozura = okno.zaclona.querySelector('#stahovani-brozura').checked;
+    const obsah = hodnota('obsah');
+    let text = '';
+    if (bezPrazdnych && brozura) {
+      text = 'Vynechané prázdné strany posunou stránkování, takže po složení brožury ' +
+             'nemusí strany vyjít tam, kde je čekáš.';
+    } else if (bezPrazdnych && obsah === 'jen-obalka') {
+      text = 'Obálka je složený list o čtyřech stranách. Bez prázdných z ní zbydou ' +
+             'jen potištěné, a složit se pak nedá.';
+    } else if (bezPrazdnych) {
+      text = 'Bez prázdných stran se může rozejít číslování a zpěvník nemusí jít ' +
+             'správně vytisknout. Na čtení na displeji to nevadí.';
+    }
+    okno.varovani.textContent = text;
+    okno.varovani.hidden = !text;
   }
 
   function zmenaVyberu() {
@@ -313,6 +381,11 @@ window.Stahovani = (function () {
       const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
       if (radek) radek.classList.toggle('nedostupne', jeZip);
     });
+    // Rozsah stran u „jen obálka" nemá co vybírat - obálka strany nemá.
+    const jenObalka = hodnota('obsah') === 'jen-obalka';
+    const radekStran = okno.zaclona.querySelector('[data-pole="strany"]');
+    if (radekStran) radekStran.classList.toggle('nedostupne', jenObalka);
+    zkontrolujKombinace();
     obnovStav();
   }
 
@@ -320,6 +393,7 @@ window.Stahovani = (function () {
   function obnovStav() {
     const { format, parametry } = recept();
     const vlastni = vybranaPredvolba() === 'vlastni';
+    if (!vlastni) okno.varovani.hidden = true;
     if (!vlastni) {
       const znak = okno.zaclona.querySelector(
         `.hotovo-znak[data-varianta="${format}-${parametry.q}"]`);
@@ -405,8 +479,10 @@ window.Stahovani = (function () {
     // Po dokončeném stažení zdědilo Zavřít zvýraznění. Bez tohohle měla po
     // znovuotevření obě tlačítka stejnou barvu a nebylo poznat, které je to hlavní.
     o.zavrit.classList.remove('hlavni');
-    o.zaclona.querySelectorAll('.napoveda-text').forEach(n => n.remove());
+    skryjNapovedu();
     o.zaclona.querySelector('#stahovani-strany').value = '';
+    const vseObsah = o.zaclona.querySelector('input[name="obsah"][value="vse"]');
+    if (vseObsah) vseObsah.checked = true;
     melRozsah = false;
     o.souhrn.classList.remove('stahovani-chyba');
     o.zaclona.hidden = false;

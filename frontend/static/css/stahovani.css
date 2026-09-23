@@ -78,15 +78,17 @@
 }
 /* Druhotné tlačítko je tiché - bez výplně. Hlavní akce má být na první pohled jasná
    a dvě stejně vypadající tlačítka vedle sebe nutí číst, než se dá kliknout. */
+/* Druhotné tlačítko má výplň, ne obrys: rámeček v barvě --panel-border se na světlém
+   panelu ztratil úplně. Rozdíl mezi ním a hlavní akcí nedělá výraznost, ale barva,
+   velikost a tučnost té hlavní. */
 .stahovani-tlacitka button {
-  background: transparent; border: 0; border-radius: 8px;
-  padding: 8px 14px;
+  background: var(--panel-btn-bg, #f0f0f0); border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
   font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
-  color: var(--panel-muted, #666);
+  color: var(--panel-btn-text, #333);
 }
-.stahovani-tlacitka button:hover {
-  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
-}
+.stahovani-tlacitka button:hover { background: var(--panel-btn-hover, #e2e2e2); }
 /* Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
    motivech, takže na něm bílý text drží čitelnost všude. U --brand-contrast to
    neplatí - v motivu amber je stejný jako brand-strong a text by zmizel. */
@@ -131,13 +133,41 @@
 }
 /* Volby, které pro zvolený formát nic nedělají (kvalita a černobílá u ZIPu). */
 .stahovani-radek.nedostupne { display: none; }
+/* Pevná šířka s rezervou na ikonku nápovědy. Na 96 px se „Prázdné strany“ a „i“
+   nevešly a ikonka spadla na další řádek. */
 .stahovani-popisek {
-  flex: 0 0 96px; font-size: 12px; color: var(--panel-muted, #666);
+  flex: 0 0 118px; font-size: 12px; color: var(--panel-muted, #666);
+  display: flex; align-items: baseline; gap: 4px;
 }
 .stahovani-volby { display: flex; gap: 12px; flex-wrap: wrap; flex: 1 1 180px; }
 .stahovani-volba {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 13px; color: var(--panel-text, #222); cursor: pointer;
+}
+
+/* Segmentový přepínač. Tři možnosti jako kolečka s textem se do řádku nevešly a lámaly
+   se dvě plus jedna; slepené segmenty bez koleček ušetří přes šedesát pixelů. */
+.stahovani-prepinac {
+  display: inline-flex; border: 1px solid var(--panel-border, #ddd);
+  border-radius: 8px; overflow: hidden; max-width: 100%;
+}
+.stahovani-prepinac .stahovani-volba { gap: 0; }
+.stahovani-prepinac input {
+  position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none;
+}
+.stahovani-prepinac .stahovani-volba > span {
+  display: block; padding: 5px 9px; font-size: 12.5px; white-space: nowrap;
+  border-left: 1px solid var(--panel-border, #ddd);
+}
+.stahovani-prepinac .stahovani-volba:first-child > span { border-left: 0; }
+.stahovani-prepinac .stahovani-volba:hover > span {
+  background: var(--panel-btn-bg, #f0f0f0);
+}
+.stahovani-prepinac input:checked + span {
+  background: var(--brand-dark, #2f7d4f); color: #fff; font-weight: 600;
+}
+.stahovani-prepinac input:focus-visible + span {
+  outline: 2px solid var(--brand-strong, #2f7d4f); outline-offset: -2px;
 }
 .stahovani-vlastni[disabled] .stahovani-volba,
 .stahovani-vlastni[disabled] .napoveda-znak { cursor: default; }
@@ -169,18 +199,33 @@
 .napoveda-znak {
   width: 15px; height: 15px; padding: 0; border: 0; border-radius: 50%;
   background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-muted, #666);
-  font: 600 10px/15px Georgia, serif; cursor: pointer; vertical-align: text-top;
+  font: 600 10px/15px Georgia, serif; cursor: help; vertical-align: text-top;
+  flex: none;
 }
-.napoveda-znak:hover { background: var(--panel-btn-hover, #e2e2e2); }
+.napoveda-znak:hover,
 .napoveda-znak[aria-expanded="true"] {
   background: var(--brand-dark, #2f7d4f); color: #fff;
 }
-.napoveda-text {
-  flex-basis: 100%; order: 9;
-  margin: 2px 0 0; padding: 8px 10px; border-radius: 8px;
+/* Plovoucí, ne v toku: nápověda vsunutá mezi řádky roztahovala okno pokaždé, když si
+   ji někdo otevřel. `fixed` proto, že panel se roluje a má vlastní přetečení. */
+.napoveda-bublina {
+  position: fixed; z-index: 3100; max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--panel-text, #222); color: var(--panel-bg, #fff);
+  font-size: 12px; line-height: 1.45;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+.napoveda-bublina[hidden] { display: none; }
+
+/* Kombinace, která projde, ale výsledek nebude ten, co kdo čeká. */
+.stahovani-varovani {
+  margin: 6px 0 0; padding: 7px 10px; border-radius: 8px;
+  border-left: 3px solid var(--brand-dark, #2f7d4f);
   background: var(--panel-btn-bg, #f0f0f0);
   font-size: 12px; line-height: 1.45; color: var(--panel-text, #333);
 }
+.stahovani-varovani[hidden] { display: none; }
 
 @media (max-width: 480px) {
   .stahovani-popisek { flex-basis: 100%; }
