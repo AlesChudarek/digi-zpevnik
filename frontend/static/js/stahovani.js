@@ -37,19 +37,27 @@ window.Stahovani = (function () {
     },
   ];
 
+  /* Proč se ta volba nedá přepnout. Ukazuje se na najetí na zamčený řádek. */
+  const DUVODY = {
+    zipKvalita: 'ZIP balí původní obrázky beze změny, takže kvalita pro něj neznamená nic.',
+    zipBarvy: 'ZIP balí původní obrázky beze změny, takže je nemá jak odbarvit.',
+    zipBrozura: 'Brožura přeskládá strany uvnitř PDF. ZIP je složka obrázků, ne tisková sazba.',
+    obalkaStrany: 'Obálka nemá číslované strany, takže není z čeho vybírat.',
+  };
+
   const NAPOVEDY = {
     kvalita: 'Menší soubor se rychleji stahuje a stačí na čtení. Plné rozlišení má ' +
              'smysl na tisk, kde je vidět každý detail akordových značek.',
-    obsah: 'Obálka je složený list o čtyřech stranách. Když ji vynecháš, zbyde jen ' +
-           'to, co je uvnitř.',
+    obsah: 'Obálka je složený list o čtyřech stranách. „Jen strany“ ji vynechá, ' +
+           '„jen obálka“ nechá naopak jen ji.',
     prazdne: 'Prázdné strany drží zpěvník tak, jak se tiskne. Když je vynecháš, může ' +
              'přestat sedět číslování stran a zpěvník se nemusí dát správně vytisknout ' +
              'ani složit. Doporučené jen na čtení na displeji.',
     cernobile: 'Pro černobílý tisk. Průhledné obálky se složí na bílou, aby z barevné ' +
                'obálky nebyla celoplošná šedá. U neprůhledných obálek s tím nejde nic ' +
                'dělat. Soubor tím nemusí být menší.',
-    strany: 'Čísla stran tak, jak je ukazuje čtečka a obsah. Dá se vypsat po jedné ' +
-            'i rozsahem, třeba 12, 24-31, 50. Prázdné pole znamená celý zpěvník.',
+    strany: 'Čísla stran tak, jak je ukazuje čtečka a obsah. Vypsat se dají po jedné ' +
+            'i rozsahem a „50-“ znamená od padesáté dál. Prázdné pole bere vše.',
     brozura: 'Dvě strany vedle sebe na list A4 na šířku, v pořadí, ve kterém se listy ' +
              'po vytištění položí na sebe, přeloží napůl a sešijí středem. Tiskni ' +
              'oboustranně a otáčej podél delší hrany.',
@@ -115,16 +123,16 @@ window.Stahovani = (function () {
               {hodnota: 'small', popisek: 'menší soubor', vychozi: true},
               {hodnota: 'high', popisek: 'plné rozlišení'},
             ], 'kvalita')}
-            ${poleVolby('obsah', 'Obálka', [
-              {hodnota: 'vse', popisek: 's obálkou', vychozi: true},
-              {hodnota: 'jen-obsah', popisek: 'bez obálky'},
+            ${poleVolby('obsah', 'Části', [
+              {hodnota: 'vse', popisek: 'vše', vychozi: true},
+              {hodnota: 'jen-obsah', popisek: 'jen strany'},
               {hodnota: 'jen-obalka', popisek: 'jen obálka'},
             ], 'obsah')}
             <div class="stahovani-radek" data-pole="strany">
               <div class="stahovani-popisek">Strany${znakNapovedy('strany')}</div>
               <div class="stahovani-volby">
                 <input type="text" id="stahovani-strany" class="stahovani-text"
-                       placeholder="celý zpěvník, nebo třeba 12, 24-31, 50"
+                       placeholder="vše, nebo třeba 1, 3, 13-45, 50-"
                        inputmode="numeric" autocomplete="off">
               </div>
             </div>
@@ -153,6 +161,10 @@ window.Stahovani = (function () {
           </fieldset>
 
           <p class="stahovani-souhrn" id="stahovani-souhrn"></p>
+          <div class="stahovani-pisne" id="stahovani-pisne" hidden>
+            <button type="button" id="stahovani-pisne-prepinac" aria-expanded="false"></button>
+            <ul class="stahovani-pisne-seznam" id="stahovani-pisne-seznam" hidden></ul>
+          </div>
           <p class="stahovani-varovani" id="stahovani-varovani" hidden></p>
         </div>
 
@@ -186,6 +198,9 @@ window.Stahovani = (function () {
       vlastni: zaclona.querySelector('#stahovani-vlastni'),
       souhrn: zaclona.querySelector('#stahovani-souhrn'),
       varovani: zaclona.querySelector('#stahovani-varovani'),
+      pisne: zaclona.querySelector('#stahovani-pisne'),
+      pisnePrepinac: zaclona.querySelector('#stahovani-pisne-prepinac'),
+      pisneSeznam: zaclona.querySelector('#stahovani-pisne-seznam'),
       postup: zaclona.querySelector('#stahovani-postup'),
       vypln: zaclona.querySelector('#stahovani-vypln'),
       cislo: zaclona.querySelector('#stahovani-cislo'),
@@ -215,6 +230,11 @@ window.Stahovani = (function () {
 
     okno.zavrit.addEventListener('click', zavri);
     okno.spustit.addEventListener('click', spust);
+    okno.pisnePrepinac.addEventListener('click', () => {
+      const otevrene = okno.pisneSeznam.hidden;
+      okno.pisneSeznam.hidden = !otevrene;
+      okno.pisnePrepinac.setAttribute('aria-expanded', otevrene ? 'true' : 'false');
+    });
     // Klik na záclonu vedle panelu zavírá taky. Modální okno, které jde zavřít jedině
     // tlačítkem, je past na dotykové obrazovce, kde se Escape nemačká.
     zaclona.addEventListener('click', (e) => {
@@ -234,11 +254,15 @@ window.Stahovani = (function () {
     // takže se to musí dát i ťuknout - a druhé ťuknutí to zase schová.
     okno.nastaveni.addEventListener('mouseover', (e) => {
       const znak = e.target.closest('.napoveda-znak');
-      if (znak && znak !== aktivniZnak) ukazNapovedu(znak);
+      if (znak) { if (znak !== aktivniZnak) ukazNapovedu(znak); return; }
+      const zamceny = e.target.closest('.stahovani-radek.zamcene');
+      if (zamceny && zamceny !== aktivniZnak) ukazNapovedu(zamceny, zamceny.dataset.duvod);
     });
     okno.nastaveni.addEventListener('mouseout', (e) => {
-      const znak = e.target.closest('.napoveda-znak');
-      if (znak && !e.relatedTarget?.closest?.('.napoveda-znak')) skryjNapovedu();
+      const kotva = e.target.closest('.napoveda-znak, .stahovani-radek.zamcene');
+      if (kotva && !e.relatedTarget?.closest?.('.napoveda-znak, .stahovani-radek.zamcene')) {
+        skryjNapovedu();
+      }
     });
     okno.nastaveni.addEventListener('focusin', (e) => {
       const znak = e.target.closest('.napoveda-znak');
@@ -262,9 +286,9 @@ window.Stahovani = (function () {
      člověk netrefil znovu. Tohle se ukáže na najetí a samo zmizí. Plovoucí je i proto,
      že ikonka sedí v úzkém sloupci s popiskem a text by se do něj zalomil. */
 
-  function ukazNapovedu(znak) {
+  function ukazNapovedu(znak, text) {
     const bublina = okno.napoveda;
-    bublina.textContent = NAPOVEDY[znak.dataset.napoveda] || '';
+    bublina.textContent = text || NAPOVEDY[znak.dataset.napoveda] || '';
     if (!bublina.textContent) return;
     bublina.hidden = false;
     // Až po zviditelnění: skrytý prvek nemá rozměry, podle kterých by se dal umístit.
@@ -371,20 +395,29 @@ window.Stahovani = (function () {
     okno.varovani.hidden = !text;
   }
 
+  /* Zamknout, ne schovat. Mizející řádky nadskakovaly pod rukou a člověk se nedozvěděl,
+     co zmizelo ani proč; zašedlý řádek zůstane na místě a na najetí řekne důvod. */
+  function zamkni(pole, duvod) {
+    const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
+    if (!radek) return;
+    radek.classList.toggle('zamcene', !!duvod);
+    if (duvod) radek.dataset.duvod = duvod; else delete radek.dataset.duvod;
+    radek.querySelectorAll('input, select').forEach(prvek => {
+      prvek.disabled = !!duvod;
+    });
+  }
+
   function zmenaVyberu() {
     const vlastni = vybranaPredvolba() === 'vlastni';
     okno.vlastni.disabled = !vlastni;
     // ZIP balí originály, takže kvalita ani černobílá pro něj neznamenají nic - a server
     // je zahodí. Ať okno neukazuje volby, které nic neudělají.
     const jeZip = hodnota('format') === 'zip';
-    ['kvalita', 'barvy', 'brozura'].forEach(pole => {
-      const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
-      if (radek) radek.classList.toggle('nedostupne', jeZip);
-    });
-    // Rozsah stran u „jen obálka" nemá co vybírat - obálka strany nemá.
     const jenObalka = hodnota('obsah') === 'jen-obalka';
-    const radekStran = okno.zaclona.querySelector('[data-pole="strany"]');
-    if (radekStran) radekStran.classList.toggle('nedostupne', jenObalka);
+    zamkni('kvalita', jeZip && DUVODY.zipKvalita);
+    zamkni('barvy', jeZip && DUVODY.zipBarvy);
+    zamkni('brozura', jeZip && DUVODY.zipBrozura);
+    zamkni('strany', jenObalka && DUVODY.obalkaStrany);
     zkontrolujKombinace();
     obnovStav();
   }
@@ -393,17 +426,17 @@ window.Stahovani = (function () {
   function obnovStav() {
     const { format, parametry } = recept();
     const vlastni = vybranaPredvolba() === 'vlastni';
-    if (!vlastni) okno.varovani.hidden = true;
     if (!vlastni) {
+      okno.varovani.hidden = true;
       const znak = okno.zaclona.querySelector(
         `.hotovo-znak[data-varianta="${format}-${parametry.q}"]`);
       nastavTlacitko(znak && !znak.hidden);
-      okno.souhrn.textContent = '';
-      return;
     }
-    // U vlastního nastavení se to musí doptat serveru. Odložit, ať se při proklikávání
-    // voleb nestřílí dotaz za každé kliknutí.
-    nastavTlacitko(false);
+    // Doptat se serveru. U předvolby už se tlačítko pojmenovalo podle značky „✓ hned“
+    // výš, ale kolik to bude stran a písní se bez dotazu neví - a to má být vidět
+    // pokaždé, ne jen u vlastního nastavení. Odložit, ať se při proklikávání voleb
+    // nestřílí dotaz za každé kliknutí.
+    if (vlastni) nastavTlacitko(false);
     clearTimeout(dotazNaHotovo);
     dotazNaHotovo = setTimeout(async () => {
       const soucasny = dotazRetezec(Object.assign({format}, parametry));
@@ -415,10 +448,11 @@ window.Stahovani = (function () {
         const { format: f2, parametry: p2 } = recept();
         if (dotazRetezec(Object.assign({format: f2}, p2)) !== soucasny) return;
         if (j.error) { chybaVNastaveni(j.error); return; }
-        nastavTlacitko(!!j.hotovo);
+        if (vlastni) nastavTlacitko(!!j.hotovo);
         okno.souhrn.classList.remove('stahovani-chyba');
         okno.souhrn.textContent = j.stran ? popisVyberu(j)
           : 'Z tohohle nastavení nevyjde ani jedna strana.';
+        vykresliPisne(j.stran ? j.pisne : []);
         okno.spustit.disabled = !j.stran;
       } catch (e) {
         nastavTlacitko(false);
@@ -430,20 +464,45 @@ window.Stahovani = (function () {
   function chybaVNastaveni(text) {
     okno.souhrn.textContent = text;
     okno.souhrn.classList.add('stahovani-chyba');
+    vykresliPisne([]);
     okno.spustit.disabled = true;
   }
 
-  /** Věta pod volbami: kolik stran, kolik listů u brožury, a které písně u rozsahu. */
+  /** Věta pod volbami: kolik stran, z toho obálky, a u brožury kolik listů papíru. */
   function popisVyberu(j) {
     let veta = `Vyjde na ${stran(j.stran)}`;
     if (j.listu) veta += `, tedy ${listu(j.listu)} papíru`;
-    veta += '.';
-    if (j.pisne && j.pisne.length) {
-      const jmena = j.pisne.map(
-        p => p.nekompletni ? `${p.nazev} (nekompletní)` : p.nazev);
-      veta += ' ' + jmena.join(', ') + '.';
+    const casti = [];
+    if (j.obalek) casti.push(`${stran(j.obalek)} obálky`);
+    if (j.bez_pisne) casti.push(`${stran(j.bez_pisne)} bez písně`);
+    if (casti.length) veta += `, z toho ${casti.join(' a ')}`;
+    return veta + '.';
+  }
+
+  /* Malé info, ne nastavení: kolik písní ve výběru je. Celý seznam až na vyžádání -
+     u stodvacetistránkového zpěvníku by jinak zabral víc místa než celé okno. */
+  function vykresliPisne(seznam) {
+    const pisne = seznam || [];
+    okno.pisne.hidden = pisne.length === 0;
+    if (!pisne.length) {
+      okno.pisneSeznam.hidden = true;
+      okno.pisnePrepinac.setAttribute('aria-expanded', 'false');
+      return;
     }
-    return veta;
+    okno.pisnePrepinac.textContent =
+      pisne.length === 1 ? '1 píseň'
+      : pisne.length <= 4 ? `${pisne.length} písně` : `${pisne.length} písní`;
+    okno.pisneSeznam.innerHTML = pisne.map(p => {
+      const poznamka = p.nekompletni
+        ? ' <span class="stahovani-nekompletni">nekompletní</span>' : '';
+      return `<li>${escapuj(p.nazev)}${poznamka}</li>`;
+    }).join('');
+  }
+
+  function escapuj(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
   }
 
   function listu(n) {

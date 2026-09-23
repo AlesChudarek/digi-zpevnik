@@ -244,8 +244,20 @@ def main():
                        rozsah["obsah"])
             zkontroluj("2 strany" in rozsah["souhrn"],
                        "rozsah 3-4 vyjde na dvě strany", rozsah["souhrn"])
-            zkontroluj("Aranka" in rozsah["souhrn"] or "Čo bolí" in rozsah["souhrn"],
-                       "a souhrn vypíše, které písně to jsou", rozsah["souhrn"])
+            pisne = page.evaluate("""() => ({
+              videt: !document.getElementById('stahovani-pisne').hidden,
+              popisek: document.getElementById('stahovani-pisne-prepinac').textContent,
+              seznam_skryty: document.getElementById('stahovani-pisne-seznam').hidden})""")
+            zkontroluj(pisne["videt"] and "2" in pisne["popisek"],
+                       "sekce s písněmi řekne, kolik jich ve výběru je", str(pisne))
+            zkontroluj(pisne["seznam_skryty"],
+                       "ale seznam se sám nerozbalí, u dlouhého zpěvníku by zabral celé okno")
+            page.evaluate("() => document.getElementById('stahovani-pisne-prepinac').click()")
+            page.wait_for_timeout(300)
+            zkontroluj(page.evaluate(
+                "() => document.querySelectorAll('#stahovani-pisne-seznam li').length") == 2,
+                "klik seznam rozbalí")
+            page.evaluate("() => document.getElementById('stahovani-pisne-prepinac').click()")
 
             # Ale jen z výchozího stavu. Kdo si obálku vrátí, o ni znovu nepřijde.
             page.evaluate("() => document.querySelector("
@@ -279,19 +291,43 @@ def main():
             page.evaluate("() => document.querySelector('input[name=format][value=zip]').click()")
             page.wait_for_timeout(600)
             u_zipu = page.evaluate("""() => {
-              const videt = p => {
+              const stav = p => {
                 const r = document.querySelector(`[data-pole="${p}"]`);
-                return r ? r.getBoundingClientRect().height > 0 : null;
+                return {videt: r.getBoundingClientRect().height > 0,
+                        zamcene: r.classList.contains('zamcene')};
               };
-              return {kvalita: videt('kvalita'), barvy: videt('barvy'),
-                      brozura: videt('brozura'), strany: videt('strany')};
+              return {kvalita: stav('kvalita'), barvy: stav('barvy'),
+                      brozura: stav('brozura'), strany: stav('strany')};
             }""")
-            zkontroluj(not u_zipu["kvalita"] and not u_zipu["barvy"] and not u_zipu["brozura"],
-                       "u ZIPu zmizí kvalita, barvy i brožura, protože by nic neudělaly",
+            zkontroluj(all(u_zipu[p]["zamcene"] for p in ('kvalita', 'barvy', 'brozura')),
+                       "u ZIPu se kvalita, barvy i brožura zamknou, protože by nic neudělaly",
                        str(u_zipu))
-            zkontroluj(u_zipu["strany"], "ale rozsah stran zůstane, ten u ZIPu funguje")
+            zkontroluj(all(u_zipu[p]["videt"] for p in ('kvalita', 'barvy', 'brozura')),
+                       "ale zůstanou na místě, ať pod rukou nenadskakuje celé okno")
+            zkontroluj(not u_zipu["strany"]["zamcene"],
+                       "rozsah stran zamčený není, ten u ZIPu funguje")
+            page.hover('[data-pole=kvalita]')
+            page.wait_for_timeout(400)
+            zkontroluj("ZIP" in page.evaluate(
+                "() => document.getElementById('stahovani-napoveda').textContent"),
+                "a najetí na zamčený řádek řekne proč",
+                page.evaluate("() => document.getElementById('stahovani-napoveda').textContent"))
             page.evaluate("() => document.querySelector('input[name=format][value=pdf]').click()")
             page.wait_for_timeout(300)
+
+            print("\n── otevřený rozsah ──")
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '3-';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(1000)
+            otevreny = page.evaluate(
+                "() => document.getElementById('stahovani-souhrn').textContent")
+            zkontroluj("stran" in otevreny and "nevyjde" not in otevreny,
+                       "„3-“ znamená od třetí strany dál", otevreny)
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(800)
 
             print("\n── žádný řádek voleb se neláme ──")
             radky = page.evaluate("""() => [...document.querySelectorAll(
@@ -315,10 +351,18 @@ def main():
             page.evaluate("() => document.querySelector("
                           "     'input[name=obsah][value=jen-obalka]').click()")
             page.wait_for_timeout(900)
-            zkontroluj(not page.evaluate(
-                "() => document.querySelector('[data-pole=strany]')"
-                ".getBoundingClientRect().height > 0"),
-                "u jen obálky zmizí rozsah stran, obálka strany nemá")
+            zamek = page.evaluate("""() => {
+              const r = document.querySelector('[data-pole=strany]');
+              return {videt: r.getBoundingClientRect().height > 0,
+                      zamcene: r.classList.contains('zamcene'),
+                      vypnute: [...r.querySelectorAll('input')].every(i => i.disabled),
+                      duvod: r.dataset.duvod || ''};
+            }""")
+            zkontroluj(zamek["videt"] and zamek["zamcene"] and zamek["vypnute"],
+                       "u jen obálky se rozsah stran zamkne, ale zůstane na místě",
+                       str(zamek))
+            zkontroluj("obálka" in zamek["duvod"].lower(),
+                       "a nese důvod, který se ukáže na najetí", zamek["duvod"])
             zkontroluj("4 strany" in page.evaluate(
                 "() => document.getElementById('stahovani-souhrn').textContent"),
                 "a zbylý text v poli už výsledek neovlivní",

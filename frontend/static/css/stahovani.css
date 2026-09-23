@@ -131,8 +131,12 @@
 .stahovani-radek {
   display: flex; align-items: baseline; gap: 10px; margin: 0 0 8px; flex-wrap: wrap;
 }
-/* Volby, které pro zvolený formát nic nedělají (kvalita a černobílá u ZIPu). */
-.stahovani-radek.nedostupne { display: none; }
+/* Volba, která pro zvolené nastavení nic neudělá. Zašedlá a na místě, ne schovaná:
+   mizející řádky nadskakovaly pod rukou a nikdo se nedozvěděl, co zmizelo ani proč.
+   Důvod řekne bublina na najetí. */
+.stahovani-radek.zamcene { opacity: 0.4; cursor: help; }
+.stahovani-radek.zamcene .stahovani-volba,
+.stahovani-radek.zamcene .stahovani-text { cursor: help; pointer-events: none; }
 /* Pevná šířka s rezervou na ikonku nápovědy. Na 96 px se „Prázdné strany“ a „i“
    nevešly a ikonka spadla na další řádek. */
 .stahovani-popisek {
@@ -230,3 +234,23 @@
 @media (max-width: 480px) {
   .stahovani-popisek { flex-basis: 100%; }
 }
+
+/* Malé info o obsahu výběru, ne nastavení. Seznam až na vyžádání: u stodvacetistránkového
+   zpěvníku by zabral víc místa než celé okno. */
+.stahovani-pisne { margin: 2px 0 0; }
+.stahovani-pisne[hidden] { display: none; }
+.stahovani-pisne-prepinac {
+  border: 0; background: none; padding: 0;
+  font: inherit; font-size: 12px; cursor: pointer;
+  color: var(--brand-dark, #2f7d4f); text-decoration: underline dotted;
+}
+.stahovani-pisne-prepinac::after { content: ' ▾'; text-decoration: none; }
+.stahovani-pisne-prepinac[aria-expanded="true"]::after { content: ' ▴'; }
+.stahovani-pisne-seznam {
+  margin: 6px 0 0; padding: 8px 10px 8px 26px; border-radius: 8px;
+  background: var(--panel-btn-bg, #f0f0f0);
+  font-size: 12px; line-height: 1.5; color: var(--panel-text, #333);
+  max-height: 180px; overflow-y: auto;
+}
+.stahovani-pisne-seznam[hidden] { display: none; }
+.stahovani-nekompletni { color: var(--panel-muted, #666); font-style: italic; }

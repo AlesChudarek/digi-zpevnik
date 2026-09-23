@@ -509,7 +509,36 @@ def main():
         zkontroluj(po == pred, "„4,3“ trefí tentýž soubor jako „3-4“",
                    f"přibylo {sorted(po - pred)}")
 
-        for zapis, proc in (("31-24", "pozpátku"), ("abc", "nečíslo"), ("0", "nula")):
+        # Otevřený konec: „3-“ znamená od třetí strany dál.
+        stav_otevreny = json.loads(admin.get(
+            f"/songbook/{BOOK}/export-hotove?strany=3-&obsah=jen-obsah")[1])
+        stav_vse = json.loads(admin.get(
+            f"/songbook/{BOOK}/export-hotove?obsah=jen-obsah")[1])
+        zkontroluj(stav_otevreny.get("stran") == stav_vse.get("stran"),
+                   "„3-“ u zpěvníku číslovaného od tří vybere celý obsah",
+                   f"{stav_otevreny.get('stran')} vs {stav_vse.get('stran')}")
+
+        # Kanonický tvar musí sedět i s otevřeným koncem.
+        pred_ot = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        stahni("?strany=3-&obsah=jen-obsah")
+        stahni("?strany=4-,3&obsah=jen-obsah")
+        po_ot = {p.name for p in EXPORTS_DIR.glob(f"{BOOK}-c*.pdf")}
+        zkontroluj(len(po_ot - pred_ot) == 1,
+                   "„4-,3“ je totéž přání jako „3-“ a nedělá druhý soubor",
+                   f"přibylo {sorted(po_ot - pred_ot)}")
+
+        # Strany bez písně nepatří mezi písně. Jsou to taky řádky v songs, jen
+        # s is_non_song, a "Vyjde na 2 strany. <Prázdná strana>" není seznam písní.
+        stav = json.loads(admin.get(f"/songbook/{BOOK}/export-hotove?obsah=jen-obsah")[1])
+        zkontroluj(all("Prázdná strana" not in p["nazev"] for p in stav.get("pisne") or []),
+                   "mezi písněmi nejsou prázdné strany",
+                   ", ".join(p["nazev"] for p in (stav.get("pisne") or [])[:3]))
+        zkontroluj("bez_pisne" in stav and "obalek" in stav,
+                   "ale počet stran bez písně a obálek se hlásí zvlášť",
+                   f"bez písně {stav.get('bez_pisne')}, obálek {stav.get('obalek')}")
+
+        for zapis, proc in (("31-24", "pozpátku"), ("abc", "nečíslo"), ("0", "nula"),
+                            ("1-2-3", "tři čísla")):
             kod = admin.get(f"/songbook/{BOOK}/export.pdf?strany={zapis}")[0]
             zkontroluj(kod == 400, f"rozsah {proc} se odmítne", f"status {kod}")
 
