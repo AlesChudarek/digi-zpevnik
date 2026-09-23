@@ -85,11 +85,8 @@ v něm. Stručně to podstatné:
 
 ## Úkol
 
-Vyber si z `TODO.md`, nebo se domluv s Alešem. Stahování je hotové, takže na řadě je
-něco jiného. Nejblíž na ráně jsou tyhle tři:
-
-**Pořadí je domluvené s Alešem:** (1) nápovědy, (2) import z PDF/ZIP, (3) samootáčecí
-tlačítko pro přepínání módů čtečky, (4) mobilní UI.
+Stahování je hotové včetně denního stropu, takže na řadě je něco jiného.
+**Pořadí je domluvené s Alešem:**
 
 1. **Sjednotit nápovědy v UI** (`TODO.md`, sekce „Obsah a prezentace"). Projekt má dnes
    dvě různé implementace tooltipů — `.tooltip-text` ve čtečce a `.tooltip`
