@@ -678,13 +678,14 @@ window.Stahovani = (function () {
       return;
     }
     if (odpoved.status !== 202) {
-      let hlaska = {
+      // Hláška ze serveru má přednost: 429 znamená buď „zrovna se staví něco jiného",
+      // nebo „vyčerpaný denní limit", a to je pro uživatele docela rozdíl.
+      let hlaska = null;
+      try { hlaska = (await odpoved.json()).error; } catch (e) { /* níž náhradní */ }
+      hlaska = hlaska || {
         429: 'Server teď skládá jiný zpěvník, zkus to za chvíli.',
         413: 'Zpěvník je na stažení příliš velký.',
       }[odpoved.status];
-      if (!hlaska) {
-        try { hlaska = (await odpoved.json()).error; } catch (e) { /* níž výchozí */ }
-      }
       chyba(hlaska || 'Stažení se nepovedlo.');
       return;
     }

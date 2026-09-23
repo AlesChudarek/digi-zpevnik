@@ -19,7 +19,7 @@ import threading
 import zipfile
 from pathlib import Path
 from werkzeug.utils import secure_filename
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, text
 import shutil
 import tempfile
 from uuid import uuid4
@@ -110,6 +110,13 @@ EXPORT_MAX_PAGES = 400
 # dvě, takže po upgradu paměti dává souběh smysl; proto se to dá zvednout z prostředí
 # a ne přepsáním kódu.
 MAX_CONCURRENT_EXPORTS = max(1, int(os.getenv("MAX_CONCURRENT_EXPORTS", "1")))
+# Kolik skládání smí jeden účet spustit za den. Počítají se jen skutečná skládání,
+# ne stažení z cache - to je pár milisekund a omezovat ho nemá co.
+#
+# Chrání to jediný stavěcí slot: kdo by si pořád dokola říkal o jiný recept, obsadil by
+# ho všem ostatním. Dvacet je pro člověka velkorysé (běžné stažení je trefa do cache
+# a nepočítá se) a nejvýš to stojí ~8 minut procesoru. Nula limit vypne.
+MAX_EXPORT_BUILDS_PER_DAY = max(0, int(os.getenv("MAX_EXPORT_BUILDS_PER_DAY", "20")))
 # Předvolba, která se po každé úpravě předgeneruje. Jediná, u které platí slib, že
 # stažení veřejného zpěvníku je hned - a proto taky jediná, která se z cache nevyhazuje.
 PREDGENEROVANA_VARIANTA = 'small'
@@ -280,6 +287,7 @@ def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
 try:
     # Prefer balíčkové importy pro nasazení (backend.app jako modul)
     from .models import (
+        ExportPokus,
         Song,
         Obrazek,
         SongImage,
@@ -293,7 +301,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, SongImage, SongbookPage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, db, init_app
+    from models import Song, Obrazek, SongImage, SongbookPage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -439,9 +447,11 @@ def _dopln_chybejici_sloupce():
 
     Hodnoty se tady nedopočítávají, jen se sloupec doplní s výchozí hodnotou.
     """
-    from sqlalchemy import text
     with app.app_context():
         try:
+            # Chybějící tabulky umí create_all; pod gunicornem se jinak nezavolá nikde,
+            # takže by nová tabulka na serveru nevznikla dřív než ručním zásahem.
+            db.create_all()
             sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(song_images)"))}
             if sloupce and 'poradi' not in sloupce:
                 db.session.execute(text(
@@ -452,7 +462,8 @@ def _dopln_chybejici_sloupce():
             # Gunicorn startuje víc workerů naráz, takže se o sloupec pokusí každý z nich
             # a všichni kromě prvního dostanou "duplicate column". Výsledek je správný,
             # není důvod to hlásit jako problém.
-            if 'duplicate column' not in str(chyba).lower():
+            zprava = str(chyba).lower()
+            if 'duplicate column' not in zprava and 'already exists' not in zprava:
                 app.logger.warning("kontrola sloupců neproběhla: %s", chyba)
 
 
@@ -3327,6 +3338,41 @@ def _build_export_file(book_id, recept, paths):
         paths['lock'].unlink(missing_ok=True)
 
 
+def _dnesni_den():
+    return datetime.now().strftime('%Y-%m-%d')
+
+
+def zbyva_skladani(user):
+    """Kolik skládání účtu dnes ještě zbývá. None = bez limitu."""
+    if not MAX_EXPORT_BUILDS_PER_DAY or not getattr(user, 'is_authenticated', False):
+        return None
+    # Admin zakládá a přestavuje veřejné zpěvníky, kde je skládání součástí práce.
+    if is_admin(user):
+        return None
+    radek = ExportPokus.query.filter_by(user_id=user.id, den=_dnesni_den()).first()
+    return max(0, MAX_EXPORT_BUILDS_PER_DAY - (radek.pocet if radek else 0))
+
+
+def zapocitej_skladani(user):
+    """Přičte jedno skládání. Musí být atomické: workerů je víc a nesdílejí paměť."""
+    if not MAX_EXPORT_BUILDS_PER_DAY or not getattr(user, 'is_authenticated', False):
+        return
+    if is_admin(user):
+        return
+    den = _dnesni_den()
+    try:
+        db.session.execute(text(
+            "INSERT INTO export_pokusy (user_id, den, pocet) VALUES (:u, :d, 1) "
+            "ON CONFLICT(user_id, den) DO UPDATE SET pocet = pocet + 1"),
+            {'u': user.id, 'd': den})
+        # Starší dny už nikdo nečte. Je to pár řádků, takže úklid při zápisu stačí.
+        db.session.execute(text("DELETE FROM export_pokusy WHERE den < :hranice"),
+                           {'hranice': (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d')})
+        db.session.commit()
+    except Exception:  # noqa: BLE001 - počítadlo nesmí shodit stahování
+        db.session.rollback()
+
+
 def _start_export_build(book_id, recept, paths):
     """Claim the build and start it. Returns the state to report back."""
     EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -3338,7 +3384,7 @@ def _start_export_build(book_id, recept, paths):
         except OSError:
             stale = False
         if not stale:
-            return 'building'
+            return 'building'   # staví to někdo jiný, tenhle požadavek nic nespustil
         paths['lock'].unlink(missing_ok=True)
 
     try:
@@ -3346,7 +3392,7 @@ def _start_export_build(book_id, recept, paths):
         # takže zámek nemůže být v proměnné - musí být na disku.
         fd = os.open(str(paths['lock']), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        return 'building'
+        return 'building'   # zámek stihl vzít někdo jiný mezi kontrolou a otevřením
     os.close(fd)
 
     if len(list(EXPORTS_DIR.glob('*.lock'))) > MAX_CONCURRENT_EXPORTS:
@@ -3356,7 +3402,7 @@ def _start_export_build(book_id, recept, paths):
     threading.Thread(
         target=_build_export_file, args=(book_id, recept, paths), daemon=False
     ).start()
-    return 'building'
+    return 'started'
 
 
 def pisne_na_stranach(book_id, cisla):
@@ -3480,7 +3526,20 @@ def songbook_export(book_id, kind):
             conditional=True,
         )
 
+    zbyva = zbyva_skladani(current_user)
+    if zbyva is not None and zbyva <= 0:
+        return jsonify({
+            'state': 'limit',
+            'error': f"Denní limit skládání souborů je vyčerpaný "
+                     f"({MAX_EXPORT_BUILDS_PER_DAY} za den). Varianty, které už jsou "
+                     f"připravené, jdou stáhnout dál.",
+        }), 429
+
     state = _start_export_build(book_id, resolved['recept'], paths)
+    # Počítá se jen skutečně spuštěné skládání. Kdo se přidal k běžícímu, nebo koho
+    # odmítlo „server je zaneprázdněn", nic nespustil a nemá se mu to účtovat.
+    if state == 'started':
+        zapocitej_skladani(current_user)
     return jsonify({'state': state}), 429 if state == 'busy' else 202
 
 

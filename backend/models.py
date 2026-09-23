@@ -172,6 +172,24 @@ class Songbook(db.Model):
     is_public = db.Column(db.Integer, default=0)
     pages = db.relationship("SongbookPage", backref="songbook", cascade="all, delete-orphan")
 
+class ExportPokus(db.Model):
+    """Kolik skládání souborů spustil účet za jeden den.
+
+    Jeden řádek na účet a den, ne řádek na pokus: tabulka se tím nerozroste a stejně
+    z ní nic jiného než to číslo nepotřebujeme. Den je text „RRRR-MM-DD“, aby šlo
+    počítat bez převodů časových pásem.
+    """
+
+    __tablename__ = "export_pokusy"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    den = db.Column(db.String, nullable=False)
+    pocet = db.Column(db.Integer, nullable=False, default=0)
+
+    __table_args__ = (db.UniqueConstraint("user_id", "den", name="uq_export_pokus_den"),)
+
+
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
 

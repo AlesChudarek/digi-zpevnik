@@ -361,9 +361,20 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
         než kdo zadal. Přepíná se jen z výchozího stavu, výslovnou volbu nepřebije.
         Souhrn pod volbami píše počet stran, u brožury i listů papíru a u rozsahu seznam
         písní; chybný rozsah se ukáže červeně a tlačítko se vypne.
-- [ ] **strop na počet stažení za den na účet.** Ochrana proti tomu, aby si někdo
-      vyžádáním pořád jiného receptu obsadil skládání všem ostatním. Není priorita —
-      návštěvnost je řádu jednoho člověka za měsíc. Číslo je potřeba promyslet.
+- [X] **strop na počet skládání za den na účet** (`MAX_EXPORT_BUILDS_PER_DAY`, výchozí
+      20, přepsatelné z prostředí, nula limit vypne). Chrání jediný stavěcí slot: kdo by
+      si pořád dokola říkal o jiný recept, obsadil by ho všem ostatním.
+      Počítají se **jen skutečná skládání**, ne stažení z cache — to je pár milisekund
+      a omezovat ho nemá co. Nepočítá se ani požadavek, který se jen přidal k běžícímu
+      skládání, ani ten, co dostal „server je zaneprázdněn"; proto `_start_export_build`
+      rozlišuje `started` od `building`. Adminovi se to nepočítá, přestavování veřejných
+      zpěvníků je součást jeho práce.
+      Počítadlo je v tabulce `export_pokusy`, jeden řádek na účet a den, zvyšuje se
+      atomickým `ON CONFLICT DO UPDATE` (workerů je víc a nesdílejí paměť) a řádky
+      starší týdne se při zápisu mažou. Odmítnutí vrací 429 s vlastní hláškou, aby
+      se nepletlo se zaneprázdněným serverem.
+      Pozor, `db.create_all()` se pod gunicornem nikde nevolalo, takže nová tabulka
+      by na serveru sama nevznikla — doplněno do `_dopln_chybejici_sloupce`.
 - [ ] **sjednotit nápovědy v UI.** Dnes jsou dvě různé implementace tooltipů:
       `.tooltip-text` ve čtečce a `.tooltip` s `data-tooltip` v Mých zpěvnících.
       Chtěné jsou dva druhy: klasický hover tooltip pro ikony, tlačítka a jiné

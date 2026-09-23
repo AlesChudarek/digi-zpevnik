@@ -30,6 +30,8 @@ VENV_PY = PROJECT_ROOT / ".venv" / "bin" / "python"
 EXPORTS_DIR = PROJECT_ROOT / "data" / "exports"
 PORT = 5584
 ADMIN = ("admin@test.com", "export-test")
+# Běžný účet: denní limit skládání se adminovi nepočítá, takže se na něm neověří.
+UZIVATEL = ("user@test.com", "export-test-user")
 BOOK = "00006"          # začíná na straně 3, dobrý test pořadí
 PRIVATE_BOOK = "00101"  # cizí soukromý zpěvník
 BOOK_RGB = "00009"      # obsahuje stranu bez alfa kanálu
@@ -68,6 +70,8 @@ def start_server(db_copy):
          '    u = User.query.filter_by(email="admin@test.com").first()\n'
          f'    u.password = generate_password_hash("{ADMIN[1]}", method="pbkdf2:sha256")\n'
          '    u.role = "admin"\n'
+         '    b = User.query.filter_by(email="user@test.com").first()\n'
+         f'    b.password = generate_password_hash("{UZIVATEL[1]}", method="pbkdf2:sha256")\n'
          '    db.session.commit()\n'],
         env=env, check=True, capture_output=True)
 
@@ -361,6 +365,66 @@ def main():
             zkontroluj(v_pdf == ocekavano_stran,
                        "a má správný počet stran, ne dvojitě zapsaný obsah",
                        f"čekáno {ocekavano_stran}, v PDF {v_pdf}")
+
+        print("\n── denní limit skládání ──")
+        # Chrání jediný stavěcí slot: kdo by si pořád dokola říkal o jiný recept,
+        # obsadil by ho všem ostatním. Počítat se smí jen skutečné skládání, ne stažení
+        # hotového souboru z cache - to je pár milisekund.
+        while list(EXPORTS_DIR.glob("*.lock")):
+            time.sleep(0.3)
+        for p in EXPORTS_DIR.glob("*"):
+            p.unlink(missing_ok=True)
+
+        limit_env = dict(env)
+        limit_env["MAX_EXPORT_BUILDS_PER_DAY"] = "2"
+        limit_port = PORT + 3
+        limit_server = subprocess.Popen(
+            [str(VENV_PY), "-m", "flask", "--app", "backend.app", "run",
+             "--port", str(limit_port), "--no-reload"],
+            cwd=str(PROJECT_ROOT), env=limit_env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            limit_base = f"http://127.0.0.1:{limit_port}"
+            for _ in range(160):
+                try:
+                    urllib.request.urlopen(limit_base + "/login", timeout=1)
+                    break
+                except Exception:
+                    time.sleep(0.25)
+
+            # Běžný uživatel, ne admin: adminovi se skládání nepočítá, protože
+            # přestavování veřejných zpěvníků je součást jeho práce.
+            uzivatel = Klient(limit_base)
+            uzivatel.prihlas(*UZIVATEL)
+            kody = []
+            for i, dotaz in enumerate(("?obsah=jen-obalka", "?prazdne=0",
+                                       "?cernobile=1", "?kvalita=high")):
+                kody.append(uzivatel.get(f"/songbook/{BOOK}/export.pdf{dotaz}")[0])
+                while list(EXPORTS_DIR.glob("*.lock")):
+                    time.sleep(0.3)
+            zkontroluj(kody[:2] == [202, 202], "první dvě skládání projdou", str(kody))
+            zkontroluj(kody[2] == 429 and kody[3] == 429,
+                       "další už limit odmítne", str(kody))
+
+            kod, telo = uzivatel.get(f"/songbook/{BOOK}/export.pdf?obsah=jen-obalka")[:2]
+            zkontroluj(kod == 200,
+                       "ale hotový soubor z cache se stáhne dál, ten nic neskládá",
+                       f"status {kod}")
+
+            _, telo = uzivatel.get(f"/songbook/{BOOK}/export.pdf?kvalita=high")[:2]
+            zkontroluj(b"limit" in telo.lower(),
+                       "odmítnutí řekne, že jde o limit, ne o zaneprázdněný server",
+                       telo.decode()[:90])
+
+            spravce = Klient(limit_base)
+            spravce.prihlas(*ADMIN)
+            kod = spravce.get(f"/songbook/{BOOK}/export.pdf?kvalita=high")[0]
+            zkontroluj(kod in (200, 202), "admina limit neomezuje", f"status {kod}")
+            while list(EXPORTS_DIR.glob("*.lock")):
+                time.sleep(0.3)
+        finally:
+            limit_server.terminate()
+            limit_server.wait(timeout=10)
 
         print("\n── autorizace ──")
         # Samotné 200 nic neříká: @login_required posílá 302 na přihlášení a urllib
