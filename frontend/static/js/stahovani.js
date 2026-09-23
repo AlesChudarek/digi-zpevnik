@@ -70,6 +70,7 @@ window.Stahovani = (function () {
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
   let melRozsah = false;    // bylo pole s rozsahem stran vyplněné při minulé změně?
   let aktivniZnak = null;   // ikonka, jejíž nápověda je zrovna vidět
+  let skryvaciCasovac = null;
 
   /* ---------- stavba okna ---------- */
 
@@ -162,10 +163,7 @@ window.Stahovani = (function () {
           </fieldset>
 
           <p class="stahovani-souhrn" id="stahovani-souhrn"></p>
-          <div class="stahovani-pisne" id="stahovani-pisne" hidden>
-            <button type="button" id="stahovani-pisne-prepinac" aria-expanded="false"></button>
-            <ul class="stahovani-pisne-seznam" id="stahovani-pisne-seznam" hidden></ul>
-          </div>
+          <p class="stahovani-pisne" id="stahovani-pisne" hidden></p>
           <p class="stahovani-varovani" id="stahovani-varovani" hidden></p>
         </div>
 
@@ -200,8 +198,6 @@ window.Stahovani = (function () {
       souhrn: zaclona.querySelector('#stahovani-souhrn'),
       varovani: zaclona.querySelector('#stahovani-varovani'),
       pisne: zaclona.querySelector('#stahovani-pisne'),
-      pisnePrepinac: zaclona.querySelector('#stahovani-pisne-prepinac'),
-      pisneSeznam: zaclona.querySelector('#stahovani-pisne-seznam'),
       postup: zaclona.querySelector('#stahovani-postup'),
       vypln: zaclona.querySelector('#stahovani-vypln'),
       cislo: zaclona.querySelector('#stahovani-cislo'),
@@ -231,11 +227,6 @@ window.Stahovani = (function () {
 
     okno.zavrit.addEventListener('click', zavri);
     okno.spustit.addEventListener('click', spust);
-    okno.pisnePrepinac.addEventListener('click', () => {
-      const otevrene = okno.pisneSeznam.hidden;
-      okno.pisneSeznam.hidden = !otevrene;
-      okno.pisnePrepinac.setAttribute('aria-expanded', otevrene ? 'true' : 'false');
-    });
     // Klik na záclonu vedle panelu zavírá taky. Modální okno, které jde zavřít jedině
     // tlačítkem, je past na dotykové obrazovce, kde se Escape nemačká.
     zaclona.addEventListener('click', (e) => {
@@ -253,27 +244,37 @@ window.Stahovani = (function () {
     });
     // Na najetí i na zaměření klávesnicí. Na dotykové obrazovce najetí neexistuje,
     // takže se to musí dát i ťuknout - a druhé ťuknutí to zase schová.
+    const KOTVY = '.napoveda-znak, .stahovani-radek.zamcene, .stahovani-dalsi';
     okno.nastaveni.addEventListener('mouseover', (e) => {
-      const znak = e.target.closest('.napoveda-znak');
-      if (znak) { if (znak !== aktivniZnak) ukazNapovedu(znak); return; }
-      const zamceny = e.target.closest('.stahovani-radek.zamcene');
-      if (zamceny && zamceny !== aktivniZnak) ukazNapovedu(zamceny, zamceny.dataset.duvod);
-    });
-    okno.nastaveni.addEventListener('mouseout', (e) => {
-      const kotva = e.target.closest('.napoveda-znak, .stahovani-radek.zamcene');
-      if (kotva && !e.relatedTarget?.closest?.('.napoveda-znak, .stahovani-radek.zamcene')) {
-        skryjNapovedu();
+      const kotva = e.target.closest(KOTVY);
+      if (!kotva || kotva === aktivniZnak) return;
+      if (kotva.classList.contains('stahovani-dalsi')) {
+        ukazNapovedu(kotva, okno.pisne.dataset.zbytek || '', true);
+      } else if (kotva.classList.contains('napoveda-znak')) {
+        ukazNapovedu(kotva);
+      } else {
+        ukazNapovedu(kotva, kotva.dataset.duvod);
       }
     });
+    okno.nastaveni.addEventListener('mouseout', (e) => {
+      if (e.target.closest(KOTVY) && !e.relatedTarget?.closest?.(KOTVY)) naplanujSkryti();
+    });
+    okno.napoveda.addEventListener('mouseenter', zrusSkryti);
+    okno.napoveda.addEventListener('mouseleave', naplanujSkryti);
     okno.nastaveni.addEventListener('focusin', (e) => {
       const znak = e.target.closest('.napoveda-znak');
       if (znak) ukazNapovedu(znak); else skryjNapovedu();
     });
     okno.nastaveni.addEventListener('click', (e) => {
-      const znak = e.target.closest('.napoveda-znak');
-      if (!znak) { skryjNapovedu(); return; }
+      const kotva = e.target.closest('.napoveda-znak, .stahovani-dalsi');
+      if (!kotva) { skryjNapovedu(); return; }
       e.preventDefault();
-      if (znak === aktivniZnak) skryjNapovedu(); else ukazNapovedu(znak);
+      if (kotva === aktivniZnak) { skryjNapovedu(); return; }
+      if (kotva.classList.contains('stahovani-dalsi')) {
+        ukazNapovedu(kotva, okno.pisne.dataset.zbytek || '', true);
+      } else {
+        ukazNapovedu(kotva);
+      }
     });
     // Panel se roluje, takže bublina přilepená na souřadnice by odjela od své ikonky.
     okno.zaclona.querySelector('.stahovani-telo')
@@ -287,9 +288,12 @@ window.Stahovani = (function () {
      člověk netrefil znovu. Tohle se ukáže na najetí a samo zmizí. Plovoucí je i proto,
      že ikonka sedí v úzkém sloupci s popiskem a text by se do něj zalomil. */
 
-  function ukazNapovedu(znak, text) {
+  function ukazNapovedu(znak, text, jakoSeznam) {
     const bublina = okno.napoveda;
-    bublina.textContent = text || NAPOVEDY[znak.dataset.napoveda] || '';
+    zrusSkryti();
+    if (jakoSeznam) bublina.innerHTML = text; else bublina.textContent = text ||
+      NAPOVEDY[znak.dataset.napoveda] || '';
+    bublina.classList.toggle('seznam', !!jakoSeznam);
     if (!bublina.textContent) return;
     bublina.hidden = false;
     // Až po zviditelnění: skrytý prvek nemá rozměry, podle kterých by se dal umístit.
@@ -309,7 +313,17 @@ window.Stahovani = (function () {
     aktivniZnak = znak;
   }
 
+  function zrusSkryti() { clearTimeout(skryvaciCasovac); }
+
+  /* Malý odklad, ať se dá přejet z „a dalších X" na samotný seznam a rolovat v něm.
+     Bez něj bublina zmizela v půli cesty. */
+  function naplanujSkryti() {
+    zrusSkryti();
+    skryvaciCasovac = setTimeout(skryjNapovedu, 160);
+  }
+
   function skryjNapovedu() {
+    zrusSkryti();
     if (okno) {
       okno.napoveda.hidden = true;
       if (aktivniZnak) aktivniZnak.setAttribute('aria-expanded', 'false');
@@ -480,24 +494,40 @@ window.Stahovani = (function () {
     return veta + '.';
   }
 
-  /* Malé info, ne nastavení: kolik písní ve výběru je. Celý seznam až na vyžádání -
-     u stodvacetistránkového zpěvníku by jinak zabral víc místa než celé okno. */
+  const UKAZ_PISNI = 3;   // kolik se jich vypíše rovnou; zbytek je pod „a dalších X"
+
+  function jmenoPisne(p) {
+    const poznamka = p.nekompletni
+      ? ' <span class="stahovani-nekompletni">(nekompletní)</span>' : '';
+    return escapuj(p.nazev) + poznamka;
+  }
+
+  function dalsich(n) {
+    if (n === 1) return 'a 1 další';
+    return n <= 4 ? `a ${n} další` : `a ${n} dalších`;
+  }
+
+  /* Malé info, ne nastavení: co ve výběru je. Prvních pár jmen rovnou, zbytek pod
+     „a dalších X" na najetí - u stodvacetistránkového zpěvníku by vypsaný seznam
+     zabral víc místa než celé okno. */
   function vykresliPisne(seznam) {
     const pisne = seznam || [];
     okno.pisne.hidden = pisne.length === 0;
-    if (!pisne.length) {
-      okno.pisneSeznam.hidden = true;
-      okno.pisnePrepinac.setAttribute('aria-expanded', 'false');
-      return;
+    if (!pisne.length) return;
+    // Každé jméno do vlastní značky: názvy písní samy obsahují čárky („Čo bolí, to
+    // prebolí“), takže se z textu oddělit nedají.
+    const zacatek = pisne.slice(0, UKAZ_PISNI)
+      .map(p => `<span class="stahovani-pisen">${jmenoPisne(p)}</span>`).join(', ');
+    let html = `Písně: ${zacatek}`;
+    if (pisne.length > UKAZ_PISNI) {
+      const zbytek = pisne.slice(UKAZ_PISNI);
+      html += ` <button type="button" class="stahovani-dalsi">` +
+              `${dalsich(zbytek.length)}</button>`;
+      okno.pisne.dataset.zbytek = zbytek.map(jmenoPisne).join('<br>');
+    } else {
+      delete okno.pisne.dataset.zbytek;
     }
-    okno.pisnePrepinac.textContent =
-      pisne.length === 1 ? '1 píseň'
-      : pisne.length <= 4 ? `${pisne.length} písně` : `${pisne.length} písní`;
-    okno.pisneSeznam.innerHTML = pisne.map(p => {
-      const poznamka = p.nekompletni
-        ? ' <span class="stahovani-nekompletni">nekompletní</span>' : '';
-      return `<li>${escapuj(p.nazev)}${poznamka}</li>`;
-    }).join('');
+    okno.pisne.innerHTML = html + '.';
   }
 
   function escapuj(text) {

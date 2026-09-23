@@ -220,6 +220,12 @@
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
   pointer-events: none;
 }
+/* Seznam písní se dá být dlouhý, takže v něm musí jít rolovat - a k tomu potřebuje
+   myš přijmout, na rozdíl od obyčejné nápovědy. */
+.napoveda-bublina.seznam {
+  pointer-events: auto; max-height: 220px; overflow-y: auto;
+}
+.napoveda-bublina .stahovani-nekompletni { opacity: 0.75; }
 .napoveda-bublina[hidden] { display: none; }
 
 /* Kombinace, která projde, ale výsledek nebude ten, co kdo čeká. */
@@ -235,22 +241,17 @@
   .stahovani-popisek { flex-basis: 100%; }
 }
 
-/* Malé info o obsahu výběru, ne nastavení. Seznam až na vyžádání: u stodvacetistránkového
-   zpěvníku by zabral víc místa než celé okno. */
-.stahovani-pisne { margin: 2px 0 0; }
+/* Malé info o obsahu výběru, ne nastavení. Pár jmen rovnou, zbytek pod „a dalších X“
+   na najetí: u stodvacetistránkového zpěvníku by vypsaný seznam zabral víc místa než
+   celé okno. */
+.stahovani-pisne {
+  margin: 4px 0 0; font-size: 12px; line-height: 1.5;
+  color: var(--panel-muted, #666);
+}
 .stahovani-pisne[hidden] { display: none; }
-.stahovani-pisne-prepinac {
+.stahovani-dalsi {
   border: 0; background: none; padding: 0;
-  font: inherit; font-size: 12px; cursor: pointer;
+  font: inherit; cursor: help;
   color: var(--brand-dark, #2f7d4f); text-decoration: underline dotted;
 }
-.stahovani-pisne-prepinac::after { content: ' ▾'; text-decoration: none; }
-.stahovani-pisne-prepinac[aria-expanded="true"]::after { content: ' ▴'; }
-.stahovani-pisne-seznam {
-  margin: 6px 0 0; padding: 8px 10px 8px 26px; border-radius: 8px;
-  background: var(--panel-btn-bg, #f0f0f0);
-  font-size: 12px; line-height: 1.5; color: var(--panel-text, #333);
-  max-height: 180px; overflow-y: auto;
-}
-.stahovani-pisne-seznam[hidden] { display: none; }
-.stahovani-nekompletni { color: var(--panel-muted, #666); font-style: italic; }
+.stahovani-nekompletni { font-style: italic; }
