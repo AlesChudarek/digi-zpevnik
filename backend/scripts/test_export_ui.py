@@ -195,9 +195,8 @@ def main():
                        "žádný řádek voleb se neláme na dva",
                        ", ".join(usporadani["zalomene"]))
 
-            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
-                          "        s.value = 'jen-obalka';"
-                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=jen-obalka]').click()")
             page.wait_for_timeout(900)
             jen_obalka = page.evaluate("""() => ({
               souhrn: document.getElementById('stahovani-souhrn').textContent,
@@ -230,9 +229,8 @@ def main():
             print("\n── rozsah stran ──")
             # Zpátky na celý zpěvník: kdo si výslovně zvolil „jen obálku", o ni přijít
             # nemá, takže se rozsah do volby obsahu plete jen z výchozího stavu.
-            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
-                          "        s.value = 'vse';"
-                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=vse]').click()")
             page.wait_for_timeout(700)
             page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
                           "        e.value = '3-4';"
@@ -240,7 +238,7 @@ def main():
             page.wait_for_timeout(1000)
             rozsah = page.evaluate("""() => ({
               souhrn: document.getElementById('stahovani-souhrn').textContent,
-              obsah: document.getElementById('stahovani-obsah').value})""")
+              obsah: document.querySelector('input[name=obsah]:checked').value})""")
             zkontroluj(rozsah["obsah"] == "jen-obsah",
                        "vyplnění rozsahu odklikne obálku, ať nevyjde víc stran, než kdo zadal",
                        rozsah["obsah"])
@@ -250,14 +248,14 @@ def main():
                        "a souhrn vypíše, které písně to jsou", rozsah["souhrn"])
 
             # Ale jen z výchozího stavu. Kdo si obálku vrátí, o ni znovu nepřijde.
-            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
-                          "        s.value = 'vse';"
-                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=vse]').click()")
             page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
                           "        e.value = '3-5';"
                           "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
             page.wait_for_timeout(900)
-            zkontroluj(page.evaluate("() => document.getElementById('stahovani-obsah').value")
+            zkontroluj(page.evaluate(
+                       "() => document.querySelector('input[name=obsah]:checked').value")
                        == "vse",
                        "ale výslovnou volbu obsahu už nepřepíše")
 
@@ -295,24 +293,95 @@ def main():
             page.evaluate("() => document.querySelector('input[name=format][value=pdf]').click()")
             page.wait_for_timeout(300)
 
+            print("\n── žádný řádek voleb se neláme ──")
+            radky = page.evaluate("""() => [...document.querySelectorAll(
+                '#stahovani-vlastni .stahovani-radek')].map(r => ({
+                  pole: r.dataset.pole,
+                  vyska: Math.round(r.querySelector('.stahovani-volby').scrollHeight),
+                  popisek: Math.round(
+                      r.querySelector('.stahovani-popisek').getBoundingClientRect().height)}))""")
+            for r in radky:
+                zkontroluj(r["vyska"] <= 32,
+                           f"{r['pole']}: volby se vejdou na jeden řádek", f"{r['vyska']} px")
+                zkontroluj(r["popisek"] <= 20,
+                           f"{r['pole']}: ikonka nápovědy nespadla pod popisek",
+                           f"{r['popisek']} px")
+
+            print("\n── jen obálka zamkne rozsah stran ──")
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '3-4';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(700)
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=jen-obalka]').click()")
+            page.wait_for_timeout(900)
+            zkontroluj(not page.evaluate(
+                "() => document.querySelector('[data-pole=strany]')"
+                ".getBoundingClientRect().height > 0"),
+                "u jen obálky zmizí rozsah stran, obálka strany nemá")
+            zkontroluj("4 strany" in page.evaluate(
+                "() => document.getElementById('stahovani-souhrn').textContent"),
+                "a zbylý text v poli už výsledek neovlivní",
+                page.evaluate("() => document.getElementById('stahovani-souhrn').textContent"))
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=vse]').click()")
+            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
+                          "        e.value = '';"
+                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
+            page.wait_for_timeout(700)
+
+            print("\n── varování u rizikových kombinací ──")
+            page.evaluate("() => document.getElementById('stahovani-bez-prazdnych').click()")
+            page.wait_for_timeout(600)
+            zkontroluj("číslování" in page.evaluate(
+                "() => document.getElementById('stahovani-varovani').textContent"),
+                "vynechání prázdných stran upozorní na číslování")
+            page.evaluate("() => document.getElementById('stahovani-brozura').click()")
+            page.wait_for_timeout(600)
+            zkontroluj("brožur" in page.evaluate(
+                "() => document.getElementById('stahovani-varovani').textContent"),
+                "a s brožurou upozorní na to, že se nemusí složit, jak člověk čeká",
+                page.evaluate("() => document.getElementById('stahovani-varovani').textContent"))
+            page.evaluate("() => document.getElementById('stahovani-brozura').click()")
+            page.evaluate("() => document.getElementById('stahovani-bez-prazdnych').click()")
+            page.wait_for_timeout(600)
+            zkontroluj(page.evaluate(
+                "() => document.getElementById('stahovani-varovani').hidden"),
+                "a bez rizikové kombinace se varování schová")
+
             print("\n── nápověda ──")
-            page.evaluate("() => document.querySelector('.napoveda-znak[data-napoveda=prazdne]').click()")
-            page.wait_for_timeout(300)
+            vyska_pred = page.evaluate(
+                "() => Math.round(document.querySelector('.stahovani-panel')"
+                ".getBoundingClientRect().height)")
+            page.hover('.napoveda-znak[data-napoveda=prazdne]')
+            page.wait_for_timeout(400)
             napoveda = page.evaluate("""() => {
-              const n = document.querySelector('.napoveda-text');
-              if (!n) return null;
+              const n = document.getElementById('stahovani-napoveda');
+              if (!n || n.hidden) return null;
               const r = n.getBoundingClientRect();
-              return {text: n.textContent, sirka: Math.round(r.width), vyska: Math.round(r.height)};
+              return {text: n.textContent, sirka: Math.round(r.width),
+                      vyska: Math.round(r.height),
+                      v_obrazovce: r.left >= 0 && r.right <= window.innerWidth &&
+                                   r.top >= 0 && r.bottom <= window.innerHeight,
+                      panel: Math.round(document.querySelector('.stahovani-panel')
+                                        .getBoundingClientRect().height)};
             }""")
-            zkontroluj(napoveda is not None, "ikonka i nápovědu rozbalí")
+            zkontroluj(napoveda is not None, "najetí na ikonku i ukáže nápovědu")
             if napoveda:
                 zkontroluj("číslování" in napoveda["text"] and "vytisknout" in napoveda["text"],
                            "a u prázdných stran varuje před číslováním i tiskem")
-                # Bublina patří na celý řádek. Když visela za ikonkou v úzkém sloupci
-                # s popiskem, zalomila se do 329 px místo 86.
-                zkontroluj(napoveda["sirka"] > 200 and napoveda["vyska"] < 160,
-                           "a vejde se na šířku řádku, ne do sloupce s popiskem",
+                # Nápověda vsunutá do toku roztahovala okno pokaždé, když si ji někdo
+                # otevřel, a zůstávala viset, dokud ji člověk netrefil znovu.
+                zkontroluj(napoveda["panel"] == vyska_pred,
+                           "a nemění výšku okna",
+                           f"{vyska_pred} -> {napoveda['panel']} px")
+                zkontroluj(napoveda["v_obrazovce"], "vejde se do obrazovky",
                            f"{napoveda['sirka']}x{napoveda['vyska']} px")
+            page.hover('#stahovani-nadpis')
+            page.wait_for_timeout(400)
+            zkontroluj(page.evaluate(
+                "() => document.getElementById('stahovani-napoveda').hidden"),
+                "a po odjetí myši sama zmizí")
 
             print("\n── okno se vejde i na nízkou obrazovku ──")
             # S rozbalenou nápovědou okno vyroste. Na telefonu na šířku je výšky málo
@@ -366,9 +435,8 @@ def main():
             page.wait_for_timeout(900)
             page.evaluate("() => document.querySelector('input[name=predvolba][value=vlastni]').click()")
             page.wait_for_timeout(300)
-            page.evaluate("() => { const s = document.getElementById('stahovani-obsah');"
-                          "        s.value = 'jen-obalka';"
-                          "        s.dispatchEvent(new Event('change', {bubbles: true})); }")
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=jen-obalka]').click()")
             page.wait_for_timeout(900)
             with page.expect_download(timeout=300000) as info2:
                 page.evaluate("() => document.getElementById('stahovani-spustit').click()")
