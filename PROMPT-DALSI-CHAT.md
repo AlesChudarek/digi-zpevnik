@@ -74,7 +74,9 @@ v něm. Stručně to podstatné:
   - Cache je klíčovaná obsahem (`songbook_export_key`), úklid je LRU podle posledního
     stažení, chráněná před vyhazováním je jen předgenerovaná varianta veřejného
     zpěvníku. Strop `EXPORTS_CACHE_LIMIT_MB` (1 GB) počítá jen vyhoditelné soubory.
-  - `MAX_CONCURRENT_EXPORTS` je 1 (paměť, ne procesor: server má 979 MB bez swapu).
+  - `MAX_CONCURRENT_EXPORTS` je 1 (paměť, ne procesor: server má 979 MB bez swapu)
+    a `MAX_EXPORT_BUILDS_PER_DAY` je 20 na účet a den (počítají se jen skutečná
+    skládání, ne stažení z cache; adminovi se nepočítá nic, tabulka `export_pokusy`).
   - Předgenerované je `small` pro všechny zpěvníky; `flask export-warm` umí
     `--all`, `--public-only` i `--songbook ID`.
 - **Provoz.** Oracle free tier, 2 jádra, 979 MB RAM bez swapu, 38 GB volných.
@@ -86,6 +88,9 @@ v něm. Stručně to podstatné:
 Vyber si z `TODO.md`, nebo se domluv s Alešem. Stahování je hotové, takže na řadě je
 něco jiného. Nejblíž na ráně jsou tyhle tři:
 
+**Pořadí je domluvené s Alešem:** (1) nápovědy, (2) import z PDF/ZIP, (3) samootáčecí
+tlačítko pro přepínání módů čtečky, (4) mobilní UI.
+
 1. **Sjednotit nápovědy v UI** (`TODO.md`, sekce „Obsah a prezentace"). Projekt má dnes
    dvě různé implementace tooltipů — `.tooltip-text` ve čtečce a `.tooltip`
    s `data-tooltip` v Mých zpěvnících — a k tomu třetí, novou a nejlepší v okně
@@ -95,14 +100,16 @@ něco jiného. Nejblíž na ráně jsou tyhle tři:
    a projít s ním zbytek projektu, stejně jako se to udělalo s oknem stahování.
    **Malý, dobře ohraničený úkol s jasným vzorem — dobrý první krok.**
 
-2. **Mobilní UI** (`TODO.md`, sekce „Mobil a vzhled"). Editor zpěvníku na telefonu
+2. **Import zpěvníku z PDF nebo ZIP** (`TODO.md`, sekce „Import"). Největší a nejvíc
+   užitečná věc v seznamu: zakládat zpěvník nahráním PDF nebo zazipovaných obrázků
+   místo strany po straně. Chce to návrh dřív než kód — Aleš ocení, když se nad tím
+   nejdřív zamyslíš a probereš to s ním, než začneš psát.
+
+3. **Samootáčecí tlačítko pro přepínání módů čtečky** (`TODO.md`, sekce „Čtečka“).
+
+4. **Mobilní UI** (`TODO.md`, sekce „Mobil a vzhled"). Editor zpěvníku na telefonu
    „vypadá strašně, tabulka se dá posunout doprava, ale je useklá", noční režim má
    v editoru moc tmavé „Uložit" a nahranou fotku obálky. Chce to změřit
    `screenshot_ui.py` na 390 px a projít to.
 
-3. **Import zpěvníku z PDF nebo ZIP** (`TODO.md`, sekce „Import"). Největší a nejvíc
-   užitečná věc v seznamu: zakládat zpěvník nahráním PDF nebo zazipovaných obrázků
-   místo strany po straně. Chce to návrh dřív než kód — Aleš ocení, když se nad tím
-   nejdřív zamyslíš a probereš to s ním.
-
-**Začni tím, že si přečteš `TODO.md`** a zeptáš se Aleše, čím chce pokračovat.
+**Začni tím, že si přečteš `TODO.md`**, a pak se pusť do nápověd.
