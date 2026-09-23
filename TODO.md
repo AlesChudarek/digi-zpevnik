@@ -286,8 +286,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       tlačítko i `pointer-events: none`, kterým se ten sloupec schovává, takže Zavřít
       nešlo kliknout — visí teď na `<body>`.
       Hlídá to `backend/scripts/test_export_ui.py`: měří rámečky, ne screenshoty.
-- [ ] **předělat stahování na „recept" místo tří variant.** Dnes jsou varianty tři
-      a jsou zadrátované. Cílem je jedno okno, které se otevře hned po kliknutí na
+- [X] **stahování stojí na „receptu", ne na třech variantách.** Hotové všechny čtyři
+      fáze. Jedno okno, které se otevře hned po kliknutí na
       stažení (na všech třech místech), nabídne pojmenované předvolby a pod nimi
       sbalené vlastní nastavení, a skončí tlačítkem **Stáhnout** (když to leží v cache)
       nebo **Připravit** (když ne) s dnešním ukazatelem postupu.
@@ -370,10 +370,6 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       netextové objekty, a ⓘ nápověda u slovních věcí (typicky volby v okně stahování).
       Udělat jedno sdílené řešení a projít s ním zbytek projektu, stejně jako se to
       udělalo s oknem stahování.
-- [ ] **do okna pro stažení přidat volby obsahu.** Okno se skládáním už existuje
-      (postup, odhad, značka „✓ hned" u variant v cache). Chybí v něm to druhé: nechat
-      uživatele vybrat, co má stažený zpěvník obsahovat — jestli obálku zvlášť, jestli
-      vůbec, jestli prázdné strany.
 
 ## Mobil a vzhled
 
