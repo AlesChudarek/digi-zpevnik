@@ -2635,48 +2635,84 @@ class ReceptChyba(ValueError):
     """Nesmyslný recept. Nese hlášku, která smí ven k uživateli."""
 
 
-def cisla_rozsahu(zapis):
-    """Z „12, 24-31, 50“ udělá množinu čísel stran.
+def useky_rozsahu(zapis):
+    """Z „1, 3, 13-45, 50-“ udělá seřazené a slepené úseky [(od, do)], kde do=None
+    znamená „a dál až do konce“.
 
     Čísla jsou ta, která zpěvník ukazuje ve čtečce a v obsahu, ne pořadí v souboru:
     zpěvník složený z cizích písní má vlastní číslování a uživatel vidí to svoje.
+    Úseky se drží místo množiny čísel právě kvůli otevřenému konci - ten se na čísla
+    dá rozepsat teprve u konkrétního zpěvníku, kde se ví, kde končí.
     """
-    cisla = set()
+    useky = []
     for kus in str(zapis).replace(';', ',').replace('–', '-').split(','):
         kus = kus.strip()
         if not kus:
             continue
         casti = [c.strip() for c in kus.split('-')]
-        if len(casti) > 2 or not all(c.isdigit() for c in casti):
+        if len(casti) > 2:
+            raise ReceptChyba(f"„{kus}“ není číslo strany ani rozsah")
+        if not casti[0].isdigit():
             raise ReceptChyba(f"„{kus}“ není číslo strany ani rozsah")
         od = int(casti[0])
-        do = int(casti[-1])
-        if od < 1 or do < 1 or od > 99999 or do > 99999:
+        if len(casti) == 1:
+            do = od
+        elif casti[1] == '':
+            do = None            # „50-“ = od padesáté dál
+        elif casti[1].isdigit():
+            do = int(casti[1])
+        else:
+            raise ReceptChyba(f"„{kus}“ není číslo strany ani rozsah")
+        if od < 1 or od > 99999 or (do is not None and (do < 1 or do > 99999)):
             raise ReceptChyba("čísla stran musí být od 1 výš")
-        if do < od:
+        if do is not None and do < od:
             raise ReceptChyba(f"rozsah „{kus}“ je pozpátku")
-        if do - od > EXPORT_MAX_PAGES:
+        useky.append((od, do))
+
+    useky.sort(key=lambda u: (u[0], u[1] is None, u[1] or 0))
+    slepene = []
+    for od, do in useky:
+        if slepene and (slepene[-1][1] is None or od <= slepene[-1][1] + 1):
+            predchozi_od, predchozi_do = slepene[-1]
+            slepene[-1] = (predchozi_od,
+                           None if (predchozi_do is None or do is None)
+                           else max(predchozi_do, do))
+        else:
+            slepene.append((od, do))
+    return slepene
+
+
+def cisla_rozsahu(zapis, posledni_strana=None):
+    """Úseky rozepsané na čísla. Otevřený konec potřebuje vědět, kde zpěvník končí."""
+    cisla = set()
+    for od, do in useky_rozsahu(zapis):
+        konec = do if do is not None else posledni_strana
+        if konec is None:
+            continue  # bez zpěvníku se „50-“ rozepsat nedá; k ověření zápisu to stačí
+        if konec - od > EXPORT_MAX_PAGES:
             raise ReceptChyba("rozsah je příliš dlouhý")
-        cisla.update(range(od, do + 1))
+        cisla.update(range(od, konec + 1))
         if len(cisla) > EXPORT_MAX_PAGES:
             raise ReceptChyba("vybráno je příliš mnoho stran")
     return cisla
 
 
-def zapis_rozsahu(cisla):
-    """Zpátky do kanonického „12,24-31,50“.
+def zapis_rozsahu(useky):
+    """Zpátky do kanonického „1,3,13-45,50-“.
 
     Kanonický tvar je podmínka, ne kosmetika: z receptu se počítá token a z něj název
     souboru v cache. „50, 12, 24-31“ a „12,24-31,50“ je totéž přání a musí dát tentýž
     soubor, ne dva.
     """
-    useky = []
-    for cislo in sorted(cisla):
-        if useky and cislo == useky[-1][1] + 1:
-            useky[-1][1] = cislo
+    kusy = []
+    for od, do in useky:
+        if do is None:
+            kusy.append(f"{od}-")
+        elif od == do:
+            kusy.append(str(od))
         else:
-            useky.append([cislo, cislo])
-    return ','.join(str(a) if a == b else f"{a}-{b}" for a, b in useky)
+            kusy.append(f"{od}-{do}")
+    return ','.join(kusy)
 
 
 def normalizuj_recept(**volby):
@@ -2701,7 +2737,7 @@ def normalizuj_recept(**volby):
     recept['prazdne'] = bool(recept['prazdne'])
     recept['cernobile'] = bool(recept['cernobile'])
     recept['brozura'] = bool(recept['brozura'])
-    recept['strany'] = zapis_rozsahu(cisla_rozsahu(recept['strany'])) if recept['strany'] else ''
+    recept['strany'] = zapis_rozsahu(useky_rozsahu(recept['strany'])) if recept['strany'] else ''
 
     if recept['format'] == 'zip':
         # ZIP balí originály, takže kvalita, černobílá ani brožura pro něj neznamenají
@@ -2841,7 +2877,10 @@ def _uprav_sekvenci(sequence, recept):
     if recept['strany']:
         # Rozsah vybírá z obsahu, obálku řídí volba `obsah`. Držet to odděleně je
         # předvídatelnější než hádat, jestli „strany 22-23“ znamená i bez obálky.
-        cisla = cisla_rozsahu(recept['strany'])
+        # Poslední strana se bere ze sekvence, aby šlo napsat „50-“ a myslet tím konec.
+        cisla_stran = [p.get('page_number') for p in sequence
+                       if p['kind'] == 'content' and p.get('page_number')]
+        cisla = cisla_rozsahu(recept['strany'], max(cisla_stran) if cisla_stran else None)
         sequence = [p for p in sequence
                     if p['kind'] != 'content' or p.get('page_number') in cisla]
     return sequence
@@ -3321,12 +3360,16 @@ def _start_export_build(book_id, recept, paths):
 
 
 def pisne_na_stranach(book_id, cisla):
-    """Písně na vybraných stranách, s poznámkou, kterých se vybral jen kus.
+    """Co je na vybraných stranách: seznam písní a počet stran bez písně.
 
-    Pro souhrn pod polem s rozsahem: bez něj člověk netuší, co si to vlastně navolil.
-    Strana, na které začíná další píseň, patří oběma - proto se počítá průnik, ne
-    rozsah od-do. „Nekompletní“ znamená, že píseň má i strany, které vybrané nejsou;
-    typicky když někdo vezme 22-23 a píseň pokračuje na 24.
+    Bez tohohle člověk netuší, co si to vlastně navolil. Strana, na které začíná další
+    píseň, patří oběma - proto se počítá průnik, ne rozsah od-do. „Nekompletní“ znamená,
+    že píseň má i strany, které vybrané nejsou; typicky když někdo vezme 22-23 a píseň
+    pokračuje na 24.
+
+    Strany bez písně (prázdné, osmisměrky, předěly) jsou v datech taky písně, jen
+    s `is_non_song`. Do seznamu písní ale nepatří - „Vyjde na 2 strany. <Prázdná
+    strana>, <Prázdná strana>.“ není seznam písní. Počítají se zvlášť.
     """
     radky = SongbookPage.query.filter_by(songbook_id=book_id).all()
     strany_pisne = {}
@@ -3334,11 +3377,15 @@ def pisne_na_stranach(book_id, cisla):
         strany_pisne.setdefault(radek.song_id, set()).add(radek.page_number)
 
     vybrane = []
+    bez_pisne = set()
     for song_id, strany in strany_pisne.items():
         prunik = strany & cisla
         if not prunik:
             continue
         pisen = db.session.get(Song, song_id)
+        if pisen is not None and pisen.is_non_song:
+            bez_pisne |= prunik
+            continue
         vybrane.append({
             'od': min(prunik),
             'nazev': (pisen.title if pisen else '') or 'Bez názvu',
@@ -3347,7 +3394,10 @@ def pisne_na_stranach(book_id, cisla):
     # I jméno do klíče: na jedné straně můžou začínat dvě písně a pořadí by pak záviselo
     # na tom, jak zrovna přišly z databáze.
     vybrane.sort(key=lambda p: (p['od'], p['nazev']))
-    return [{'nazev': p['nazev'], 'nekompletni': p['nekompletni']} for p in vybrane]
+    return {
+        'pisne': [{'nazev': p['nazev'], 'nekompletni': p['nekompletni']} for p in vybrane],
+        'bez_pisne': len(bez_pisne),
+    }
 
 
 def _resolve_export_request(book_id, kind, recept=None):
@@ -3490,8 +3540,15 @@ def songbook_export_hotove(book_id):
             return jsonify({'error': str(chyba)}), 400
         sekvence = build_songbook_export_sequence(songbook, recept)
         odpoved = {'hotovo': False, 'stran': len(sekvence)}
-        if recept['strany']:
-            odpoved['pisne'] = pisne_na_stranach(book_id, cisla_rozsahu(recept['strany']))
+        # Souhrn písní vždycky, ne jen u rozsahu: „co v tom vlastně bude“ zajímá
+        # člověka pokaždé. Bere se z výsledné sekvence, takže sedí na cokoliv, co ji
+        # zúžilo - rozsah, vynechané prázdné strany i vypuštěnou obálku.
+        cisla_vybranych = {p['page_number'] for p in sekvence
+                           if p['kind'] == 'content' and p.get('page_number')}
+        souhrn = pisne_na_stranach(book_id, cisla_vybranych)
+        odpoved['pisne'] = souhrn['pisne']
+        odpoved['bez_pisne'] = souhrn['bez_pisne']
+        odpoved['obalek'] = sum(1 for p in sekvence if p['kind'] == 'cover')
         if recept['brozura']:
             # Listy papíru, ne strany: na tisk je to to číslo, které člověk potřebuje.
             odpoved['listu'] = (len(sekvence) + 3) // 4 * 2
