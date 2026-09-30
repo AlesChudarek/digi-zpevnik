@@ -408,13 +408,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Vyšlo přitom najevo, že oba panely mohly být otevřené naráz; na široké obrazovce
       sedí vedle sebe, takže si toho nikdo nevšiml, na úzké se překryly. Otevření
       jednoho teď zavírá druhý.
-- [X] **menu pod hamburgerem přerovnané.** Byly to tři odkazy a pod nimi dvě němé
-      ikony — šipka a paleta. Účet i motiv jsou teď celý řádek s popiskem, stejně
-      široký jako odkazy nad nimi, a spouštěčem účtu je jeho e-mail; podle samotné
-      šipky se nedalo poznat, že se pod ní odhlašuje.
-      Oba panely se kotví k liště, ne ke svému řádku, takže vyjedou pod celé menu
-      a nepřekryjí ho: účet přes celou šířku, motivy v přirozených 162 px u pravého
-      kraje. Roztažené přes stránku vypadaly jako další panel, ne jako výběr koleček.
+- [X] **menu pod hamburgerem srovnané.** Zůstalo rozvržení, jaké mělo od začátku —
+      paleta vlevo, účet vpravo, na jednom řádku — ale spouštěčem účtu je jeho
+      e-mail, ne holá šipka; podle šipky se nedalo poznat, že se pod ní odhlašuje.
+      Pořadí je v CSS zapsané výslovně, protože rozhoduje o tom, kterým směrem smí
+      panel vyjet: každý se otevírá od kraje, u kterého jeho tlačítko sedí. Dřív oba
+      mířily doprava. Bublina motivů má přirozených 162 px, ne šířku stránky.
 - [X] **menu překrývá obsah, místo aby s ním strkalo.** Rozbalené menu bylo součástí
       lišty, takže se jeho výška přenesla do mezerníku pod ní: otevření sjelo celou
       stránkou o 187 px dolů a schování lišty pak skočilo o 243 px zpátky. Naměřeno
