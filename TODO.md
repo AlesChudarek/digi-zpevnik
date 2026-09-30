@@ -398,14 +398,22 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [ ] na telefonu okno pro úpravu zpěvníku vypadá strašně, tabulka se dá posunout doprava,
       ale je useklá
 - [ ] noční režim má hrozně tmavou barvu v editoru zpěvníku pro "Uložit" a nahranou fotku coveru
-- [ ] **na úzké obrazovce se nedá odhlásit.** Panel účtu pod šipkou v liště se vysouvá
-      doleva a na telefonu tím odjede mimo obrazovku, takže se na „Odhlásit se" nedá
-      kliknout. Stojí za zvážení, jestli tam na telefonu vysouvací panel má být vůbec —
-      položky z něj by mohly být rovnou v burger menu.
-- [ ] **výběr barevného motivu je na telefonu nedostupný.** Panel s motivy se vysouvá
-      doprava a skončí mimo obrazovku. Stejná příčina jako u panelu účtu.
-- [ ] **ikony úprav zpěvníku přečuhují z dlaždice.** V Mých zpěvnících na úzké obrazovce
-      leží řádek ikon (upravit, sdílet, stáhnout, smazat) mimo hranice dlaždice.
+- [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba
+      vysouvací panely se kotvily ke svému tlačítku, a v burger menu sedí tlačítka
+      u protilehlých krajů: panel účtu odjel 207 px vlevo (i s „Odhlásit se", na které
+      pak nešlo kliknout) a panel motivů 112 px vpravo. Naměřeno na 390 px.
+      Kotvou je v úzkém menu lišta, ne tlačítko — `position: static` na obalu ji nechá
+      převzít `.navbar`, která je `fixed`, a panel se roztáhne na její šířku pod celé
+      menu. Na široké obrazovce se nemění nic.
+      Vyšlo přitom najevo, že oba panely mohly být otevřené naráz; na široké obrazovce
+      sedí vedle sebe, takže si toho nikdo nevšiml, na úzké se překryly. Otevření
+      jednoho teď zavírá druhý.
+- [X] **ikony úprav zpěvníku přečuhují z dlaždice** — opraveno. Dlaždice jsou
+      na telefonu v mřížce od 130 px, čtyři ikony po 36 px s mezerami potřebují 174 px.
+      Naměřeno na 320 px: 33 px přes okraj. `flex-wrap` je zalomí na druhý řádek
+      a na telefonu jsou mezery užší, takže od 390 px zůstanou na jednom.
+      Obojí i hlavičky hlídá `backend/scripts/test_mobil.py`, 24 kontrol na šířkách
+      320-412 px a pro jistotu i na 1280.
 
 ## Uživatelé
 
@@ -456,6 +464,21 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       panel pod burgerem, ale ukazatel je v něm stejný a nikde nepřečuhuje.
 - [ ] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
       s někým a pak si je smažu" (zaplním mu schránku bordelem)
+- [X] **stránky neposílaly `Cache-Control`** — opraveno. Prohlížeč si sám rozhodl,
+      jak dlouho si HTML nechá, a po nasazení servíroval starou verzi. Horší, než to
+      zní: verze skriptů a stylů se nese v adrese (`static_bust` podle mtime), ale ta
+      adresa je napsaná v tom starém HTML — zastaralá stránka si tedy dotáhla
+      i zastaralý JavaScript a cache busting byl k ničemu.
+      `after_request` teď dává HTML odpovědím `no-cache`, což neznamená „neukládej",
+      ale „než to použiješ, zeptej se": prohlížeč pošle podmíněný dotaz a při 304
+      nepřenese data. Odpovědi, které si hlavičku nastavily samy (náhledy a strany
+      s `immutable`), se nechávají být.
+- [ ] **statické soubory by se daly cachovat natvrdo.** Flask jim posílá `no-cache`,
+      takže se na každý skript a obrázek chodí ptát, i když se nezměnil. Přitom je
+      všechny bez výjimky adresuje `static_bust` s `?v=<mtime>` (ověřeno, přímá cesta
+      `/static/…` není v projektu ani jednou), takže by `SEND_FILE_MAX_AGE_DEFAULT`
+      na rok ušetřilo jeden dotaz na soubor a na stránku. Háček: kdo někdy napíše
+      adresu do `/static/` ručně, dostane rok starý soubor — chce to k tomu poznámku.
 - [ ] **lepší hosting kvůli rychlosti odezvy.** Dnešní Oracle free tier má 1 GB RAM a
       jedno slabé jádro; skládání PDF na něm trvá 12-25 s na zpěvník.
 - [X] selhání zálohy se hlásí nahlas, ne jen do logu; po úspěchu se zapisuje značka,
