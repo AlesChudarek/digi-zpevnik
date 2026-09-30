@@ -293,6 +293,7 @@
 
     /* Theme picker in navbar */
     .theme-picker { position: relative; display: inline-block; margin: 0 10px; }
+    .theme-popisek { display: none; }
     .theme-btn { background: transparent; border: 2px solid transparent; border-radius: 8px; padding: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
     .theme-icon { width: 22px; height: 22px; background: var(--brand-contrast); }
     .theme-icon { -webkit-mask: url('{{ static_bust('img/icons/palette.svg') }}') no-repeat center / contain; mask: url('{{ static_bust('img/icons/palette.svg') }}') no-repeat center / contain; }
@@ -373,41 +374,75 @@
         margin: 2px 0;
         padding: 10px 12px;
       }
-      /* Účet a paleta se vejdou na jeden řádek, takže sedí na opačných koncích
-         místo pod sebou. */
+      /* Účet a motiv pod sebou, ne vedle sebe: práce s účtem je celý blok, ne
+         jedna položka. */
       .navbar.menu-open .right {
         display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
         border-top: 1px solid rgba(255, 255, 255, 0.25);
         margin-top: 4px;
-        padding-top: 6px;
+        padding-top: 8px;
       }
-      .navbar.menu-open .right .theme-picker { margin: 0; }
       .navbar.menu-open .right a {
         margin: 0;
         padding: 10px 12px;
       }
-      /* Oba vysouvací panely se na širokém displeji kotví ke svému tlačítku. To je
-         v úzkém menu past: tlačítka sedí u protilehlých krajů, takže panel účtu
-         odjel 207 px vlevo za obrazovku (a s ním „Odhlásit se", na které pak nešlo
-         kliknout) a panel motivů 112 px vpravo. Naměřeno na 390 px.
-         Kotvou je tady proto lišta, ne tlačítko - `position: static` na obalu ji
-         nechá převzít `.navbar`, která je `fixed`, a panel se roztáhne na její šířku.
-         Pod celé menu, ne pod tlačítko: menu je vysoké a panel pod tlačítkem by
-         překryl položky, ze kterých vyjel. */
-      .navbar.menu-open .ucet-obal,
-      .navbar.menu-open .theme-picker { position: static; }
-      .navbar.menu-open .ucet-panel,
-      .navbar.menu-open .theme-panel {
-        left: 12px;
-        right: 12px;
-        top: calc(100% + 6px);
-        width: auto;
-        max-width: none;
+
+      /* Účet je tu rozbalený, ne pod šipkou. Šipka sama o sobě neřekla, co je pod ní,
+         a odhlášení stálo tři ťuknutí: hamburger, šipka, Odhlásit se. Panel proto
+         v menu leží rovnou v toku a jeho spouštěč nemá co spouštět.
+         Tím zároveň padá celé umisťování: panel se dřív kotvil ke svému tlačítku,
+         a protože tlačítka sedí u protilehlých krajů menu, odjel 207 px vlevo
+         za obrazovku i s „Odhlásit se". Naměřeno na 390 px. */
+      .navbar.menu-open .ucet-obal {
+        position: static;
+        display: block;
+        order: 1;
       }
-      .navbar.menu-open .theme-panel.visible { justify-content: center; }
+      .navbar.menu-open .ucet { display: none; }
+      .navbar.menu-open .ucet-panel {
+        display: block;
+        position: static;
+        width: 100%;
+        min-width: 0;
+      }
+
+      /* Motiv pod účtem, u pravého kraje, i s popiskem. */
+      .navbar.menu-open .right .theme-picker {
+        order: 2;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .navbar.menu-open .theme-popisek {
+        display: inline;
+        color: var(--brand-contrast);
+        font-size: 14px;
+      }
+      /* Bublina o přirozené šířce (~162 px), ne přes celou stránku. Roztažená
+         na šířku lišty vypadala jako další panel, ne jako výběr osmi koleček.
+         Nahoru, ne dolů: paleta je poslední řádek menu a menu se roluje
+         (`overflow-y: auto`), takže bublina vysunutá pod něj se ořízla a zmizela
+         za obsahem stránky. Nahoru zůstane uvnitř. */
+      .navbar.menu-open .theme-panel {
+        bottom: calc(100% + 6px);
+        top: auto;
+        right: 0;
+        left: auto;
+        width: max-content;
+        max-width: calc(100vw - 24px);
+      }
+
+      /* Rozbalený účet menu prodlouží; na nízké obrazovce (telefon na šířku) se
+         musí dát dorolovat, jinak by „Odhlásit se" leželo pod okrajem. */
+      .navbar.menu-open {
+        max-height: 100dvh;
+        overflow-y: auto;
+      }
       .navbar.menu-open .nav-links .s-napovedou { display: block; }
     }
   </style>
@@ -433,6 +468,9 @@
             aria-label="Zobrazit menu" aria-expanded="false">☰</button>
     <div class="right">
       <span class="theme-picker">
+        {# Popisek se ukazuje jen v menu pod hamburgerem, kde na samotné ikoně není
+           poznat, co je zač. V liště na široké obrazovce by jen zabíral místo. #}
+        <span class="theme-popisek" aria-hidden="true">Motiv</span>
         <button class="theme-btn" data-napoveda="Změnit téma" id="theme-picker-btn" aria-haspopup="true" aria-expanded="false">
           <div class="theme-icon" aria-hidden="true"></div>
         </button>
@@ -584,6 +622,12 @@
       const burger = document.querySelector('.nav-burger');
       if (!navbar) return;
       const isOpen = navbar.classList.toggle('menu-open');
+      // V menu je panel účtu rozbalený v toku, takže o něm musí vědět i odečítač
+      // obrazovky; mimo menu se zase schová. Panel motivů se při každé změně zavírá,
+      // aby nezůstal viset u tlačítka, které se zrovna přesunulo.
+      const ucetPanel = document.getElementById('ucet-panel');
+      if (ucetPanel) ucetPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      zavriPanelMotivu();
       if (burger) {
         burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         burger.setAttribute('aria-label', isOpen ? 'Skrýt menu' : 'Zobrazit menu');
@@ -613,6 +657,10 @@
         // While hidden the bar is translated off-screen and the spacer collapses to 0;
         // its own height has not changed, so keep the last real measurement.
         if (navbar.classList.contains('hidden')) return;
+        // Rozbalené menu pod hamburgerem je přes obsah, ne nad ním: kdyby se výška
+        // lišty přenesla do mezerníku, sjela by celá stránka o 187 px dolů a při
+        // schování lišty by pak skočila o 243 px zpátky. Naměřeno na 390 px.
+        if (navbar.classList.contains('menu-open')) return;
         const h = Math.round(navbar.getBoundingClientRect().height);
         if (h <= 0 || h === lastApplied) return;
         lastApplied = h;

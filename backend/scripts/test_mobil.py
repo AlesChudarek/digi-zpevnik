@@ -166,36 +166,81 @@ def main():
             page.evaluate("() => toggleNavMenu()")
             page.wait_for_timeout(500)
             zkontroluj(page.evaluate(RAM, ".navbar .right")["vejde"],
-                       "spodní řádek menu (paleta a účet) se vejde do obrazovky")
+                       "spodní část menu (účet a motiv) se vejde do obrazovky")
+
+            # Práce s účtem je v menu rozbalená, ne pod šipkou: šipka sama o sobě
+            # neřekla, co je pod ní, a odhlášení stálo tři ťuknutí.
+            ucet = page.evaluate(RAM, ".ucet-panel")
+            zkontroluj(ucet and ucet["vejde"] and ucet["w"] > 300,
+                       "účet je v menu rozbalený rovnou, bez druhého okna", str(ucet))
+            zkontroluj(page.evaluate(TREFA, ".ucet-odhlasit") == "ano",
+                       "a „Odhlásit se“ jde trefit na dvě ťuknutí",
+                       page.evaluate(TREFA, ".ucet-odhlasit"))
+            zkontroluj(page.evaluate(
+                "() => document.querySelector('.ucet').getBoundingClientRect().width") == 0,
+                "spouštěcí šipka je v menu schovaná, nemá co spouštět")
+            zkontroluj(page.evaluate(
+                "() => getComputedStyle(document.querySelector('.theme-popisek'))"
+                ".display") != "none",
+                "u palety je vidět popisek Motiv")
 
             page.evaluate("() => document.getElementById('theme-picker-btn').click()")
             page.wait_for_timeout(400)
             motivy = page.evaluate(RAM, ".theme-panel")
             zkontroluj(motivy["vejde"],
-                       "panel motivů se vejde celý - dřív čouhal 112 px vpravo",
+                       "bublina motivů se vejde celá - dřív čouhala 112 px vpravo",
                        str(motivy))
+            zkontroluj(motivy["w"] < 250,
+                       "a má přirozenou šířku, ne celou šířku stránky",
+                       f"{motivy['w']} px")
             zkontroluj(page.evaluate(TREFA, ".theme-swatch") == "ano",
                        "a dá se na motiv kliknout",
                        page.evaluate(TREFA, ".theme-swatch"))
 
-            page.evaluate("() => document.getElementById('ucet-btn').click()")
-            page.wait_for_timeout(400)
-            ucet = page.evaluate(RAM, ".ucet-panel")
-            zkontroluj(ucet["vejde"],
-                       "panel účtu se vejde celý - dřív odjel 207 px vlevo", str(ucet))
-            trefa = page.evaluate(TREFA, ".ucet-odhlasit")
-            zkontroluj(trefa == "ano", "a na „Odhlásit se“ jde kliknout", trefa)
+            print("\n── menu překrývá obsah, nestrká s ním ──")
+            # Menu bylo součástí lišty, takže její výška šla do mezerníku: otevření
+            # sjelo stránkou o 187 px dolů a schování lišty pak skočilo o 243 px zpátky.
+            stav = """() => ({
+              navbar: Math.round(document.querySelector('.navbar').getBoundingClientRect().height),
+              spacer: Math.round(document.querySelector('.navbar-spacer').getBoundingClientRect().height),
+              obsah: Math.round(document.querySelector('.grid-container').getBoundingClientRect().top)})"""
+            page.evaluate("() => toggleNavMenu()")
+            page.wait_for_timeout(500)
+            zavreno = page.evaluate(stav)
+            page.evaluate("() => toggleNavMenu()")
+            page.wait_for_timeout(600)
+            otevreno = page.evaluate(stav)
+            zkontroluj(otevreno["obsah"] == zavreno["obsah"],
+                       "otevření menu nepohne obsahem stránky",
+                       f"{zavreno['obsah']} → {otevreno['obsah']} px")
+            zkontroluj(otevreno["spacer"] == zavreno["spacer"],
+                       "mezerník pod lištou zůstává na výšce zavřené lišty",
+                       f"{otevreno['spacer']} px při liště {otevreno['navbar']} px")
+            page.evaluate("() => toggleNavbar()")
+            page.wait_for_timeout(700)
+            skok = zavreno["obsah"] - page.evaluate(stav)["obsah"]
+            zkontroluj(skok <= zavreno["spacer"] + 1,
+                       "schování lišty posune obsah jen o výšku zavřené lišty",
+                       f"{skok} px")
+            page.evaluate("() => toggleNavbar()")
+            page.wait_for_timeout(500)
+            ctx.close()
 
-            # Na široké obrazovce panely sedí vedle sebe, na úzké na stejném místě
-            # pod lištou - takže se ten druhý musí zavřít, jinak ho první překryje.
-            zkontroluj(not page.evaluate(
-                "() => document.getElementById('theme-panel').classList.contains('visible')"),
-                "otevření účtu zavře panel motivů, ať se nepřekrývají")
-            page.evaluate("() => document.getElementById('theme-picker-btn').click()")
-            page.wait_for_timeout(300)
-            zkontroluj(not page.evaluate(
-                "() => document.getElementById('ucet-panel').classList.contains('open')"),
-                "a naopak")
+            print("\n── menu u hosta, který účet nemá ──")
+            ctx = browser.new_context(viewport={"width": 390, "height": 780})
+            page = ctx.new_page()
+            page.on("pageerror", lambda e: chyby.append(str(e)))
+            page.goto(base + "/guest-login")
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(600)
+            page.evaluate("() => toggleNavMenu()")
+            page.wait_for_timeout(500)
+            host = page.evaluate(RAM, ".navbar .right")
+            zkontroluj(host is not None and host["vejde"],
+                       "spodní část menu se vejde i bez účtu", str(host))
+            zkontroluj(page.evaluate(TREFA, ".right a") == "ano",
+                       "a na „Přihlásit“ jde kliknout",
+                       page.evaluate(TREFA, ".right a"))
             ctx.close()
 
             print("\n── lišta na 1280 px: široká obrazovka beze změny ──")

@@ -408,11 +408,23 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Vyšlo přitom najevo, že oba panely mohly být otevřené naráz; na široké obrazovce
       sedí vedle sebe, takže si toho nikdo nevšiml, na úzké se překryly. Otevření
       jednoho teď zavírá druhý.
+- [X] **menu pod hamburgerem přerovnané.** Šipka u účtu neřekla, co je pod ní, a
+      odhlášení stálo tři ťuknutí. Práce s účtem je teď v menu rozbalená rovnou
+      (e-mail, stav ověření, zabrané místo, Změnit heslo, Odstranit účet, Odhlásit se)
+      a spouštěcí šipka je schovaná, protože nemá co spouštět. Motiv je pod tím
+      u pravého kraje i s popiskem; jeho bublina má přirozenou šířku 162 px místo
+      roztažení přes celou stránku a vysouvá se nahoru — menu se roluje
+      (`overflow-y: auto`), takže bublina vysunutá pod něj se ořízla a zmizela
+      za obsahem stránky.
+- [X] **menu překrývá obsah, místo aby s ním strkalo.** Rozbalené menu bylo součástí
+      lišty, takže se jeho výška přenesla do mezerníku pod ní: otevření sjelo celou
+      stránkou o 187 px dolů a schování lišty pak skočilo o 243 px zpátky. Naměřeno
+      na 390 px. `syncNavbarHeightToReality` teď výšku při otevřeném menu nepřebírá.
 - [X] **ikony úprav zpěvníku přečuhují z dlaždice** — opraveno. Dlaždice jsou
       na telefonu v mřížce od 130 px, čtyři ikony po 36 px s mezerami potřebují 174 px.
       Naměřeno na 320 px: 33 px přes okraj. `flex-wrap` je zalomí na druhý řádek
       a na telefonu jsou mezery užší, takže od 390 px zůstanou na jednom.
-      Obojí i hlavičky hlídá `backend/scripts/test_mobil.py`, 24 kontrol na šířkách
+      Všechno i hlavičky hlídá `backend/scripts/test_mobil.py`, 32 kontrol na šířkách
       320-412 px a pro jistotu i na 1280.
 
 ## Uživatelé
