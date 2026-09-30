@@ -394,10 +394,38 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ## Mobil a vzhled
 
-- [ ] **projít UI na mobilech celkově**, hlavně úpravu zpěvníku a zakládání nového
-- [ ] na telefonu okno pro úpravu zpěvníku vypadá strašně, tabulka se dá posunout doprava,
-      ale je useklá
-- [ ] noční režim má hrozně tmavou barvu v editoru zpěvníku pro "Uložit" a nahranou fotku coveru
+### Editor zpěvníku na telefonu
+
+> Změřeno 30. 9. 2026 na 390 px, ve světlém i nočním motivu. Pozor na jednu věc:
+> editor, který se opravdu otevírá, je **`#new-book-modal`** (tentýž jako „Nový
+> zpěvník", dostavěný funkcí `ensureEditSection`). `#edit-book-modal` se nikdy
+> neotevře — viz mrtvý kód níž. Všechno v téhle sekci se týká toho živého.
+
+- [ ] **tabulka písní je useknutá.** `.songs-list` je široká 346 px, tabulka v ní
+      435 px, takže 89 px leží mimo. Sloupec „Odebrat" končí na x = 458, tedy 68 px
+      za pravým okrajem obrazovky. `.songs-list` má `overflow: visible`, takže to
+      nemá ani vlastní vodorovné rolování — posouvá se celé okno.
+      Šest sloupců (táhlo, Název, Autor, Strana, Stran, Odebrat) se na telefon
+      nevejde. Chce to rozhodnout, jestli tabulku na úzké obrazovce překlopit
+      do karet (jeden řádek = jedna píseň pod sebou), nebo jí dát vlastní
+      `overflow-x: auto` a nechat ji rolovat uvnitř rámečku.
+- [ ] **tlačítko „Uložit" leží přes nadpis.** Nadpis „Upravit zpěvník" a plovoucí
+      `.btn-top-save` se překrývají o 170 px. Není to jen noční režim, je to v obou.
+- [ ] **kontrast v editoru je pod normou, v nočním režimu výrazně.**
+      „Uložit" i názvy nahraných obálek: **2,04 : 1 v nočním** (text `#0d366b`
+      na pozadí `#0b1220`) a **2,89 : 1 ve světlém** (`#1b5e20` na `#e8f5e9`).
+      Norma pro běžný text je 4,5 : 1. V nočním režimu je to prakticky nečitelné —
+      dropzóna s nahranou obálkou vypadá jako černý obdélník. Obojí sdílí tytéž
+      barvy, takže je to nejspíš jedna oprava.
+      Náhled obálky dole (barva zpěvníku + obrázek) je v pořádku v obou motivech.
+- [ ] projít zakládání nového zpěvníku a přidávání písničky stejným způsobem —
+      měřeno zatím nebylo, ale editor a „nový zpěvník" jsou totéž okno, takže
+      většina oprav padne na obojí
+
+### Ostatní mobilní
+
+- [ ] **projít UI na mobilech celkově** (lišta, dlaždice a nápovědy hotové, čtečka
+      a hledání neprověřené)
 - [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba
       vysouvací panely se kotvily ke svému tlačítku, a v burger menu sedí tlačítka
       u protilehlých krajů: panel účtu odjel 207 px vlevo (i s „Odhlásit se", na které
@@ -424,6 +452,21 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       a na telefonu jsou mezery užší, takže od 390 px zůstanou na jednom.
       Všechno i hlavičky hlídá `backend/scripts/test_mobil.py`, 32 kontrol na šířkách
       320-412 px a pro jistotu i na 1280.
+
+## Mrtvý kód
+
+- [ ] **`my_songbooks.html` má 346 řádků JavaScriptu za `{% endblock %}`.** Jinja
+      všechno za koncem bloku zahodí, takže se to nikdy nevykreslí ani nespustí.
+      Je to druhý, starší editor zpěvníku nad oknem `#edit-book-modal`: `openEditModal`,
+      obsluhy `eb-save`, `eb-cancel`, klik na pozadí a `hasClassicEditChanges`.
+      Ověřeno za běhu — `window.openEditSongbookModal` je ta novější funkce z řádku
+      2229 (`#new-book-modal` + `ensureEditSection`) a `#edit-book-modal` nikdy
+      nedostane `display: flex`.
+      K tomu se zbytečně vykresluje i jeho **markup a CSS uvnitř bloku** (kolem
+      175 řádků: `#edit-book-modal`, `.songs-list` pravidla, `eb-*` prvky) — ten se
+      do stránky dostane, jen ho nic neotevře. Smazat se dá obojí naráz, ale chce to
+      napřed projít, jestli `.songs-list` a další třídy nepoužívá i živý editor;
+      `ensureEditSection` staví vlastní `.songs-list`, takže CSS nejspíš zůstane.
 
 ## Uživatelé
 
