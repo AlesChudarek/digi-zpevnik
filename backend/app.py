@@ -510,6 +510,30 @@ def static_bust(filename: str) -> str:
 
 app.jinja_env.globals['static_bust'] = static_bust
 
+
+@app.after_request
+def bez_cache_html(odpoved):
+    """HTML se nesmí cachovat, obrázky a skripty ano.
+
+    Stránky dosud neposílaly žádnou hlavičku o cachování, takže si prohlížeč sám
+    rozhodl, jak dlouho si je nechá, a po nasazení servíroval starou verzi. Horší,
+    než to zní: verze skriptů a stylů se nese v adrese (`static_bust` podle mtime),
+    ale **ta adresa je napsaná v tom starém HTML**. Zastaralá stránka si tedy
+    dotáhne i zastaralý JavaScript a cache busting je k ničemu.
+
+    `no-cache` neznamená „neukládej", ale „než to použiješ, zeptej se". Prohlížeč si
+    stránku nechá a pošle podmíněný dotaz; když se nic nezměnilo, dostane 304 a data
+    po síti neputují. Stojí to jeden dotaz na stránku, ne přenos navíc.
+
+    Odpovědi, které si hlavičku nastavily samy (náhledy a strany s `immutable`),
+    se nechávají být.
+    """
+    if 'Cache-Control' in odpoved.headers:
+        return odpoved
+    if odpoved.mimetype == 'text/html':
+        odpoved.headers['Cache-Control'] = 'no-cache'
+    return odpoved
+
 def zpevniky_s_obrazkem(cesta: str):
     """Zpěvníky, ve kterých ten obrázek je - jako strana, obálka nebo intro.
 
