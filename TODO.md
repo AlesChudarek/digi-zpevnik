@@ -398,6 +398,14 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [ ] na telefonu okno pro úpravu zpěvníku vypadá strašně, tabulka se dá posunout doprava,
       ale je useklá
 - [ ] noční režim má hrozně tmavou barvu v editoru zpěvníku pro "Uložit" a nahranou fotku coveru
+- [ ] **na úzké obrazovce se nedá odhlásit.** Panel účtu pod šipkou v liště se vysouvá
+      doleva a na telefonu tím odjede mimo obrazovku, takže se na „Odhlásit se" nedá
+      kliknout. Stojí za zvážení, jestli tam na telefonu vysouvací panel má být vůbec —
+      položky z něj by mohly být rovnou v burger menu.
+- [ ] **výběr barevného motivu je na telefonu nedostupný.** Panel s motivy se vysouvá
+      doprava a skončí mimo obrazovku. Stejná příčina jako u panelu účtu.
+- [ ] **ikony úprav zpěvníku přečuhují z dlaždice.** V Mých zpěvnících na úzké obrazovce
+      leží řádek ikon (upravit, sdílet, stáhnout, smazat) mimo hranice dlaždice.
 
 ## Uživatelé
 
@@ -458,3 +466,13 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Reálná podoba je „stáhnout tenhle zpěvník do zařízení" jako vědomá volba u
       konkrétního zpěvníku. Háček: offline se uživatel nepřihlásí, takže by čtečka musela
       umět běžet z cache bez ověření session. Výrazně by tomu pomohly náhledové verze.
+
+
+
+
+
+
+
+
+
+## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
