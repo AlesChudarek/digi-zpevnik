@@ -174,20 +174,17 @@ def main():
                 "() => getComputedStyle(document.querySelector('.ucet-email'))"
                 ".display") != "none",
                 "spouštěč účtu ukazuje e-mail, ne jen šipku")
-            zkontroluj(page.evaluate(
-                "() => getComputedStyle(document.querySelector('.theme-popisek'))"
-                ".display") != "none",
-                "a u palety je vidět popisek Motiv")
-            radky = page.evaluate("""() => {
-              const u = document.querySelector('.ucet').getBoundingClientRect();
+            # Paleta vlevo, účet vpravo, na jednom řádku. Pořadí rozhoduje o tom,
+            # kterým směrem smí každý panel vyjet, takže se hlídá.
+            strany = page.evaluate("""() => {
               const t = document.querySelector('.theme-picker').getBoundingClientRect();
-              const o = document.querySelector('.nav-links a').getBoundingClientRect();
-              return {ucet: Math.round(u.width), motiv: Math.round(t.width),
-                      odkaz: Math.round(o.width)};
+              const u = document.querySelector('.ucet').getBoundingClientRect();
+              return {paleta_x: Math.round(t.left), ucet_pravy: Math.round(u.right),
+                      stejny_radek: Math.abs(t.top - u.top) < 12,
+                      okno: window.innerWidth};
             }""")
-            zkontroluj(abs(radky["ucet"] - radky["odkaz"]) <= 2
-                       and abs(radky["motiv"] - radky["odkaz"]) <= 2,
-                       "oba řádky jsou stejně široké jako odkazy nad nimi", str(radky))
+            zkontroluj(strany["stejny_radek"] and strany["paleta_x"] < strany["ucet_pravy"] / 2,
+                       "paleta je vlevo a účet vpravo na jednom řádku", str(strany))
 
             page.evaluate("() => document.getElementById('ucet-btn').click()")
             page.wait_for_timeout(400)
