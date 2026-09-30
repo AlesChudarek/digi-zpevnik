@@ -168,21 +168,41 @@ def main():
             zkontroluj(page.evaluate(RAM, ".navbar .right")["vejde"],
                        "spodní část menu (účet a motiv) se vejde do obrazovky")
 
-            # Práce s účtem je v menu rozbalená, ne pod šipkou: šipka sama o sobě
-            # neřekla, co je pod ní, a odhlášení stálo tři ťuknutí.
-            ucet = page.evaluate(RAM, ".ucet-panel")
-            zkontroluj(ucet and ucet["vejde"] and ucet["w"] > 300,
-                       "účet je v menu rozbalený rovnou, bez druhého okna", str(ucet))
-            zkontroluj(page.evaluate(TREFA, ".ucet-odhlasit") == "ano",
-                       "a „Odhlásit se“ jde trefit na dvě ťuknutí",
-                       page.evaluate(TREFA, ".ucet-odhlasit"))
+            # Spouštěčem účtu je e-mail, ne holá šipka: podle šipky se nedalo poznat,
+            # co je pod ní, a odhlášení se tím schovalo za dvě neoznačená ťuknutí.
             zkontroluj(page.evaluate(
-                "() => document.querySelector('.ucet').getBoundingClientRect().width") == 0,
-                "spouštěcí šipka je v menu schovaná, nemá co spouštět")
+                "() => getComputedStyle(document.querySelector('.ucet-email'))"
+                ".display") != "none",
+                "spouštěč účtu ukazuje e-mail, ne jen šipku")
             zkontroluj(page.evaluate(
                 "() => getComputedStyle(document.querySelector('.theme-popisek'))"
                 ".display") != "none",
-                "u palety je vidět popisek Motiv")
+                "a u palety je vidět popisek Motiv")
+            radky = page.evaluate("""() => {
+              const u = document.querySelector('.ucet').getBoundingClientRect();
+              const t = document.querySelector('.theme-picker').getBoundingClientRect();
+              const o = document.querySelector('.nav-links a').getBoundingClientRect();
+              return {ucet: Math.round(u.width), motiv: Math.round(t.width),
+                      odkaz: Math.round(o.width)};
+            }""")
+            zkontroluj(abs(radky["ucet"] - radky["odkaz"]) <= 2
+                       and abs(radky["motiv"] - radky["odkaz"]) <= 2,
+                       "oba řádky jsou stejně široké jako odkazy nad nimi", str(radky))
+
+            page.evaluate("() => document.getElementById('ucet-btn').click()")
+            page.wait_for_timeout(400)
+            ucet = page.evaluate(RAM, ".ucet-panel")
+            zkontroluj(ucet and ucet["vejde"],
+                       "ťuknutí na e-mail rozbalí účet a panel se vejde - dřív odjel "
+                       "207 px vlevo", str(ucet))
+            trefa = page.evaluate(TREFA, ".ucet-odhlasit")
+            zkontroluj(trefa == "ano", "a na „Odhlásit se“ jde kliknout", trefa)
+            # Oba panely vyjíždějí pod celé menu, takže by se na tom místě překryly.
+            zkontroluj(not page.evaluate(
+                "() => document.getElementById('theme-panel').classList.contains('visible')"),
+                "rozbalení účtu zavře bublinu motivů")
+            page.evaluate("() => document.getElementById('ucet-btn').click()")
+            page.wait_for_timeout(300)
 
             page.evaluate("() => document.getElementById('theme-picker-btn').click()")
             page.wait_for_timeout(400)
