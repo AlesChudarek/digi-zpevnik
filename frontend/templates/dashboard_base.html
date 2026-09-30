@@ -373,8 +373,8 @@
         margin: 2px 0;
         padding: 10px 12px;
       }
-      /* Logout and the palette fit on one line, so they sit on opposite ends
-         instead of stacking - logout left, palette right. */
+      /* Účet a paleta se vejdou na jeden řádek, takže sedí na opačných koncích
+         místo pod sebou. */
       .navbar.menu-open .right {
         display: flex;
         flex-direction: row;
@@ -384,21 +384,30 @@
         margin-top: 4px;
         padding-top: 6px;
       }
-      /* Explicit order, so this does not depend on the markup: the palette goes left
-         and logout right. The theme panel drops down and to the right, so the palette
-         needs the space on that side. */
-      .navbar.menu-open .right .theme-picker { margin: 0; order: 1; }
+      .navbar.menu-open .right .theme-picker { margin: 0; }
       .navbar.menu-open .right a {
         margin: 0;
         padding: 10px 12px;
-        order: 2;
       }
+      /* Oba vysouvací panely se na širokém displeji kotví ke svému tlačítku. To je
+         v úzkém menu past: tlačítka sedí u protilehlých krajů, takže panel účtu
+         odjel 207 px vlevo za obrazovku (a s ním „Odhlásit se", na které pak nešlo
+         kliknout) a panel motivů 112 px vpravo. Naměřeno na 390 px.
+         Kotvou je tady proto lišta, ne tlačítko - `position: static` na obalu ji
+         nechá převzít `.navbar`, která je `fixed`, a panel se roztáhne na její šířku.
+         Pod celé menu, ne pod tlačítko: menu je vysoké a panel pod tlačítkem by
+         překryl položky, ze kterých vyjel. */
+      .navbar.menu-open .ucet-obal,
+      .navbar.menu-open .theme-picker { position: static; }
+      .navbar.menu-open .ucet-panel,
       .navbar.menu-open .theme-panel {
-        top: 40px;
-        left: 0;
-        right: auto;
-        max-width: calc(100vw - 24px);
+        left: 12px;
+        right: 12px;
+        top: calc(100% + 6px);
+        width: auto;
+        max-width: none;
       }
+      .navbar.menu-open .theme-panel.visible { justify-content: center; }
       .navbar.menu-open .nav-links .s-napovedou { display: block; }
     }
   </style>
@@ -513,9 +522,31 @@
     // Server vrací chyby jako JSON. Vypisovat ho uživateli syrový znamená hlášku typu
     // "Vytvoření selhalo: {"error":"Nejd\u0159\u00edv si pros\u00edm..."}", kde je
     // vlastní sdělení schované mezi uvozovkami a únikovými sekvencemi.
+    /* V úzkém menu se oba vysouvací panely kreslí na stejné místo pod lištou, takže
+       ten druhý musí zavřít. Na široké obrazovce sedí vedle sebe a nikdo si toho
+       nevšiml. Obě tlačítka si událost zastaví, takže se navzájem přes dokument
+       nezavřou samy. */
+    function zavriPanelMotivu() {
+      const panel = document.getElementById('theme-panel');
+      const btn = document.getElementById('theme-picker-btn');
+      if (panel) panel.classList.remove('visible');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    function zavriPanelUctu() {
+      const panel = document.getElementById('ucet-panel');
+      const btn = document.getElementById('ucet-btn');
+      if (panel) {
+        panel.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+      }
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
     function prepniUcet(event) {
       event.preventDefault();
       event.stopPropagation();
+      zavriPanelMotivu();
       const panel = document.getElementById('ucet-panel');
       const btn = document.getElementById('ucet-btn');
       const otevreno = panel.classList.toggle('open');
@@ -524,20 +555,11 @@
     }
     // Kliknutí jinam i Escape panel zavřou, ať nezůstane viset přes obsah.
     document.addEventListener('click', (e) => {
-      const panel = document.getElementById('ucet-panel');
-      if (panel && panel.classList.contains('open') && !e.target.closest('.ucet-obal')) {
-        panel.classList.remove('open');
-        panel.setAttribute('aria-hidden', 'true');
-        document.getElementById('ucet-btn').setAttribute('aria-expanded', 'false');
-      }
+      if (e.target.closest('.ucet-obal')) return;
+      zavriPanelUctu();
     });
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape') return;
-      const panel = document.getElementById('ucet-panel');
-      if (panel) {
-        panel.classList.remove('open');
-        panel.setAttribute('aria-hidden', 'true');
-      }
+      if (e.key === 'Escape') zavriPanelUctu();
     });
 
     function popisChyby(text, kod) {
@@ -658,7 +680,10 @@
         { key:'pink',   name:'Bonbón',   color:'#EC4899' }
       ];
       panel.innerHTML = THEMES.map(t => `<span class="s-napovedou" data-napoveda="${t.name}"><button class="theme-swatch" style="background:${t.color}" data-theme="${t.key}" aria-label="${t.name}"></button></span>`).join('');
-      function openPanel(){ panel.classList.add('visible'); btn.setAttribute('aria-expanded','true'); }
+      function openPanel(){
+        if (window.zavriPanelUctu) window.zavriPanelUctu();
+        panel.classList.add('visible'); btn.setAttribute('aria-expanded','true');
+      }
       function closePanel(){ panel.classList.remove('visible'); btn.setAttribute('aria-expanded','false'); }
       btn.addEventListener('click', (e)=>{ e.stopPropagation(); const open = panel.classList.contains('visible'); open ? closePanel() : openPanel(); });
       panel.addEventListener('click', (e)=>{
