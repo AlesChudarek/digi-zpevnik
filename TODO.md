@@ -408,14 +408,13 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Vyšlo přitom najevo, že oba panely mohly být otevřené naráz; na široké obrazovce
       sedí vedle sebe, takže si toho nikdo nevšiml, na úzké se překryly. Otevření
       jednoho teď zavírá druhý.
-- [X] **menu pod hamburgerem přerovnané.** Šipka u účtu neřekla, co je pod ní, a
-      odhlášení stálo tři ťuknutí. Práce s účtem je teď v menu rozbalená rovnou
-      (e-mail, stav ověření, zabrané místo, Změnit heslo, Odstranit účet, Odhlásit se)
-      a spouštěcí šipka je schovaná, protože nemá co spouštět. Motiv je pod tím
-      u pravého kraje i s popiskem; jeho bublina má přirozenou šířku 162 px místo
-      roztažení přes celou stránku a vysouvá se nahoru — menu se roluje
-      (`overflow-y: auto`), takže bublina vysunutá pod něj se ořízla a zmizela
-      za obsahem stránky.
+- [X] **menu pod hamburgerem přerovnané.** Byly to tři odkazy a pod nimi dvě němé
+      ikony — šipka a paleta. Účet i motiv jsou teď celý řádek s popiskem, stejně
+      široký jako odkazy nad nimi, a spouštěčem účtu je jeho e-mail; podle samotné
+      šipky se nedalo poznat, že se pod ní odhlašuje.
+      Oba panely se kotví k liště, ne ke svému řádku, takže vyjedou pod celé menu
+      a nepřekryjí ho: účet přes celou šířku, motivy v přirozených 162 px u pravého
+      kraje. Roztažené přes stránku vypadaly jako další panel, ne jako výběr koleček.
 - [X] **menu překrývá obsah, místo aby s ním strkalo.** Rozbalené menu bylo součástí
       lišty, takže se jeho výška přenesla do mezerníku pod ní: otevření sjelo celou
       stránkou o 187 px dolů a schování lišty pak skočilo o 243 px zpátky. Naměřeno

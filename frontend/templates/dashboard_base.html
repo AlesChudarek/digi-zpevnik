@@ -390,58 +390,63 @@
         padding: 10px 12px;
       }
 
-      /* Účet je tu rozbalený, ne pod šipkou. Šipka sama o sobě neřekla, co je pod ní,
-         a odhlášení stálo tři ťuknutí: hamburger, šipka, Odhlásit se. Panel proto
-         v menu leží rovnou v toku a jeho spouštěč nemá co spouštět.
-         Tím zároveň padá celé umisťování: panel se dřív kotvil ke svému tlačítku,
-         a protože tlačítka sedí u protilehlých krajů menu, odjel 207 px vlevo
-         za obrazovku i s „Odhlásit se". Naměřeno na 390 px. */
+      /* Účet i motiv jsou v menu celý řádek s popiskem, ne osamocená ikona.
+         Spouštěčem účtu je e-mail: samotná šipka neřekla, co je pod ní. */
       .navbar.menu-open .ucet-obal {
         position: static;
         display: block;
         order: 1;
       }
-      .navbar.menu-open .ucet { display: none; }
-      .navbar.menu-open .ucet-panel {
-        display: block;
-        position: static;
+      .navbar.menu-open .ucet {
+        display: flex;
         width: 100%;
-        min-width: 0;
+        max-width: none;
+        justify-content: space-between;
+        padding: 10px 12px;
       }
+      /* V zúžené liště se e-mail schovává, aby se vešel; v rozbaleném menu je
+         naopak to jediné, podle čeho se pozná, co ten řádek dělá. */
+      .navbar.menu-open .ucet-email { display: block; }
 
-      /* Motiv pod účtem, u pravého kraje, i s popiskem. */
       .navbar.menu-open .right .theme-picker {
         order: 2;
         margin: 0;
         display: flex;
         align-items: center;
-        justify-content: flex-end;
+        justify-content: space-between;
         gap: 8px;
+        padding: 0 12px;
       }
       .navbar.menu-open .theme-popisek {
         display: inline;
         color: var(--brand-contrast);
         font-size: 14px;
       }
-      /* Bublina o přirozené šířce (~162 px), ne přes celou stránku. Roztažená
-         na šířku lišty vypadala jako další panel, ne jako výběr osmi koleček.
-         Nahoru, ne dolů: paleta je poslední řádek menu a menu se roluje
-         (`overflow-y: auto`), takže bublina vysunutá pod něj se ořízla a zmizela
-         za obsahem stránky. Nahoru zůstane uvnitř. */
+
+      /* Oba panely se na široké obrazovce kotví ke svému tlačítku. To je v úzkém
+         menu past: tlačítka jsou řádky přes celou šířku a panel pod tím posledním
+         by přečuhoval přes okraj. Kotvou je tady lišta - `position: static` na obalu
+         ji nechá převzít `.navbar`, která je `fixed` - a oba panely vyjedou pod celé
+         menu, ne doprostřed něj. Účet přes celou šířku, motivy v přirozených 162 px
+         u pravého kraje; roztažené přes stránku vypadaly jako další panel, ne jako
+         výběr osmi koleček. */
+      .navbar.menu-open .ucet-panel,
       .navbar.menu-open .theme-panel {
-        bottom: calc(100% + 6px);
-        top: auto;
-        right: 0;
+        top: calc(100% + 6px);
+        bottom: auto;
+      }
+      .navbar.menu-open .ucet-panel {
+        left: 12px;
+        right: 12px;
+        width: auto;
+        min-width: 0;
+      }
+      .navbar.menu-open .theme-picker { position: static; }
+      .navbar.menu-open .theme-panel {
+        right: 12px;
         left: auto;
         width: max-content;
         max-width: calc(100vw - 24px);
-      }
-
-      /* Rozbalený účet menu prodlouží; na nízké obrazovce (telefon na šířku) se
-         musí dát dorolovat, jinak by „Odhlásit se" leželo pod okrajem. */
-      .navbar.menu-open {
-        max-height: 100dvh;
-        overflow-y: auto;
       }
       .navbar.menu-open .nav-links .s-napovedou { display: block; }
     }
@@ -622,11 +627,9 @@
       const burger = document.querySelector('.nav-burger');
       if (!navbar) return;
       const isOpen = navbar.classList.toggle('menu-open');
-      // V menu je panel účtu rozbalený v toku, takže o něm musí vědět i odečítač
-      // obrazovky; mimo menu se zase schová. Panel motivů se při každé změně zavírá,
-      // aby nezůstal viset u tlačítka, které se zrovna přesunulo.
-      const ucetPanel = document.getElementById('ucet-panel');
-      if (ucetPanel) ucetPanel.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      // Oba panely se při každé změně menu zavírají, ať nezůstanou viset u tlačítka,
+      // které se zrovna přesunulo z lišty do menu nebo zpátky.
+      zavriPanelUctu();
       zavriPanelMotivu();
       if (burger) {
         burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
