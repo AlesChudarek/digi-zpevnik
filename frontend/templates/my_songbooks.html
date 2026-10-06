@@ -450,7 +450,13 @@
   .book-row .book-preview { justify-self: stretch; }
   .book-tools { min-width: 260px; }
   .book-tools label { color: var(--brand-dark, #1b5e20); }
-  @media (max-width: 820px) { .book-row { grid-template-columns: 1fr; } .book-tools { width: 100%; } }
+  /* `min-width: 260px` drželo volič barvy širší, než je na 320px displeji místo. */
+  @media (max-width: 820px) {
+    /* `1fr` samo o sobě sloupec pod šířku obsahu nepustí, proto `minmax(0, 1fr)` -
+       jinak volič barvy roztáhne okno a to pak jde táhnout do strany. */
+    .book-row { grid-template-columns: minmax(0, 1fr); }
+    .book-tools { width: 100%; min-width: 0; }
+  }
 
   /* Range slider theming: light channel-tinted tracks, black thumbs */
   input[type="range"] { accent-color: #000; }
@@ -564,22 +570,22 @@
           </div>
           <div class="book-tools" id="cover-color-tools" style="display:flex; flex-direction:column; gap:10px;">
             <label style="font-weight:600; font-size:14px;">Barva obálky</label>
-            <div class="rgb-row" style="display:grid; grid-template-columns: 34px 180px 60px; gap:8px; align-items:center;">
+            <div class="rgb-row" style="display:grid; grid-template-columns: 34px minmax(0, 1fr) 60px; gap:8px; align-items:center;">
               <span style="font-size:12px;">R</span>
               <input type="range" id="col-r" min="0" max="255" value="255">
               <input type="number" id="num-r" min="0" max="255" value="255" style="padding:6px 8px; border-radius:8px; border:1px solid #cfe6d3;">
             </div>
-            <div class="rgb-row" style="display:grid; grid-template-columns: 34px 180px 60px; gap:8px; align-items:center;">
+            <div class="rgb-row" style="display:grid; grid-template-columns: 34px minmax(0, 1fr) 60px; gap:8px; align-items:center;">
               <span style="font-size:12px;">G</span>
               <input type="range" id="col-g" min="0" max="255" value="255">
               <input type="number" id="num-g" min="0" max="255" value="255" style="padding:6px 8px; border-radius:8px; border:1px solid #cfe6d3;">
             </div>
-            <div class="rgb-row" style="display:grid; grid-template-columns: 34px 180px 60px; gap:8px; align-items:center;">
+            <div class="rgb-row" style="display:grid; grid-template-columns: 34px minmax(0, 1fr) 60px; gap:8px; align-items:center;">
               <span style="font-size:12px;">B</span>
               <input type="range" id="col-b" min="0" max="255" value="255">
               <input type="number" id="num-b" min="0" max="255" value="255" style="padding:6px 8px; border-radius:8px; border:1px solid #cfe6d3;">
             </div>
-            <div class="hex-row" style="display:grid; grid-template-columns: max-content 140px max-content; gap:8px; align-items:center;">
+            <div class="hex-row" style="display:grid; grid-template-columns: max-content minmax(0, 1fr) max-content; gap:8px; align-items:center;">
               <span style="font-size:12px;">HEX</span>
               <input type="text" id="hex-col" value="#ffffff" maxlength="7" style="padding:6px 8px; border-radius:8px; border:1px solid #cfe6d3;">
               <div id="col-preview" style="width:28px; height:28px; border-radius:6px; border:1px solid #cfe6d3; background:#ffffff;"></div>
@@ -604,7 +610,13 @@
   #edit-book-modal .modal { position: relative; }
   #edit-book-modal h2 { margin: 0 0 12px; }
   .edit-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  .songs-list { border: 1px solid var(--muted-border, #dbeadf); border-radius: 10px; overflow: visible; }
+  /* Šest sloupců se na telefon nevejde: na 390 px má rámeček 346 px a tabulka podle
+     obsahu 413-435, takže poslední sloupec „Odebrat" ležel až za okrajem obrazovky
+     a posouvalo se celé okno. Teď se roluje tabulka uvnitř svého rámečku.
+     `overflow: visible` tu dřív bylo kvůli tooltipům, které z řádků vykukovaly ven;
+     ty dnes kreslí plovoucí bublina na <body> (static/js/napoveda.js), takže ten
+     důvod padl. */
+  .songs-list { border: 1px solid var(--muted-border, #dbeadf); border-radius: 10px; overflow-x: auto; }
   .songs-list table { width: 100%; border-collapse: collapse; }
   .songs-list th, .songs-list td { padding: 10px 12px; border-top: 1px solid var(--muted-border, #e2e8f0); text-align: left; }
   .songs-list tr:first-child th { border-top: none; }
@@ -646,6 +658,16 @@
 
     /* Four cover dropzones two-up do not fit a phone */
     .cover-grid { grid-template-columns: 1fr; gap: 12px; }
+
+    /* Odsazení buněk je na úzké obrazovce to jediné, co se dá ušetřit, aniž by se
+       sloupec musel schovat. Vydá to kolem 50 px z těch 89, o které tabulka přetékala. */
+    .songs-list th, .songs-list td { padding: 8px 5px; }
+
+    /* Tři tlačítka na přidávání stran vedle nadpisu „Písničky" mají dohromady 314 px
+       a přečuhovala z okna o 30 px. `flex-wrap` sem patří do CSS, protože samotné
+       `display:flex` sedí v atributu style (staví se to v ensureEditSection) a odtud
+       by se přebít nedalo. */
+    .section-head, .right-actions { flex-wrap: wrap; }
     .ns-row { grid-template-columns: 1fr; }
 
     /* These sat at right: -34px, outside their own box, and reached 506px on a 390px
@@ -1725,7 +1747,7 @@ function openCreateModal() {
           <button type=\"button\" class=\"napoveda-znak\" aria-label=\"Co to znamená\"
                   data-napoveda=\"Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.\">i</button>
         </div>
-        <div class="songs-list" style="margin-top:12px; border:1px solid var(--muted-border, #dbeadf); border-radius:10px; overflow:visible;">
+        <div class="songs-list" style="margin-top:12px;">
           <table style="width:100%; border-collapse:collapse;">
             <thead>
               <tr>

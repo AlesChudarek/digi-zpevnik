@@ -401,20 +401,25 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 > zpěvník", dostavěný funkcí `ensureEditSection`). `#edit-book-modal` se nikdy
 > neotevře — viz mrtvý kód níž. Všechno v téhle sekci se týká toho živého.
 
-- [ ] **tabulka písní je useknutá.** Je úplně dole v okně editoru, v sekci
-      „Písničky" — je potřeba v okně odrolovat na konec. Useknutý je poslední
-      sloupec **„Odebrat"**, tedy křížky na odebrání písně.
-      Na 390 px je `.songs-list` široká 346 px a tabulka v ní 413–435 px.
-      Naměřeno na všech třech zpěvnících v seznamu: 00101 přesahuje o 89 px
-      (končí 68 px za okrajem obrazovky), 00102 o 73 px, Fildův a Aldův o 66 px.
-      Šířku určuje obsah — sloupce Název a Autor se roztahují podle nejdelší
-      písničky — takže zpěvník se samými krátkými názvy se vejde a vypadá to
-      pak náhodně.
-      `.songs-list` má `overflow: visible`, takže vlastní vodorovné rolování nemá
-      a přebírá ho až `.modal`; proto se dá posunout celé okno.
-      Chce to rozhodnout, jestli tabulku na úzké obrazovce překlopit do karet
-      (jedna píseň = jeden blok pod sebou), nebo jí dát vlastní `overflow-x: auto`
-      a nechat ji rolovat uvnitř rámečku.
+- [X] **okno editoru se na telefonu rozbíjelo do stran** — opraveno, tři různé
+      příčiny. Naměřeno na 320, 390 i 1280 px: žádná z nich už oknem ani stránkou
+      nehýbe.
+      1. **Tabulka písní** byla širší než rámeček (na 390 px 435 vs. 346) a protože
+         `.songs-list` měla `overflow: visible`, přebíralo rolování až `.modal` —
+         posouvalo se tedy celé okno a poslední sloupec „Odebrat" ležel za okrajem
+         obrazovky. Teď roluje tabulka uvnitř svého rámečku a na křížky se dá
+         dorolovat. `overflow: visible` tam bývalo kvůli tooltipům vykukujícím
+         z řádků; ty dnes kreslí plovoucí bublina na `<body>`, takže ten důvod padl.
+         K tomu užší odsazení buněk na telefonu, což ubralo ~34 px z přesahu.
+      2. **Tři tlačítka na přidávání stran** vedle nadpisu „Písničky" mají dohromady
+         314 px a přečuhovala o 30 px. Zalomí se (`flex-wrap`; musí být v CSS, protože
+         `display:flex` sedí v atributu `style` a staví se v `ensureEditSection`).
+      3. **Volič barvy obálky** měl pevné sloupce 34 + 180 + 60 px a `min-width: 260`,
+         dohromady 360 px — na 320px displeji o 67 px moc. Prostřední sloupec teď
+         pruží a sloupec mřížky je `minmax(0, 1fr)`, protože samotné `1fr` se pod
+         šířku obsahu nestlačí.
+      Pozn.: body 1 a 2 jsou provizorium do doby, než se přidávání stran předělá na
+      jedno univerzální „Přidat" — pak tabulka i ta tři tlačítka stejně zmizí.
 - [X] **kontrast v motivu Půlnoc** — opraveno, viz „Barvy motivů" níž.
 - [ ] projít zakládání nového zpěvníku a přidávání písničky stejným způsobem —
       měřeno zatím nebylo, ale editor a „nový zpěvník" jsou totéž okno, takže
