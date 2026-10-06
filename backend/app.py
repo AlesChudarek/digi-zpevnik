@@ -290,8 +290,8 @@ try:
         ExportPokus,
         Song,
         Obrazek,
-        SongImage,
-        SongbookPage,
+        Strana,
+        PisenNaStrane,
         Songbook,
         Author,
         User,
@@ -301,7 +301,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, SongImage, SongbookPage, Songbook, Author, User, UserSongbookAccess, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -357,20 +357,10 @@ def is_guest(user):
     return user.is_authenticated and getattr(user, 'role', None) == 'guest'
 
 
-# ---------- Non-song pages ----------
-# Pages that belong to a songbook but carry no song: intros, dividers, indexes.
-# They order and move exactly like song pages, but stay out of the table of
-# contents and out of global search. Rows created before the is_non_song column
-# existed are still recognised by their generated titles.
+# Strana bez písně (úvod, osmisměrka, předěl) se v editoru ukazuje pod tímhle jménem,
+# když nemá vlastní popisek.
 NON_SONG_TITLE = '<Prázdná strana>'
-NON_SONG_AUTHOR = 'System'
 
-
-def _is_non_song(song) -> bool:
-    if getattr(song, 'is_non_song', 0):
-        return True
-    title = getattr(song, 'title', '') or ''
-    return title == NON_SONG_TITLE or title.startswith('Non-song page')
 
 # Načti konfiguraci z .env
 load_dotenv()
@@ -439,32 +429,32 @@ init_app(app)
 
 
 def _dopln_chybejici_sloupce():
-    """Doplní sloupce, které přibyly v modelech, ať nezáleží na pořadí nasazení.
+    """Při startu založí chybějící tabulky a zkontroluje, že schéma odpovídá kódu.
 
-    Projekt nemá migrační nástroj a `create_all` umí jen chybějící tabulky, ne sloupce.
-    Kdyby se nasadil kód dřív než migrační skript, každý dotaz na `song_images` by spadl.
-    Tohle je ta pojistka; je to jedno PRAGMA při startu a po doplnění už nic nedělá.
+    Projekt nemá migrační nástroj a `create_all` umí jen chybějící tabulky, ne sloupce
+    ani přestavbu dat. Pod gunicornem se jinak nezavolá nikde, takže by nová tabulka
+    na serveru nevznikla dřív než ručním zásahem.
 
-    Hodnoty se tady nedopočítávají, jen se sloupec doplní s výchozí hodnotou.
+    Kdyby se nasadil kód dřív, než proběhne `migrace_strany.py`, `create_all` by
+    založil prázdné `strany` a všechny zpěvníky by vypadaly prázdné, zatímco data leží
+    ve starých tabulkách. Neztratí se nic (migrace s tím počítá), ale musí to být
+    vidět v logu, ne jen na webu.
     """
     with app.app_context():
         try:
-            # Chybějící tabulky umí create_all; pod gunicornem se jinak nezavolá nikde,
-            # takže by nová tabulka na serveru nevznikla dřív než ručním zásahem.
             db.create_all()
-            sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(song_images)"))}
-            if sloupce and 'poradi' not in sloupce:
-                db.session.execute(text(
-                    "ALTER TABLE song_images ADD COLUMN poradi INTEGER NOT NULL DEFAULT 1"))
-                db.session.commit()
-                app.logger.warning("song_images.poradi doplněn s výchozí hodnotou")
+            stare = db.session.execute(text(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='songbook_pages'"
+            )).first()
+            if stare:
+                app.logger.error("DATABÁZE NENÍ PO MIGRACI: existuje songbook_pages. "
+                                 "Pusť backend/scripts/migrace_strany.py --zapsat.")
         except Exception as chyba:  # noqa: BLE001 - chybějící DB při startu není důvod spadnout
-            # Gunicorn startuje víc workerů naráz, takže se o sloupec pokusí každý z nich
-            # a všichni kromě prvního dostanou "duplicate column". Výsledek je správný,
-            # není důvod to hlásit jako problém.
+            # Gunicorn startuje víc workerů naráz; souběžné create_all může u některého
+            # skončit na "already exists". Výsledek je správný.
             zprava = str(chyba).lower()
-            if 'duplicate column' not in zprava and 'already exists' not in zprava:
-                app.logger.warning("kontrola sloupců neproběhla: %s", chyba)
+            if 'already exists' not in zprava:
+                app.logger.warning("kontrola schématu neproběhla: %s", chyba)
 
 
 _dopln_chybejici_sloupce()
@@ -535,7 +525,7 @@ def bez_cache_html(odpoved):
     return odpoved
 
 def zpevniky_s_obrazkem(cesta: str):
-    """Zpěvníky, ve kterých ten obrázek je - jako strana, obálka nebo intro.
+    """Zpěvníky, ve kterých ten obrázek je - jako strana nebo obálka.
 
     O právech nerozhoduje, kde soubor leží, ale komu patří zpěvník, který ho ukazuje.
     Umístění to říct nemůže: strana veřejného zpěvníku běžně visí i v něčím soukromém
@@ -545,9 +535,8 @@ def zpevniky_s_obrazkem(cesta: str):
     obraz = Obrazek.query.filter_by(cesta=cesta).first()
     if obraz is None:
         return []
-    ids = {r[0] for r in db.session.query(SongbookPage.songbook_id)
-           .join(SongImage, SongImage.song_id == SongbookPage.song_id)
-           .filter(SongImage.image_id == obraz.id).distinct()}
+    ids = {r[0] for r in db.session.query(Strana.songbook_id)
+           .filter(Strana.image_id == obraz.id).distinct()}
     ids |= {r[0] for r in db.session.query(Songbook.id).filter(db.or_(
         Songbook.cover_preview_id == obraz.id,
         Songbook.cover_front_outer_id == obraz.id,
@@ -649,31 +638,94 @@ def _next_public_songbook_id() -> str:
     return f"{n:05d}"
 
 
-# ---------- Helpers for song file ownership/migration ----------
-def _handle_song_delete_for_book(sb: Songbook, song: Song):
-    """Odebere píseň z jednoho zpěvníku a uklidí, co po ní zbylo.
+# ---------- Strany zpěvníku ----------
+def cislo_strany(sb: Songbook, strana: Strana) -> int:
+    """Číslo vytištěné na straně - to, co uživatel vidí ve čtečce a v obsahu."""
+    return (sb.prvni_cislo_strany or 1) + strana.poradi
 
-    Dřív to muselo řešit, který zpěvník je "původní", protože pod ním ležely soubory.
-    Ten pojem zanikl: strana leží v `pages/` a nepatří žádnému zpěvníku, takže stačí
-    odpojit vazbu a podívat se, jestli píseň ještě někde je.
 
-    Necommituje. Vrací i `kandidati` - cesty, které se po commitu nabídnou
-    `smaz_osirele_obrazky`, protože tutéž stranu může nést ještě jiná píseň.
+def prerovnej_strany(sb: Songbook, strany):
+    """Zapíše `strany` jako obsah zpěvníku v tomhle pořadí, od nuly bez mezer.
+
+    Dvakrát, protože (songbook_id, poradi) je unikátní a SQLite to hlídá řádek po
+    řádku: přehození dvou stran by v jednom kroku narazilo samo na sebe.
     """
-    imgs = SongImage.query.filter_by(song_id=song.id).all()
-    kandidati = [img.image_path for img in imgs]
-    db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
+    for i, strana in enumerate(strany):
+        strana.poradi = -1 - i
+    db.session.flush()
+    for i, strana in enumerate(strany):
+        strana.poradi = i
     db.session.flush()
 
-    if db.session.query(SongbookPage.id).filter_by(song_id=song.id).first():
-        # Píseň zůstává v jiném zpěvníku. Dřív se tu soubory stěhovaly, protože cesta
-        # nesla "původní" zpěvník; dnes nenese nic měnitelného a stěhovat není co.
-        return {'detached_only': True, 'kandidati': kandidati}
 
-    db.session.query(SongImage).filter_by(song_id=song.id).delete()
-    db.session.delete(song)
-    # Soubory maže volající po commitu, protože tutéž stranu může nést jiná píseň.
-    return {'deleted_song': True, 'kandidati': kandidati}
+def strany_pisne(song_id, songbook_id=None):
+    """Strany, na kterých píseň leží, v pořadí písně.
+
+    Bez zpěvníku vrátí strany z jednoho (prvního podle id) zpěvníku, kde píseň je - to
+    je „píseň sama“, když ji někdo přidává jinam. Ve všech zpěvnících je tatáž.
+    """
+    q = (db.session.query(Strana).join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+         .filter(PisenNaStrane.song_id == song_id))
+    if songbook_id is None:
+        prvni = (db.session.query(Strana.songbook_id)
+                 .join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+                 .filter(PisenNaStrane.song_id == song_id)
+                 .order_by(Strana.songbook_id).limit(1).scalar())
+        if prvni is None:
+            return []
+        songbook_id = prvni
+    return (q.filter(Strana.songbook_id == songbook_id)
+            .order_by(PisenNaStrane.poradi_v_pisni, Strana.poradi).all())
+
+
+def odeber_pisen_ze_zpevniku(sb: Songbook, song_id) -> list:
+    """Odebere píseň ze zpěvníku. Strany, které nesly jen ji, zmizí; strana sdílená
+    s jinou písní zůstane a přijde jen o vazbu.
+
+    Necommituje. Vrací cesty obrázků, které po commitu zkontroluje
+    `smaz_osirele_obrazky` - tutéž stranu může mít i jiný zpěvník.
+    """
+    kandidati = []
+    # Kolekce mohla zastarat, když v témže požadavku přibyly strany přes session.
+    db.session.flush()
+    db.session.expire(sb, ['strany'])
+    for strana in strany_pisne(song_id, sb.id):
+        for vazba in list(strana.pisne):
+            if vazba.song_id == song_id:
+                strana.pisne.remove(vazba)
+        if not strana.pisne:
+            if strana.image_path:
+                kandidati.append(strana.image_path)
+            sb.strany.remove(strana)
+    db.session.flush()
+    prerovnej_strany(sb, list(sb.strany))
+    return kandidati
+
+
+def smaz_pisne_mimo_zpevniky(song_ids):
+    """Smaže písně, které po úpravě nejsou v žádném zpěvníku. Necommituje.
+
+    Píseň bez zpěvníku nikdo nenajde ani neotevře, takže ji nemá smysl držet. Dřív
+    tohle dělala jen část cest (smazání písně ano, uložení editoru a smazání účtu ne)
+    a písně bez zpěvníku se hromadily.
+    """
+    smazano = 0
+    for song_id in set(song_ids):
+        if db.session.query(PisenNaStrane.id).filter_by(song_id=song_id).first():
+            continue
+        pisen = db.session.get(Song, song_id)
+        if pisen is not None:
+            db.session.delete(pisen)
+            smazano += 1
+    return smazano
+
+
+def pisne_zpevniku(sb_id):
+    """Id všech písní ve zpěvníku."""
+    return {r[0] for r in db.session.query(PisenNaStrane.song_id)
+            .join(Strana, Strana.id == PisenNaStrane.strana_id)
+            .filter(Strana.songbook_id == sb_id).distinct()}
+
 
 # Sloupce s obálkami. Na jednom místě, ať se seznam nemusí opisovat v každé funkci,
 # která obálky prochází.
@@ -693,9 +745,9 @@ def smaz_osirele_obrazky(kandidati):
     se jen zrušil odkaz a soubor zůstal ležet - tak vznikly ty, které se musely uklízet
     ručně. Tohle to dodělává pro obě cesty.
 
-    Smazat se smí teprve tehdy, když na řádek v `images` neukazuje žádná píseň, obálka ani
-    intro. Tutéž stranu totiž může nést druhá píseň a týž zpěvník může být ve dvou
-    zpěvnících - sedmdesát písniček dnes je.
+    Smazat se smí teprve tehdy, když na řádek v `images` neukazuje žádná strana ani
+    obálka. Tentýž obrázek totiž může být stranou ve víc zpěvnících - když si někdo
+    přidá veřejnou píseň do svého, sedmdesát písniček dnes je.
 
     Volat až po commitu, jinak dotazy uvidí ještě neodstraněné řádky.
     """
@@ -707,7 +759,7 @@ def smaz_osirele_obrazky(kandidati):
     osirele = []
     for obraz in Obrazek.query.filter(Obrazek.cesta.in_(kandidati)).all():
         pouzity = (
-            db.session.query(SongImage.id).filter_by(image_id=obraz.id).first()
+            db.session.query(Strana.id).filter_by(image_id=obraz.id).first()
             or db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == obraz.id,
                 Songbook.cover_front_outer_id == obraz.id,
@@ -1229,17 +1281,18 @@ def smazat_ucet():
 
         uid, email = current_user.id, current_user.email
         soubory = []
+        pisne = set()
         for sb in moje:
             for sloupec, _ in SLOTY_OBALEK:
                 cesta = getattr(sb, sloupec, None)
                 if cesta:
                     soubory.append(cesta)
-            for strana in build_songbook_content_pages(sb.id):
-                if strana['file'] != 'blank':
-                    soubory.append(strana['file'])
-            db.session.query(SongbookPage).filter_by(songbook_id=sb.id).delete()
+            soubory += [st.image_path for st in sb.strany if st.image_path]
+            pisne |= pisne_zpevniku(sb.id)
             db.session.query(UserSongbookAccess).filter_by(songbook_id=sb.id).delete()
             db.session.delete(sb)
+        db.session.flush()
+        smaz_pisne_mimo_zpevniky(pisne)
 
         db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
         logout_user()
@@ -1375,56 +1428,34 @@ def poslat_overeni_znovu():
 
 
 @app.route('/api/songbook/<songbook_id>/toc')
+@login_required
 def get_songbook_toc(songbook_id):
-    """Table of contents: one entry per song, in page order.
+    """Obsah: jedna položka na píseň, v pořadí stran, u každé strana, kde začíná.
 
-    A page can hold several short songs, so entries are counted per page rather
-    than per song image. Deduplicating by image used to drop every song after the
-    first on a shared page.
+    Píseň na víc stranách se uvede jednou, u své první strany. Víc písní na jedné
+    straně se uvede všechny, v pořadí, v jakém na stranu přibyly.
     """
-    pages = SongbookPage.query.filter_by(songbook_id=songbook_id).order_by(
-        SongbookPage.page_number.asc(), SongbookPage.id.asc()
-    ).all()
-    if not pages:
-        return jsonify({"pages": []})
-
-    song_ids = {p.song_id for p in pages}
-    songs = {s.id: s for s in Song.query.filter(Song.id.in_(song_ids)).all()}
-    images_by_song = {}
-    for img in (SongImage.query.filter(SongImage.song_id.in_(song_ids))
-                .order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()):
-        images_by_song.setdefault(img.song_id, []).append(img)
-
-    # Songs sharing a page_number sit on the same physical page, so that page
-    # advances the running number once, no matter how many songs it carries.
-    songs_by_page = {}
-    for page in pages:
-        songs_by_page.setdefault(page.page_number, []).append(page.song_id)
+    # Dřív tu žádná kontrola nebyla: názvy písní v cizím soukromém zpěvníku si mohl
+    # přečíst kdokoli, i nepřihlášený, kdo znal (nebo uhodl) jeho id. 404 jako u obrázků,
+    # ať se nedá zjišťovat, které zpěvníky existují.
+    sb = db.session.get(Songbook, songbook_id)
+    if sb is None or not can_view_songbook(current_user, sb):
+        return jsonify({"pages": []}), 404
 
     toc = []
-    listed = set()
-
-    # Use the stored page number rather than the page's position. Some songbooks were
-    # numbered starting from the title page, so their first song sits on page 3 and
-    # that is what is printed on the scan; counting positions would show 1 instead.
-    for page_number in sorted(songs_by_page):
-        for song_id in songs_by_page[page_number]:
-            song = songs.get(song_id)
-            if not song:
+    uvedene = set()
+    for strana in sb.strany:
+        for vazba in strana.pisne:
+            song = vazba.song
+            if song.id in uvedene:
                 continue
-            if _is_non_song(song) or song_id in listed:
-                continue
-            listed.add(song_id)
-            song_images = images_by_song.get(song_id, [])
+            uvedene.add(song.id)
             author_name = song.author.name if song.author else ""
-            author_display = author_name or "-"
-            if song.title == NON_SONG_TITLE or author_name.strip().lower() == 'system':
-                author_display = '-'
             toc.append({
                 "title": song.title,
-                "author": author_display,
-                "page": song_images[0].image_path if song_images else "",
-                "page_number": page_number,
+                "author": author_name or "-",
+                "page": strana.image_path or "",
+                "page_number": cislo_strany(sb, strana),
                 "song_id": song.id,
             })
 
@@ -1454,16 +1485,18 @@ def search():
         for row in access_rows:
             shared_access[row.songbook_id] = (row.permission or 'view')
 
-    # Subquery to get the first (minimum) page for each song within a songbook
+    # První strana každé písně v každém zpěvníku (pořadí, číslo se dopočte níž)
     first_pages_subq = (
         db.session.query(
-            SongbookPage.songbook_id.label('songbook_id'),
-            SongbookPage.song_id.label('song_id'),
-            func.min(SongbookPage.page_number).label('first_page_number')
+            Strana.songbook_id.label('songbook_id'),
+            PisenNaStrane.song_id.label('song_id'),
+            func.min(Strana.poradi).label('first_poradi')
         )
-        .group_by(SongbookPage.songbook_id, SongbookPage.song_id)
+        .join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+        .group_by(Strana.songbook_id, PisenNaStrane.song_id)
         .subquery()
     )
+    first_page_number = (Songbook.prvni_cislo_strany + first_pages_subq.c.first_poradi)
 
     shared_counts_subq = (
         db.session.query(
@@ -1476,7 +1509,7 @@ def search():
 
     # Build query across first-pages -> song -> author -> songbook
     q = db.session.query(
-        first_pages_subq.c.first_page_number.label('page_number'),
+        first_page_number.label('page_number'),
         Song.title.label('song_title'),
         Song.id.label('song_id'),
         Author.name.label('author_name'),
@@ -1486,14 +1519,11 @@ def search():
         Songbook.owner_id.label('owner_id'),
         Songbook.is_public.label('is_public'),
         shared_counts_subq.c.shared_count.label('shared_count')
+    ).select_from(first_pages_subq
     ).join(Song, Song.id == first_pages_subq.c.song_id
     ).join(Songbook, Songbook.id == first_pages_subq.c.songbook_id
     ).outerjoin(shared_counts_subq, shared_counts_subq.c.songbook_id == Songbook.id
     ).join(Author, Song.author_id == Author.id, isouter=True)
-
-    # Non-song pages never show up in search (legacy rows are matched by title too)
-    q = q.filter(Song.is_non_song == 0)
-    q = q.filter(~or_(Song.title.like('Non-song page%'), Song.title == NON_SONG_TITLE))
 
     # Filter accessible songbooks. Admins search across every songbook, matching
     # can_view_songbook() and the admin branch of /my-songbooks.
@@ -1506,7 +1536,7 @@ def search():
         q = q.filter(or_(*filters))
 
     rows = (
-        q.order_by(Song.title.asc(), Songbook.title.asc(), first_pages_subq.c.first_page_number.asc())
+        q.order_by(Song.title.asc(), Songbook.title.asc(), first_page_number.asc())
          .all()
     )
 
@@ -1610,9 +1640,10 @@ def list_my_songbooks_options():
     if song_id:
         ids = [b.id for b in books]
         if ids:
-            present_rows = db.session.query(SongbookPage.songbook_id).filter(
-                (SongbookPage.song_id == song_id) & (SongbookPage.songbook_id.in_(ids))
-            ).all()
+            present_rows = (db.session.query(Strana.songbook_id)
+                            .join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+                            .filter(PisenNaStrane.song_id == song_id,
+                                    Strana.songbook_id.in_(ids)).distinct().all())
             present_ids = {row[0] for row in present_rows}
     return jsonify({
         'ok': True,
@@ -1645,20 +1676,21 @@ def add_song_to_songbook(songbook_id):
         return jsonify({'ok': False, 'error': 'Song not found'}), 404
 
     # If already present in this songbook, do nothing
-    exists = db.session.query(SongbookPage.id).filter_by(songbook_id=sb.id, song_id=song.id).first()
-    if exists:
+    if song.id in pisne_zpevniku(sb.id):
         return jsonify({'ok': True, 'already_present': True, 'added_pages': 0})
 
-    # Determine next page number in target songbook
-    max_page = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=sb.id).scalar()
-    next_page = (max_page or 0) + 1
-
-    # Append entries for all images of the song, in order
-    song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
+    # Strany písně se připojí na konec jako nové strany tohohle zpěvníku. Obrázek je
+    # tentýž (řádek v `images`), strana je vlastní - jejím pořadím tenhle zpěvník
+    # nehýbe s nikým jiným. Když píseň ve zdroji sdílí stranu s jinou, přejde sem
+    # obrázek celé strany, ale vazba jen na tuhle píseň.
+    zdroj = strany_pisne(song.id)
+    dalsi = len(sb.strany)
     added = 0
-    for img in song_images:
-        db.session.add(SongbookPage(songbook_id=sb.id, song_id=song.id, page_number=next_page))
-        next_page += 1
+    for poradi_v_pisni, puvodni in enumerate(zdroj, start=1):
+        nova = Strana(songbook_id=sb.id, poradi=dalsi, image_id=puvodni.image_id)
+        nova.pisne.append(PisenNaStrane(song_id=song.id, poradi_v_pisni=poradi_v_pisni))
+        db.session.add(nova)
+        dalsi += 1
         added += 1
 
     db.session.commit()
@@ -1667,7 +1699,6 @@ def add_song_to_songbook(songbook_id):
     schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'added_pages': added})
 
-# API: Create a new custom song with uploaded page images and append to songbook
 # API: Delete song from songbook with origin/reference logic for private songs
 @app.route('/api/my-songbooks/<songbook_id>/songs/<song_id>', methods=['DELETE'])
 @login_required
@@ -1677,28 +1708,15 @@ def delete_song_from_songbook(songbook_id, song_id):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
     song = Song.query.get_or_404(song_id)
-    imgs = SongImage.query.filter_by(song_id=song.id).all()
-    kandidati = [img.image_path for img in imgs]
-
-    # Odpojit z tohohle zpěvníku. Soubory se nestěhují: cesta už nenese, ze kterého
-    # zpěvníku strana pochází, takže se nemá s čím rozejít.
-    db.session.query(SongbookPage).filter_by(songbook_id=sb.id, song_id=song.id).delete()
-    db.session.flush()
-
-    zbyva = db.session.query(SongbookPage.id).filter_by(song_id=song.id).first()
-    if zbyva:
-        db.session.commit()
-        schedule_export_warm(songbook_id)
-        return jsonify({'ok': True, 'detached_only': True})
-
-    # Píseň už není v žádném zpěvníku, takže může pryč i s vazbami. Soubory až po
-    # commitu a přes smaz_osirele_obrazky, protože tutéž stranu může nést jiná píseň.
-    db.session.query(SongImage).filter_by(song_id=song.id).delete()
-    db.session.delete(song)
+    kandidati = odeber_pisen_ze_zpevniku(sb, song.id)
+    smazana = smaz_pisne_mimo_zpevniky([song.id])
     db.session.commit()
+    # Soubory až po commitu a přes smaz_osirele_obrazky, protože tutéž stranu může mít
+    # i jiný zpěvník.
     smaz_osirele_obrazky(kandidati)
     schedule_export_warm(songbook_id)
-    return jsonify({'ok': True, 'deleted_song': True})
+    return jsonify({'ok': True, 'deleted_song': True} if smazana
+                   else {'ok': True, 'detached_only': True})
 
 @app.route('/public-songbooks')
 @login_required
@@ -1942,22 +1960,19 @@ def api_delete_songbook(songbook_id):
 
     # Strany zpěvníku se posbírají ještě před smazáním, ale nemažou se natvrdo: tutéž
     # stranu může mít ještě jiný zpěvník. Rozhodne až smaz_osirele_obrazky po commitu.
-    song_ids = {r.song_id for r in SongbookPage.query.filter_by(songbook_id=sb.id).all()}
-    kandidati = [r.image_path for r in
-                 SongImage.query.filter(SongImage.song_id.in_(song_ids)).all()] if song_ids else []
+    song_ids = pisne_zpevniku(sb.id)
+    kandidati = [st.image_path for st in sb.strany if st.image_path]
     kandidati += [c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
                               sb.img_path_cover_back_inner, sb.img_path_cover_back_outer,
                               sb.img_path_cover_preview) if c]
 
-    # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
+    # Sdílení mizí se zpěvníkem. Dřív tu zůstávalo ležet a ukazovalo na zpěvník, který
+    # neexistuje (migrace na strany jeden takový záznam našla).
+    UserSongbookAccess.query.filter_by(songbook_id=sb.id).delete()
     db.session.delete(sb)
     db.session.flush()
-    for song_id in song_ids:
-        if not db.session.query(SongbookPage.id).filter_by(song_id=song_id).first():
-            db.session.query(SongImage).filter_by(song_id=song_id).delete()
-            osirela = Song.query.get(song_id)
-            if osirela:
-                db.session.delete(osirela)
+    # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
+    smaz_pisne_mimo_zpevniky(song_ids)
     db.session.commit()
 
     smaz_osirele_obrazky(kandidati)
@@ -2018,68 +2033,68 @@ def get_songbook_structure(songbook_id):
     if not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Forbidden'}), 403
 
-    # Distinct songs in this songbook with start page and page count (count rows in this book)
-    subq_min = (
-        db.session.query(
-            SongbookPage.song_id.label('song_id'),
-            func.min(SongbookPage.page_number).label('start_page'),
-            func.count(SongbookPage.id).label('page_count')
-        )
-        .filter(SongbookPage.songbook_id == songbook_id)
-        .group_by(SongbookPage.song_id)
-        .subquery()
-    )
-
-    rows = (
-        db.session.query(
-            Song.id, Song.title, Author.name.label('author'),
-            subq_min.c.start_page, subq_min.c.page_count, Song.is_non_song
-        )
-        .join(subq_min, subq_min.c.song_id == Song.id)
-        .join(Author, Song.author_id == Author.id, isouter=True)
-        .order_by(subq_min.c.start_page.asc())
-        .all()
-    )
-
-    # Determine which songs are private (have images under users/)
-    song_ids = [r[0] for r in rows]
-    private_set = set()
-    if song_ids:
-        priv_rows = (db.session.query(SongImage.song_id)
-                     .join(Obrazek, Obrazek.id == SongImage.image_id)
-                     .filter(SongImage.song_id.in_(song_ids),
-                             Obrazek.cesta.like('uzivatele/%'))
-                     .distinct().all())
-        private_set = {sid for (sid,) in priv_rows}
-
     def filename_or_none(path):
         try:
             return Path(path).name if path else None
         except Exception:
             return None
 
-    def _row_is_non_song(row):
-        """Row order is (id, title, author, start_page, page_count, is_non_song)."""
-        if row[5]:
-            return True
-        title = row[1] or ''
-        return title == NON_SONG_TITLE or str(title).startswith('Non-song page')
+    # Editor dnes pracuje s řádky "píseň" (stará podoba, přepíše se s jednotným
+    # „Přidat strany“). Strana bez písně proto vystupuje jako řádek s náhradním id
+    # `strana-<id>`, které ukládání zase pozná.
+    songs = []
+    radek_pisne = {}
+    for strana in sb.strany:
+        cislo = cislo_strany(sb, strana)
+        soukroma = bool(strana.image_path and strana.image_path.startswith('uzivatele/'))
+        if not strana.pisne:
+            songs.append({
+                'song_id': f'strana-{strana.id}',
+                'title': strana.popisek or '&lt;Prázdná strana&gt;',
+                'author': '',
+                'start_page': cislo,
+                'page_count': 1,
+                'is_private': soukroma,
+                'is_non_song': True,
+                'page_group': None,
+            })
+            continue
+        for vazba in strana.pisne:
+            radek = radek_pisne.get(vazba.song_id)
+            if radek is None:
+                song = vazba.song
+                radek = {
+                    'song_id': song.id,
+                    'title': song.title,
+                    'author': (song.author.name if song.author else '') or '',
+                    'start_page': cislo,
+                    'page_count': 0,
+                    'is_private': False,
+                    'is_non_song': False,
+                    'page_group': None,
+                    '_strany': set(),
+                }
+                radek_pisne[vazba.song_id] = radek
+                songs.append(radek)
+            radek['page_count'] += 1
+            radek['is_private'] = radek['is_private'] or soukroma
+            radek['_strany'].add(strana.id)
 
-    # Several short songs can share one physical page. Group them so the editor
-    # shows one row per page and keeps them together when saving.
-    page_rows = (db.session.query(SongbookPage.song_id, SongbookPage.page_number)
-                 .filter(SongbookPage.songbook_id == songbook_id).all())
-    songs_on_page = {}
-    for song_id, page_number in page_rows:
-        songs_on_page.setdefault(page_number, set()).add(song_id)
-    group_of = {}
-    for page_number in sorted(songs_on_page):
-        sharing = songs_on_page[page_number]
-        # Reuse a group id if any song on this page already belongs to one
-        existing = next((group_of[s] for s in sharing if s in group_of), None)
-        group_id = existing if existing is not None else len(set(group_of.values()))
-        for song_id in sharing:
-            group_of[song_id] = group_id
+    # Písně, které se potkají na jedné straně, patří do jedné skupiny (a tranzitivně:
+    # A s B na jedné straně, B s C na další → všechny tři). Editor je ukáže jako jeden
+    # řádek a uloží je spolu, jinak by uložení stranu roztrhlo.
+    skupina = {}
+    for strana in sb.strany:
+        ids = [v.song_id for v in strana.pisne]
+        if len(ids) < 2:
+            continue
+        existujici = next((skupina[i] for i in ids if i in skupina), None)
+        g = existujici if existujici is not None else len(set(skupina.values()))
+        for i in ids:
+            skupina[i] = g
+    for radek in radek_pisne.values():
+        radek['page_group'] = skupina.get(radek['song_id'])
+        del radek['_strany']
 
     return jsonify({
         'ok': True,
@@ -2088,8 +2103,7 @@ def get_songbook_structure(songbook_id):
             'title': sb.title,
             'color': getattr(sb, 'color', '#FFFFFF') or '#FFFFFF',
             # Printed number of the first page; not always 1 (title page counted in)
-            'first_page_number': (db.session.query(func.min(SongbookPage.page_number))
-                                  .filter_by(songbook_id=songbook_id).scalar() or 1),
+            'first_page_number': sb.prvni_cislo_strany or 1,
             'covers': {
                 'front_outer': sb.img_path_cover_front_outer,
                 'front_inner': sb.img_path_cover_front_inner,
@@ -2100,26 +2114,7 @@ def get_songbook_structure(songbook_id):
                 'back_inner_name': filename_or_none(sb.img_path_cover_back_inner),
                 'back_outer_name': filename_or_none(sb.img_path_cover_back_outer),
             },
-            'songs': [
-                {
-                    'song_id': r[0],
-                    # Non-song pages show their own title if they have one, otherwise a
-                    # placeholder. Escaped angle brackets keep the placeholder visible.
-                    'title': (
-                        ("&lt;Prázdná strana&gt;" if (not r[1] or r[1] == NON_SONG_TITLE
-                                                      or str(r[1]).startswith("Non-song page")) else r[1])
-                        if _row_is_non_song(r) else r[1]
-                    ),
-                    'author': ('' if _row_is_non_song(r) else (r[2] or '')),
-                    'start_page': r[3],
-                    'page_count': r[4],
-                    'is_private': (r[0] in private_set),
-                    'is_non_song': bool(_row_is_non_song(r)),
-                    # Songs with the same page_group sit on the same page(s)
-                    'page_group': group_of.get(r[0]),
-                }
-                for r in rows
-            ]
+            'songs': songs,
         }
     })
 
@@ -2137,7 +2132,6 @@ def update_songbook_structure(songbook_id):
 
     title = (request.form.get('title') or sb.title).strip()
     color = (request.form.get('color') or getattr(sb, 'color', '#FFFFFF') or '#FFFFFF').strip()
-    auto_numbering = (request.form.get('auto_numbering', '1') in ('1', 'true', 'True', 'on'))
 
     # Where the printed numbering starts. Some songbooks count the title page as 1,
     # so their first song is page 3; renumbering from a hardcoded 1 would lose that.
@@ -2147,8 +2141,7 @@ def update_songbook_structure(songbook_id):
     except (TypeError, ValueError):
         first_page_number = None
     if first_page_number is None:
-        first_page_number = db.session.query(func.min(SongbookPage.page_number)).filter_by(
-            songbook_id=songbook_id).scalar()
+        first_page_number = sb.prvni_cislo_strany
     first_page_number = max(1, int(first_page_number or 1))
 
     def save_cover(file_storage, name_hint):
@@ -2178,14 +2171,11 @@ def update_songbook_structure(songbook_id):
     f_back_outer = request.files.get('back_outer')
 
     def cleanup_old(old_rel: str, new_rel: str):
-        try:
-            if old_rel and old_rel != new_rel:
-                p = _abs_image_path(old_rel)
-                if p and p.exists():
-                    p.unlink()
-        except Exception:
-            # Best-effort cleanup only
-            pass
+        # Stará obálka jde stejnou cestou jako odebrané strany: po commitu ji smaže
+        # smaz_osirele_obrazky i s řádkem v `images`. Dřív se tu mazal jen soubor a
+        # řádek zůstal ukazovat na nic.
+        if old_rel and old_rel != new_rel:
+            ke_smazani_soubory.add(old_rel)
 
     if f_front_outer:
         new_rel = save_cover(f_front_outer, 'coverfrontout')
@@ -2231,7 +2221,7 @@ def update_songbook_structure(songbook_id):
     song_entries = []
     if order_raw:
         try:
-            song_entries = _json.loads(order_raw)
+            song_entries = [e for e in _json.loads(order_raw) if isinstance(e, dict)]
         except Exception:
             song_entries = []
 
@@ -2246,213 +2236,144 @@ def update_songbook_structure(songbook_id):
             new_songs_list = []
     new_songs_map = {s.get('temp_id'): s for s in new_songs_list if isinstance(s, dict) and s.get('temp_id')}
 
-    # Create new songs (with uploaded pages) referenced in order, assign real IDs
+    # Nové strany z nahraných souborů. Zakládají se jen ty, na které pořadí odkazuje.
     referenced_new_ids = []
     for entry in song_entries:
-        if not isinstance(entry, dict):
-            continue
         sid = entry.get('song_id')
         if sid and sid in new_songs_map and sid not in referenced_new_ids:
             referenced_new_ids.append(sid)
 
-    created_new_songs = {}
-    if referenced_new_ids:
-        next_page_number = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=songbook_id).scalar() or 0
-        payloads = []
-        for temp_id in referenced_new_ids:
-            meta = new_songs_map.get(temp_id) or {}
-            non_song = bool(meta.get('non_song'))
-            # Short songs can share one page: 'songs' carries a title/author per song
-            # and they all end up on the same uploaded page images.
-            members_raw = meta.get('songs')
-            if isinstance(members_raw, list) and members_raw:
-                members = []
-                for m in members_raw:
-                    if not isinstance(m, dict):
-                        continue
-                    if non_song:
-                        members.append(((m.get('title') or '').strip() or NON_SONG_TITLE, NON_SONG_AUTHOR))
-                    else:
-                        members.append(((m.get('title') or 'Moje písnička').strip() or 'Moje písnička',
-                                        (m.get('author') or '-').strip() or '-'))
-                members = members or None
-            else:
-                members = None
-            if members is None:
-                if non_song:
-                    members = [((meta.get('title') or '').strip() or NON_SONG_TITLE, NON_SONG_AUTHOR)]
-                else:
-                    members = [((meta.get('title') or 'Moje písnička').strip() or 'Moje písnička',
-                                (meta.get('author') or '-').strip() or '-')]
-            title = members[0][0]
-            try:
-                requested_pages = int(meta.get('page_count') or 1)
-            except Exception:
-                requested_pages = 1
-            requested_pages = max(1, min(20, requested_pages))
-            files = []
-            for idx in range(1, requested_pages + 1):
-                field = f'new_song_{temp_id}_page_{idx}'
-                file_obj = request.files.get(field)
-                if file_obj:
-                    files.append(file_obj)
-            if not files:
-                label = 'nové stránky' if non_song else f'novou písničku: {title}'
-                return jsonify({'ok': False, 'error': f'Chybí soubory pro {label}'}), 400
-            payloads.append((temp_id, members, files, non_song))
-
-        for temp_id, members, files, non_song in payloads:
-            shared = len(members) > 1
-            member_ids = [f"custom_{uuid4().hex[:12]}" for _ in members]
-
-            # Soubor se ukládá jednou, ať už na straně stojí jedna píseň nebo tři.
-            # Dřív se rozlišovalo, jestli je strana sdílená, a nesdílená se ukládala pod
-            # jednu z písní - to teď nedává smysl, protože strana nepatří ani jedné.
-            saved_paths = []
-            for offset, file_storage in enumerate(files, start=1):
-                pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
-                rel_path = _nova_cesta_strany(sb, pripona)
-                abs_path = IMAGES_DIR / rel_path
-                abs_path.parent.mkdir(parents=True, exist_ok=True)
-                _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
-                saved_paths.append(rel_path)
-
-            if not saved_paths:
-                return jsonify({'ok': False, 'error': f'Nepodařilo se uložit soubory nové písničky: {members[0][0]}'}), 400
-
-            # Every song of the group points at the same images and the same pages
-            page_numbers = []
-            for _ in saved_paths:
-                next_page_number += 1
-                page_numbers.append(next_page_number)
-
-            for song_id, (title, author_name) in zip(member_ids, members):
-                author = Author.query.filter_by(name=author_name).first()
-                if not author:
-                    author = Author(name=author_name)
-                    db.session.add(author)
-                    db.session.flush()
-                db.session.add(Song(id=song_id, title=title, author_id=author.id,
-                                    is_non_song=1 if non_song else 0))
-                db.session.flush()
-                # Každá z písní na téhle straně dostane vlastní číslování od 1 - poradi
-                # je pořadí v rámci písně, takže sdílená strana může být pro jednu píseň
-                # první a pro druhou druhá.
-                for poradi, rel_path in enumerate(saved_paths, 1):
-                    db.session.add(SongImage(song_id=song_id, poradi=poradi,
-                                             image_path=rel_path))
-                for page_number in page_numbers:
-                    db.session.add(SongbookPage(songbook_id=songbook_id, song_id=song_id,
-                                                page_number=page_number))
-
-            created_new_songs[temp_id] = {'song_id': member_ids[0], 'song_ids': member_ids,
-                                          'page_count': len(saved_paths)}
-
-        # Replace placeholder IDs in order entries with real song IDs
-        for entry in song_entries:
-            if not isinstance(entry, dict):
+    payloads = []
+    for temp_id in referenced_new_ids:
+        meta = new_songs_map.get(temp_id) or {}
+        non_song = bool(meta.get('non_song'))
+        # Krátké písně můžou sdílet stranu: 'songs' nese název a autora každé z nich
+        # a všechny leží na týchž nahraných stranách.
+        members_raw = meta.get('songs')
+        if not (isinstance(members_raw, list) and members_raw):
+            members_raw = [meta]
+        members = []
+        for m in members_raw:
+            if not isinstance(m, dict):
                 continue
-            sid = entry.get('song_id')
-            if sid and sid in created_new_songs:
-                entry['song_id'] = created_new_songs[sid]['song_id']
-                entry['song_ids'] = list(created_new_songs[sid]['song_ids'])
+            if non_song:
+                members.append(((m.get('title') or '').strip(), None))
+            else:
+                members.append(((m.get('title') or 'Moje písnička').strip() or 'Moje písnička',
+                                (m.get('author') or '-').strip() or '-'))
+        if not members:
+            members = [('', None)] if non_song else [('Moje písnička', '-')]
+        try:
+            requested_pages = int(meta.get('page_count') or 1)
+        except Exception:
+            requested_pages = 1
+        requested_pages = max(1, min(20, requested_pages))
+        files = [f for f in (request.files.get(f'new_song_{temp_id}_page_{idx}')
+                             for idx in range(1, requested_pages + 1)) if f]
+        if not files:
+            label = 'nové stránky' if non_song else f'novou písničku: {members[0][0]}'
+            return jsonify({'ok': False, 'error': f'Chybí soubory pro {label}'}), 400
+        payloads.append((temp_id, members, files, non_song))
 
-    # Build mapping for updates
-    # song_entries: list of {song_id, start_page?}
-    # Apply deletions of songs removed from the order, then renumber remaining
-    # Execute this block whenever 'order' was provided (even if empty => delete all)
-    if order_raw is not None:
-        # Determine which songs currently exist in this songbook
-        existing_ids = [sid for (sid,) in (
-            db.session.query(SongbookPage.song_id)
-            .filter(SongbookPage.songbook_id == songbook_id)
-            .distinct()
-            .all()
-        )]
-        # Count every member of a shared page as submitted, not just the entry's
-        # primary song, or the others would look removed and get deleted.
-        incoming_ids = set()
-        for e in song_entries:
-            if e.get('song_id'):
-                incoming_ids.add(e.get('song_id'))
-            for member in (e.get('song_ids') or []):
-                incoming_ids.add(member)
-        to_delete = set(existing_ids) - incoming_ids
-
-        if to_delete:
-            # Cesty obrázků odebíraných písniček si musíme zapamatovat teď, dokud na ně
-            # ještě vedou řádky v databázi. Smazat se smí až po commitu a jen ty, na které
-            # už nikdo neukazuje - viz smaz_osirele_obrazky.
-            ke_smazani_soubory.update(
-                p for (p,) in db.session.query(Obrazek.cesta)
-                .join(SongImage, SongImage.image_id == Obrazek.id)
-                .filter(SongImage.song_id.in_(list(to_delete))).all())
-            # Delete all pages for songs that are no longer present in the submitted order
-            (db.session.query(SongbookPage)
-             .filter(SongbookPage.songbook_id == songbook_id, SongbookPage.song_id.in_(list(to_delete)))
-             .delete(synchronize_session=False))
-
-        # Prepare counts per remaining song within this songbook (after deletion)
-        counts = dict(
-            db.session.query(SongbookPage.song_id, func.count(SongbookPage.id))
-            .filter(SongbookPage.songbook_id == songbook_id)
-            .group_by(SongbookPage.song_id)
-            .all()
-        )
-
-        next_page = first_page_number
-        # Helper: ensure 'System' author exists for non-song pages
-        def get_system_author_id():
-            sys = Author.query.filter_by(name='System').first()
-            if not sys:
-                sys = Author(name='System')
-                db.session.add(sys)
+    nove_bloky = {}           # temp_id -> [Strana]
+    docasne_poradi = -1_000_000
+    for temp_id, members, files, non_song in payloads:
+        member_ids = [] if non_song else [f"custom_{uuid4().hex[:12]}" for _ in members]
+        for song_id, (title, author_name) in zip(member_ids, members):
+            author = Author.query.filter_by(name=author_name).first()
+            if not author:
+                author = Author(name=author_name)
+                db.session.add(author)
                 db.session.flush()
-            return sys.id
+            db.session.add(Song(id=song_id, title=title, author_id=author.id))
+        db.session.flush()
+
+        blok = []
+        # Soubor se ukládá jednou, ať už na straně stojí jedna píseň nebo tři.
+        for poradi_v_pisni, file_storage in enumerate(files, start=1):
+            pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
+            rel_path = _nova_cesta_strany(sb, pripona)
+            abs_path = IMAGES_DIR / rel_path
+            abs_path.parent.mkdir(parents=True, exist_ok=True)
+            _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
+            # Dočasné pořadí mimo dosah skutečných, ať se strana při flush nepotká
+            # s existující; skutečné dostane v prerovnej_strany.
+            docasne_poradi -= 1
+            strana = Strana(songbook_id=sb.id, poradi=docasne_poradi, image_path=rel_path)
+            if non_song:
+                popisek = members[0][0]
+                strana.popisek = popisek if popisek and popisek != NON_SONG_TITLE else None
+            for song_id in member_ids:
+                strana.pisne.append(PisenNaStrane(song_id=song_id, poradi_v_pisni=poradi_v_pisni))
+            db.session.add(strana)
+            blok.append(strana)
+        nove_bloky[temp_id] = blok
+    db.session.flush()
+
+    dotcene_pisne = set()
+    # Pořadí: editor posílá řádky (píseň, skupinu písní na sdílené straně, stranu bez
+    # písně jako `strana-<id>`, novou prázdnou stranu, nebo nově nahranou píseň). Z nich
+    # se složí nová řada stran; co v ní není, ze zpěvníku odchází.
+    # Prázdné pořadí znamená "smaž všechno", chybějící pořadí "na strany nesahej".
+    if order_raw is not None:
+        puvodni = list(sb.strany)
+        podle_id = {st.id: st for st in puvodni}
+        strany_pisne_zde = {}
+        for st in puvodni:
+            for vazba in st.pisne:
+                strany_pisne_zde.setdefault(vazba.song_id, []).append(st)
+
+        nova_rada, pouzite = [], set()
+
+        def pridej(strana):
+            if strana.id is None or strana.id not in pouzite:
+                nova_rada.append(strana)
+                if strana.id is not None:
+                    pouzite.add(strana.id)
 
         for entry in song_entries:
             sid = entry.get('song_id')
             if not sid:
-                # Possibly a request to add a new non-song page
                 if entry.get('non_song'):
-                    page_count = 1
-                    start = next_page if auto_numbering else int(entry.get('start_page') or next_page)
-                    # Create dummy song + one page
-                    ns_song_id = f"{songbook_id}_ns_{uuid4().hex[:8]}"
-                    sys_author_id = get_system_author_id()
-                    ns_song = Song(id=ns_song_id, title=NON_SONG_TITLE, author_id=sys_author_id, is_non_song=1)
-                    db.session.add(ns_song)
+                    docasne_poradi -= 1
+                    prazdna = Strana(songbook_id=sb.id, poradi=docasne_poradi)
+                    db.session.add(prazdna)
                     db.session.flush()
-                    db.session.add(SongbookPage(songbook_id=songbook_id, song_id=ns_song_id, page_number=start))
-                    next_page = start + page_count if not auto_numbering else (next_page + page_count)
+                    pridej(prazdna)
                 continue
-            # Several short songs can share one page. Such a group is renumbered as
-            # a single unit: every member gets the same page numbers and the page
-            # counter advances only once, otherwise saving would split the page.
-            group_ids = entry.get('song_ids')
-            if not isinstance(group_ids, list) or not group_ids:
-                group_ids = [sid]
-            group_ids = [g for g in group_ids if int(counts.get(g, 0)) > 0]
-            if not group_ids:
+            if sid in nove_bloky:
+                for strana in nove_bloky[sid]:
+                    pridej(strana)
                 continue
-            page_count = max(int(counts.get(g, 0)) for g in group_ids)
-            start = next_page if auto_numbering else int(entry.get('start_page') or next_page)
+            if str(sid).startswith('strana-'):
+                try:
+                    strana = podle_id.get(int(str(sid)[len('strana-'):]))
+                except ValueError:
+                    strana = None
+                if strana is not None:
+                    pridej(strana)
+                continue
+            # Skupina písní na sdílené straně se posílá celá a ukládá jako celek, jinak
+            # by se strana roztrhla.
+            clenove = entry.get('song_ids')
+            if not isinstance(clenove, list) or not clenove:
+                clenove = [sid]
+            strany_skupiny = {st.id: st for c in clenove for st in strany_pisne_zde.get(c, [])}
+            for strana in sorted(strany_skupiny.values(), key=lambda st: st.poradi):
+                pridej(strana)
 
-            for member_id in group_ids:
-                # Select rows for this song ordered by page_number then id
-                rows = (SongbookPage.query
-                        .filter_by(songbook_id=songbook_id, song_id=member_id)
-                        .order_by(SongbookPage.page_number.asc(), SongbookPage.id.asc())
-                        .all())
-                # Reassign page numbers sequentially from 'start'
-                p = start
-                for r in rows:
-                    r.page_number = p
-                    p += 1
+        for strana in puvodni:
+            if strana.id not in pouzite:
+                if strana.image_path:
+                    ke_smazani_soubory.add(strana.image_path)
+                dotcene_pisne.update(v.song_id for v in strana.pisne)
+                sb.strany.remove(strana)
+        db.session.flush()
+        prerovnej_strany(sb, nova_rada)
+        db.session.expire(sb, ['strany'])
 
-            next_page = start + page_count if not auto_numbering else (next_page + page_count)
-
-    # Handle explicit delete requests with full origin/reference logic (staged deletes)
+    # Výslovně odebrané písně. Většinou už jsou pryč, protože chybí v pořadí; tohle je
+    # pojistka pro požadavek, který pošle odebrání bez pořadí.
     delete_raw = request.form.get('delete_songs')
     if delete_raw:
         try:
@@ -2460,10 +2381,14 @@ def update_songbook_structure(songbook_id):
         except Exception:
             to_delete = []
         if isinstance(to_delete, list):
+            v_knize = pisne_zpevniku(sb.id)
             for sid in to_delete:
-                s = Song.query.get(sid)
-                if s:
-                    _handle_song_delete_for_book(sb, s)
+                if sid in v_knize:
+                    ke_smazani_soubory.update(odeber_pisen_ze_zpevniku(sb, sid))
+                dotcene_pisne.add(sid)
+
+    sb.prvni_cislo_strany = first_page_number
+    smaz_pisne_mimo_zpevniky(dotcene_pisne)
 
     db.session.commit()
     # Až po commitu, protože se rozhoduje podle toho, co v databázi zbylo.
@@ -2539,38 +2464,18 @@ def schedule_export_warm(book_id):
 
 
 def build_songbook_content_pages(book_id):
-    """Ordered content pages of a songbook: [{"file", "page_number", "kind"}].
+    """Strany obsahu zpěvníku v pořadí: [{"file", "page_number", "kind"}].
 
-    The single source of truth for page order, moved out of songbook_detail() so the
-    reader and the export cannot drift apart. There is no page entity in the model: a
-    physical page is a page_number paired with an image that belongs to a *song*, so
-    two things have to be untangled here. Several short songs sharing one printed page
-    collapse to a single entry, and a song spanning several pages takes its images in
-    order. A page with no image becomes the literal "blank".
+    Jediný zdroj pořadí stran pro čtečku i export, ať se nerozejdou. Strana bez
+    obrázku je doslovné "blank".
     """
-    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(
-        SongbookPage.page_number.asc(), SongbookPage.id.asc()
-    ).all()
-
-    pages_by_song = {}
-    for page in raw_pages:
-        pages_by_song.setdefault(page.song_id, []).append(page.page_number)
-
-    # A page number maps to one image; several short songs can share that one page.
-    image_for_page = {}
-    for song_id, page_numbers in pages_by_song.items():
-        song_images = SongImage.query.filter_by(song_id=song_id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
-        for offset, page_number in enumerate(sorted(set(page_numbers))):
-            if page_number in image_for_page:
-                continue  # already provided by another song on this same page
-            # A multi-page song has one page per image, in order
-            image_for_page[page_number] = (
-                song_images[offset].image_path if offset < len(song_images) else "blank"
-            )
-
+    sb = db.session.get(Songbook, book_id)
+    if sb is None:
+        return []
     return [
-        {"file": image_for_page[page_number], "page_number": page_number, "kind": "content"}
-        for page_number in sorted(image_for_page)
+        {"file": strana.image_path or "blank", "page_number": cislo_strany(sb, strana),
+         "kind": "content"}
+        for strana in sb.strany
     ]
 
 
@@ -3345,32 +3250,30 @@ def pisne_na_stranach(book_id, cisla):
     že píseň má i strany, které vybrané nejsou; typicky když někdo vezme 22-23 a píseň
     pokračuje na 24.
 
-    Strany bez písně (prázdné, osmisměrky, předěly) jsou v datech taky písně, jen
-    s `is_non_song`. Do seznamu písní ale nepatří - „Vyjde na 2 strany. <Prázdná
-    strana>, <Prázdná strana>.“ není seznam písní. Počítají se zvlášť.
+    Strany bez písně (prázdné, osmisměrky, předěly) do seznamu písní nepatří -
+    „Vyjde na 2 strany. <Prázdná strana>, <Prázdná strana>.“ není seznam písní.
+    Počítají se zvlášť.
     """
-    radky = SongbookPage.query.filter_by(songbook_id=book_id).all()
-    strany_pisne = {}
-    for radek in radky:
-        strany_pisne.setdefault(radek.song_id, set()).add(radek.page_number)
+    sb = db.session.get(Songbook, book_id)
+    strany_pisne_ = {}
+    bez_pisne = set()
+    for strana in (sb.strany if sb else []):
+        cislo = cislo_strany(sb, strana)
+        if not strana.pisne and cislo in cisla:
+            bez_pisne.add(cislo)
+        for vazba in strana.pisne:
+            strany_pisne_.setdefault(vazba.song_id, (vazba.song, set()))[1].add(cislo)
 
     vybrane = []
-    bez_pisne = set()
-    for song_id, strany in strany_pisne.items():
+    for song_id, (pisen, strany) in strany_pisne_.items():
         prunik = strany & cisla
         if not prunik:
-            continue
-        pisen = db.session.get(Song, song_id)
-        if pisen is not None and pisen.is_non_song:
-            bez_pisne |= prunik
             continue
         vybrane.append({
             'od': min(prunik),
             'nazev': (pisen.title if pisen else '') or 'Bez názvu',
             'nekompletni': prunik != strany,
         })
-    # I jméno do klíče: na jedné straně můžou začínat dvě písně a pořadí by pak záviselo
-    # na tom, jak zrovna přišly z databáze.
     vybrane.sort(key=lambda p: (p['od'], p['nazev']))
     return {
         'pisne': [{'nazev': p['nazev'], 'nekompletni': p['nekompletni']} for p in vybrane],
@@ -3576,14 +3479,6 @@ def songbook_detail(book_id):
     # Determine first_page_side from songbook attribute or default
     first_page_side = getattr(songbook, 'first_page_side', 'left')
 
-    # Build the page list from the stored page numbers, so a songbook numbered from
-    # its title page keeps showing what is printed on the scans. Counting positions
-    # here made the viewer disagree with the table of contents.
-    raw_pages = SongbookPage.query.filter_by(songbook_id=book_id).order_by(
-        SongbookPage.page_number.asc(), SongbookPage.id.asc()
-    ).all()
-
-    # raw_pages above stays: the table of contents further down still walks it.
     pages = build_songbook_content_pages(book_id)
 
     def pair_pages(pages, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
@@ -3655,55 +3550,6 @@ def songbook_detail(book_id):
     )
 
 
-    # Build toc_entries: one entry per song with correct page numbering
-    toc_entries = []
-    processed_songs = set()
-    seen_images_for_toc = set()
-    current_toc_page = 1
-
-    for page in raw_pages:
-        if page.song_id in processed_songs:
-            continue
-
-        song = Song.query.get(page.song_id)
-        if not song:
-            continue
-
-        # Skip system-generated dummy songs for non-song pages
-        if song.title.startswith("Non-song page") or song.title == '<Prázdná strana>':
-            # Still count the page in the numbering
-            song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
-            current_toc_page += len(song_images) if song_images else 1
-            processed_songs.add(page.song_id)
-            continue
-
-        # Get all images for this song
-        song_images = SongImage.query.filter_by(song_id=song.id).order_by(SongImage.poradi.asc(), SongImage.id.asc()).all()
-        if song_images:
-            # Calculate page range for this song
-            start_page = current_toc_page
-            end_page = current_toc_page + len(song_images) - 1
-            page_display = f"{start_page}" if start_page == end_page else f"{start_page}-{end_page}"
-
-            # Mark images as processed
-            for img in song_images:
-                seen_images_for_toc.add(img.image_path)
-            current_toc_page += len(song_images)
-        else:
-            # Handle case with no images
-            page_display = str(current_toc_page)
-            current_toc_page += 1
-
-        # Only add to TOC if not a dummy non-song page
-        if not (song.title.startswith("Non-song page") or song.title == '<Prázdná strana>'):
-            toc_entries.append({
-                'page_number': page_display,
-                'title': song.title,
-                'author': song.author.name if song.author else ""
-            })
-
-        processed_songs.add(page.song_id)
-
     # Default color fallback
     book_color = getattr(songbook, 'color', '#FFFFFF') or '#FFFFFF'
 
@@ -3717,7 +3563,6 @@ def songbook_detail(book_id):
         'songbook_view.html',
         book_id=book_id,
         songbook_title=songbook.title or '',
-        toc_entries=toc_entries,
         page_files=page_files,
         first_page_side=first_page_side,
         book_color=book_color,
@@ -3806,7 +3651,7 @@ def nahledy_warm(jen):
     if jen != 'obalky':
         # Tatáž písnička může být ve dvou zpěvnících, takže se cesty opakují; množina
         # zařídí, že se obrázek zmenšuje jednou.
-        cesty = {r.image_path for r in SongImage.query.all() if r.image_path}
+        cesty = {r.image_path for r in Strana.query.all() if r.image_path}
         # Obálky patří do obou skupin. Nahoře dostaly malý náhled do přehledů, ale čtečka
         # je ukazuje jako běžné strany, takže potřebují i variantu v šířce strany. Bez
         # tohohle se čtyři obálky každého zpěvníku dogenerovávaly až za provozu.

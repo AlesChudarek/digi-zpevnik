@@ -22,6 +22,25 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [ ] číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout
 - [ ] (?) přidat písničku → nový zpěvník: nepřidá písničku, ale vytvoří prázdný zpěvník
 
+## Datový model
+
+- [ ] **zpěvník je řada stran** — lokálně hotovo, **na serveru zatím ne**. Tabulky
+      `strany` a `pisne_na_strane` nahradily `songbook_pages` a `song_images`; prázdná
+      a nepísňová strana už nejsou přestrojené písně. Popis a jak se to ověřovalo:
+      [docs/model-stran.md](docs/model-stran.md), migrace `backend/scripts/migrace_strany.py`.
+      Lokálně: 1078 stran, 974 vazeb, z 988 „písní“ zbylo 866 skutečných.
+      Nasazení: zastavit službu → `git pull` → `migrace_strany.py` (nejdřív bez
+      `--zapsat`) → `--zapsat` (zálohu dělá sám) → `kontrola_zpevniku.py` → spustit.
+      Kód před migrací nasadit nejde: viděl by prázdné zpěvníky (do logu to při startu
+      křičí, data se neztratí).
+- [X] **opravy, které migrace přinesla** (našla je diferenciální kontrola):
+      smazání účtu nechávalo na disku nahrané strany a v DB písně bez zpěvníku;
+      smazání zpěvníku nechávalo záznamy o sdílení; odebrání obálky smazalo soubor, ale
+      ne řádek v `images`; **`/api/songbook/<id>/toc` neměl kontrolu práv** — názvy písní
+      cizího soukromého zpěvníku si mohl přečíst i nepřihlášený, kdo znal jeho id.
+- [ ] editor zatím mluví postaru (řádek = píseň, strana bez písně jako `strana-<id>`).
+      Zmizí s přepisem editoru na jednotné „Přidat strany“.
+
 ## Import zpěvníku z PDF nebo ZIP
 
 - [ ] **založit zpěvník importem místo strana po straně.** Při vytváření nového zpěvníku
@@ -494,14 +513,19 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Jediný nápad, který živý editor nemá: **ruční číslování** (vypnout
       „Automatické číslování“ a zadat první stranu každé písni). Nikdo ho nepotřebuje,
       lokální DB nemá v číslování jedinou mezeru, ale kdyby se objevil sken s chybějící
-      stranou, tady je ta myšlenka. Server tu větev (`auto_numbering=0`) pořád umí,
-      jen ji nic nevolá — zanikne s přepisem ukládání.
+      stranou, tady je ta myšlenka. Serverová větev (`auto_numbering=0`) zanikla
+      s migrací na strany; nový model mezery v číslování nezná (číslo strany je
+      `prvni_cislo_strany + poradi`), takže kdyby to bylo potřeba, chce to sloupec.
 - [X] **endpoint `custom-song` smazán.** Od listopadu 2025 ho nic nevolá, editor ukládá
       nové písně přes `structure`. Byla to jednodušší podmnožina téhož (jedna píseň,
       bez sdílené strany).
 - [X] **`_book_storage_base` a model `SongPart` smazány**, nic je nepoužívalo.
-      Tabulky `song_parts` a `songbook_intro_outro_images` v DB zůstávají (prázdné,
-      z dob seedování) — smazat je patří do příští migrace schématu, ne do úklidu kódu.
+      Prázdné tabulky `song_parts` a `songbook_intro_outro_images` smazala migrace na strany.
+- [X] **čtečka počítala obsah zpěvníku a zahazovala ho.** `songbook_detail` skládal
+      `toc_entries` (dotaz na každou píseň zvlášť) a předával je šabloně, která je
+      nepoužívá — obsah si čtečka bere z `/api/songbook/<id>/toc`. Smazáno s migrací.
+- [X] **`dump_page_order.py`** sloužil k ověření dřívější migrace pořadí stran a stál
+      na starých tabulkách. Smazán.
 
 ## Uživatelé
 

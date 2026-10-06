@@ -1,8 +1,9 @@
 # Kam ukládat obrázky
 
-**Stav: migrace proběhla lokálně, na serveru zatím ne.** Nový strom leží v `data/images`,
-starý (`data/public/images/songbooks`, `data/private/users`) zůstal ležet jako záchranná
-síť a smaže se, až si provoz sedne.
+**Stav: hotovo, i na serveru (15. 9. 2026), starý strom je smazaný.** Tabulky
+`song_images` a `songbook_pages`, o kterých se tu mluví, od 6. 10. 2026 nahradily
+`strany` a `pisne_na_strane` — viz [model-stran.md](model-stran.md). Úložiště souborů
+se tím nezměnilo.
 
 Do migrace žily v datech čtyři různé tvary cest. Vznikly postupně a každý dává smysl sám o sobě,
 ale dohromady se v nich nedá vyznat a některé nesou věci, které nejsou pravda. Tenhle

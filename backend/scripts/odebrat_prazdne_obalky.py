@@ -132,11 +132,11 @@ def main():
     # Soubor se maže až po commitu a jen tehdy, když na něj už nikdo neukazuje. Cesty se
     # mezi zpěvníky sdílet nemají, ale mazat obrázek, na který někde zbyl odkaz, by bylo
     # horší než nechat na disku pár kilobajtů navíc.
-    # Odkaz může vést i ze song_images nebo z jiného zpěvníku, proto se ptáme přes images.
+    # Odkaz může vést i ze strany nebo z jiného zpěvníku, proto se ptáme přes images.
     zbyle = set()
     for (cesta,) in con.execute(
             "SELECT DISTINCT i.cesta FROM images i WHERE EXISTS "
-            "(SELECT 1 FROM song_images si WHERE si.image_id = i.id) OR EXISTS "
+            "(SELECT 1 FROM strany st WHERE st.image_id = i.id) OR EXISTS "
             "(SELECT 1 FROM songbooks s WHERE i.id IN (s.cover_preview_id, "
             "s.cover_front_outer_id, s.cover_front_inner_id, s.cover_back_inner_id, "
             "s.cover_back_outer_id))"):

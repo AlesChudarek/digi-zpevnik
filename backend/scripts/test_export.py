@@ -249,16 +249,16 @@ def main():
             [str(VENV_PY), "-c",
              'import os, sys, time\n'
              'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
-             'from backend.app import app, schedule_export_warm\n'
-             'from backend.models import Songbook, SongbookPage, db\n'
+             'from backend.app import app, schedule_export_warm, prerovnej_strany\n'
+             'from backend.models import Songbook, db\n'
              'with app.app_context():\n'
              # Prohodit dvě strany. Pouhá změna čísla strany by nestačila: klíč se
              # počítá z pořadí souborů a čísla stran se do PDF netisknou, takže by
              # výstup byl opravdu totožný a nová verze by neměla vzniknout.
-             f'    rows = SongbookPage.query.filter_by(songbook_id="{BOOK}").order_by(\n'
-             '        SongbookPage.page_number.asc()).all()\n'
-             '    prvni, druhy = rows[0].page_number, rows[1].page_number\n'
-             '    rows[0].page_number, rows[1].page_number = druhy, prvni\n'
+             f'    sb = db.session.get(Songbook, "{BOOK}")\n'
+             '    strany = list(sb.strany)\n'
+             '    strany[0], strany[1] = strany[1], strany[0]\n'
+             '    prerovnej_strany(sb, strany)\n'
              '    db.session.commit()\n'
              f'    schedule_export_warm("{BOOK}")\n'
              '    time.sleep(25)\n'],
@@ -457,10 +457,10 @@ def main():
             [str(VENV_PY), "-c",
              'import os, sys\n'
              'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
-             'from backend.app import app\n'
-             'from backend.models import Song, SongbookPage, db\n'
+             'from backend.app import app, pisne_zpevniku\n'
+             'from backend.models import Song, db\n'
              'with app.app_context():\n'
-             f'    v_knize = {{r.song_id for r in SongbookPage.query.filter_by(songbook_id="{BOOK}")}}\n'
+             f'    v_knize = pisne_zpevniku("{BOOK}")\n'
              '    volna = [s.id for s in Song.query.all() if s.id not in v_knize]\n'
              '    print(volna[0] if volna else "")\n'],
             env=env, capture_output=True, text=True).stdout.strip()
@@ -591,8 +591,8 @@ def main():
                    "„4-,3“ je totéž přání jako „3-“ a nedělá druhý soubor",
                    f"přibylo {sorted(po_ot - pred_ot)}")
 
-        # Strany bez písně nepatří mezi písně. Jsou to taky řádky v songs, jen
-        # s is_non_song, a "Vyjde na 2 strany. <Prázdná strana>" není seznam písní.
+        # Strany bez písně nepatří mezi písně: "Vyjde na 2 strany. <Prázdná strana>"
+        # není seznam písní.
         stav = json.loads(admin.get(f"/songbook/{BOOK}/export-hotove?obsah=jen-obsah")[1])
         zkontroluj(all("Prázdná strana" not in p["nazev"] for p in stav.get("pisne") or []),
                    "mezi písněmi nejsou prázdné strany",

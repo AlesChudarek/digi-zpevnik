@@ -16,8 +16,8 @@ class Obrazek(db.Model):
     ještě někdo?" se pak musela ptát šestkrát a porovnávat řetězce, nic nehlídalo, že
     cesta vůbec existuje, a přesun souboru znamenal přepsat šest sloupců.
 
-    Sdílení vychází samo: strana se dvěma písněmi je jeden řádek `images` a dva řádky
-    `song_images`; táž strana ve dvou zpěvnících je pořád jeden řádek `images`.
+    Sdílení vychází samo: táž strana ve dvou zpěvnících je dva řádky `strany`, ale
+    pořád jeden řádek `images`.
 
     Kód dál pracuje s `image_path` a `img_path_cover_*` jako s textem - drží to
     vlastnost `cesta_obrazku` níž, takže se kvůli téhle změně nemuselo přepsat 227 míst.
@@ -106,39 +106,70 @@ class Author(db.Model):
     name = db.Column(db.String, unique=True, nullable=False)
 
 class Song(db.Model):
+    """Píseň jako taková: název a autor. Kde ve zpěvníku leží, říká `PisenNaStrane`.
+
+    Jedna píseň může být ve víc zpěvnících (veřejnou si lidé přidávají do svých), proto
+    nenese ani obrázky, ani čísla stran. Píseň, která není v žádném zpěvníku, se maže.
+    """
+
     __tablename__ = "songs"
 
     id = db.Column(db.String, primary_key=True)
     title = db.Column(db.String, nullable=False)
     author_id = db.Column(db.Integer, db.ForeignKey("authors.id"))
-    # Non-song pages (intros, dividers, indexes) are ordinary pages that carry no
-    # song: they are hidden from the table of contents and from global search.
-    is_non_song = db.Column(db.Integer, default=0, nullable=False, server_default="0")
     author = db.relationship("Author", backref="songs")
-    images = db.relationship("SongImage", backref="song", cascade="all, delete-orphan")
 
-class SongImage(db.Model):
-    """Která strana patří které písni. Je to vazební tabulka, ne vlastnictví.
 
-    Obojí je potřeba umět zároveň: píseň se může táhnout přes víc stran (dnes 32 písní)
-    a na jedné straně můžou být dvě písně (dnes 18 stran). Řádek tedy neříká "tohle je
-    obrázek té písně", ale "tahle strana nese tuhle píseň, a je to její N-tá strana".
+class Strana(db.Model):
+    """Jedna fyzická strana obsahu zpěvníku (obálky jsou zvlášť, ve sloupcích `Songbook`).
 
-    `poradi` je pořadí strany **v rámci té písně**, ne ve zpěvníku. Číslo strany ve
-    zpěvníku drží `songbook_pages.page_number` a mění se s každým přidáním strany, aniž
-    by se sahalo na obrázky. U sdílené strany má každá z písní své vlastní `poradi`.
+    Tohle je to, co uživatel vidí a s čím pracuje: zpěvník je řada stran a na každé
+    něco je. Dřív strana jako věc v databázi neexistovala - dopočítávala se z písní, a
+    všechno, co písní nebylo, se za píseň muselo přestrojit: prázdná strana byla
+    „píseň“ bez obrázku, osmisměrka „píseň“ s příznakem `is_non_song`.
+
+    - `poradi` je pozice ve zpěvníku od nuly. Číslo, které je vytištěné na skenu, je
+      `songbook.prvni_cislo_strany + poradi`.
+    - `image_id` NULL = prázdná strana.
+    - Strana bez písní je nepísňová (úvod, osmisměrka, předěl). `popisek` jí může dát
+      jméno, které se ukáže v editoru; do obsahu ani hledání nepatří.
     """
 
-    __tablename__ = "song_images"
+    __tablename__ = "strany"
+    __table_args__ = (db.UniqueConstraint("songbook_id", "poradi", name="uq_strana_poradi"),)
 
     id = db.Column(db.Integer, primary_key=True)
-    song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
-    image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
-    poradi = db.Column(db.Integer, nullable=False, default=1)
+    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False, index=True)
+    poradi = db.Column(db.Integer, nullable=False)
+    image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True, index=True)
+    popisek = db.Column(db.String, nullable=True)
 
     image = db.relationship("Obrazek")
-    # Kód dál čte i zapisuje `image_path` jako text, jen pod tím leží řádek v `images`.
     image_path = cesta_obrazku("image")
+    # Pořadí písní na straně je pořadí, v jakém na ni přibyly - tak to bylo i dřív
+    # (podle id řádku) a tak to ukazuje obsah.
+    pisne = db.relationship("PisenNaStrane", backref="strana", cascade="all, delete-orphan",
+                            order_by="PisenNaStrane.id")
+
+
+class PisenNaStrane(db.Model):
+    """Tahle strana nese tuhle píseň a je to její N-tá strana.
+
+    Unese obojí, co zpěvníky opravdu mají: píseň přes víc stran (víc řádků jedné písně
+    s `poradi_v_pisni` 1, 2, 3…) i víc písní na jedné straně (víc řádků jedné strany).
+    Obojí naráz taky: strana, na které jedna píseň končí a další začíná.
+    """
+
+    __tablename__ = "pisne_na_strane"
+    __table_args__ = (db.UniqueConstraint("strana_id", "song_id", name="uq_pisen_na_strane"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    strana_id = db.Column(db.Integer, db.ForeignKey("strany.id"), nullable=False, index=True)
+    song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False, index=True)
+    poradi_v_pisni = db.Column(db.Integer, nullable=False, default=1)
+
+    song = db.relationship("Song")
+
 
 class Songbook(db.Model):
     __tablename__ = "songbooks"
@@ -170,7 +201,11 @@ class Songbook(db.Model):
     img_path_cover_back_inner = cesta_obrazku("cover_back_inner")
     img_path_cover_back_outer = cesta_obrazku("cover_back_outer")
     is_public = db.Column(db.Integer, default=0)
-    pages = db.relationship("SongbookPage", backref="songbook", cascade="all, delete-orphan")
+    # Číslo vytištěné na první straně obsahu. Většinou 1, ale některé zpěvníky číslují
+    # od titulní strany, takže první píseň je na straně 3.
+    prvni_cislo_strany = db.Column(db.Integer, nullable=False, default=1, server_default="1")
+    strany = db.relationship("Strana", backref="songbook", cascade="all, delete-orphan",
+                             order_by="Strana.poradi")
 
 class ExportPokus(db.Model):
     """Kolik skládání souborů spustil účet za jeden den.
@@ -196,16 +231,6 @@ class UserSongbookAccess(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
     songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), primary_key=True)
     permission = db.Column(db.String, default='view')
-
-class SongbookPage(db.Model):
-    __tablename__ = "songbook_pages"
-
-    id = db.Column(db.Integer, primary_key=True)
-    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False)
-    song_id = db.Column(db.String, db.ForeignKey("songs.id"), nullable=False)
-    page_number = db.Column(db.Integer, nullable=False)
-    song = db.relationship("Song", backref="songbook_pages")
-
 
 # Funkce pro propojení db s Flask aplikací
 def init_app(app):

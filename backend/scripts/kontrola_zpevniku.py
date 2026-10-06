@@ -14,6 +14,8 @@ Co se kontroluje:
   - barva v DB odpovídá pozadí obálky
   - měnitelnost barvy je celá, ne poloviční
   - v datech neleží soubor, na který nikdo neukazuje
+  - struktura stran drží: pořadí bez mezer, každá píseň na souvislých stranách
+    a s pořadím v písni 1..N, žádná píseň bez zpěvníku, žádný řádek images bez odkazu
 
     python backend/scripts/kontrola_zpevniku.py
     python backend/scripts/kontrola_zpevniku.py --vse    # vypíše i to, co je v pořádku
@@ -121,6 +123,62 @@ def main():
                 pruhl = sum(1 for s in stav.values() if s in ('průhledná', 'kreslená'))
                 print(f"✓  {kniha.id}  {barva_hex}  barva {stav_txt}, "
                       f"{len(obsah_ctecky)} stran, {pruhl}/4 obálek následuje barvu")
+
+        # --- struktura stran ---
+        from backend.app import db, Strana, PisenNaStrane, Song, Obrazek  # noqa: E402
+        from sqlalchemy import text  # noqa: E402
+        nalezy = []
+        for kniha in knihy:
+            poradi = [st.poradi for st in kniha.strany]
+            if poradi != list(range(len(poradi))):
+                nalezy.append(f"{kniha.id}: pořadí stran není 0..{len(poradi) - 1} bez mezer")
+            strany_pisne = {}
+            for st in kniha.strany:
+                for v in st.pisne:
+                    strany_pisne.setdefault(v.song_id, []).append((st.poradi, v.poradi_v_pisni))
+            for sid, sez in strany_pisne.items():
+                por = [p for p, _ in sez]
+                if por != list(range(por[0], por[0] + len(por))):
+                    nalezy.append(f"{kniha.id}: píseň {sid} leží na nesouvislých stranách")
+                if [v for _, v in sez] != list(range(1, len(sez) + 1)):
+                    nalezy.append(f"{kniha.id}: píseň {sid} má pořadí v písni "
+                                  f"{[v for _, v in sez]}")
+        bez_zpevniku = (Song.query.filter(~Song.id.in_(
+            db.session.query(PisenNaStrane.song_id))).count())
+        if bez_zpevniku:
+            nalezy.append(f"{bez_zpevniku} písní není v žádném zpěvníku")
+        # Píseň ve víc zpěvnících má být všude tatáž - přidání písně do dalšího
+        # zpěvníku bere její strany z prvního, kde je.
+        obrazky_pisne = {}
+        for st in Strana.query.order_by(Strana.songbook_id, Strana.poradi):
+            for v in st.pisne:
+                obrazky_pisne.setdefault(v.song_id, {}).setdefault(
+                    st.songbook_id, []).append(st.image_id)
+        for sid, podle_knih in obrazky_pisne.items():
+            if len({tuple(x) for x in podle_knih.values()}) > 1:
+                nalezy.append(f"píseň {sid} má v různých zpěvnících jiné strany: "
+                              f"{sorted(podle_knih)}")
+        nepouzite = db.session.execute(text(
+            "SELECT cesta FROM images i WHERE NOT EXISTS (SELECT 1 FROM strany s "
+            "WHERE s.image_id = i.id) AND NOT EXISTS (SELECT 1 FROM songbooks b WHERE i.id "
+            "IN (b.cover_preview_id, b.cover_front_outer_id, b.cover_front_inner_id, "
+            "b.cover_back_inner_id, b.cover_back_outer_id))")).fetchall()
+        if nepouzite:
+            nalezy.append(f"{len(nepouzite)} řádků images, na které nic neukazuje: "
+                          f"{[r[0] for r in nepouzite[:5]]}")
+        for radek in db.session.execute(text("PRAGMA foreign_key_check")).fetchall():
+            nalezy.append(f"porušený cizí klíč: {tuple(radek)}")
+        if db.session.execute(text("SELECT 1 FROM sqlite_master WHERE name = "
+                                   "'songbook_pages'")).first():
+            nalezy.append("databáze není po migraci na strany (existuje songbook_pages)")
+        if nalezy:
+            nalezy_celkem += len(nalezy)
+            print("\n⚠️  struktura stran:")
+            for n in nalezy[:30]:
+                print(f"      {n}")
+        elif args.vse:
+            print(f"✓  struktura stran: {Strana.query.count()} stran, "
+                  f"{PisenNaStrane.query.count()} vazeb, {Song.query.count()} písní")
 
         # --- soubory, na které nikdo neukazuje ---
         osirele = []
