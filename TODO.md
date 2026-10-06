@@ -426,6 +426,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ### Ostatní mobilní
 
+- [ ] **nápovědy na dotykové obrazovce překrývají to, k čemu patří.** Objeví se po
+      klepnutí a zůstanou viset — nápověda „Změna tématu“ zakryje dvě z možností
+      v nabídce motivů. Chce to promyslet, kdy se na dotyku nápověda vůbec má ukázat
+      a kdy zmizet (`static/js/napoveda.js`).
 - [ ] **projít UI na mobilech celkově** (lišta, dlaždice a nápovědy hotové, čtečka
       a hledání neprověřené)
 - [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba
