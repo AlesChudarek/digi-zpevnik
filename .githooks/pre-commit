@@ -1,0 +1,39 @@
+#!/bin/sh
+# Pojistka proti tomu, aby se do veřejného repozitáře dostala data.
+#
+# Vznikla po tom, co v historii rok ležela záloha databáze s e-maily a hashi hesel.
+# .gitignore ji vylučoval, jenže byla přidaná dřív, než to pravidlo vzniklo — a git
+# dál sleduje, co už jednou sleduje. Proto se tu nekontroluje jen jméno, ale i obsah
+# a to, jestli git nenese něco, co by podle .gitignore nést neměl.
+#
+# Zapnutí v novém klonu: git config core.hooksPath .githooks
+
+chyba=0
+
+zakazane=$(git diff --cached --name-only --diff-filter=ACMR | grep -E \
+  '\.db$|\.db\.|\.sqlite|\.key$|\.pem$|(^|/)\.env$|^data/|^zalohy/|^backend/instance/')
+if [ -n "$zakazane" ]; then
+  echo "❌ Tyhle soubory do gitu nepatří (databáze, klíče, data uživatelů):"
+  echo "$zakazane" | sed 's/^/     /'
+  chyba=1
+fi
+
+# Databáze pod jiným jménem: SQLite začíná vždy stejnou hlavičkou.
+git diff --cached --name-only --diff-filter=ACMR -z | while IFS= read -r -d '' f; do
+  if git show ":$f" 2>/dev/null | head -c 16 | grep -q "SQLite format 3"; then
+    echo "❌ $f je databáze SQLite."
+    exit 1
+  fi
+done || chyba=1
+
+sledovane=$(git ls-files -ci --exclude-standard)
+if [ -n "$sledovane" ]; then
+  echo "❌ Git sleduje soubory, které má .gitignore vyloučit. Ven z gitu s nimi:"
+  echo "$sledovane" | sed 's/^/     git rm --cached /'
+  chyba=1
+fi
+
+if [ $chyba -ne 0 ]; then
+  echo "   Commit zastaven. Jen když víš, co děláš: git commit --no-verify"
+  exit 1
+fi

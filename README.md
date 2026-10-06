@@ -9,6 +9,8 @@ Webová aplikace pro prohlížení a správu zpěvníků. Umožňuje:
 
 ## Lokální vývoj
 
+- Zapni pojistku proti commitnutí databáze a klíčů: `git config core.hooksPath .githooks`
+  (repozitář je veřejný, viz `.githooks/pre-commit`).
 - Vytvoř virtuální prostředí a nainstaluj závislosti: `python3 -m venv .venv && source .venv/bin/activate && pip install -r backend/requirements.txt`
 - Zajisti konfiguraci v `.env` (minimálně `FLASK_SECRET_KEY`, `DATABASE_URL` pokud nechceš výchozí SQLite).
 - Inicializuj databázi: `flask --app backend.app init-db`
