@@ -53,7 +53,9 @@
   }
 
   .cover-preview > img { width: 100%; height: auto; }
-  .songbook-card p { margin: 10px; padding: 0; color: var(--brand-strong, #2E7D32); }
+  /* Název na bílé kartě je text, ne akcent - proto `--brand-dark`. `--brand-strong`
+     je mířený na barevné plochy a na bílé dával v Půlnoci 2,96 : 1. */
+  .songbook-card p { margin: 10px; padding: 0; color: var(--brand-dark, #1b5e20); }
 
   /* Cover preview canvas: fixed ratio 1748x2480 with songbook color background */
   .cover-preview {
@@ -108,7 +110,7 @@
   .songbook-title {
     margin: 10px;
     padding: 0;
-    color: var(--brand-strong, #2E7D32);
+    color: var(--brand-dark, #1b5e20);
     overflow: visible;
     text-overflow: ellipsis;
     white-space: nowrap;

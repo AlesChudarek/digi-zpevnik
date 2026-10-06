@@ -401,23 +401,21 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 > zpěvník", dostavěný funkcí `ensureEditSection`). `#edit-book-modal` se nikdy
 > neotevře — viz mrtvý kód níž. Všechno v téhle sekci se týká toho živého.
 
-- [ ] **tabulka písní je useknutá.** `.songs-list` je široká 346 px, tabulka v ní
-      435 px, takže 89 px leží mimo. Sloupec „Odebrat" končí na x = 458, tedy 68 px
-      za pravým okrajem obrazovky. `.songs-list` má `overflow: visible`, takže to
-      nemá ani vlastní vodorovné rolování — posouvá se celé okno.
-      Šest sloupců (táhlo, Název, Autor, Strana, Stran, Odebrat) se na telefon
-      nevejde. Chce to rozhodnout, jestli tabulku na úzké obrazovce překlopit
-      do karet (jeden řádek = jedna píseň pod sebou), nebo jí dát vlastní
-      `overflow-x: auto` a nechat ji rolovat uvnitř rámečku.
-- [ ] **tlačítko „Uložit" leží přes nadpis.** Nadpis „Upravit zpěvník" a plovoucí
-      `.btn-top-save` se překrývají o 170 px. Není to jen noční režim, je to v obou.
-- [ ] **kontrast v editoru je pod normou, v nočním režimu výrazně.**
-      „Uložit" i názvy nahraných obálek: **2,04 : 1 v nočním** (text `#0d366b`
-      na pozadí `#0b1220`) a **2,89 : 1 ve světlém** (`#1b5e20` na `#e8f5e9`).
-      Norma pro běžný text je 4,5 : 1. V nočním režimu je to prakticky nečitelné —
-      dropzóna s nahranou obálkou vypadá jako černý obdélník. Obojí sdílí tytéž
-      barvy, takže je to nejspíš jedna oprava.
-      Náhled obálky dole (barva zpěvníku + obrázek) je v pořádku v obou motivech.
+- [ ] **tabulka písní je useknutá.** Je úplně dole v okně editoru, v sekci
+      „Písničky" — je potřeba v okně odrolovat na konec. Useknutý je poslední
+      sloupec **„Odebrat"**, tedy křížky na odebrání písně.
+      Na 390 px je `.songs-list` široká 346 px a tabulka v ní 413–435 px.
+      Naměřeno na všech třech zpěvnících v seznamu: 00101 přesahuje o 89 px
+      (končí 68 px za okrajem obrazovky), 00102 o 73 px, Fildův a Aldův o 66 px.
+      Šířku určuje obsah — sloupce Název a Autor se roztahují podle nejdelší
+      písničky — takže zpěvník se samými krátkými názvy se vejde a vypadá to
+      pak náhodně.
+      `.songs-list` má `overflow: visible`, takže vlastní vodorovné rolování nemá
+      a přebírá ho až `.modal`; proto se dá posunout celé okno.
+      Chce to rozhodnout, jestli tabulku na úzké obrazovce překlopit do karet
+      (jedna píseň = jeden blok pod sebou), nebo jí dát vlastní `overflow-x: auto`
+      a nechat ji rolovat uvnitř rámečku.
+- [X] **kontrast v motivu Půlnoc** — opraveno, viz „Barvy motivů" níž.
 - [ ] projít zakládání nového zpěvníku a přidávání písničky stejným způsobem —
       měřeno zatím nebylo, ale editor a „nový zpěvník" jsou totéž okno, takže
       většina oprav padne na obojí
@@ -452,6 +450,28 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       a na telefonu jsou mezery užší, takže od 390 px zůstanou na jednom.
       Všechno i hlavičky hlídá `backend/scripts/test_mobil.py`, 32 kontrol na šířkách
       320-412 px a pro jistotu i na 1280.
+
+## Barvy motivů
+
+- [X] **motiv Půlnoc měl nečitelná místa** — opraveno. Jedenáct motivů drží týž
+      kontrakt: `--muted-bg` je plocha uvnitř oken (světlý odstín) a `--brand-dark`
+      = `--muted-text` je text na ní, kontrast 7–16 : 1. Půlnoc měla obě barvy tmavé
+      (`#0b1220` a `#0d366b`), tedy **1,57 : 1** — zavírací křížek v obsahu vypadal
+      jako černé kolečko, „Uložit" a názvy nahraných obálek nešlo přečíst.
+      Okna jsou ve všech motivech bílá, takže `--muted-bg` je i v Půlnoci světlý
+      odstín; tmavý zůstává podklad stránky, lišta a `--panel-*` plochy (okno
+      stahování, bubliny nápověd), které mají vlastní dvojici proměnných.
+      Při té příležitosti tři místa, která byla špatně nezávisle na motivu:
+      „a X dalších" v okně stahování bralo `--brand-dark` na `--panel-*` ploše,
+      název zpěvníku na bílé kartě bral `--brand-strong` (akcent) místo
+      `--brand-dark` (text) a `.book-type` v hledání měl natvrdo `#607d8b`.
+      Hlídá `backend/scripts/test_kontrast.py` — projde každý viditelný text proti
+      jeho skutečnému pozadí ve všech dvanácti motivech na pěti obrazovkách.
+- [ ] **bílý text v liště je pod normou v devíti motivech.** `--brand-contrast` na
+      `--brand`: Cyan 2,43 : 1, Teal 2,49, Emerald 2,54, Blue 2,57, Purple/Indigo/
+      Rose/Pink podobně, Amber 3,30. Norma je 4,5 : 1. Spraví se to ztmavením
+      `--brand` v každém motivu, ale je to zásah do vzhledu — a u Blue je `#00B0D5`
+      značková barva Handicapu. Zatím vedené jako známá výjimka v `test_kontrast.py`.
 
 ## Mrtvý kód
 

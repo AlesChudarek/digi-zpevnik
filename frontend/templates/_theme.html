@@ -90,17 +90,25 @@
     --muted-border:  #BFEAF6;  /* separators */
     --muted-text:    #0B4F6C;  /* dark text */
   }
-  /* Dark */
+  /* Půlnoc.
+     Tmavý je tu podklad stránky a lišta, ne plochy uvnitř oken: okna jsou ve všech
+     motivech bílá, takže `--muted-bg` je i tady světlý odstín a `--brand-dark`
+     s `--muted-text` tmavý text na něm, přesně jako ve zbylých jedenácti motivech.
+     Dřív byl `--muted-bg` skoro černý (#0b1220) a text na něm taky tmavý (#0d366b),
+     což dávalo kontrast 1,57 : 1 — zavírací křížek v obsahu vypadal jako černé
+     kolečko, „Uložit" a názvy nahraných obálek nešlo přečíst.
+     Opravdu tmavé plochy jsou `--panel-*` (okno stahování, bubliny nápověd), ty mají
+     vlastní dvojici proměnných a sahat se na ně nemusí. */
   html.theme-dark {
     --bg-grad-start: #0f172a; /* slate-900 */
     --bg-grad-end:   #23283f; /* slate-950 */
-    --brand:         #40598e; /* blue-600 */
-    --brand-strong:  #7299c7; /* blue-400 */
-    --brand-dark:    #0d366b; /* text on light surfaces */
-    --brand-contrast:#ffffff; /* text on brand */
-    --muted-bg:      #0b1220; /* dark panel */
-    --muted-border:  #334155; /* slate-700 */
-    --muted-text:    #6c7176; /* light text */
+    --brand:         #40598e; /* lišta */
+    --brand-strong:  #7299c7; /* akcent na tmavém podkladu */
+    --brand-dark:    #0f172a; /* text na světlých plochách */
+    --brand-contrast:#ffffff; /* text na brand */
+    --muted-bg:      #e8ecf4; /* světlá plocha uvnitř oken */
+    --muted-border:  #cbd5e1; /* slate-300 */
+    --muted-text:    #0f172a; /* tentýž text, stejně jako v ostatních motivech */
   }
   /* Purple */
   html.theme-purple {

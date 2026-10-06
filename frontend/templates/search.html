@@ -77,7 +77,10 @@
   th.th-sortable .hdr { display: inline-flex; align-items: center; gap: 6px; }
   th.th-sortable .sort-indicator { font-size: 12px; opacity: 0.35; min-width: 12px; display: inline-block; }
   th.th-sortable.active .sort-indicator { opacity: 1; }
-  .book-type { color: #607d8b; font-weight: normal; margin-left: 6px; font-size: 0.9em; }
+  /* Nezávisle na motivu to byla pevná šedá #607d8b, na světlých řádcích tabulky
+     3,8 : 1. Odvozená z barvy řádku drží kontrast ve všech dvanácti motivech. */
+  .book-type { color: var(--muted-text, #1b5e20); opacity: 0.75;
+               font-weight: normal; margin-left: 6px; font-size: 0.9em; }
   .actions { display: flex; gap: 10px; align-items: center; }
   .action-btn { background: none; border: none; padding: 0; cursor: pointer; }
   .action-btn img { width: 22px; height: 22px; display: block; }
