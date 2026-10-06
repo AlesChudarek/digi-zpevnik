@@ -79,6 +79,10 @@ Stručně to podstatné:
 - **Mobilní lišta** srovnaná: menu pod hamburgerem překrývá obsah (nestrká s ním),
   paleta vlevo a účet vpravo, spouštěčem účtu je jeho e-mail, panely se otevírají
   od kraje, u kterého jejich tlačítko sedí.
+- **Okno editoru se na telefonu nerozbíjí do stran.** Tabulka písní roluje uvnitř
+  svého rámečku, tlačítka na přidávání stran se zalomí a volič barvy obálky pruží.
+  Změřeno na 320, 390 i 1280 px. Tabulka i ta tlačítka jsou ale **provizorium** —
+  až se přidávání stran předělá podle úkolu níž, zmizí obojí.
 - **HTML se neservíruje z cache** (`after_request` dává `no-cache`). Bez toho prohlížeč
   po nasazení držel starou stránku a s ní i starou adresu skriptů.
 - **Barvy motivů.** Kontrakt: `--muted-bg` je plocha uvnitř oken (světlá),
@@ -90,8 +94,9 @@ Stručně to podstatné:
 
 ### Nenasazeno
 
-Poslední commit (**motiv Půlnoc**) je zacommitovaný, ale **ne nasazený**. Zeptej se
-Aleše, jestli to má jít ven, než začneš něco dalšího.
+Poslední tři commity (**motiv Půlnoc**, **tenhle prompt** a **okno editoru na
+telefonu**) jsou zacommitované, ale **ne nasazené**. Zeptej se Aleše, jestli to má jít
+ven, než začneš něco dalšího — dokud to nenasadíš, on ty změny nevidí.
 
 ## Úkol: návrh, ne kód
 
@@ -142,11 +147,11 @@ ZIP"**.
 
 ### Co ještě visí (ne teď, ale ať o tom víš)
 
-- **Tabulka písní v editoru je na telefonu useknutá** — poslední sloupec „Odebrat".
-  Změřeno, podrobnosti v `TODO.md`. Souvisí s tímhle úkolem: když se bude editor
-  předělávat, dá smysl to vyřešit při tom.
-- Bílý text v liště je pod normou kontrastu v devíti motivech (2,4–3,3 : 1).
+- Bílý text v liště je pod normou kontrastu v devíti motivech (2,4–3,3 : 1). Vedeno
+  jako známá výjimka v `test_kontrast.py`, oprava znamená zásah do vzhledu motivů.
 - Samootáčecí tlačítko pro přepínání módů čtečky.
+- Zbytek sekce „Mobil a vzhled" v `TODO.md` — čtečka a hledání na telefonu nikdo
+  neproměřil.
 
 **Začni tím, že si přečteš `TODO.md`**, podíváš se na dnešní editor, a pak to
 s Alešem probereš — návrh dřív než kód.
