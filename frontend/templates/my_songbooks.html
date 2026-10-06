@@ -602,14 +602,8 @@
   </div>
 </div>
 
-<!-- Modal: Edit songbook -->
+<!-- Styly sdílené oknem zpěvníku a jeho seznamem písní -->
 <style>
-  #edit-book-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 3000; overflow-y: auto; }
-  #edit-book-modal .modal-wrap { margin-top: 70px; }
-  #edit-book-modal .modal { background: white; color: var(--brand-dark, #1b5e20); width: min(980px, 94vw); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 24px 24px 22px; }
-  #edit-book-modal .modal { position: relative; }
-  #edit-book-modal h2 { margin: 0 0 12px; }
-  .edit-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
   /* Šest sloupců se na telefon nevejde: na 390 px má rámeček 346 px a tabulka podle
      obsahu 413-435, takže poslední sloupec „Odebrat" ležel až za okrajem obrazovky
      a posouvalo se celé okno. Teď se roluje tabulka uvnitř svého rámečku.
@@ -632,12 +626,9 @@
   .pending-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff3cd; color: #8a6116; font-size: 12px; padding: 2px 6px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
   .songs-toolbar { display: flex; align-items: center; gap: 16px; }
   .songs-toolbar label { display: flex; align-items: center; gap: 8px; }
-  .page-input { width: 64px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
   .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
-  /* Hide bottom actions in classic edit modal too */
-  #edit-book-modal .modal .modal-actions { display: none; }
 
   /* Phone layout for the songbook dialogs. Kept at the very end of the styles so it
      wins over the base rules - putting mobile overrides earlier silently lost to
@@ -646,15 +637,13 @@
     /* width: min(880px, 92vw) plus 24px padding on a content-box made the dialog
        wider than the screen (407px inside a 390px window) and shifted it off-centre. */
     #new-book-modal .modal,
-    #edit-book-modal .modal,
-    #new-song-modal .modal {
+      #new-song-modal .modal {
       box-sizing: border-box;
       width: 96vw;
       padding: 14px;
     }
     #new-book-modal .modal-wrap,
-    #edit-book-modal .modal-wrap,
-    #new-song-modal .modal-wrap { margin-top: 8px; }
+      #new-song-modal .modal-wrap { margin-top: 8px; }
 
     /* Four cover dropzones two-up do not fit a phone */
     .cover-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -683,117 +672,6 @@
     .book-preview { max-width: 100%; }
   }
 </style>
-
-<div id="edit-book-modal">
-  <div class="modal-wrap">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="eb-title">
-      <h2 id="eb-title">Upravit zpěvník</h2>
-      <div class="btn-top-save-wrap">
-        <span class="btn-spinner" id="eb-save-top-spinner" aria-hidden="true"></span>
-        <button class="btn primary btn-top-save" id="eb-save-top">Uložit</button>
-      </div>
-      <!-- Hidden removal flags for edit modal -->
-      <input type="hidden" id="erem-front_outer" value="0">
-      <input type="hidden" id="erem-front_inner" value="0">
-      <input type="hidden" id="erem-back_inner" value="0">
-      <input type="hidden" id="erem-back_outer" value="0">
-      <div class="form-row">
-        <label for="eb-name">Název zpěvníku</label>
-        <input type="text" id="eb-name" placeholder="Název">
-      </div>
-      <div class="form-row">
-        <label for="eb-color">Barva obálky (HEX)</label>
-        <input type="text" id="eb-color" class="page-input" value="#ffffff">
-      </div>
-
-      <div class="cover-grid" style="margin-top:4px;">
-        <div class="field-file">
-          <label>Přední obálka zvenku</label>
-          <label class="dropzone" id="edz-front-outer">
-            <span class="dz-label" id="elab-front-outer">Klikni nebo přetáhni obrázek sem</span>
-            <input type="file" accept="image/*" id="efile-front-outer">
-            <button class="dz-clear" id="eclear-front-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
-          </label>
-        </div>
-        <div class="field-file">
-          <label>Zadní obálka zvenku</label>
-          <label class="dropzone" id="edz-back-outer">
-            <span class="dz-label" id="elab-back-outer">Klikni nebo přetáhni obrázek sem</span>
-            <input type="file" accept="image/*" id="efile-back-outer">
-            <button class="dz-clear" id="eclear-back-outer" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
-          </label>
-        </div>
-        <div class="field-file">
-          <label>Přední obálka zevnitř</label>
-          <label class="dropzone" id="edz-front-inner">
-            <span class="dz-label" id="elab-front-inner">Klikni nebo přetáhni obrázek sem</span>
-            <input type="file" accept="image/*" id="efile-front-inner">
-            <button class="dz-clear" id="eclear-front-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
-          </label>
-        </div>
-        <div class="field-file">
-          <label>Zadní obálka zevnitř</label>
-          <label class="dropzone" id="edz-back-inner">
-            <span class="dz-label" id="elab-back-inner">Klikni nebo přetáhni obrázek sem</span>
-            <input type="file" accept="image/*" id="efile-back-inner">
-            <button class="dz-clear" id="eclear-back-inner" data-napoveda="Odebrat"><img src="{{ static_bust('img/icons/minus_circle.svg') }}" alt="Odebrat"></button>
-          </label>
-        </div>
-      </div>
-
-      <div class="book-row">
-        <div class="book-preview" id="ebook-preview">
-          <div class="book-scene">
-            <div class="book-anchor">
-              <div class="book" id="ebook-3d">
-                <div class="book-cover left">
-                  <div class="face outer" id="etex-back-outer"></div>
-                  <div class="face inner" id="etex-back-inner"></div>
-                </div>
-                <div class="book-cover right">
-                  <div class="face outer" id="etex-front-outer"></div>
-                  <div class="face inner" id="etex-front-inner"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="book-tools"></div>
-      </div>
-      <div class="section-head" style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top: 6px;">
-        <h3 class="section-title" style="margin: 0;">Písničky</h3>
-        <div class="right-actions" style="display:flex; align-items:center; gap:8px;">
-          <button class="btn" id="btn-add-blank-page-eb">Přidat prázdnou stránku</button>
-          <button class="btn" id="btn-add-nonsong-page-eb">Přidat nepísničkovou stránku</button>
-          <button class="btn primary" id="btn-add-custom-song-eb">Přidat svou písničku</button>
-        </div>
-      </div>
-      <div class="songs-toolbar" style="margin-top:6px;">
-        <label><input type="checkbox" id="eb-auto" checked> Automatické číslování</label>
-      </div>
-      <div class="songs-list" style="margin-top:12px;">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:36px;">&nbsp;</th>
-              <th>Název</th>
-              <th>Autor</th>
-              <th class="center" style="width:120px;">První strana</th>
-              <th style="width:90px;">Stran</th>
-              <th class="action-col" style="width:80px; text-align:center;">Odebrat</th>
-            </tr>
-          </thead>
-          <tbody id="eb-songs"></tbody>
-        </table>
-      </div>
-
-      <div class="modal-actions">
-        <button class="btn" id="eb-cancel" style="display:none;">Zavřít</button>
-        <button class="btn primary" id="eb-save" style="display:none;">Uložit</button>
-      </div>
-    </div>
-  </div>
-</div>
 
   <script>
     // Global confirm dialog helper (theme-aware)
@@ -1619,17 +1497,6 @@ function openCreateModal() {
       }
     }
 
-    function captureEditInitialStateFromClassic() {
-      try {
-        const titleVal = (document.getElementById('eb-name')?.value || '').trim();
-        const colorVal = (document.getElementById('eb-color')?.value || '').trim();
-        const orderInit = computeSongOrderSignature();
-        window.__editInitialState = { title: titleVal, color: colorVal, order: orderInit };
-      } catch(_) {
-        window.__editInitialState = null;
-      }
-    }
-
     function hasEditModeChanges() {
       const rows = Array.from(document.getElementById('eb-songs')?.querySelectorAll('tr') || []);
       const currentOrder = computeSongOrderSignature();
@@ -1676,52 +1543,6 @@ function openCreateModal() {
           const active = Array.from(pendingNew.keys()).some(key => orderSet.has(key));
           if (active) changed = true;
         }
-      }
-      if (!changed) {
-        const flagged = !!window.__editDirtyConfirm;
-        if (flagged) window.__editDirtyConfirm = false;
-      }
-      return changed;
-    }
-
-    function hasClassicEditChanges() {
-      const rows = Array.from(document.getElementById('eb-songs')?.querySelectorAll('tr') || []);
-      const currentOrder = computeSongOrderSignature();
-      cleanupPendingNewSongs(currentOrder);
-      const titleVal = (document.getElementById('eb-name')?.value || '').trim();
-      const colorVal = (document.getElementById('eb-color')?.value || '').trim().toLowerCase();
-      const init = window.__editInitialState || null;
-      let changed = false;
-      if (init) {
-        if (titleVal !== (init.title || '')) changed = true;
-        if (!changed && colorVal !== (init.color || '').toLowerCase()) changed = true;
-        if (!changed) {
-          const initOrder = init.order || [];
-          if (currentOrder.length !== initOrder.length) changed = true;
-          else {
-            for (let i = 0; i < currentOrder.length; i += 1) {
-              if (currentOrder[i] !== initOrder[i]) { changed = true; break; }
-            }
-          }
-        }
-      }
-      if (!changed) {
-        const coverIds = ['efile-front-outer','efile-front-inner','efile-back-inner','efile-back-outer'];
-        changed = coverIds.some(id => {
-          const inp = document.getElementById(id);
-          return !!(inp && inp.files && inp.files.length);
-        });
-      }
-      if (!changed) {
-        changed = ['front_outer','front_inner','back_inner','back_outer']
-          .some(key => document.getElementById('erem-' + key)?.value === '1');
-      }
-      if (!changed && rows.some(tr => tr.getAttribute('data-new-song') === '1' || tr.getAttribute('data-non-song') === '1')) {
-        changed = true;
-      }
-      if (!changed) {
-        const pendingDeletes = window.__pendingSongDeletes;
-        if (pendingDeletes && pendingDeletes.size) changed = true;
       }
       if (!changed) {
         const flagged = !!window.__editDirtyConfirm;
@@ -2121,13 +1942,12 @@ function openCreateModal() {
     if (nsPages) nsPages.addEventListener('input', () => { renderNsInputs(nsPages.value, true); });
     if (nsCancel) nsCancel.addEventListener('click', () => closeNewSongModal(true));
 
-    // Hook buttons in both editors
     document.addEventListener('click', (e) => {
       const id = e.target && e.target.id;
-      if (id === 'btn-add-custom-song-eb' || id === 'btn-add-custom-song-nb') {
+      if (id === 'btn-add-custom-song-nb') {
         e.preventDefault(); openNewSongModal(false);
       }
-      if (id === 'btn-add-nonsong-page-eb' || id === 'btn-add-nonsong-page-nb') {
+      if (id === 'btn-add-nonsong-page-nb') {
         e.preventDefault(); openNewSongModal(true);
       }
     });
@@ -2395,407 +2215,4 @@ function openCreateModal() {
     // Removed duplicate nb-cancel handler that reset layout prematurely during confirm
   });
   </script>
-  <script>
-  // Fallback in case main script fails earlier: ensure edit modal can open
-  (function(){
-    if (window.openEditSongbookModal) return;
-    window.openEditSongbookModal = function(bookId){
-      try {
-        var modal = document.getElementById('edit-book-modal');
-        var ebName = document.getElementById('eb-name');
-        var ebColor = document.getElementById('eb-color');
-        var ebSongs = document.getElementById('eb-songs');
-        if (!modal) return;
-        modal.style.display = 'flex';
-        if (ebSongs) ebSongs.innerHTML = '';
-        fetch('/api/my-songbooks/' + encodeURIComponent(bookId) + '/structure')
-          .then(function(r){ return r.json(); })
-          .then(function(data){
-            if (!data || !data.ok) return;
-            var sb = data.songbook || {};
-            if (ebName) ebName.value = sb.title || '';
-            if (ebColor) ebColor.value = sb.color || '#ffffff';
-            var covers = sb.covers || {};
-            var map = {
-              front_outer: 'elab-front-outer',
-              front_inner: 'elab-front-inner',
-              back_inner: 'elab-back-inner',
-              back_outer: 'elab-back-outer'
-            };
-            Object.keys(map).forEach(function(k){
-              var labId = map[k];
-              var nameKey = k.replace(/^(.*)$/,'$1') + '_name';
-              var el = document.getElementById(labId);
-              if (el && covers[nameKey]) el.textContent = covers[nameKey];
-            });
-            if (ebSongs) {
-              (sb.songs || []).forEach(function(s){
-                var tr = document.createElement('tr');
-                tr.innerHTML = '<td data-napoveda="Přetáhnout">≡</td>'+
-                               '<td>'+(s.title||'')+'</td>'+
-                               '<td>'+(s.author||'')+'</td>'+
-                               '<td class="center"><input class="page-input eb-start" type="number" min="1" value="'+(s.start_page||1)+'"></td>'+
-                               '<td>'+(s.page_count||1)+'</td>'+
-                               '<td class="action-cell">'+
-                                 '<span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">'+
-                                   '<button class="row-action btn-row-delete" aria-label="Odstranit">'+
-                                   '<img src="{{ static_bust('"'"'img/icons/remove-song.svg'"'"') }}" alt="Odebrat">'+
-                                   '</button>'+
-                                 '</span>'+
-                               '</td>';
-                ebSongs.appendChild(tr);
-              });
-            }
-          })
-          .catch(function(){});
-      } catch(e){}
-    };
-  })();
-  </script>
 {% endblock %}
-    // ------- Edit songbook modal -------
-    const editModal = document.getElementById('edit-book-modal');
-    const ebName = document.getElementById('eb-name');
-    const ebColor = document.getElementById('eb-color');
-    const ebAuto = document.getElementById('eb-auto');
-    const ebSongs = document.getElementById('eb-songs');
-    const efiles = {
-      front_outer: document.getElementById('efile-front-outer'),
-      front_inner: document.getElementById('efile-front-inner'),
-      back_inner: document.getElementById('efile-back-inner'),
-      back_outer: document.getElementById('efile-back-outer')
-    };
-    const elabs = {
-      front_outer: document.getElementById('elab-front-outer'),
-      front_inner: document.getElementById('elab-front-inner'),
-      back_inner: document.getElementById('elab-back-inner'),
-      back_outer: document.getElementById('elab-back-outer')
-    };
-
-    function bindDrop(idInput, idDz, idLab, targetFaceId) {
-      const input = document.getElementById(idInput);
-      const dz = document.getElementById(idDz);
-      const label = document.getElementById(idLab);
-      const handleFiles = (files) => {
-        if (!files || !files[0]) return;
-        const f = files[0];
-        notifyIfLargeFile(f);
-        if (label) { label.textContent = f.name; label.style.fontWeight = '700'; }
-        dz.classList.add('filled');
-        if (targetFaceId) {
-          const face = document.getElementById(targetFaceId);
-          if (face) {
-            const url = URL.createObjectURL(f);
-            face.style.backgroundImage = `url('${url}')`;
-          }
-        }
-      };
-      dz.addEventListener('click', () => input.click());
-      input.addEventListener('change', (e) => handleFiles(e.target.files));
-      ;['dragenter','dragover'].forEach(evt => dz.addEventListener(evt, (e) => { e.preventDefault(); dz.classList.add('hover'); }));
-      ;['dragleave','drop'].forEach(evt => dz.addEventListener(evt, (e) => { e.preventDefault(); dz.classList.remove('hover'); }));
-      dz.addEventListener('drop', (e) => { const files = e.dataTransfer.files; if (files && files.length) { input.files = files; handleFiles(files); } });
-
-      // Clear button for edit dropzone
-      const clearBtnId = idInput.replace('efile-', 'eclear-');
-      const clearBtn = document.getElementById(clearBtnId);
-      if (clearBtn) {
-        clearBtn.addEventListener('click', (e) => {
-          e.preventDefault(); e.stopPropagation();
-          if (input) input.value = '';
-          if (label) { label.textContent = 'Klikni nebo přetáhni obrázek sem'; label.style.fontWeight = '600'; }
-          if (dz) dz.classList.remove('filled');
-          if (targetFaceId) {
-            const face = document.getElementById(targetFaceId);
-            if (face) face.style.backgroundImage = '';
-          }
-          // set removal flag and mark dirty
-          try {
-            const key = idDz.replace(/^edz-/, '').replace(/-/g, '_'); // e.g. front_outer
-            const rem = document.getElementById('erem-' + key);
-            if (rem) rem.value = '1';
-            window.__editDirtyConfirm = true;
-          } catch(_) {}
-        });
-      }
-    }
-    bindDrop('efile-front-outer','edz-front-outer','elab-front-outer','etex-front-outer');
-    bindDrop('efile-back-outer','edz-back-outer','elab-back-outer','etex-back-outer');
-    bindDrop('efile-front-inner','edz-front-inner','elab-front-inner','etex-front-inner');
-    bindDrop('efile-back-inner','edz-back-inner','elab-back-inner','etex-back-inner');
-
-    let currentEditBookId = null;
-
-    function openEditModal(bookId) {
-      currentEditBookId = bookId;
-      // Reset UI
-      window.__editDirtyConfirm = false;
-      ebName.value = '';
-      ebColor.value = '#ffffff';
-      // Reset removal flags
-      try {
-        ['erem-front_outer','erem-front_inner','erem-back_inner','erem-back_outer']
-          .forEach(id => { const el = document.getElementById(id); if (el) el.value = '0'; });
-      } catch(_) {}
-      Object.values(elabs).forEach(l => { if (l) { l.textContent = 'Klikni nebo přetáhni obrázek sem'; l.style.fontWeight='600'; }});
-      Object.values(efiles).forEach(inp => { if (inp) inp.value = ''; });
-      ebSongs.innerHTML = '';
-      ebAuto.checked = true;
-
-      editModal.style.display = 'flex';
-
-      fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/structure`)
-        .then(r => r.json())
-        .then(data => {
-          if (!data || !data.ok) return;
-          const sb = data.songbook || {};
-          ebName.value = sb.title || '';
-          ebColor.value = sb.color || '#ffffff';
-          // Apply book color to preview faces (as base)
-          const efaces = ['etex-front-outer','etex-front-inner','etex-back-inner','etex-back-outer'];
-          efaces.forEach(id => { const el = document.getElementById(id); if (el) { el.style.backgroundColor = ebColor.value; el.style.backgroundImage = ''; }});
-          if (sb.covers) {
-            if (sb.covers.front_outer_name) elabs.front_outer.textContent = sb.covers.front_outer_name;
-            if (sb.covers.front_inner_name) elabs.front_inner.textContent = sb.covers.front_inner_name;
-            if (sb.covers.back_inner_name) elabs.back_inner.textContent = sb.covers.back_inner_name;
-            if (sb.covers.back_outer_name) elabs.back_outer.textContent = sb.covers.back_outer_name;
-            // Set preview images if paths are available
-            if (sb.covers.front_outer) { const el = document.getElementById('etex-front-outer'); if (el) el.style.backgroundImage = `url('/songbooks/${sb.covers.front_outer}')`; }
-            if (sb.covers.front_inner) { const el = document.getElementById('etex-front-inner'); if (el) el.style.backgroundImage = `url('/songbooks/${sb.covers.front_inner}')`; }
-            if (sb.covers.back_inner)  { const el = document.getElementById('etex-back-inner');  if (el) el.style.backgroundImage = `url('/songbooks/${sb.covers.back_inner}')`; }
-            if (sb.covers.back_outer)  { const el = document.getElementById('etex-back-outer');  if (el) el.style.backgroundImage = `url('/songbooks/${sb.covers.back_outer}')`; }
-            // Mark dropzones as filled so the clear icon shows
-            try {
-              const mapFilled = [
-                ['edz-front-outer','front_outer_name'],
-                ['edz-front-inner','front_inner_name'],
-                ['edz-back-inner','back_inner_name'],
-                ['edz-back-outer','back_outer_name'],
-              ];
-              mapFilled.forEach(([dzId, nameKey]) => {
-                const dz = document.getElementById(dzId);
-                if (dz && sb.covers[nameKey]) dz.classList.add('filled');
-              });
-            } catch(_) {}
-          }
-          // Simple continuous rotation like creation
-          const ebook = document.getElementById('ebook-3d');
-          if (ebook) {
-            ebook.style.animation = 'spin-book 8000ms linear infinite';
-          }
-          // Update color preview on ebColor change
-          ebColor.addEventListener('input', () => {
-            efaces.forEach(id => { const el = document.getElementById(id); if (el) el.style.backgroundColor = ebColor.value; });
-          }, { once: true });
-          const songs = sb.songs || [];
-          songs.forEach((s, idx) => ebSongs.appendChild(renderRow(s, idx)));
-          wireDrag();
-          applyAutoNumbering();
-          wireClassicRowActions();
-          captureEditInitialStateFromClassic();
-          window.__editDirtyConfirm = false;
-        });
-    }
-
-    // expose for inline onclick fallback
-    window.openEditSongbookModal = openEditModal;
-
-    function renderRow(s, idx) {
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-song-id', s.song_id);
-      if (s.is_private) tr.setAttribute('data-private', '1');
-      tr.setAttribute('data-page-count', String(s.page_count || 1));
-      tr.setAttribute('draggable', 'true');
-      tr.innerHTML = `
-        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
-        <td>${s.title || ''}</td>
-        <td>${s.author || ''}</td>
-        <td class="center"><input class="page-input eb-start" type="number" min="1" value="${s.start_page||1}" disabled></td>
-        <td>${s.page_count||1}</td>
-        <td class="action-cell">
-          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
-            <button class="row-action btn-row-delete" aria-label="Odstranit">
-              <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
-            </button>
-          </span>
-        </td>
-      `;
-      return tr;
-    }
-
-    function wireDrag() {
-      let dragEl = null;
-      ebSongs.querySelectorAll('tr').forEach(tr => {
-        tr.addEventListener('dragstart', (e) => { dragEl = tr; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-        tr.addEventListener('dragend', () => {
-          if (dragEl) tr.classList.remove('dragging');
-          dragEl = null;
-          // Recompute numbering after reorder
-          applyAutoNumbering();
-          // Mark edit as dirty (order changed)
-          window.__editDirtyConfirm = true;
-        });
-        tr.addEventListener('dragover', (e) => { e.preventDefault(); const target = e.currentTarget; if (!dragEl || dragEl === target) return; const rect = target.getBoundingClientRect(); const after = (e.clientY - rect.top) > rect.height/2; ebSongs.insertBefore(dragEl, after ? target.nextSibling : target); });
-      });
-    }
-
-    // Helper: create a classic-edit blank page row
-    function renderBlankClassicRow() {
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-page-count', '1');
-      tr.setAttribute('data-non-song', '1');
-      tr.setAttribute('draggable', 'true');
-      tr.setAttribute('data-temp-id', generateTempRowId('blank'));
-      tr.innerHTML = `
-        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
-        <td>&lt;Prázdná strana&gt;</td>
-        <td>-</td>
-        <td class="center"><input class="page-input eb-start" type="number" min="1" value="1" disabled></td>
-        <td>1</td>
-        <td class="action-cell">
-          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
-            <button class="row-action btn-row-delete" aria-label="Odstranit">
-              <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
-            </button>
-          </span>
-        </td>`;
-      return tr;
-    }
-
-    function wireClassicRowActions() {
-      ebSongs.querySelectorAll('.btn-row-delete').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.preventDefault(); e.stopPropagation();
-          const tr = btn.closest('tr'); if (!tr) return;
-          const sid = tr.getAttribute('data-song-id');
-          const isPriv = tr.getAttribute('data-private') === '1';
-          if (isPriv && window.__editBookId) {
-            try {
-              const res = await fetch(`/api/my-songbooks/${encodeURIComponent(window.__editBookId)}/songs/${encodeURIComponent(sid)}`, { method: 'DELETE' });
-              if (!res.ok) { const t = await res.text(); alert('Mazání písničky selhalo: ' + (t || res.status)); return; }
-            } catch(_) { alert('Chyba při mazání písničky'); return; }
-          }
-          tr.remove();
-          applyAutoNumbering();
-          window.__editDirtyConfirm = true;
-        });
-      });
-    }
-
-    // Add blank page in classic edit modal
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      if (!t) return;
-      if (t.id === 'btn-add-blank-page-eb') {
-        e.preventDefault();
-        const tbody = document.getElementById('eb-songs');
-        if (!tbody) return;
-        const tr = renderBlankClassicRow();
-        tbody.appendChild(tr);
-        applyAutoNumbering();
-        wireDrag();
-        wireClassicRowActions();
-      }
-    });
-
-    function applyAutoNumbering() {
-      const rows = Array.from(ebSongs.querySelectorAll('tr'));
-      const auto = ebAuto.checked;
-      let next = 1;
-      rows.forEach(tr => {
-        const startInput = tr.querySelector('.eb-start');
-        const pageCount = parseInt(tr.getAttribute('data-page-count') || '1', 10) || 1;
-        if (auto) {
-          startInput.value = next;
-          startInput.disabled = true;
-          next += pageCount;
-        } else {
-          startInput.disabled = false;
-        }
-      });
-    }
-
-    ebAuto.addEventListener('change', applyAutoNumbering);
-    document.getElementById('eb-cancel').addEventListener('click', async (e) => {
-      const changed = hasClassicEditChanges();
-      if (changed) {
-        const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
-        if (choice === 'cancel') { e.preventDefault(); e.stopPropagation(); return; }
-        if (choice === 'save') { document.getElementById('eb-save')?.click(); return; }
-      }
-      editModal.style.display = 'none';
-      window.__editDirtyConfirm = false;
-      window.__pendingNewSongs = new Map();
-    });
-    document.getElementById('eb-save').addEventListener('click', async () => {
-      if (!currentEditBookId) return;
-      const rows = Array.from(ebSongs.querySelectorAll('tr'));
-      const order = rows.map(tr => {
-        const sid = tr.getAttribute('data-song-id');
-        const sp = (tr.querySelector('.eb-start') || {}).value;
-        if (sid) return { song_id: sid, start_page: sp };
-        if (tr.getAttribute('data-non-song') === '1') return { non_song: true, start_page: sp };
-        return null;
-      }).filter(Boolean);
-      const fd = new FormData();
-      fd.append('title', (ebName.value||'').trim());
-      fd.append('color', (ebColor.value||'').trim());
-      fd.append('auto_numbering', ebAuto.checked ? '1' : '0');
-      fd.append('order', JSON.stringify(order));
-      // Cover removal flags
-      try {
-        ['front_outer','front_inner','back_inner','back_outer'].forEach(key => {
-          const v = document.getElementById('erem-' + key)?.value;
-          if (v === '1') fd.append('remove_' + key, '1');
-        });
-      } catch(_) {}
-      // Optional covers
-      Object.entries(efiles).forEach(([k,inp]) => { if (inp && inp.files && inp.files[0]) fd.append(k, inp.files[0]); });
-      try {
-        const res = await fetch(`/api/my-songbooks/${encodeURIComponent(currentEditBookId)}/structure`, { method: 'POST', body: fd });
-        if (!res.ok) { const t = await res.text(); alert('Uložení selhalo: ' + (t || res.status)); return; }
-        editModal.style.display = 'none';
-        window.location.reload();
-      } catch (e) { alert('Chyba při ukládání'); }
-    });
-
-    // Top-right Save in classic edit modal mirrors eb-save
-    try {
-      const ebSaveTop = document.getElementById('eb-save-top');
-      const ebSaveBtn = document.getElementById('eb-save');
-      if (ebSaveTop && ebSaveBtn) {
-        ebSaveTop.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); ebSaveBtn.click(); });
-      }
-    } catch(_) {}
-
-    // Open edit modal buttons (progressive enhancement; inline onclick also calls global)
-    document.querySelectorAll('.btn-edit').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault(); e.stopPropagation();
-        const id = btn.getAttribute('data-book-id'); if (id) openEditModal(id);
-      });
-    });
-
-    // Edit modal dirty tracking and overlay close with confirm
-    window.__editDirtyConfirm = false;
-    [document.getElementById('eb-name'), document.getElementById('eb-color')]
-      .filter(Boolean).forEach(el => el.addEventListener('input', () => { window.__editDirtyConfirm = true; }));
-    ['efile-front-outer','efile-front-inner','efile-back-inner','efile-back-outer']
-      .map(id => document.getElementById(id)).filter(Boolean)
-      .forEach(inp => inp.addEventListener('change', () => { window.__editDirtyConfirm = true; }));
-
-    const ebContent = editModal.querySelector('.modal');
-    editModal.addEventListener('click', async (e) => {
-      // Treat any click outside the .modal content as overlay click
-      const outside = ebContent ? !ebContent.contains(e.target) : (e.target === editModal);
-      if (!outside) return;
-      const changed = hasClassicEditChanges();
-      if (changed) {
-        const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
-        if (choice === 'cancel') { e.preventDefault(); e.stopPropagation(); return; }
-        if (choice === 'save') { document.getElementById('eb-save')?.click(); return; }
-      }
-      editModal.style.display = 'none';
-      window.__editDirtyConfirm = false;
-      window.__pendingNewSongs = new Map();
-    });

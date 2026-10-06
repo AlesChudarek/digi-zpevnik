@@ -396,10 +396,9 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ### Editor zpěvníku na telefonu
 
-> Změřeno 30. 9. 2026 na 390 px, ve světlém i nočním motivu. Pozor na jednu věc:
-> editor, který se opravdu otevírá, je **`#new-book-modal`** (tentýž jako „Nový
-> zpěvník", dostavěný funkcí `ensureEditSection`). `#edit-book-modal` se nikdy
-> neotevře — viz mrtvý kód níž. Všechno v téhle sekci se týká toho živého.
+> Změřeno 30. 9. 2026 na 390 px, ve světlém i nočním motivu. Editor je okno
+> **`#new-book-modal`** (tentýž jako „Nový zpěvník", dostavěný funkcí
+> `ensureEditSection`). Starší `#edit-book-modal` je smazaný, viz „Mrtvý kód".
 
 - [X] **okno editoru se na telefonu rozbíjelo do stran** — opraveno, tři různé
       příčiny. Naměřeno na 320, 390 i 1280 px: žádná z nich už oknem ani stránkou
@@ -480,18 +479,25 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ## Mrtvý kód
 
-- [ ] **`my_songbooks.html` má 346 řádků JavaScriptu za `{% endblock %}`.** Jinja
-      všechno za koncem bloku zahodí, takže se to nikdy nevykreslí ani nespustí.
-      Je to druhý, starší editor zpěvníku nad oknem `#edit-book-modal`: `openEditModal`,
-      obsluhy `eb-save`, `eb-cancel`, klik na pozadí a `hasClassicEditChanges`.
-      Ověřeno za běhu — `window.openEditSongbookModal` je ta novější funkce z řádku
-      2229 (`#new-book-modal` + `ensureEditSection`) a `#edit-book-modal` nikdy
-      nedostane `display: flex`.
-      K tomu se zbytečně vykresluje i jeho **markup a CSS uvnitř bloku** (kolem
-      175 řádků: `#edit-book-modal`, `.songs-list` pravidla, `eb-*` prvky) — ten se
-      do stránky dostane, jen ho nic neotevře. Smazat se dá obojí naráz, ale chce to
-      napřed projít, jestli `.songs-list` a další třídy nepoužívá i živý editor;
-      `ensureEditSection` staví vlastní `.songs-list`, takže CSS nejspíš zůstane.
+- [X] **starý editor zpěvníku smazán** (`my_songbooks.html` 2801 → 2218 řádků).
+      Byl to druhý editor nad oknem `#edit-book-modal`: 346 řádků JS za
+      `{% endblock %}`, které Jinja zahodí, k tomu jeho markup, CSS, „záložní“ skript,
+      který by ho otevřel, kdyby hlavní skript spadl, a dvě funkce volané jen z něj
+      (`hasClassicEditChanges`, `captureEditInitialStateFromClassic`). Sdílené styly
+      (`.songs-list`, `.btn`, mobilní pravidla) zůstaly, živý editor je používá.
+      Mrtvý markup měl i `<tbody id="eb-songs">`, tedy totéž `id` jako živý editor.
+      Fungovalo to jen díky tomu, že živé okno leží ve stránce dřív.
+      Jediný nápad, který živý editor nemá: **ruční číslování** (vypnout
+      „Automatické číslování“ a zadat první stranu každé písni). Nikdo ho nepotřebuje,
+      lokální DB nemá v číslování jedinou mezeru, ale kdyby se objevil sken s chybějící
+      stranou, tady je ta myšlenka. Server tu větev (`auto_numbering=0`) pořád umí,
+      jen ji nic nevolá — zanikne s přepisem ukládání.
+- [X] **endpoint `custom-song` smazán.** Od listopadu 2025 ho nic nevolá, editor ukládá
+      nové písně přes `structure`. Byla to jednodušší podmnožina téhož (jedna píseň,
+      bez sdílené strany).
+- [X] **`_book_storage_base` a model `SongPart` smazány**, nic je nepoužívalo.
+      Tabulky `song_parts` a `songbook_intro_outro_images` v DB zůstávají (prázdné,
+      z dob seedování) — smazat je patří do příští migrace schématu, ne do úklidu kódu.
 
 ## Uživatelé
 

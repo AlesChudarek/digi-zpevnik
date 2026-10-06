@@ -584,20 +584,6 @@ def serve_songbook_image(filename):
 
 
 # ---------- Storage layout helpers (public vs private songbooks) ----------
-def _book_storage_base(book: Songbook):
-    """Složka zpěvníku v novém stromu: (absolutní cesta, cesta uložená v DB).
-
-    Dřív se skládala ze slugu e-mailu a názvu zpěvníku, takže se po přejmenování rozešla
-    se skutečností - a musel to zachraňovat fallback, který cestu zpětně odhadoval
-    z uloženého sloupce obálky. Teď v ní nic měnitelného není.
-
-    Strany sem nepatří, ty leží ploché v `pages/` - viz `_nova_cesta_strany`.
-    """
-    koren = _koren_pro_zpevnik(book)
-    rel = f"{koren}/songbooks/{book.id}"
-    return IMAGES_DIR / rel, rel
-
-
 def _je_nova_cesta(rel_path) -> bool:
     return isinstance(rel_path, str) and rel_path.startswith(('verejne/', 'uzivatele/'))
 
@@ -1682,84 +1668,6 @@ def add_song_to_songbook(songbook_id):
     return jsonify({'ok': True, 'added_pages': added})
 
 # API: Create a new custom song with uploaded page images and append to songbook
-@app.route('/api/my-songbooks/<songbook_id>/custom-song', methods=['POST'])
-@login_required
-def create_custom_song(songbook_id):
-    sb = Songbook.query.get_or_404(songbook_id)
-    if not can_edit_songbook(current_user, sb):
-        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
-
-    # A non-song page is an ordinary page with images that carries no song: it may
-    # have a title for the editor's benefit, but never an author, and it stays out
-    # of the table of contents and out of global search.
-    non_song = request.form.get('non_song') in ('1', 'true', 'True', 'on')
-
-    if non_song:
-        title = (request.form.get('title') or '').strip() or NON_SONG_TITLE
-        author_name = NON_SONG_AUTHOR
-    else:
-        title = (request.form.get('title') or 'Moje písnička').strip() or 'Moje písnička'
-        author_name = (request.form.get('author') or '-').strip() or '-'
-    try:
-        page_count = int(request.form.get('page_count') or '1')
-    except Exception:
-        page_count = 1
-    page_count = max(1, min(20, page_count))
-
-    # Collect uploaded pages
-    files = []
-    for i in range(1, page_count + 1):
-        f = request.files.get(f'page_{i}')
-        if f:
-            files.append((i, f))
-
-    if not files:
-        return jsonify({'ok': False, 'error': 'No files'}), 400
-
-    # Get or create author
-    author = Author.query.filter_by(name=author_name).first()
-    if not author:
-        author = Author(name=author_name)
-        db.session.add(author)
-        db.session.flush()
-
-    # Create song
-    new_song_id = f"custom_{uuid4().hex[:12]}"
-    song = Song(id=new_song_id, title=title, author_id=author.id, is_non_song=1 if non_song else 0)
-    db.session.add(song)
-    db.session.flush()
-
-    # Strany leží ploché v pages/ a nepatří ani písni, ani zpěvníku - jedna strana může
-    # nést dvě písně a jedna píseň může být ve dvou zpěvnících.
-    saved = 0
-    for idx, file_storage in files:
-        pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
-        # Číslo se přiděluje po jednom a soubor se hned zapíše, takže další přidělení
-        # už ho vidí obsazené.
-        rel_path = _nova_cesta_strany(sb, pripona)
-        abs_path = IMAGES_DIR / rel_path
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
-        _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
-        # Pořadí v rámci písně, ne ve zpěvníku. Bere se z pořadí nahraných souborů,
-        # protože jméno souboru o pořadí nic neříká a říkat nemá.
-        db.session.add(SongImage(song_id=new_song_id, poradi=saved + 1, image_path=rel_path))
-        saved += 1
-
-    if saved == 0:
-        return jsonify({'ok': False, 'error': 'No valid files'}), 400
-
-    # Append to songbook at the end
-    max_page = db.session.query(func.max(SongbookPage.page_number)).filter_by(songbook_id=sb.id).scalar()
-    next_page = (max_page or 0) + 1
-    # Use saved count for number of pages
-    for _ in range(saved):
-        db.session.add(SongbookPage(songbook_id=sb.id, song_id=new_song_id, page_number=next_page))
-        next_page += 1
-
-    db.session.commit()
-    schedule_export_warm(sb.id)
-    return jsonify({'ok': True, 'song_id': new_song_id, 'added_pages': saved})
-
 # API: Delete song from songbook with origin/reference logic for private songs
 @app.route('/api/my-songbooks/<songbook_id>/songs/<song_id>', methods=['DELETE'])
 @login_required
