@@ -24,15 +24,17 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 
 ## Datový model
 
-- [ ] **zpěvník je řada stran** — lokálně hotovo, **na serveru zatím ne**. Tabulky
+- [X] **zpěvník je řada stran** — nasazeno 7. 10. 2026. Tabulky
       `strany` a `pisne_na_strane` nahradily `songbook_pages` a `song_images`; prázdná
       a nepísňová strana už nejsou přestrojené písně. Popis a jak se to ověřovalo:
       [docs/model-stran.md](docs/model-stran.md), migrace `backend/scripts/migrace_strany.py`.
       Lokálně: 1078 stran, 974 vazeb, z 988 „písní“ zbylo 866 skutečných.
-      Nasazení: zastavit službu → `git pull` → `migrace_strany.py` (nejdřív bez
-      `--zapsat`) → `--zapsat` (zálohu dělá sám) → `kontrola_zpevniku.py` → spustit.
-      Kód před migrací nasadit nejde: viděl by prázdné zpěvníky (do logu to při startu
-      křičí, data se neztratí).
+      Před nasazením ověřeno i proti snímku serverových dat a ostrým během na kopii DB
+      přímo na serveru (SQLite 3.37). Po nasazení: `kontrola_zpevniku` vše sedí, 137
+      požadavků na všech 33 zpěvnících 200, předgenerovaná PDF platí dál.
+      Záloha před migrací: `backend/instance/zpevnik.db.pred-stranami-20261007-072605`.
+      `kontrola_exportu` hlásí dva ZIPy (00001, 00101 v originále) z 16. 9., na které se
+      klíč netrefí — zastaraly úpravou zpěvníků už před migrací, uklidí je LRU.
 - [X] **opravy, které migrace přinesla** (našla je diferenciální kontrola):
       smazání účtu nechávalo na disku nahrané strany a v DB písně bez zpěvníku;
       smazání zpěvníku nechávalo záznamy o sdílení; odebrání obálky smazalo soubor, ale
@@ -40,6 +42,50 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       cizího soukromého zpěvníku si mohl přečíst i nepřihlášený, kdo znal jeho id.
 - [ ] editor zatím mluví postaru (řádek = píseň, strana bez písně jako `strana-<id>`).
       Zmizí s přepisem editoru na jednotné „Přidat strany“.
+
+## Sdílení: rodina a kopie
+
+Domluveno 7. 10. 2026, zatím nic z toho není naprogramované. Nahrazuje dnešní stav, kdy
+se sdílený zpěvník po smazání převede na prvního ze sdílených a soubory dál zabírají
+limit tomu, kdo ho smazal (smazání sdíleného zpěvníku tak místo neuvolní), a kdy
+smazání účtu sdílené zpěvníky ostatním bez varování vezme.
+
+Základní pravidlo: **každý bajt na serveru se počítá do limitu aspoň jednomu
+existujícímu člověku, který s tím souhlasil**, a smazání vždycky uvolní místo tomu,
+kdo maže.
+
+- [ ] **limit podle databáze, ne podle složky.** Počítají se různé obrázky ve všech
+      zpěvnících, které uživatel má (vlastní i rodinné), každý jednou — obrázek ve dvou
+      mých zpěvnících se počítá jednou. **Strany z veřejných zpěvníků za 0.** Do `images`
+      přibude sloupec s velikostí, ať se nemusí procházet disk. Složky
+      `uzivatele/<id>/` pak nic neznamenají (můžou zůstat, nové strany klidně ploše).
+      Jediná cesta přes limit: admin smaže veřejný zpěvník, ze kterého měl někdo písně
+      — nic se nemaže, jen dotyčný nemůže nahrávat, dokud si neuvolní místo.
+- [ ] **sdílení vyžaduje přijetí** a je dvojí:
+      - **kopie** — příjemce dostane vlastní zpěvník ve stavu v době sdílení
+        (na disku nic nepřibude, jen řádky v DB)
+      - **rodina** — společný zpěvník, upravují všichni. Vlastník je jediný, kdo zve
+        a odebírá. Členové smějí sdílet dál jen jako kopii.
+      Pozvánka do přijetí nic nezabírá. Strop na počet nevyřízených pozvánek pro
+      příjemce, tlačítko „odmítnout všechny“ (útok „tisíc zpěvníků s nepěkným obrázkem“).
+- [ ] **nahrání do rodinného zpěvníku musí projít limitem všech členů.** Jinak se dá
+      člen přeplnit a pak opakovaně „nahrát, odejít“ — data by se hromadila bez stropu.
+      Když se to někomu nevejde, hláška ho jmenuje a vlastník ho může odebrat.
+- [ ] **odchody a nabídka kopie.** Kdo přijde o přístup, dostane nabídku kopie stavu
+      v okamžiku odchodu: odebraný člen (snímek se udělá při odebrání), člen, který odešel
+      sám, i všichni členové, když vlastník rodinný zpěvník zruší. Kopie limit nezmění
+      (tytéž obrázky už měl započítané), odmítnutí místo uvolní.
+      Zrušený rodinný zpěvník zůstane členům jen ke čtení s nabídkou „kopie k sobě /
+      smazat“ a zanikne, až se rozhodne poslední z nich. Žádné lhůty — drží ho jen ti,
+      komu se počítá.
+- [ ] **smazání účtu** = smazání vlastních zpěvníků (s nabídkou kopie rodině) a odchod
+      z cizích.
+- [ ] **ukázat, kolik místa zpěvník zabírá** — spíš obrázkem (podíl z pruhu limitu)
+      než v MB, gigabajty lidem nic neřeknou.
+- [ ] **převod dnešních dat:** dnešní sdílení = rodina s přijatým členstvím, vlastník
+      zůstává.
+- Předávání vlastnictví se dělat nebude: kdo chce pokračovat bez vlastníka, udělá si
+  kopii a pozve ostatní do nové rodiny.
 
 ## Import zpěvníku z PDF nebo ZIP
 
@@ -575,7 +621,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Změřeno v Chromiu ve všech třech stavech na 1280 i 390 px — na úzké obrazovce je
       panel pod burgerem, ale ukazatel je v něm stejný a nikde nepřečuhuje.
 - [ ] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
-      s někým a pak si je smažu" (zaplním mu schránku bordelem)
+      s někým a pak si je smažu" (zaplním mu schránku bordelem) — řeší ho návrh
+      v sekci „Sdílení: rodina a kopie“ (přijímání pozvánek, strop nevyřízených)
 - [X] **stránky neposílaly `Cache-Control`** — opraveno. Prohlížeč si sám rozhodl,
       jak dlouho si HTML nechá, a po nasazení servíroval starou verzi. Horší, než to
       zní: verze skriptů a stylů se nese v adrese (`static_bust` podle mtime), ale ta
