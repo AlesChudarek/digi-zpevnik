@@ -16,9 +16,16 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] opravit nový zpěvník = edit zpěvník
 - [X] Nový zpěvník / upravit zpěvník: kliknu uložit a zůstane okno s novým zpěvníkem otevřené
 - [ ] Tlačítko uložit při editaci se rozsvítí, když se udělá úprava
-- [ ] zjednodušit přidání písničky / non-písničky / prázdné strany na "přidat stránku" a pak
-      specifikovat, co na ní bude: prázdná, jen obrázek, písnička, více písniček, nebo
-      napojení poslední písně na další strany
+- [X] **editor přes strany** (`static/js/editor.js`, `css/editor.css`). Jedno okno pro
+      nový i upravovaný zpěvník, jedno „+ Přidat strany“ (obrázky, PDF, ZIP) a „+ Prázdná
+      strana“, vkládání mezi strany. U každé strany volba Píseň (i víc písní) /
+      Pokračování / Bez písně (s popiskem) / Prázdná. Nová strana je píseň, Enter skočí
+      na další stranu, autoři se našeptávají. Přesouvání tažením i šipkami (na telefonu
+      tažení nejde), píseň se přesouvá i se svými pokračováními. Píseň z cizího zpěvníku
+      je zamčená (přejmenování by se projevilo všude). Kontrola před uložením vyznačí
+      neúplné strany. Strany se nahrávají hned po přidání (`/api/strany/nahrat`),
+      uložení (`/api/zpevnik`) posílá jen strukturu; neuložené nahrávky se po dni uklidí.
+      Hlídá `test_editor.py` (API) a `test_editor_ui.py` (prohlížeč).
 - [ ] číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout
 - [ ] (?) přidat písničku → nový zpěvník: nepřidá písničku, ale vytvoří prázdný zpěvník
 
@@ -40,8 +47,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       smazání zpěvníku nechávalo záznamy o sdílení; odebrání obálky smazalo soubor, ale
       ne řádek v `images`; **`/api/songbook/<id>/toc` neměl kontrolu práv** — názvy písní
       cizího soukromého zpěvníku si mohl přečíst i nepřihlášený, kdo znal jeho id.
-- [ ] editor zatím mluví postaru (řádek = píseň, strana bez písně jako `strana-<id>`).
-      Zmizí s přepisem editoru na jednotné „Přidat strany“.
+- [X] editor mluví jazykem stran — starý protokol `structure` (řádek = píseň, strana bez
+      písně jako `strana-<id>`) zanikl s novým editorem.
 
 ## Sdílení: rodina a kopie
 
@@ -89,7 +96,12 @@ kdo maže.
 
 ## Import zpěvníku z PDF nebo ZIP
 
-- [ ] **založit zpěvník importem místo strana po straně.** Při vytváření nového zpěvníku
+- [X] **založit zpěvník importem místo strana po straně.** Hotovo jako součást
+      editoru: PDF nebo ZIP v „+ Přidat strany“ (nebo přetažené) se zeptá „všechny strany
+      / jen strany 3-10“ a jestli je v souboru obálka (první a poslední strana zvenku,
+      případně i dvě vnitřní). Rozkládá se v prohlížeči (pdf.js a JSZip v `static/vendor/`,
+      načtou se až při potřebě), strany PDF se vykreslí na šířku skenů 1748 px. Server
+      tím nezatíží. Původní zadání: Při vytváření nového zpěvníku
       (soukromého, nebo veřejného adminem) půjde vedle dnešní cesty „vlož obrázek, přidej
       píseň, opakuj" zvolit **Vložit PDF/ZIP**:
       - nahraje se PDF nebo zazipované obrázky a rozloží se strana po straně
@@ -98,7 +110,7 @@ kdo maže.
         prázdná strana… (přesné role doladíme)
       - rovnou se u nich vyplní názvy a autoři písniček
       - jedním uložením se to zkontroluje a založí jako nový zpěvník
-- [ ] Import by měl rovnou ukládat podle standardu z
+- [X] Import by měl rovnou ukládat podle standardu z
       [docs/ukladani-obrazku.md](docs/ukladani-obrazku.md), ne dělat čtvrté schéma. Souvisí
       to s úkolem „zjednodušit úložiště" níž — dává smysl mít úložiště hotové dřív.
 - [ ] Poznámka do začátku: `build_songbook_export_sequence`

@@ -76,6 +76,21 @@ def typy(page):
         "els => els.map(e => [...e.classList].find(c => c.startsWith('es-typ-')).slice(7))")
 
 
+def sedy_png(odstin, sirka=200):
+    b = io.BytesIO()
+    Image.new("RGB", (sirka, int(sirka * 2480 / 1748)), (odstin,) * 3).save(b, "PNG")
+    return b.getvalue()
+
+
+# Odstín uprostřed každého náhledu. Strany importu mají každá jinou šedou, takže
+# podle ní jde poznat, která strana souboru kam přišla.
+ODSTINY = """() => [...document.querySelectorAll('#es-seznam .es-nahled img')].map(img => {
+  const c = document.createElement('canvas'); c.width = 8; c.height = 8;
+  const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0, 8, 8);
+  return ctx.getImageData(4, 4, 1, 1).data[0];
+})"""
+
+
 PRETEKA = """() => {
   const m = document.querySelector('#new-book-modal .modal').getBoundingClientRect();
   const venku = [...document.querySelectorAll('#editor-stran *')].filter(e => {
@@ -98,6 +113,16 @@ def main():
     soubory.mkdir()
     for jmeno, sirka in (("10.png", 300), ("2.png", 200), ("1.png", 100)):
         (soubory / jmeno).write_bytes(png(sirka))
+    # PDF o šesti stranách, strana n má šedou 30*n
+    stranky = [Image.new("RGB", (595, 842), (30 * n,) * 3) for n in range(1, 7)]
+    stranky[0].save(soubory / "zpevnik.pdf", save_all=True, append_images=stranky[1:])
+    import zipfile
+    with zipfile.ZipFile(soubory / "skeny.zip", "w") as z:
+        for jmeno, odstin in (("skeny/strana 10.png", 100), ("skeny/strana 2.png", 60),
+                              ("skeny/strana 1.png", 20)):
+            z.writestr(jmeno, sedy_png(odstin))
+        z.writestr("__MACOSX/skeny/._strana 1.png", b"balast")
+        z.writestr("skeny/poznamky.txt", b"nic")
 
     with sync_playwright() as p:
         prohlizec = p.chromium.launch()
@@ -196,6 +221,65 @@ def main():
         zkontroluj([x[3] for x in s] == [[], [], [("Píseň A1", 1)], [("Píseň A1", 2)]],
                    "přesuny se uloží", [x[3] for x in s])
 
+        print("\n── import PDF a ZIP ──")
+        page.goto(base + "/my-songbooks")
+        page.wait_for_load_state("networkidle")
+        page.click(".add-card")
+        page.set_input_files("#es-soubory", str(soubory / "zpevnik.pdf"))
+        page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
+        nadpis = page.inner_text("#es-import-nadpis")
+        zkontroluj("6 stran" in nadpis, "PDF se otevře a řekne, kolik má stran", nadpis)
+        page.fill("#es-import-strany", "7")
+        page.click("#es-import-ok")
+        chyba = page.inner_text("#es-import-chyba")
+        zkontroluj(page.is_visible("#es-import") and "6 stran" in chyba,
+                   "rozsah mimo soubor se odmítne a řekne proč", chyba)
+        page.fill("#es-import-strany", "2-5")
+        zkontroluj(page.is_checked('#es-import input[value="vyber"]'),
+                   "psaní do rozsahu přepne na „jen strany“")
+        page.select_option("#es-import-obalka", "2")
+        page.click("#es-import-ok")
+        page.wait_for_function("document.getElementById('es-stav-importu').hidden && "
+                               "document.getElementById('es-stav-nahravani').hidden "
+                               "&& document.querySelectorAll('#es-seznam .es-strana').length === 2",
+                               timeout=60000)
+        odstiny = page.evaluate(ODSTINY)
+        zkontroluj(len(odstiny) == 2 and abs(odstiny[0] - 90) < 12 and abs(odstiny[1] - 120) < 12,
+                   "strany 3 a 4 přibyly jako strany, 2 a 5 šly na obálku", odstiny)
+        obalky = page.evaluate("""() => ['front-outer', 'back-outer', 'front-inner'].map(r =>
+          (document.getElementById('file-' + r).files[0] || {}).name || null)""")
+        zkontroluj(obalky == ["zpevnik-2.jpg", "zpevnik-5.jpg", None],
+                   "první a poslední vybraná strana je obálka zvenku", obalky)
+        sirka = page.evaluate("document.querySelector('#es-seznam .es-nahled img').naturalWidth")
+        zkontroluj(sirka == 1748, "strana PDF se vykreslí na šířku skenů", sirka)
+
+        page.set_input_files("#es-soubory", str(soubory / "skeny.zip"))
+        page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
+        nadpis = page.inner_text("#es-import-nadpis")
+        zkontroluj("3 strany" in nadpis, "ZIP vidí jen obrázky, ne balast z Macu ani text", nadpis)
+        page.click("#es-import-ok")
+        page.wait_for_function("document.getElementById('es-stav-importu').hidden && "
+                               "document.getElementById('es-stav-nahravani').hidden "
+                               "&& document.querySelectorAll('#es-seznam .es-strana').length === 5",
+                               timeout=60000)
+        odstiny = page.evaluate(ODSTINY)[2:]
+        zkontroluj(len(odstiny) == 3 and all(abs(a - b) < 12 for a, b in zip(odstiny, (20, 60, 100))),
+                   "obrázky ze ZIPu jdou podle jména (1, 2, 10)", odstiny)
+        radky = page.locator("#es-seznam .es-strana")
+        for i in range(5):
+            radky.nth(i).locator(".es-nazev").fill(f"Importovaná {i + 1}")
+        page.fill("#nb-name", "Import z testu")
+        with page.expect_navigation():
+            page.click("#nb-save-top")
+        page.wait_for_load_state("networkidle")
+        with A.app.app_context():
+            imp = A.Songbook.query.filter_by(title="Import z testu").first()
+            zkontroluj(imp is not None and len(imp.strany) == 5
+                       and imp.img_path_cover_front_outer and imp.img_path_cover_back_outer
+                       and not imp.img_path_cover_front_inner,
+                       "importovaný zpěvník se uloží i s obálkami",
+                       imp and (len(imp.strany), imp.img_path_cover_front_outer))
+
         print("\n── neuložené změny ──")
         page.evaluate(f"window.openEditSongbookModal('{novy.id}')")
         page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
@@ -213,7 +297,15 @@ def main():
             m = page.evaluate(PRETEKA)
             zkontroluj(m["stranka"] <= m["sirka"] and not m["venku"],
                        f"{sirka} px: editor se vejde do okna", m)
-            page.click("#nb-cancel") if page.is_visible("#nb-cancel") else page.keyboard.press("Escape")
+            page.set_input_files("#es-soubory", str(soubory / "zpevnik.pdf"))
+            page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
+            r = page.evaluate("""() => { const r = document.querySelector('.es-import-okno').getBoundingClientRect();
+              const b = document.getElementById('es-import-ok').getBoundingClientRect();
+              const t = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+              return {vlevo: Math.round(r.left), vpravo: Math.round(r.right), tlacitko: t && t.id}; }""")
+            zkontroluj(r["vlevo"] >= 0 and r["vpravo"] <= sirka and r["tlacitko"] == "es-import-ok",
+                       f"{sirka} px: dialog importu se vejde a „Přidat“ jde trefit", r)
+            page.click("#es-import-zrusit")
             page.goto(base + "/my-songbooks")
             page.wait_for_load_state("networkidle")
 

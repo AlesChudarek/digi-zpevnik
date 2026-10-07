@@ -530,7 +530,10 @@
         </div>
       </div>
 
-      <section class="editor-stran" id="editor-stran">
+      <section class="editor-stran" id="editor-stran"
+               data-pdfjs="{{ static_bust('vendor/pdfjs/pdf.min.js') }}"
+               data-pdfjs-worker="{{ static_bust('vendor/pdfjs/pdf.worker.min.js') }}"
+               data-jszip="{{ static_bust('vendor/jszip/jszip.min.js') }}">
         <div class="es-zahlavi">
           <h3>Strany</h3>
           <label class="es-prvni">Číslo první strany
@@ -540,17 +543,18 @@
           </label>
         </div>
         <p class="es-zprava" id="es-zprava" hidden></p>
-        <p class="es-prazdno" id="es-prazdno">Zpěvník zatím nemá žádnou stranu. Přidej obrázky stran, nebo je sem přetáhni.</p>
+        <p class="es-prazdno" id="es-prazdno">Zpěvník zatím nemá žádnou stranu. Přidej obrázky stran nebo celý zpěvník jako PDF či ZIP.</p>
         <ol class="es-seznam" id="es-seznam"></ol>
         <div class="es-pridavani">
           <button type="button" class="btn primary" id="es-pridat">+ Přidat strany</button>
           <button type="button" class="btn" id="es-pridat-prazdnou">+ Prázdná strana</button>
-          <span class="es-tip">Obrázky jde i přetáhnout sem.</span>
-          <input type="file" id="es-soubory" accept="image/*" multiple hidden>
+          <span class="es-tip">Obrázky, PDF nebo ZIP. Jde je i přetáhnout sem.</span>
+          <input type="file" id="es-soubory" accept="image/*,.pdf,application/pdf,.zip,application/zip" multiple hidden>
         </div>
+        <p class="es-stav-nahravani" id="es-stav-importu" role="status" hidden></p>
         <p class="es-stav-nahravani" id="es-stav-nahravani" role="status" hidden></p>
         <div class="es-nabidka" id="es-nabidka-vlozit" hidden>
-          <button type="button" data-akce="obrazky">Obrázky stran…</button>
+          <button type="button" data-akce="obrazky">Obrázky, PDF nebo ZIP…</button>
           <button type="button" data-akce="prazdna">Prázdná strana</button>
         </div>
         <datalist id="es-autori"></datalist>
@@ -569,6 +573,27 @@
   <div class="es-lupa-akce">
     <button type="button" class="btn es-vymenit">Vyměnit obrázek</button>
     <button type="button" class="btn primary es-zavrit">Zavřít</button>
+  </div>
+</div>
+
+<div class="es-import" id="es-import" hidden role="dialog" aria-modal="true" aria-labelledby="es-import-nadpis">
+  <div class="es-import-okno">
+    <h3 id="es-import-nadpis"></h3>
+    <label class="es-import-volba"><input type="radio" name="es-rozsah" value="vse" checked> Přidat všechny strany</label>
+    <label class="es-import-volba"><input type="radio" name="es-rozsah" value="vyber"> Jen strany
+      <input type="text" id="es-import-strany" placeholder="např. 3-10, 12" inputmode="numeric"></label>
+    <label class="es-import-volba">Obálka
+      <select id="es-import-obalka">
+        <option value="0">v souboru není</option>
+        <option value="2">první a poslední strana je obálka zvenku</option>
+        <option value="4">dvě první a dvě poslední strany jsou obálka (zvenku i zevnitř)</option>
+      </select>
+    </label>
+    <p class="es-import-chyba" id="es-import-chyba" role="alert" hidden></p>
+    <div class="es-import-akce">
+      <button type="button" class="btn" id="es-import-zrusit">Zrušit</button>
+      <button type="button" class="btn primary" id="es-import-ok">Přidat</button>
+    </div>
   </div>
 </div>
 
@@ -900,12 +925,22 @@
       }
 
 let createDirty = false;
+// Strana z importovaného PDF do slotu obálky. Jde přes <input> slotu a jeho change,
+// takže se ukáže v náhledu knihy i uloží stejně jako ručně vybraná obálka.
+function vlozObalku(role, soubor) {
+  const input = document.getElementById('file-' + role.replace('_', '-'));
+  if (!input) return;
+  const dt = new DataTransfer();
+  dt.items.add(soubor);
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change'));
+}
 function openCreateModal() {
   createDirty = false;
   try { ['front_outer','front_inner','back_inner','back_outer'].forEach(k => { const el = document.getElementById('erem-' + k); if (el) el.value = '0'; }); } catch(_) {}
   // Strany obsluhuje static/js/editor.js; u úprav je pak naplní openEditSongbookModal.
   EditorStran.zacni({ zpevnikId: window.__editMode ? window.__editBookId : null,
-                      verejny: MANAGE_PUBLIC });
+                      verejny: MANAGE_PUBLIC, naObalku: vlozObalku });
   // Reset heading/primary only when NOT in edit mode
   if (!window.__editMode) {
     const titleEl = document.getElementById('nb-title'); if (titleEl) titleEl.textContent = 'Nový zpěvník';

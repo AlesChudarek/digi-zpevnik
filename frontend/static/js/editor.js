@@ -11,8 +11,13 @@
    Nové obrázky se nahrávají hned po přidání, jeden po druhém, takže uložení pak
    posílá jen strukturu. Co se nahraje a neuloží, server po dni uklidí sám.
 
+   PDF a ZIP se rozloží v prohlížeči (pdf.js, JSZip - načtou se, až když jsou potřeba)
+   a každá jejich strana se přidá jako obrázek. Server tím nic nezatíží a náhledy jsou
+   vidět hned.
+
    Použití:
-     EditorStran.zacni({ zpevnikId, verejny });   // před každým otevřením okna
+     EditorStran.zacni({ zpevnikId, verejny, naObalku });   // před každým otevřením okna
+       naObalku(role, soubor) vloží stranu z PDF do slotu obálky (front_outer…)
      EditorStran.nacti(strany, prvniCislo);        // strany z /api/zpevnik/<id>
      await EditorStran.pripravKUlozeni();          // {ok, chyba} - počká na nahrávání
      EditorStran.data();  EditorStran.prvniCislo();  EditorStran.zmeneno(); */
@@ -202,22 +207,33 @@
     if (prvni) prvni.focus();
   }
 
+  function jePdf(f) { return f.type === 'application/pdf' || /\.pdf$/i.test(f.name); }
+  function jeZip(f) { return /zip/.test(f.type) || /\.zip$/i.test(f.name); }
+  function jeObrazek(f) { return /^image\//.test(f.type) || /\.(png|jpe?g|webp)$/i.test(f.name); }
+
+  function stranaZeSouboru(f) {
+    var s = novaStrana({ typ: 'pisen' });
+    s.soubor = f;
+    s.nahled = s.obrazek = URL.createObjectURL(f);
+    return s;
+  }
+
   function pridejSoubory(soubory) {
-    var obrazky = seradPodleJmena(soubory).filter(function (f) { return /^image\//.test(f.type); });
-    var ostatni = soubory.length - obrazky.length;
-    if (ostatni) {
-      zprava(ostatni === 1 ? 'Jeden soubor není obrázek, ten se přeskočil.'
-                           : ostatni + ' souborů nejsou obrázky, ty se přeskočily.');
+    soubory = seradPodleJmena(soubory);
+    var obrazky = soubory.filter(jeObrazek);
+    var dokumenty = soubory.filter(function (f) { return !jeObrazek(f) && (jePdf(f) || jeZip(f)); });
+    var ostatni = soubory.length - obrazky.length - dokumenty.length;
+    zprava(ostatni ? (ostatni === 1 ? 'Jeden soubor není obrázek, PDF ani ZIP, ten se přeskočil.'
+                                    : ostatni + ' souborů nejsou obrázky, PDF ani ZIP, ty se přeskočily.') : '');
+    var kam = vlozitNa;
+    if (obrazky.length) {
+      var nove = obrazky.map(stranaZeSouboru);
+      vlozStrany(nove);
+      nove.forEach(zarad);
+      if (kam != null) kam += nove.length;
     }
-    if (!obrazky.length) return;
-    var nove = obrazky.map(function (f) {
-      var s = novaStrana({ typ: 'pisen' });
-      s.soubor = f;
-      s.nahled = s.obrazek = URL.createObjectURL(f);
-      return s;
-    });
-    vlozStrany(nove);
-    nove.forEach(zarad);
+    dokumenty.forEach(function (f) { importy.push({ soubor: f, kam: kam }); });
+    dalsiImport();
   }
 
   function pridejPrazdnou() {
@@ -229,6 +245,202 @@
     if (!el) return;
     el.textContent = text || '';
     el.hidden = !text;
+  }
+
+  // ---------- import PDF a ZIP ----------
+
+  // Šířka, na kterou se strana PDF vykreslí - stejná jako u dnešních skenů (A4 při
+  // ~210 dpi), takže se import neliší od nahraných obrázků ani velikostí, ani ostrostí.
+  var SIRKA_STRANY = 1748;
+  var importy = [];          // dokumenty čekající na dialog
+  var importBezi = false;
+  var otevreni = 0;          // roste s každým otevřením okna; import z minulého okna se pozná
+  var skripty = {};
+
+  function nactiSkript(url) {
+    if (!skripty[url]) {
+      skripty[url] = new Promise(function (resolve, reject) {
+        var sc = document.createElement('script');
+        sc.src = url;
+        sc.onload = resolve;
+        sc.onerror = function () { delete skripty[url]; reject(new Error('Nepodařilo se načíst knihovnu pro čtení souboru.')); };
+        document.head.appendChild(sc);
+      });
+    }
+    return skripty[url];
+  }
+
+  function otevriPdf(f) {
+    var sekce = $('editor-stran');
+    return nactiSkript(sekce.dataset.pdfjs).then(function () {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc = sekce.dataset.pdfjsWorker;
+      return f.arrayBuffer();
+    }).then(function (data) {
+      return window.pdfjsLib.getDocument({ data: data }).promise;
+    }).then(function (pdf) {
+      var zaklad = f.name.replace(/\.pdf$/i, '');
+      return {
+        pocet: pdf.numPages,
+        strana: function (n) {
+          return pdf.getPage(n).then(function (stranka) {
+            var meritko = SIRKA_STRANY / stranka.getViewport({ scale: 1 }).width;
+            var vp = stranka.getViewport({ scale: meritko });
+            var platno = document.createElement('canvas');
+            platno.width = Math.round(vp.width);
+            platno.height = Math.round(vp.height);
+            var ctx = platno.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, platno.width, platno.height);
+            return stranka.render({ canvasContext: ctx, viewport: vp }).promise.then(function () {
+              return new Promise(function (resolve) { platno.toBlob(resolve, 'image/jpeg', 0.9); });
+            }).then(function (blob) {
+              stranka.cleanup();
+              platno.width = platno.height = 0;
+              return new File([blob], zaklad + '-' + n + '.jpg', { type: 'image/jpeg' });
+            });
+          });
+        },
+        zavri: function () { pdf.destroy(); },
+      };
+    });
+  }
+
+  function otevriZip(f) {
+    var sekce = $('editor-stran');
+    return nactiSkript(sekce.dataset.jszip).then(function () {
+      return window.JSZip.loadAsync(f);
+    }).then(function (zip) {
+      var polozky = [];
+      zip.forEach(function (cesta, z) {
+        // Složky, systémový balast z Macu (__MACOSX, ._soubory) a cokoli, co není obrázek
+        if (z.dir || /(^|\/)(__MACOSX|\.)/.test(cesta) || !/\.(png|jpe?g|webp)$/i.test(cesta)) return;
+        polozky.push(z);
+      });
+      polozky.sort(function (a, b) { return a.name.localeCompare(b.name, 'cs', { numeric: true, sensitivity: 'base' }); });
+      return {
+        pocet: polozky.length,
+        strana: function (n) {
+          var z = polozky[n - 1];
+          var pripona = z.name.split('.').pop().toLowerCase();
+          var typ = pripona === 'png' ? 'image/png' : (pripona === 'webp' ? 'image/webp' : 'image/jpeg');
+          return z.async('blob').then(function (blob) {
+            return new File([blob], z.name.split('/').pop(), { type: typ });
+          });
+        },
+        zavri: function () {},
+      };
+    });
+  }
+
+  // „3-10, 12“ -> [3..10, 12]; čísla mimo 1..pocet jsou chyba, ne tiché přeskočení.
+  function rozsah(zapis, pocet) {
+    var vysledek = [];
+    var kusy = String(zapis).replace(/–/g, '-').split(/[,;]/);
+    for (var i = 0; i < kusy.length; i++) {
+      var kus = kusy[i].trim();
+      if (!kus) continue;
+      var m = kus.match(/^(\d+)\s*(?:-\s*(\d*))?$/);
+      if (!m) throw new Error('„' + kus + '“ není číslo strany ani rozsah.');
+      var od = parseInt(m[1], 10);
+      var po = m[2] === undefined ? od : (m[2] === '' ? pocet : parseInt(m[2], 10));
+      if (od < 1 || po > pocet || po < od) throw new Error('Rozsah „' + kus + '“ nesedí, soubor má ' + pocet + ' stran.');
+      for (var n = od; n <= po; n++) if (vysledek.indexOf(n) < 0) vysledek.push(n);
+    }
+    if (!vysledek.length) throw new Error('Zadej, které strany přidat.');
+    return vysledek;
+  }
+
+  function zeptejSeNaImport(nazev, pocet) {
+    return new Promise(function (resolve) {
+      var okno = $('es-import');
+      $('es-import-nadpis').textContent = '„' + nazev + '“ má ' + pocet + ' ' +
+        (pocet === 1 ? 'stranu' : (pocet < 5 ? 'strany' : 'stran')) + '.';
+      okno.querySelector('input[value="vse"]').checked = true;
+      $('es-import-strany').value = '';
+      $('es-import-obalka').value = '0';
+      var chyba = $('es-import-chyba');
+      chyba.hidden = true;
+      okno.hidden = false;
+      var potvrd = $('es-import-ok'), zrus = $('es-import-zrusit');
+      function konec(vysledek) {
+        okno.hidden = true;
+        potvrd.removeEventListener('click', ok);
+        zrus.removeEventListener('click', ne);
+        resolve(vysledek);
+      }
+      function ok() {
+        try {
+          var vse = okno.querySelector('input[value="vse"]').checked;
+          var cisla = vse ? rozsah('1-' + pocet, pocet) : rozsah($('es-import-strany').value, pocet);
+          var obalek = parseInt($('es-import-obalka').value, 10) || 0;
+          if (obalek && cisla.length < obalek) throw new Error('Na obálku je potřeba aspoň ' + obalek + ' stran.');
+          konec({ cisla: cisla, obalek: obalek });
+        } catch (e) {
+          chyba.textContent = e.message;
+          chyba.hidden = false;
+        }
+      }
+      function ne() { konec(null); }
+      potvrd.addEventListener('click', ok);
+      zrus.addEventListener('click', ne);
+      $('es-import-strany').onfocus = function () { okno.querySelector('input[value="vyber"]').checked = true; };
+    });
+  }
+
+  function dalsiImport() {
+    if (importBezi) return;
+    var uloha = importy.shift();
+    if (!uloha) return;
+    importBezi = true;
+    var f = uloha.soubor, dokument = null, moje = otevreni;
+    hlasImport('Otevírám „' + f.name + '“…');
+    (jePdf(f) ? otevriPdf(f) : otevriZip(f)).then(function (d) {
+      dokument = d;
+      hlasImport('');
+      if (!d.pocet) throw new Error('V „' + f.name + '“ nejsou žádné strany ani obrázky.');
+      return zeptejSeNaImport(f.name, d.pocet);
+    }).then(function (volba) {
+      if (!volba) return;
+      // Obálka v souboru: 2 = první a poslední strana vnější obálka, 4 = i vnitřní.
+      var role = {};
+      var c = volba.cisla;
+      if (volba.obalek >= 2) { role[c[0]] = 'front_outer'; role[c[c.length - 1]] = 'back_outer'; }
+      if (volba.obalek >= 4) { role[c[1]] = 'front_inner'; role[c[c.length - 2]] = 'back_inner'; }
+      var kam = uloha.kam == null ? strany.length : uloha.kam;
+      var hotovo = 0;
+      return c.reduce(function (retez, n) {
+        return retez.then(function () {
+          hlasImport('Rozkládám „' + f.name + '“: strana ' + (++hotovo) + ' z ' + c.length + '…');
+          return dokument.strana(n);
+        }).then(function (soubor) {
+          // Okno se mezitím zavřelo a otevřel se jiný zpěvník - do něj strany nepatří.
+          if (moje !== otevreni) throw new Error('');
+          if (role[n]) {
+            if (nastaveni.naObalku) nastaveni.naObalku(role[n], soubor);
+            return;
+          }
+          var s = stranaZeSouboru(soubor);
+          strany.splice(Math.min(kam, strany.length), 0, s);
+          kam++;
+          vykresli();
+          zarad(s);
+        });
+      }, Promise.resolve());
+    }).catch(function (e) {
+      if (moje === otevreni) zprava(e.message || 'Soubor se nepodařilo přečíst.');
+    }).then(function () {
+      if (dokument) dokument.zavri();
+      hlasImport('');
+      importBezi = false;
+      dalsiImport();
+    });
+  }
+
+  function hlasImport(text) {
+    var el2 = $('es-stav-importu');
+    if (!el2) return;
+    el2.textContent = text;
+    el2.hidden = !text;
   }
 
   // ---------- přesouvání ----------
@@ -676,8 +888,10 @@
       nastaveni = volby || {};
       navaz();
       nactiAutory();
+      otevreni++;
       strany = [];
       fronta = [];
+      importy = [];
       vlozitNa = null;
       zprava('');
       if ($('es-prvni')) $('es-prvni').value = 1;
@@ -697,6 +911,9 @@
     // Počká na rozpracované nahrávání a zkontroluje strany. Při problému je ukáže
     // u stran a na první z nich posune.
     pripravKUlozeni: function () {
+      if (importBezi || importy.length) {
+        return Promise.resolve({ ok: false, chyba: 'Ještě se rozkládá importovaný soubor, počkej, až doběhne.' });
+      }
       return cekejNaNahrani().then(function () {
         var p = ukazProblemy(true);
         var klice = Object.keys(p);
@@ -707,6 +924,6 @@
                                                        : klice.length + ' stran potřebuje doplnit.' };
       });
     },
-    nahrava: function () { return nahravaSe || fronta.length > 0; },
+    nahrava: function () { return nahravaSe || fronta.length > 0 || importBezi || importy.length > 0; },
   };
 })();
