@@ -357,11 +357,6 @@ def is_guest(user):
     return user.is_authenticated and getattr(user, 'role', None) == 'guest'
 
 
-# Strana bez písně (úvod, osmisměrka, předěl) se v editoru ukazuje pod tímhle jménem,
-# když nemá vlastní popisek.
-NON_SONG_TITLE = '<Prázdná strana>'
-
-
 # Načti konfiguraci z .env
 load_dotenv()
 
@@ -610,14 +605,15 @@ def _cesta_obalky(book, role: str, pripona: str) -> str:
     return f"{_koren_pro_zpevnik(book)}/songbooks/{book.id}/covers/{ROLE_OBALEK.get(role, role)}{pripona}"
 
 
-def _nova_cesta_strany(book, pripona: str) -> str:
-    """Další volné číslo v `pages/` daného kořene.
+def _nova_cesta_strany(koren: str, pripona: str) -> str:
+    """Další volné číslo v `<koren>/pages/`, rovnou zarezervované prázdným souborem.
 
     Strana nepatří zpěvníku ani písni - viz docs/ukladani-obrazku.md - takže leží plochá
-    a dostane jen pořadové číslo. Pravdou je disk, ne databáze: kdyby dva uploady dorazily
-    zároveň, volající soubor stejně zakládá výhradním zápisem a při kolizi si řekne o další.
+    a dostane jen pořadové číslo. Číslo se zabírá výhradním vytvořením souboru
+    (O_EXCL): editor nahrává strany po jedné a workerů je víc, takže dva souběžné
+    požadavky by jinak spočítaly totéž číslo a druhý by první stranu přepsal.
+    Volající soubor pak přepíše obsahem; když nahrání selže, má ho smazat.
     """
-    koren = _koren_pro_zpevnik(book)
     adresar = IMAGES_DIR / koren / 'pages'
     adresar.mkdir(parents=True, exist_ok=True)
     nejvyssi = 0
@@ -626,7 +622,14 @@ def _nova_cesta_strany(book, pripona: str) -> str:
             nejvyssi = max(nejvyssi, int(p.stem))
         except (ValueError, OSError):
             continue
-    return f"{koren}/pages/{nejvyssi + 1:06d}{pripona}"
+    cislo = nejvyssi + 1
+    while True:
+        rel = f"{koren}/pages/{cislo:06d}{pripona}"
+        try:
+            os.close(os.open(IMAGES_DIR / rel, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+            return rel
+        except FileExistsError:
+            cislo += 1
 
 
 def _next_public_songbook_id() -> str:
@@ -1826,90 +1829,6 @@ def my_songbooks():
     )
 
 # API: Create a new songbook — private for the current user, or public for an admin
-@app.route('/api/my-songbooks', methods=['POST'])
-@login_required
-def api_create_songbook():
-    if is_guest(current_user):
-        return jsonify({"ok": False, "error": "Guests cannot create songbooks"}), 403
-    if not smi_tvorit(current_user):
-        return jsonify({"ok": False,
-                        "error": "Nejdřív si prosím ověřte e-mailovou adresu"}), 403
-
-    want_public = request.form.get('is_public') in ('1', 'true', 'True', 'on')
-    if want_public and not is_admin(current_user):
-        return jsonify({"ok": False, "error": "Veřejný zpěvník může vytvořit jen admin."}), 403
-
-    title = (request.form.get('title') or '').strip() or ('Nový zpěvník' if want_public else 'Můj zpěvník')
-    use_cover = request.form.get('use_cover', '1') in ('1', 'true', 'True', 'on')
-
-    if want_public:
-        # Keep the seeded 00001.. numbering so public books stay consistent
-        sid = _next_public_songbook_id()
-        koren = 'verejne'
-    else:
-        # Generate a simple unique ID scoped by user and timestamp
-        sid = f"u{current_user.id}-{int(time.time())}"
-        koren = f"uzivatele/{current_user.id}"
-    # Ani název, ani e-mail - obojí se mění, a cesta by pak lhala.
-    rel_dir = Path(koren) / 'songbooks' / sid / 'covers'
-    abs_dir = IMAGES_DIR / rel_dir
-
-    # Prepare file save helper
-    def save_cover(file_storage, name_hint):
-        if not file_storage:
-            return None
-        # Normalize extension
-        ext = (Path(file_storage.filename).suffix or '.png').lower()
-        if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
-            ext = '.png'
-        abs_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{ROLE_OBALEK.get(name_hint, name_hint)}{ext}"
-        abs_path = abs_dir / filename
-        _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
-        # Return path relative to the /songbooks route root
-        return str(rel_dir / filename)
-
-    img_front_outer = None
-    img_front_inner = None
-    img_back_inner = None
-    img_back_outer = None
-    # Color (hex) from UI; fallback to white
-    color = (request.form.get('color') or '').strip() or '#FFFFFF'
-
-    if use_cover:
-        img_front_outer = save_cover(request.files.get('front_outer'), 'coverfrontout')
-        img_front_inner = save_cover(request.files.get('front_inner'), 'coverfrontin')
-        img_back_inner = save_cover(request.files.get('back_inner'), 'coverbackin')
-        img_back_outer = save_cover(request.files.get('back_outer'), 'coverbackout')
-
-    # Create songbook ORM entry. Public books are owner-less, like the seeded ones.
-    sb = Songbook(
-        id=sid,
-        title=title,
-        owner_id=None if want_public else current_user.id,
-        is_public=1 if want_public else 0,
-        first_page_side='right',
-        color=color,
-        img_path_cover_preview=img_front_outer,
-        img_path_cover_front_outer=img_front_outer,
-        img_path_cover_front_inner=img_front_inner,
-        img_path_cover_back_inner=img_back_inner,
-        img_path_cover_back_outer=img_back_outer,
-    )
-
-    db.session.add(sb)
-    db.session.commit()
-
-    return jsonify({
-        "ok": True,
-        "songbook": {
-            "id": sb.id,
-            "title": sb.title,
-            "img_path_cover_preview": sb.img_path_cover_preview,
-        }
-    }), 201
-
-
 # API: Delete a private songbook (owner or admin)
 @app.route('/api/my-songbooks/<songbook_id>', methods=['DELETE'])
 @login_required
@@ -2025,379 +1944,423 @@ def api_share_songbook(songbook_id):
 
     return jsonify({"ok": True, "message": f"Zpěvník byl sdílen s {target.email}."}), 200
 
-# API: Get songbook structure for editing (owner only)
-@app.route('/api/my-songbooks/<songbook_id>/structure')
-@login_required
-def get_songbook_structure(songbook_id):
-    sb = Songbook.query.get_or_404(songbook_id)
-    if not can_edit_songbook(current_user, sb):
-        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
+# ---------- Editor zpěvníku ----------
+# Zpěvník se v editoru upravuje jako řada stran. Strana má typ podle toho, co na ní je:
+#   pisen        - začíná na ní jedna nebo víc písní (název, autor)
+#   pokracovani  - pokračuje na ni poslední píseň předchozí strany (a může na ní
+#                  začínat i další, i když to dnes žádný zpěvník nemá)
+#   bez          - obrázek bez písně (úvod, osmisměrka); může mít popisek
+#   prazdna      - strana bez obrázku
+# Nové strany se nahrávají předem jedna po druhé (/api/strany/nahrat), takže uložení
+# posílá jen strukturu a obálky, ne stovky obrázků v jednom požadavku.
 
-    def filename_or_none(path):
-        try:
-            return Path(path).name if path else None
-        except Exception:
-            return None
+TYPY_STRAN = ('pisen', 'pokracovani', 'bez', 'prazdna')
+# Nahraná strana, kterou nikdo neuložil (zavřené okno), se po téhle době smaže.
+NEULOZENA_STRANA_HODIN = 24
+MAX_STRAN_V_ZPEVNIKU = 1000
 
-    # Editor dnes pracuje s řádky "píseň" (stará podoba, přepíše se s jednotným
-    # „Přidat strany“). Strana bez písně proto vystupuje jako řádek s náhradním id
-    # `strana-<id>`, které ukládání zase pozná.
-    songs = []
-    radek_pisne = {}
+
+def _pisne_jinde(sb_id, song_ids):
+    """Které z písní jsou i v jiném zpěvníku. Ty má editor zamčené: přejmenování by
+    se projevilo všude, kde jsou."""
+    if not song_ids:
+        return set()
+    return {r[0] for r in db.session.query(PisenNaStrane.song_id)
+            .join(Strana, Strana.id == PisenNaStrane.strana_id)
+            .filter(PisenNaStrane.song_id.in_(list(song_ids)),
+                    Strana.songbook_id != sb_id).distinct()}
+
+
+def strany_pro_editor(sb):
+    """Strany zpěvníku ve tvaru, se kterým pracuje editor."""
+    jinde = _pisne_jinde(sb.id, pisne_zpevniku(sb.id))
+    vysledek = []
     for strana in sb.strany:
-        cislo = cislo_strany(sb, strana)
-        soukroma = bool(strana.image_path and strana.image_path.startswith('uzivatele/'))
+        zacinajici = [v for v in strana.pisne if v.poradi_v_pisni == 1]
         if not strana.pisne:
-            songs.append({
-                'song_id': f'strana-{strana.id}',
-                'title': strana.popisek or '&lt;Prázdná strana&gt;',
-                'author': '',
-                'start_page': cislo,
-                'page_count': 1,
-                'is_private': soukroma,
-                'is_non_song': True,
-                'page_group': None,
-            })
-            continue
-        for vazba in strana.pisne:
-            radek = radek_pisne.get(vazba.song_id)
-            if radek is None:
-                song = vazba.song
-                radek = {
-                    'song_id': song.id,
-                    'title': song.title,
-                    'author': (song.author.name if song.author else '') or '',
-                    'start_page': cislo,
-                    'page_count': 0,
-                    'is_private': False,
-                    'is_non_song': False,
-                    'page_group': None,
-                    '_strany': set(),
-                }
-                radek_pisne[vazba.song_id] = radek
-                songs.append(radek)
-            radek['page_count'] += 1
-            radek['is_private'] = radek['is_private'] or soukroma
-            radek['_strany'].add(strana.id)
+            typ = 'bez' if strana.image_id else 'prazdna'
+        elif len(zacinajici) < len(strana.pisne):
+            typ = 'pokracovani'
+        else:
+            typ = 'pisen'
+        vysledek.append({
+            'id': strana.id,
+            'image_id': strana.image_id,
+            'nahled': url_strany(strana.image_path) if strana.image_path else None,
+            'obrazek': (url_for('serve_songbook_image', filename=strana.image_path)
+                        if strana.image_path else None),
+            'typ': typ,
+            'popisek': strana.popisek or '',
+            'pisne': [{
+                'song_id': v.song_id,
+                'nazev': v.song.title,
+                'autor': (v.song.author.name if v.song.author else '') or '',
+                'zamcena': v.song_id in jinde,
+            } for v in zacinajici],
+        })
+    return vysledek
 
-    # Písně, které se potkají na jedné straně, patří do jedné skupiny (a tranzitivně:
-    # A s B na jedné straně, B s C na další → všechny tři). Editor je ukáže jako jeden
-    # řádek a uloží je spolu, jinak by uložení stranu roztrhlo.
-    skupina = {}
-    for strana in sb.strany:
-        ids = [v.song_id for v in strana.pisne]
-        if len(ids) < 2:
-            continue
-        existujici = next((skupina[i] for i in ids if i in skupina), None)
-        g = existujici if existujici is not None else len(set(skupina.values()))
-        for i in ids:
-            skupina[i] = g
-    for radek in radek_pisne.values():
-        radek['page_group'] = skupina.get(radek['song_id'])
-        del radek['_strany']
 
+@app.route('/api/zpevnik/<songbook_id>')
+@login_required
+def nacti_zpevnik_pro_editor(songbook_id):
+    sb = db.session.get(Songbook, songbook_id)
+    if sb is None or not can_edit_songbook(current_user, sb):
+        return jsonify({'ok': False, 'error': 'Zpěvník nenalezen'}), 404
+    obalky = {}
+    for role in ('front_outer', 'front_inner', 'back_inner', 'back_outer'):
+        cesta = getattr(sb, f'img_path_cover_{role}')
+        obalky[role] = {'cesta': cesta, 'jmeno': Path(cesta).name if cesta else None}
     return jsonify({
         'ok': True,
-        'songbook': {
+        'zpevnik': {
             'id': sb.id,
-            'title': sb.title,
-            'color': getattr(sb, 'color', '#FFFFFF') or '#FFFFFF',
-            # Printed number of the first page; not always 1 (title page counted in)
-            'first_page_number': sb.prvni_cislo_strany or 1,
-            'covers': {
-                'front_outer': sb.img_path_cover_front_outer,
-                'front_inner': sb.img_path_cover_front_inner,
-                'back_inner': sb.img_path_cover_back_inner,
-                'back_outer': sb.img_path_cover_back_outer,
-                'front_outer_name': filename_or_none(sb.img_path_cover_front_outer),
-                'front_inner_name': filename_or_none(sb.img_path_cover_front_inner),
-                'back_inner_name': filename_or_none(sb.img_path_cover_back_inner),
-                'back_outer_name': filename_or_none(sb.img_path_cover_back_outer),
-            },
-            'songs': songs,
-        }
+            'nazev': sb.title,
+            'barva': sb.color or '#FFFFFF',
+            'prvni_cislo': sb.prvni_cislo_strany or 1,
+            'obalky': obalky,
+            'strany': strany_pro_editor(sb),
+        },
     })
 
-# API: Update songbook structure: title/color/covers + song order and page numbers
-@app.route('/api/my-songbooks/<songbook_id>/structure', methods=['POST'])
+
+def _uklid_neulozenych_stran():
+    """Smaže nahrané strany, které nikdo neuložil a jsou starší než den.
+
+    Bez tohohle by každé zavřené okno s rozpracovaným importem nechalo na disku soubory,
+    které nikdo nevidí a které se počítají do limitu. Běží při nahrávání, takže nic
+    nepotřebuje cron; dotaz je jeden a levný.
+    """
+    hranice = time.time() - NEULOZENA_STRANA_HODIN * 3600
+    kandidati = []
+    for obraz in Obrazek.query.filter(
+            ~db.session.query(Strana.id).filter(Strana.image_id == Obrazek.id).exists(),
+            ~db.session.query(Songbook.id).filter(db.or_(
+                Songbook.cover_preview_id == Obrazek.id,
+                Songbook.cover_front_outer_id == Obrazek.id,
+                Songbook.cover_front_inner_id == Obrazek.id,
+                Songbook.cover_back_inner_id == Obrazek.id,
+                Songbook.cover_back_outer_id == Obrazek.id)).exists()).all():
+        cesta = _abs_image_path(obraz.cesta)
+        try:
+            stari = cesta.stat().st_mtime if cesta and cesta.exists() else 0
+        except OSError:
+            stari = 0
+        if stari < hranice:
+            kandidati.append(obraz.cesta)
+    if kandidati:
+        smaz_osirele_obrazky(kandidati)
+
+
+@app.route('/api/autori')
 @login_required
-def update_songbook_structure(songbook_id):
-    sb = Songbook.query.get_or_404(songbook_id)
-    if not can_edit_songbook(current_user, sb):
-        return jsonify({'ok': False, 'error': 'Forbidden'}), 403
+def seznam_autoru():
+    """Jména autorů pro našeptávání v editoru. Jen ti, kdo mají aspoň jednu píseň."""
+    jmena = (db.session.query(Author.name).filter(Author.songs.any())
+             .order_by(Author.name).all())
+    return jsonify({'ok': True, 'autori': [j for (j,) in jmena if j and j != '-']})
 
-    # Cesty obrázků, které by po uložení mohly zůstat bez odkazu. Plní se cestou dolů,
-    # vyhodnocuje až po commitu.
-    ke_smazani_soubory = set()
 
-    title = (request.form.get('title') or sb.title).strip()
-    color = (request.form.get('color') or getattr(sb, 'color', '#FFFFFF') or '#FFFFFF').strip()
+@app.route('/api/strany/nahrat', methods=['POST'])
+@login_required
+def nahraj_stranu():
+    """Nahraje jeden obrázek strany. Do zpěvníku se dostane až uložením editoru.
 
-    # Where the printed numbering starts. Some songbooks count the title page as 1,
-    # so their first song is page 3; renumbering from a hardcoded 1 would lose that.
-    # Read before any deletion, so dropping the first song does not shift the book.
+    Strana nového zpěvníku (ten ještě nemá id) leží v kořeni toho, kdo ji nahrál,
+    případně ve veřejném, když admin zakládá veřejný zpěvník.
+    """
+    if is_guest(current_user) or not smi_tvorit(current_user):
+        return jsonify({'ok': False, 'error': 'Nahrávat může jen ověřený účet.'}), 403
+    soubor = request.files.get('soubor')
+    if not soubor:
+        return jsonify({'ok': False, 'error': 'Chybí soubor.'}), 400
+    zpevnik_id = request.form.get('zpevnik_id')
+    if zpevnik_id:
+        sb = db.session.get(Songbook, zpevnik_id)
+        if sb is None or not can_edit_songbook(current_user, sb):
+            return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+        koren = _koren_pro_zpevnik(sb)
+    elif request.form.get('verejny') == '1':
+        if not is_admin(current_user):
+            return jsonify({'ok': False, 'error': 'Veřejný zpěvník zakládá jen admin.'}), 403
+        koren = 'verejne'
+    else:
+        koren = f'uzivatele/{current_user.id}'
+
+    _uklid_neulozenych_stran()
+    pripona = Path(secure_filename(soubor.filename or '') or '').suffix.lower() or '.png'
+    if pripona not in ('.png', '.jpg', '.jpeg', '.webp'):
+        pripona = '.png'
+    rel = _nova_cesta_strany(koren, pripona)
+    abs_path = IMAGES_DIR / rel
     try:
-        first_page_number = int(request.form.get('first_page_number'))
-    except (TypeError, ValueError):
-        first_page_number = None
-    if first_page_number is None:
-        first_page_number = sb.prvni_cislo_strany
-    first_page_number = max(1, int(first_page_number or 1))
+        _save_image_with_limit(soubor, abs_path, ext_hint=pripona)
+    except Exception:
+        abs_path.unlink(missing_ok=True)     # zarezervované číslo, nic v něm není
+        raise
+    obraz = Obrazek.ziskej(rel)
+    db.session.commit()
+    return jsonify({'ok': True, 'image_id': obraz.id})
 
-    def save_cover(file_storage, name_hint):
-        if not file_storage:
-            return None
-        # Jméno se z uploadu nebere. Dřív se přebíralo to uživatelovo, takže výměna obálky
-        # založila `co_radi_hrajeme.png` vedle `coverfrontout.png` a role souboru se dala
-        # zjistit jen z databáze. Obálky jsou čtyři a každá má pevné jméno podle role.
-        ext = (Path(file_storage.filename).suffix or '.png').lower()
-        if ext not in ['.png', '.jpg', '.jpeg', '.webp', '.svg']:
-            ext = '.png'
-        rel = _cesta_obalky(sb, name_hint, ext)
-        abs_path = IMAGES_DIR / rel
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
-        _save_image_with_limit(file_storage, abs_path, ext_hint=ext)
-        return rel
 
-    # Keep originals to allow cleanup when new files are uploaded (avoid storage bloat)
-    old_front_outer = sb.img_path_cover_front_outer
-    old_front_inner = sb.img_path_cover_front_inner
-    old_back_inner = sb.img_path_cover_back_inner
-    old_back_outer = sb.img_path_cover_back_outer
+def _smi_pouzit_obrazek(image_id, sb, koren):
+    """Smí editor dát tenhle obrázek na stranu? Brání tomu, aby si někdo podle čísla
+    vložil cizí soukromou stranu do svého zpěvníku.
 
-    f_front_outer = request.files.get('front_outer')
-    f_front_inner = request.files.get('front_inner')
-    f_back_inner = request.files.get('back_inner')
-    f_back_outer = request.files.get('back_outer')
+    Smí, když obrázek už ve zpěvníku je, když ho uživatel vidí v některém zpěvníku
+    (třeba veřejném), nebo když je čerstvě nahraný (bez odkazu) v kořeni tohohle
+    zpěvníku.
+    """
+    obraz = db.session.get(Obrazek, image_id)
+    if obraz is None:
+        return None
+    if sb is not None and db.session.query(Strana.id).filter_by(
+            songbook_id=sb.id, image_id=obraz.id).first():
+        return obraz
+    if smi_videt_obrazek(current_user, obraz.cesta):
+        return obraz
+    neulozeny = not db.session.query(Strana.id).filter_by(image_id=obraz.id).first()
+    if neulozeny and obraz.cesta.startswith(koren + '/'):
+        return obraz
+    return None
 
-    def cleanup_old(old_rel: str, new_rel: str):
-        # Stará obálka jde stejnou cestou jako odebrané strany: po commitu ji smaže
-        # smaz_osirele_obrazky i s řádkem v `images`. Dřív se tu mazal jen soubor a
-        # řádek zůstal ukazovat na nic.
-        if old_rel and old_rel != new_rel:
-            ke_smazani_soubory.add(old_rel)
 
-    if f_front_outer:
-        new_rel = save_cover(f_front_outer, 'coverfrontout')
-        cleanup_old(old_front_outer, new_rel)
-        sb.img_path_cover_front_outer = new_rel
-        sb.img_path_cover_preview = sb.img_path_cover_front_outer
-    if f_front_inner:
-        new_rel = save_cover(f_front_inner, 'coverfrontin')
-        cleanup_old(old_front_inner, new_rel)
-        sb.img_path_cover_front_inner = new_rel
-    if f_back_inner:
-        new_rel = save_cover(f_back_inner, 'coverbackin')
-        cleanup_old(old_back_inner, new_rel)
-        sb.img_path_cover_back_inner = new_rel
-    if f_back_outer:
-        new_rel = save_cover(f_back_outer, 'coverbackout')
-        cleanup_old(old_back_outer, new_rel)
-        sb.img_path_cover_back_outer = new_rel
+def _uloz_obalky(sb, ke_smazani):
+    """Obálky z formuláře: nový soubor nahradí starý, příznak remove_<role> ho odebere.
 
-    # Handle removal flags from clear buttons
-    if request.form.get('remove_front_outer') == '1':
-        cleanup_old(sb.img_path_cover_front_outer, None)
-        sb.img_path_cover_front_outer = None
-        if sb.img_path_cover_preview == old_front_outer:
-            sb.img_path_cover_preview = None
-    if request.form.get('remove_front_inner') == '1':
-        cleanup_old(sb.img_path_cover_front_inner, None)
-        sb.img_path_cover_front_inner = None
-    if request.form.get('remove_back_inner') == '1':
-        cleanup_old(sb.img_path_cover_back_inner, None)
-        sb.img_path_cover_back_inner = None
-    if request.form.get('remove_back_outer') == '1':
-        cleanup_old(sb.img_path_cover_back_outer, None)
-        sb.img_path_cover_back_outer = None
-
-    # Update basic fields
-    sb.title = title or sb.title
-    sb.color = color or sb.color
-
-    # Order parsing
-    import json as _json
-    order_raw = request.form.get('order')
-    song_entries = []
-    if order_raw:
-        try:
-            song_entries = [e for e in _json.loads(order_raw) if isinstance(e, dict)]
-        except Exception:
-            song_entries = []
-
-    new_songs_raw = request.form.get('new_songs')
-    new_songs_list = []
-    if new_songs_raw:
-        try:
-            parsed_new = _json.loads(new_songs_raw)
-            if isinstance(parsed_new, list):
-                new_songs_list = parsed_new
-        except Exception:
-            new_songs_list = []
-    new_songs_map = {s.get('temp_id'): s for s in new_songs_list if isinstance(s, dict) and s.get('temp_id')}
-
-    # Nové strany z nahraných souborů. Zakládají se jen ty, na které pořadí odkazuje.
-    referenced_new_ids = []
-    for entry in song_entries:
-        sid = entry.get('song_id')
-        if sid and sid in new_songs_map and sid not in referenced_new_ids:
-            referenced_new_ids.append(sid)
-
-    payloads = []
-    for temp_id in referenced_new_ids:
-        meta = new_songs_map.get(temp_id) or {}
-        non_song = bool(meta.get('non_song'))
-        # Krátké písně můžou sdílet stranu: 'songs' nese název a autora každé z nich
-        # a všechny leží na týchž nahraných stranách.
-        members_raw = meta.get('songs')
-        if not (isinstance(members_raw, list) and members_raw):
-            members_raw = [meta]
-        members = []
-        for m in members_raw:
-            if not isinstance(m, dict):
-                continue
-            if non_song:
-                members.append(((m.get('title') or '').strip(), None))
-            else:
-                members.append(((m.get('title') or 'Moje písnička').strip() or 'Moje písnička',
-                                (m.get('author') or '-').strip() or '-'))
-        if not members:
-            members = [('', None)] if non_song else [('Moje písnička', '-')]
-        try:
-            requested_pages = int(meta.get('page_count') or 1)
-        except Exception:
-            requested_pages = 1
-        requested_pages = max(1, min(20, requested_pages))
-        files = [f for f in (request.files.get(f'new_song_{temp_id}_page_{idx}')
-                             for idx in range(1, requested_pages + 1)) if f]
-        if not files:
-            label = 'nové stránky' if non_song else f'novou písničku: {members[0][0]}'
-            return jsonify({'ok': False, 'error': f'Chybí soubory pro {label}'}), 400
-        payloads.append((temp_id, members, files, non_song))
-
-    nove_bloky = {}           # temp_id -> [Strana]
-    docasne_poradi = -1_000_000
-    for temp_id, members, files, non_song in payloads:
-        member_ids = [] if non_song else [f"custom_{uuid4().hex[:12]}" for _ in members]
-        for song_id, (title, author_name) in zip(member_ids, members):
-            author = Author.query.filter_by(name=author_name).first()
-            if not author:
-                author = Author(name=author_name)
-                db.session.add(author)
-                db.session.flush()
-            db.session.add(Song(id=song_id, title=title, author_id=author.id))
-        db.session.flush()
-
-        blok = []
-        # Soubor se ukládá jednou, ať už na straně stojí jedna píseň nebo tři.
-        for poradi_v_pisni, file_storage in enumerate(files, start=1):
-            pripona = Path(secure_filename(Path(file_storage.filename).name) or '').suffix.lower() or '.png'
-            rel_path = _nova_cesta_strany(sb, pripona)
-            abs_path = IMAGES_DIR / rel_path
+    Odebrání platí jen tehdy, když ve stejném slotu nepřišel nový soubor. Dřív se
+    zpracovávalo až po nahrání, takže „odebrat a nahrát jinou“ novou obálku zase smazalo.
+    """
+    role_jmen = {'front_outer': 'coverfrontout', 'front_inner': 'coverfrontin',
+                 'back_inner': 'coverbackin', 'back_outer': 'coverbackout'}
+    for role, jmeno in role_jmen.items():
+        sloupec = f'img_path_cover_{role}'
+        stara = getattr(sb, sloupec)
+        soubor = request.files.get(role)
+        if soubor:
+            # Jméno se z uploadu nebere: obálky jsou čtyři a každá má pevné jméno podle role.
+            ext = (Path(soubor.filename or '').suffix or '.png').lower()
+            if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.svg'):
+                ext = '.png'
+            rel = _cesta_obalky(sb, jmeno, ext)
+            abs_path = IMAGES_DIR / rel
             abs_path.parent.mkdir(parents=True, exist_ok=True)
-            _save_image_with_limit(file_storage, abs_path, ext_hint=pripona)
-            # Dočasné pořadí mimo dosah skutečných, ať se strana při flush nepotká
-            # s existující; skutečné dostane v prerovnej_strany.
-            docasne_poradi -= 1
-            strana = Strana(songbook_id=sb.id, poradi=docasne_poradi, image_path=rel_path)
-            if non_song:
-                popisek = members[0][0]
-                strana.popisek = popisek if popisek and popisek != NON_SONG_TITLE else None
-            for song_id in member_ids:
-                strana.pisne.append(PisenNaStrane(song_id=song_id, poradi_v_pisni=poradi_v_pisni))
+            _save_image_with_limit(soubor, abs_path, ext_hint=ext)
+            if stara and stara != rel:
+                ke_smazani.add(stara)
+            setattr(sb, sloupec, rel)
+            if role == 'front_outer':
+                sb.img_path_cover_preview = rel
+        elif request.form.get(f'remove_{role}') == '1' and stara:
+            ke_smazani.add(stara)
+            setattr(sb, sloupec, None)
+            if role == 'front_outer':
+                sb.img_path_cover_preview = None
+
+
+class ChybaEditoru(ValueError):
+    """Nesmyslná struktura z editoru. Hláška smí ven k uživateli."""
+
+
+def _uloz_strany(sb, data, koren, ke_smazani):
+    """Zapíše strany zpěvníku podle editoru. Necommituje.
+
+    Strana, která v seznamu není, ze zpěvníku odchází. Písně, které pak nejsou v žádném
+    zpěvníku, se smažou; obrázky bez odkazu po commitu smaz_osirele_obrazky.
+    """
+    if not isinstance(data, list):
+        raise ChybaEditoru('Neplatný seznam stran.')
+    if len(data) > MAX_STRAN_V_ZPEVNIKU:
+        raise ChybaEditoru(f'Zpěvník může mít nejvýš {MAX_STRAN_V_ZPEVNIKU} stran.')
+
+    puvodni = {st.id: st for st in sb.strany}
+    dotcene_pisne = {v.song_id for st in puvodni.values() for v in st.pisne}
+    jinde = _pisne_jinde(sb.id, dotcene_pisne)
+    nova_rada, pouzite = [], set()
+    docasne = -1_000_000
+    autori = {}
+
+    def autor_id(jmeno):
+        jmeno = (jmeno or '').strip() or '-'
+        if jmeno not in autori:
+            a = Author.query.filter_by(name=jmeno).first()
+            if a is None:
+                a = Author(name=jmeno)
+                db.session.add(a)
+                db.session.flush()
+            autori[jmeno] = a.id
+        return autori[jmeno]
+
+    predchozi_pisen = None      # píseň, která smí pokračovat na další stranu
+    poradi_predchozi = 0
+    for i, polozka in enumerate(data, start=1):
+        if not isinstance(polozka, dict):
+            raise ChybaEditoru(f'Strana {i} je neplatná.')
+        typ = polozka.get('typ')
+        if typ not in TYPY_STRAN:
+            raise ChybaEditoru(f'Strana {i} má neznámý typ.')
+
+        strana_id = polozka.get('id')
+        if strana_id is not None:
+            strana = puvodni.get(strana_id)
+            if strana is None or strana_id in pouzite:
+                raise ChybaEditoru(f'Strana {i} do zpěvníku nepatří.')
+            pouzite.add(strana_id)
+        else:
+            docasne -= 1
+            strana = Strana(songbook_id=sb.id, poradi=docasne)
             db.session.add(strana)
-            blok.append(strana)
-        nove_bloky[temp_id] = blok
+
+        # Obrázek
+        if typ == 'prazdna':
+            novy_obrazek = None
+        else:
+            image_id = polozka.get('image_id')
+            if not image_id:
+                raise ChybaEditoru(f'Strana {i} nemá obrázek.')
+            if image_id == strana.image_id:
+                novy_obrazek = strana.image
+            else:
+                novy_obrazek = _smi_pouzit_obrazek(image_id, sb, koren)
+                if novy_obrazek is None:
+                    raise ChybaEditoru(f'Obrázek strany {i} nejde použít.')
+        if strana.image_path and (novy_obrazek is None or novy_obrazek.id != strana.image_id):
+            ke_smazani.add(strana.image_path)
+        strana.image = novy_obrazek
+        strana.popisek = ((polozka.get('popisek') or '').strip() or None) if typ == 'bez' else None
+
+        # Písně: nejdřív pokračování z předchozí strany, pak ty, které tu začínají
+        vazby = []
+        if typ == 'pokracovani':
+            if predchozi_pisen is None:
+                raise ChybaEditoru(f'Strana {i} je pokračování, ale předchozí strana '
+                                   f'žádnou píseň nemá.')
+            vazby.append((predchozi_pisen, poradi_predchozi + 1))
+        zacinajici = (polozka.get('pisne') or []) if typ in ('pisen', 'pokracovani') else []
+        if typ == 'pisen' and not zacinajici:
+            raise ChybaEditoru(f'Strana {i} je označená jako píseň, ale nemá žádnou.')
+        for pisen in zacinajici:
+            if not isinstance(pisen, dict):
+                raise ChybaEditoru(f'Strana {i}: neplatná píseň.')
+            nazev = (pisen.get('nazev') or '').strip()
+            song_id = pisen.get('song_id')
+            if song_id:
+                song = db.session.get(Song, song_id)
+                if song is None or (song_id not in dotcene_pisne
+                                    and not _smi_videt_pisen(song_id)):
+                    raise ChybaEditoru(f'Strana {i}: píseň nenalezena.')
+                # Upravit jde jen píseň, která je tady a nikde jinde - přejmenování by se
+                # jinak projevilo i v cizích zpěvnících.
+                if song_id in dotcene_pisne and song_id not in jinde:
+                    if not nazev:
+                        raise ChybaEditoru(f'Strana {i}: píseň nemá název.')
+                    song.title = nazev
+                    song.author_id = autor_id(pisen.get('autor'))
+            else:
+                if not nazev:
+                    raise ChybaEditoru(f'Strana {i}: píseň nemá název.')
+                song = Song(id=f"custom_{uuid4().hex[:12]}", title=nazev,
+                            author_id=autor_id(pisen.get('autor')))
+                db.session.add(song)
+            vazby.append((song.id, 1))
+        if len({sid for sid, _ in vazby}) != len(vazby):
+            raise ChybaEditoru(f'Strana {i}: táž píseň je na straně dvakrát.')
+
+        stare = {v.song_id: v for v in strana.pisne}
+        strana.pisne = [stare[sid] if sid in stare else PisenNaStrane(song_id=sid)
+                        for sid, _ in vazby]
+        for vazba, (sid, por) in zip(strana.pisne, vazby):
+            vazba.poradi_v_pisni = por
+        dotcene_pisne |= stare.keys()
+
+        if vazby:
+            predchozi_pisen, poradi_predchozi = vazby[-1]
+        else:
+            predchozi_pisen, poradi_predchozi = None, 0
+        nova_rada.append(strana)
+
+    for strana_id, strana in puvodni.items():
+        if strana_id not in pouzite:
+            if strana.image_path:
+                ke_smazani.add(strana.image_path)
+            dotcene_pisne.update(v.song_id for v in strana.pisne)
+            sb.strany.remove(strana)
     db.session.flush()
-
-    dotcene_pisne = set()
-    # Pořadí: editor posílá řádky (píseň, skupinu písní na sdílené straně, stranu bez
-    # písně jako `strana-<id>`, novou prázdnou stranu, nebo nově nahranou píseň). Z nich
-    # se složí nová řada stran; co v ní není, ze zpěvníku odchází.
-    # Prázdné pořadí znamená "smaž všechno", chybějící pořadí "na strany nesahej".
-    if order_raw is not None:
-        puvodni = list(sb.strany)
-        podle_id = {st.id: st for st in puvodni}
-        strany_pisne_zde = {}
-        for st in puvodni:
-            for vazba in st.pisne:
-                strany_pisne_zde.setdefault(vazba.song_id, []).append(st)
-
-        nova_rada, pouzite = [], set()
-
-        def pridej(strana):
-            if strana.id is None or strana.id not in pouzite:
-                nova_rada.append(strana)
-                if strana.id is not None:
-                    pouzite.add(strana.id)
-
-        for entry in song_entries:
-            sid = entry.get('song_id')
-            if not sid:
-                if entry.get('non_song'):
-                    docasne_poradi -= 1
-                    prazdna = Strana(songbook_id=sb.id, poradi=docasne_poradi)
-                    db.session.add(prazdna)
-                    db.session.flush()
-                    pridej(prazdna)
-                continue
-            if sid in nove_bloky:
-                for strana in nove_bloky[sid]:
-                    pridej(strana)
-                continue
-            if str(sid).startswith('strana-'):
-                try:
-                    strana = podle_id.get(int(str(sid)[len('strana-'):]))
-                except ValueError:
-                    strana = None
-                if strana is not None:
-                    pridej(strana)
-                continue
-            # Skupina písní na sdílené straně se posílá celá a ukládá jako celek, jinak
-            # by se strana roztrhla.
-            clenove = entry.get('song_ids')
-            if not isinstance(clenove, list) or not clenove:
-                clenove = [sid]
-            strany_skupiny = {st.id: st for c in clenove for st in strany_pisne_zde.get(c, [])}
-            for strana in sorted(strany_skupiny.values(), key=lambda st: st.poradi):
-                pridej(strana)
-
-        for strana in puvodni:
-            if strana.id not in pouzite:
-                if strana.image_path:
-                    ke_smazani_soubory.add(strana.image_path)
-                dotcene_pisne.update(v.song_id for v in strana.pisne)
-                sb.strany.remove(strana)
-        db.session.flush()
-        prerovnej_strany(sb, nova_rada)
-        db.session.expire(sb, ['strany'])
-
-    # Výslovně odebrané písně. Většinou už jsou pryč, protože chybí v pořadí; tohle je
-    # pojistka pro požadavek, který pošle odebrání bez pořadí.
-    delete_raw = request.form.get('delete_songs')
-    if delete_raw:
-        try:
-            to_delete = _json.loads(delete_raw)
-        except Exception:
-            to_delete = []
-        if isinstance(to_delete, list):
-            v_knize = pisne_zpevniku(sb.id)
-            for sid in to_delete:
-                if sid in v_knize:
-                    ke_smazani_soubory.update(odeber_pisen_ze_zpevniku(sb, sid))
-                dotcene_pisne.add(sid)
-
-    sb.prvni_cislo_strany = first_page_number
+    prerovnej_strany(sb, nova_rada)
+    db.session.expire(sb, ['strany'])
     smaz_pisne_mimo_zpevniky(dotcene_pisne)
 
-    db.session.commit()
-    # Až po commitu, protože se rozhoduje podle toho, co v databázi zbylo.
-    smaz_osirele_obrazky(ke_smazani_soubory)
-    # Až po commitu: předpřipravit ke stažení novou podobu zpěvníku a zahodit tu starou.
-    # Bez toho by první, kdo si zpěvník stáhne po úpravě, čekal na skládání - a hlavně
-    # by hrozilo, že se stáhne jiný stav, než je na webu, kdyby na to někdo zapomněl.
-    schedule_export_warm(songbook_id)
-    return jsonify({'ok': True})
+
+def _smi_videt_pisen(song_id):
+    """Píseň z jiného zpěvníku smí editor použít, jen když ten zpěvník uživatel vidí."""
+    for (sb_id,) in (db.session.query(Strana.songbook_id)
+                     .join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+                     .filter(PisenNaStrane.song_id == song_id).distinct()):
+        jiny = db.session.get(Songbook, sb_id)
+        if jiny is not None and can_view_songbook(current_user, jiny):
+            return True
+    return False
+
+
+@app.route('/api/zpevnik', methods=['POST'])
+@app.route('/api/zpevnik/<songbook_id>', methods=['POST'])
+@login_required
+def uloz_zpevnik(songbook_id=None):
+    """Založí nový zpěvník, nebo uloží existující - obojí stejně, z jednoho editoru.
+
+    Formulář: nazev, barva, prvni_cislo, strany (JSON), obálky front_outer… jako
+    soubory a remove_<role>=1 pro odebrání; u nového zpěvníku verejny=1 (jen admin).
+    """
+    import json as _json
+    if songbook_id is None:
+        if is_guest(current_user) or not smi_tvorit(current_user):
+            return jsonify({'ok': False, 'error': 'Nejdřív si prosím ověřte e-mailovou adresu.'}), 403
+        verejny = request.form.get('verejny') == '1'
+        if verejny and not is_admin(current_user):
+            return jsonify({'ok': False, 'error': 'Veřejný zpěvník může vytvořit jen admin.'}), 403
+        sb = Songbook(
+            id=_next_public_songbook_id() if verejny else f"u{current_user.id}-{int(time.time())}",
+            title='Nový zpěvník', owner_id=None if verejny else current_user.id,
+            is_public=1 if verejny else 0, first_page_side='right', color='#FFFFFF',
+            prvni_cislo_strany=1)
+        db.session.add(sb)
+        db.session.flush()
+    else:
+        sb = db.session.get(Songbook, songbook_id)
+        if sb is None or not can_edit_songbook(current_user, sb):
+            return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+
+    koren = _koren_pro_zpevnik(sb)
+    ke_smazani = set()
+    try:
+        nazev = (request.form.get('nazev') or '').strip()
+        if nazev:
+            sb.title = nazev
+        elif songbook_id is None:
+            sb.title = 'Nový zpěvník' if sb.is_public else 'Můj zpěvník'
+        barva = (request.form.get('barva') or '').strip()
+        if re.fullmatch(r'#[0-9a-fA-F]{6}', barva):
+            sb.color = barva
+        try:
+            sb.prvni_cislo_strany = max(1, min(9999, int(request.form.get('prvni_cislo'))))
+        except (TypeError, ValueError):
+            pass
+        _uloz_obalky(sb, ke_smazani)
+        if request.form.get('strany') is not None:
+            try:
+                strany = _json.loads(request.form.get('strany'))
+            except ValueError:
+                raise ChybaEditoru('Neplatný seznam stran.')
+            _uloz_strany(sb, strany, koren, ke_smazani)
+        db.session.commit()
+    except ChybaEditoru as chyba:
+        db.session.rollback()
+        return jsonify({'ok': False, 'error': str(chyba)}), 400
+
+    smaz_osirele_obrazky(ke_smazani)
+    schedule_export_warm(sb.id)
+    return jsonify({'ok': True, 'id': sb.id})
+
 
 def _drop_stale_exports(songbook):
     """Delete every download of this songbook that no longer matches its content.

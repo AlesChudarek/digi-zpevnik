@@ -319,7 +319,7 @@ def main():
             page.evaluate("() => document.querySelector('.btn-edit').click()")
             page.wait_for_timeout(1500)
             editor = page.evaluate("""() => {
-              const z = document.querySelector('#edit-songs-section .napoveda-znak');
+              const z = document.querySelector('#editor-stran .napoveda-znak');
               return z ? {text: z.dataset.napoveda || '',
                           sirka: Math.round(z.getBoundingClientRect().width)} : null;
             }""")
@@ -331,7 +331,7 @@ def main():
                 zkontroluj(editor["sirka"] == 15,
                            "a má stejnou velikost jako ⓘ v okně stahování",
                            f"{editor['sirka']} px")
-                najed(page, "#edit-songs-section .napoveda-znak")
+                najed(page, "#editor-stran .napoveda-znak")
                 stav = page.evaluate(STAV)
                 zkontroluj(not stav["skryta"] and stav["vejde"],
                            "bublina se v editoru vejde na obrazovku", str(stav["ram"]))

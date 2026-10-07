@@ -5,6 +5,9 @@
 {# Okno se skládáním souboru je sdílené se čtečkou, viz static/js/stahovani.js. #}
 <link rel="stylesheet" href="{{ static_bust('css/stahovani.css') }}">
 <script src="{{ static_bust('js/stahovani.js') }}"></script>
+{# Editor stran zpěvníku, viz static/js/editor.js. #}
+<link rel="stylesheet" href="{{ static_bust('css/editor.css') }}">
+<script src="{{ static_bust('js/editor.js') }}"></script>
 {% set upload_limit_mb = max_upload_mb if max_upload_mb is defined and max_upload_mb is not none else 2.0 %}
 {% set upload_limit_bytes = max_upload_bytes if max_upload_bytes is defined and max_upload_bytes is not none else 2097152 %}
 <style>
@@ -305,73 +308,6 @@
   </div>
 </div>
 
-<!-- Modal: Nová písnička -->
-<style>
-  #new-song-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 3200; overflow-y: auto; }
-  #new-song-modal .modal-wrap { margin-top: 70px; }
-  #new-song-modal .modal { background: white; color: var(--brand-dark, #1b5e20); width: min(840px, 94vw); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 20px 22px; }
-  #new-song-modal h2 { margin: 0 0 12px; }
-  .ns-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0; }
-  .ns-row label { font-weight: 600; font-size: 14px; }
-  .ns-row input[type="text"] { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); }
-  .ns-ctrl { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-  .ns-ctrl input[type="number"] { width: 80px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); }
-  .ns-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin: 10px 0; }
-  .ns-file { display: grid; grid-template-columns: 1fr 96px; gap: 8px; align-items: center; }
-  /* Reuse dropzone look for consistency with editor */
-  .ns-file .dropzone { border: 2px dashed #c8c8c8; border-radius: 10px; padding: 12px; text-align: center; color: #666; background: #fafafa; cursor: pointer; transition: background 0.2s, border-color 0.2s; min-height: 60px; display: flex; align-items: center; justify-content: center; }
-  .ns-file .dropzone:hover { background: #f1f1f1; border-color: #a8a8a8; }
-  .ns-prev { width: 96px; height: calc(96px * 2480 / 1748); background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-  .ns-prev img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; background: #fff; }
-  /* Hover preview */
-  #ns-hover-preview { position: fixed; pointer-events: none; z-index: 4000; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.35); border: 1px solid #e0e0e0; background: #fff; border-radius: 8px; }
-  #ns-hover-preview img { display: block; width: 280px; height: calc(280px * 2480 / 1748); object-fit: contain; background: #fff; }
-  .ns-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
-  .ns-btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 9px 13px; border-radius: 10px; cursor: pointer; font-weight: 600; }
-  .ns-btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
-  .ns-btn[disabled] { opacity: 0.5; pointer-events: none; }
-</style>
-
-<div id="new-song-modal">
-  <div class="modal-wrap">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="ns-title">
-      <h2 id="ns-title">Nová písnička</h2>
-      <div class="ns-row">
-        <div>
-          <label for="ns-title-input">Název</label>
-          <input type="text" id="ns-title-input" placeholder="Moje písnička">
-        </div>
-        <div id="ns-author-wrap">
-          <label for="ns-author-input">Autor</label>
-          <input type="text" id="ns-author-input" placeholder="-">
-        </div>
-      </div>
-      <div id="ns-extra-songs"></div>
-      <div id="ns-add-song-wrap" style="margin-top:6px;">
-        <span class="s-napovedou" data-napoveda="Přidat další písničku na tuto stejnou stránku">
-          <button type="button" id="ns-add-song"
-                  style="width:28px; height:28px; border-radius:50%; border:1px solid var(--muted-border, #a7d7b0);
-                         background: var(--muted-bg, #e8f5e9); color: var(--brand-dark, #1b5e20);
-                         font-size:18px; line-height:1; cursor:pointer;">+</button>
-        </span>
-      </div>
-      <div class="ns-ctrl">
-        <label for="ns-pages">Počet stran písničky</label>
-        <input type="number" id="ns-pages" min="1" max="20" value="1">
-      </div>
-      <div id="ns-files" class="ns-grid"></div>
-      <div class="ns-actions">
-        <button class="ns-btn" id="ns-cancel">Zrušit</button>
-        <div class="btn-with-inline-spinner">
-          <span class="btn-spinner" id="ns-save-spinner" aria-hidden="true"></span>
-          <button class="ns-btn primary" id="ns-save" disabled>Uložit</button>
-        </div>
-      </div>
-    </div>
-  </div>
-  
-</div>
-<div id="ns-hover-preview"><img alt="Náhled"></div>
 <!-- Modal: Nový zpěvník (vizuál) -->
 <style>
   #new-book-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 3000; overflow-y: auto; }
@@ -594,6 +530,32 @@
         </div>
       </div>
 
+      <section class="editor-stran" id="editor-stran">
+        <div class="es-zahlavi">
+          <h3>Strany</h3>
+          <label class="es-prvni">Číslo první strany
+            <input type="number" id="es-prvni" min="1" max="9999" value="1">
+            <button type="button" class="napoveda-znak" aria-label="Co to znamená"
+                    data-napoveda="Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.">i</button>
+          </label>
+        </div>
+        <p class="es-zprava" id="es-zprava" hidden></p>
+        <p class="es-prazdno" id="es-prazdno">Zpěvník zatím nemá žádnou stranu. Přidej obrázky stran, nebo je sem přetáhni.</p>
+        <ol class="es-seznam" id="es-seznam"></ol>
+        <div class="es-pridavani">
+          <button type="button" class="btn primary" id="es-pridat">+ Přidat strany</button>
+          <button type="button" class="btn" id="es-pridat-prazdnou">+ Prázdná strana</button>
+          <span class="es-tip">Obrázky jde i přetáhnout sem.</span>
+          <input type="file" id="es-soubory" accept="image/*" multiple hidden>
+        </div>
+        <p class="es-stav-nahravani" id="es-stav-nahravani" role="status" hidden></p>
+        <div class="es-nabidka" id="es-nabidka-vlozit" hidden>
+          <button type="button" data-akce="obrazky">Obrázky stran…</button>
+          <button type="button" data-akce="prazdna">Prázdná strana</button>
+        </div>
+        <datalist id="es-autori"></datalist>
+      </section>
+
       <div class="modal-actions">
         <button class="btn" id="nb-cancel" style="display:none;">Zrušit</button>
         <button class="btn primary" id="nb-create" style="display:none;">Uložit</button>
@@ -602,30 +564,16 @@
   </div>
 </div>
 
-<!-- Styly sdílené oknem zpěvníku a jeho seznamem písní -->
+<div class="es-lupa" id="es-lupa" hidden>
+  <img alt="Strana zpěvníku">
+  <div class="es-lupa-akce">
+    <button type="button" class="btn es-vymenit">Vyměnit obrázek</button>
+    <button type="button" class="btn primary es-zavrit">Zavřít</button>
+  </div>
+</div>
+
+<!-- Styly sdílené okny zpěvníku -->
 <style>
-  /* Šest sloupců se na telefon nevejde: na 390 px má rámeček 346 px a tabulka podle
-     obsahu 413-435, takže poslední sloupec „Odebrat" ležel až za okrajem obrazovky
-     a posouvalo se celé okno. Teď se roluje tabulka uvnitř svého rámečku.
-     `overflow: visible` tu dřív bylo kvůli tooltipům, které z řádků vykukovaly ven;
-     ty dnes kreslí plovoucí bublina na <body> (static/js/napoveda.js), takže ten
-     důvod padl. */
-  .songs-list { border: 1px solid var(--muted-border, #dbeadf); border-radius: 10px; overflow-x: auto; }
-  .songs-list table { width: 100%; border-collapse: collapse; }
-  .songs-list th, .songs-list td { padding: 10px 12px; border-top: 1px solid var(--muted-border, #e2e8f0); text-align: left; }
-  .songs-list tr:first-child th { border-top: none; }
-  .drag-handle { cursor: grab; user-select: none; font-size: 18px; opacity: 0.7; }
-  .songs-list tr.dragging { opacity: 0.6; }
-  .row-action { background: none; border: none; padding: 0; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  .row-action img { width: 22px; height: 22px; display: block; filter: invert(27%) sepia(81%) saturate(4041%) hue-rotate(342deg) brightness(102%) contrast(97%); transition: transform 0.12s ease-in-out; }
-  .row-action:hover img { transform: scale(1.08); }
-  .songs-list .page-span { text-align: center; }
-  .songs-list th.center, .songs-list td.center { text-align: center; }
-  .songs-list th.action-col, .songs-list td.action-cell { text-align: center; }
-  #eb-songs tr[data-new-song="1"] td { font-style: italic; }
-  .pending-pill { display: inline-flex; align-items: center; gap: 4px; background: #fff3cd; color: #8a6116; font-size: 12px; padding: 2px 6px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
-  .songs-toolbar { display: flex; align-items: center; gap: 16px; }
-  .songs-toolbar label { display: flex; align-items: center; gap: 8px; }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
   .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
@@ -636,28 +584,15 @@
   @media (max-width: 820px) {
     /* width: min(880px, 92vw) plus 24px padding on a content-box made the dialog
        wider than the screen (407px inside a 390px window) and shifted it off-centre. */
-    #new-book-modal .modal,
-      #new-song-modal .modal {
+    #new-book-modal .modal {
       box-sizing: border-box;
       width: 96vw;
       padding: 14px;
     }
-    #new-book-modal .modal-wrap,
-      #new-song-modal .modal-wrap { margin-top: 8px; }
+    #new-book-modal .modal-wrap { margin-top: 8px; }
 
     /* Four cover dropzones two-up do not fit a phone */
     .cover-grid { grid-template-columns: 1fr; gap: 12px; }
-
-    /* Odsazení buněk je na úzké obrazovce to jediné, co se dá ušetřit, aniž by se
-       sloupec musel schovat. Vydá to kolem 50 px z těch 89, o které tabulka přetékala. */
-    .songs-list th, .songs-list td { padding: 8px 5px; }
-
-    /* Tři tlačítka na přidávání stran vedle nadpisu „Písničky" mají dohromady 314 px
-       a přečuhovala z okna o 30 px. `flex-wrap` sem patří do CSS, protože samotné
-       `display:flex` sedí v atributu style (staví se to v ensureEditSection) a odtud
-       by se přebít nedalo. */
-    .section-head, .right-actions { flex-wrap: wrap; }
-    .ns-row { grid-template-columns: 1fr; }
 
     /* These sat at right: -34px, outside their own box, and reached 506px on a 390px
        screen - that was the widest thing on the page. Moved inside. */
@@ -883,8 +818,6 @@
       const nbCreateBtn = document.getElementById('nb-create');
       const nbSaveTopBtn = document.getElementById('nb-save-top');
       const nbSaveTopSpinner = document.getElementById('nb-save-top-spinner');
-      const nsSaveBtn = document.getElementById('ns-save');
-      const nsSaveSpinner = document.getElementById('ns-save-spinner');
 
       let rafId = null;
       const DURATION_MS = 8000; // default full turn time
@@ -968,10 +901,11 @@
 
 let createDirty = false;
 function openCreateModal() {
-  // If an edit-injected section from a previous session exists, remove it
-  try { const editSection = document.getElementById('edit-songs-section'); if (editSection) editSection.remove(); } catch(_) {}
-  // Reset dirty flag for fresh create session
   createDirty = false;
+  try { ['front_outer','front_inner','back_inner','back_outer'].forEach(k => { const el = document.getElementById('erem-' + k); if (el) el.value = '0'; }); } catch(_) {}
+  // Strany obsluhuje static/js/editor.js; u úprav je pak naplní openEditSongbookModal.
+  EditorStran.zacni({ zpevnikId: window.__editMode ? window.__editBookId : null,
+                      verejny: MANAGE_PUBLIC });
   // Reset heading/primary only when NOT in edit mode
   if (!window.__editMode) {
     const titleEl = document.getElementById('nb-title'); if (titleEl) titleEl.textContent = 'Nový zpěvník';
@@ -993,17 +927,14 @@ function openCreateModal() {
         if (sp.get('create') === '1') { window.__editMode = false; window.__editBookId = null; openCreateModal(); }
       } catch(_) {}
       document.getElementById('nb-cancel').addEventListener('click', async (e) => {
-        const changed = window.__editMode ? hasEditModeChanges() : !!createDirty;
-        if (changed) {
+        if (zmenyOkna()) {
           const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
           if (choice === 'cancel') { e.preventDefault(); return; }
           if (choice === 'save') { nbCreateBtn?.click(); return; }
         }
         modal.style.display = 'none'; stopAnim(); resetColorToRandom(); resetUploads();
         // Leaving create/edit modal: ensure next open via "+" is fresh create
-        window.__editMode = false; window.__editBookId = null; window.__editInitialState = null;
-        window.__pendingNewSongs = new Map();
-        try { if (window.__pendingSongDeletes && typeof window.__pendingSongDeletes.clear === 'function') { window.__pendingSongDeletes.clear(); } } catch(_) {}
+        window.__editMode = false; window.__editBookId = null;
       });
       // Close only if the click started on overlay and ended on overlay (no drag from content)
       let pointerDownOnOverlay = false;
@@ -1017,8 +948,7 @@ function openCreateModal() {
       modal.addEventListener('click', async (e) => {
         const shouldClose = (e.target === modal) && pointerDownOnOverlay && !dragging && !justDragged && !startedInsideContent;
         if (shouldClose) {
-          const changed = window.__editMode ? hasEditModeChanges() : !!createDirty;
-          if (changed) {
+          if (zmenyOkna()) {
             const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
             if (choice === 'cancel') { pointerDownOnOverlay = false; startedInsideContent = false; return; }
             if (choice === 'save') { nbCreateBtn?.click(); return; }
@@ -1027,9 +957,7 @@ function openCreateModal() {
           stopAnim();
           resetColorToRandom();
           resetUploads();
-          window.__editMode = false; window.__editBookId = null; window.__editInitialState = null;
-          window.__pendingNewSongs = new Map();
-          try { if (window.__pendingSongDeletes && typeof window.__pendingSongDeletes.clear === 'function') { window.__pendingSongDeletes.clear(); } } catch(_) {}
+          window.__editMode = false; window.__editBookId = null;
         }
         // reset flags after any click
         pointerDownOnOverlay = false;
@@ -1228,42 +1156,47 @@ function openCreateModal() {
 
     initColor();
 
-    // Create private songbook
+    // Uložení: nový i upravovaný zpěvník jdou stejnou cestou (/api/zpevnik). Strany už
+    // jsou nahrané (editor.js je posílá hned po přidání), takže se tu posílá jen
+    // struktura a obálky.
+    function zmenyOkna() { return !!createDirty || EditorStran.zmeneno(); }
+
     if (nbCreateBtn) {
       nbCreateBtn.addEventListener('click', async () => {
-        if (window.__editMode) return;
         if (nbCreateBtn.dataset.loading === '1') return;
-        toggleButtonLoading(nbCreateBtn, null, true, 'Ukládám…');
-        toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, 'Ukládám…');
-        const nameEl = document.getElementById('nb-name');
-        // cover toggle removed (always enabled)
-        const hexInput = document.getElementById('hex-col');
-        const files = {
-          front_outer: document.getElementById('file-front-outer')?.files?.[0] || null,
-          back_outer: document.getElementById('file-back-outer')?.files?.[0] || null,
-          front_inner: document.getElementById('file-front-inner')?.files?.[0] || null,
-          back_inner: document.getElementById('file-back-inner')?.files?.[0] || null,
-        };
-
-        const fd = new FormData();
-        fd.append('title', (nameEl?.value || '').trim());
-        fd.append('use_cover', '1');
-        if (MANAGE_PUBLIC) fd.append('is_public', '1');
-        if (hexInput && hexInput.value) fd.append('color', hexInput.value);
-        Object.entries(files).forEach(([k,v]) => { if (v) fd.append(k, v); });
-
+        const popisek = EditorStran.nahrava() ? 'Nahrávám strany…' : 'Ukládám…';
+        toggleButtonLoading(nbCreateBtn, null, true, popisek);
+        toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, popisek);
         let resetLoading = true;
         try {
-          const res = await fetch('/api/my-songbooks', { method: 'POST', body: fd });
-          if (!res.ok) {
-            const msg = await res.text();
-            alert('Vytvoření selhalo: ' + popisChyby(msg, res.status));
+          const pripraveno = await EditorStran.pripravKUlozeni();
+          if (!pripraveno.ok) {
+            alert(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.');
             return;
           }
-          // Success: reload to show the new songbook
+          const fd = new FormData();
+          fd.append('nazev', (document.getElementById('nb-name')?.value || '').trim());
+          const hex = document.getElementById('hex-col')?.value;
+          if (hex) fd.append('barva', hex);
+          fd.append('prvni_cislo', String(EditorStran.prvniCislo()));
+          fd.append('strany', JSON.stringify(EditorStran.data()));
+          if (!window.__editMode && MANAGE_PUBLIC) fd.append('verejny', '1');
+          ['front_outer', 'front_inner', 'back_inner', 'back_outer'].forEach(role => {
+            const soubor = document.getElementById('file-' + role.replace('_', '-'))?.files?.[0];
+            if (soubor) fd.append(role, soubor);
+            if (document.getElementById('erem-' + role)?.value === '1') fd.append('remove_' + role, '1');
+          });
+          const url = window.__editMode
+            ? `/api/zpevnik/${encodeURIComponent(window.__editBookId)}` : '/api/zpevnik';
+          const res = await fetch(url, { method: 'POST', body: fd });
+          const odpoved = await res.json().catch(() => ({}));
+          if (!res.ok || !odpoved.ok) {
+            alert('Uložení se nepovedlo: ' + (odpoved.error || `chyba serveru ${res.status}`));
+            return;
+          }
+          createDirty = false;
           window.location.reload();
           resetLoading = false;
-          return;
         } catch (e) {
           alert('Chyba při komunikaci se serverem');
         } finally {
@@ -1447,772 +1380,37 @@ function openCreateModal() {
       });
     }
 
-    // ------- Edit mode reusing create modal -------
+    // ------- Úprava existujícího zpěvníku: totéž okno, jen naplněné -------
     window.__editMode = false;
     window.__editBookId = null;
-    window.__pendingNewSongs = new Map();
-
-    function generateTempRowId(prefix = 'tmp') {
-      return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-    }
-
-    function ensureRowStableId(tr) {
-      if (!tr) return null;
-      let tid = tr.getAttribute('data-temp-id');
-      if (!tid) {
-        tid = generateTempRowId('row');
-        tr.setAttribute('data-temp-id', tid);
-      }
-      return tid;
-    }
-
-    function computeSongOrderSignature() {
-      const tbody = document.getElementById('eb-songs');
-      if (!tbody) return [];
-      return Array.from(tbody.querySelectorAll('tr')).map(tr => {
-        const sid = tr.getAttribute('data-song-id');
-        if (sid && sid !== 'null') return sid;
-        return ensureRowStableId(tr);
-      });
-    }
-
-    function cleanupPendingNewSongs(currentOrder) {
-      if (!window.__pendingNewSongs || !window.__pendingNewSongs.size) return;
-      const orderSet = new Set(currentOrder);
-      Array.from(window.__pendingNewSongs.keys()).forEach(key => {
-        if (!orderSet.has(key)) {
-          window.__pendingNewSongs.delete(key);
-        }
-      });
-    }
-
-    function captureEditInitialStateFromCreate() {
-      try {
-        const titleVal = (document.getElementById('nb-name')?.value || '').trim();
-        const colorVal = (document.getElementById('hex-col')?.value || '').trim();
-        const orderInit = computeSongOrderSignature();
-        window.__editInitialState = { title: titleVal, color: colorVal, order: orderInit };
-      } catch(_) {
-        window.__editInitialState = null;
-      }
-    }
-
-    function hasEditModeChanges() {
-      const rows = Array.from(document.getElementById('eb-songs')?.querySelectorAll('tr') || []);
-      const currentOrder = computeSongOrderSignature();
-      cleanupPendingNewSongs(currentOrder);
-      const titleVal = (document.getElementById('nb-name')?.value || '').trim();
-      const colorVal = (document.getElementById('hex-col')?.value || '').trim().toLowerCase();
-      const init = window.__editInitialState || null;
-      let changed = false;
-      if (init) {
-        if (titleVal !== (init.title || '')) changed = true;
-        if (!changed && colorVal !== (init.color || '').toLowerCase()) changed = true;
-        if (!changed) {
-          const initOrder = init.order || [];
-          if (currentOrder.length !== initOrder.length) changed = true;
-          else {
-            for (let i = 0; i < currentOrder.length; i += 1) {
-              if (currentOrder[i] !== initOrder[i]) { changed = true; break; }
-            }
-          }
-        }
-      }
-      if (!changed) {
-        const fileIds = ['file-front-outer','file-front-inner','file-back-inner','file-back-outer'];
-        changed = fileIds.some(id => {
-          const inp = document.getElementById(id);
-          return !!(inp && inp.files && inp.files.length);
-        });
-      }
-      if (!changed) {
-        changed = ['front_outer','front_inner','back_inner','back_outer']
-          .some(key => document.getElementById('erem-' + key)?.value === '1');
-      }
-      if (!changed && rows.some(tr => tr.getAttribute('data-new-song') === '1' || tr.getAttribute('data-non-song') === '1')) {
-        changed = true;
-      }
-      if (!changed) {
-        const pendingDeletes = window.__pendingSongDeletes;
-        if (pendingDeletes && pendingDeletes.size) changed = true;
-      }
-      if (!changed) {
-        const pendingNew = window.__pendingNewSongs;
-        if (pendingNew && pendingNew.size) {
-          const orderSet = new Set(currentOrder);
-          const active = Array.from(pendingNew.keys()).some(key => orderSet.has(key));
-          if (active) changed = true;
-        }
-      }
-      if (!changed) {
-        const flagged = !!window.__editDirtyConfirm;
-        if (flagged) window.__editDirtyConfirm = false;
-      }
-      return changed;
-    }
-
-    function escapeHtmlLite(value) {
-      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-      return String(value || '').replace(/[&<>"']/g, ch => map[ch] || ch);
-    }
-
-    function ensureEditSection(modalContent) {
-      if (document.getElementById('edit-songs-section')) return;
-      const section = document.createElement('div');
-      section.id = 'edit-songs-section';
-      section.innerHTML = `
-        <div class=\"section-head\" style=\"display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top: 6px;\">\n          <h3 class=\"section-title\" style=\"margin: 0;\">Písničky</h3>\n          <div class=\"right-actions\" style=\"display:flex; align-items:center; gap:8px;\">\n            <button class=\"btn\" id=\"btn-add-blank-page-nb\">Přidat prázdnou stránku</button>\n            <button class=\"btn\" id=\"btn-add-nonsong-page-nb\">Přidat nepísničkovou stránku</button>\n            <button class=\"btn primary\" id=\"btn-add-custom-song-nb\">Přidat svou písničku</button>\n          </div>\n        </div>
-        <div class=\"songs-toolbar\" style=\"margin-top:8px; display:flex; align-items:center; gap:8px;\">
-          <label for=\"nb-first-page\">Číslo první strany</label>
-          <input type=\"number\" id=\"nb-first-page\" min=\"1\" value=\"1\" style=\"width:80px;\">
-          <button type=\"button\" class=\"napoveda-znak\" aria-label=\"Co to znamená\"
-                  data-napoveda=\"Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.\">i</button>
-        </div>
-        <div class="songs-list" style="margin-top:12px;">
-          <table style="width:100%; border-collapse:collapse;">
-            <thead>
-              <tr>
-                <th style=\"width:36px; padding:10px 12px;\">&nbsp;</th>
-                <th style=\"padding:10px 12px;\">Název</th>
-                <th style=\"padding:10px 12px;\">Autor</th>
-                <th style=\"width:180px; padding:10px 12px; text-align:center;\">Strana</th>
-                <th class=\"action-col\" style=\"width:60px; padding:10px 12px; text-align:center;\">Odebrat</th>
-              </tr>
-            </thead>
-            <tbody id=\"eb-songs\"></tbody>
-          </table>
-        </div>
-        </div>`;
-      modalContent.appendChild(section);
-    }
-
-    // Songs that share a page are shown as one row, because that row IS the page.
-    // Keeping them in one row is also what stops saving from splitting the page.
-    function groupSongsByPage(songs) {
-      const groups = [];
-      const byGroup = new Map();
-      (songs || []).forEach(s => {
-        const key = (s.page_group === null || s.page_group === undefined) ? `solo:${s.song_id}` : `g:${s.page_group}`;
-        if (byGroup.has(key)) {
-          byGroup.get(key).members.push(s);
-          return;
-        }
-        const group = { ...s, members: [s] };
-        byGroup.set(key, group);
-        groups.push(group);
-      });
-      return groups;
-    }
-
-    function renderEditRow(s) {
-      const tr = document.createElement('tr');
-      const members = s.members && s.members.length ? s.members : [s];
-      tr.setAttribute('data-song-id', s.song_id);
-      tr.setAttribute('data-song-ids', members.map(m => m.song_id).join(','));
-      if (s.is_private) tr.setAttribute('data-private', '1');
-      tr.setAttribute('data-page-count', String(s.page_count || 1));
-      tr.setAttribute('draggable', 'true');
-      if (s.pending) tr.setAttribute('data-new-song', '1');
-      // Marker only, for styling. Deliberately NOT 'data-non-song', which the order
-      // builder reads as "create an empty page" for rows that carry no song id.
-      if (s.is_non_song) tr.setAttribute('data-nonsong-page', '1');
-      const nonSongPill = s.is_non_song
-        ? ' <span class="pending-pill" style="background:#eceff1; color:#546e7a;">Bez písničky</span>'
-        : '';
-      const sharedPill = members.length > 1
-        ? ` <span class="pending-pill" style="background:#e8f0fe; color:#1a56c4;">${members.length} na straně</span>`
-        : '';
-      const pendingPill = s.pending ? ' <span class="pending-pill">Nová</span>' : '';
-      // One row is one page, so a shared page lists every song sitting on it
-      const titleHtml = members.map(m => m.title || '').join('<br>')
-                        + nonSongPill + sharedPill + pendingPill;
-      const authorHtml = members.map(m => m.author || '').join('<br>');
-      tr.innerHTML = `
-        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
-        <td>${titleHtml}</td>
-        <td>${authorHtml}</td>
-        <td class="page-span"></td>
-        <td class="action-cell">
-          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
-            <button class="row-action btn-row-delete" aria-label="Odstranit">
-              <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
-            </button>
-          </span>
-        </td>
-      `;
-      return tr;
-    }
-
-    function renderBlankEditRow() {
-      const tr = document.createElement('tr');
-      tr.setAttribute('data-page-count', '1');
-      tr.setAttribute('data-non-song', '1');
-      tr.setAttribute('draggable', 'true');
-      tr.setAttribute('data-temp-id', generateTempRowId('blank'));
-      tr.innerHTML = `
-        <td class="drag-handle" data-napoveda="Přetáhnout">≡</td>
-        <td>&lt;Prázdná strana&gt;</td>
-        <td>-</td>
-        <td class="page-span"></td>
-        <td class="action-cell">
-          <span class="s-napovedou" data-napoveda="Odstranit ze zpěvníku">
-            <button class="row-action btn-row-delete" aria-label="Odstranit">
-              <img src="${"{{ static_bust('img/icons/remove-song.svg') }}"}" alt="Odebrat">
-            </button>
-          </span>
-        </td>`;
-      return tr;
-    }
-
-    function wireEditDrag() {
-      const ebSongs = document.getElementById('eb-songs');
-      if (!ebSongs) return;
-      let dragEl = null;
-      ebSongs.querySelectorAll('tr').forEach(tr => {
-        tr.addEventListener('dragstart', (e) => { dragEl = tr; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; });
-        tr.addEventListener('dragend', () => { if (dragEl) tr.classList.remove('dragging'); dragEl = null; updateDisplayPages(); try { createDirty = true; } catch(_) {} });
-        tr.addEventListener('dragover', (e) => { e.preventDefault(); const target = e.currentTarget; if (!dragEl || dragEl === target) return; const rect = target.getBoundingClientRect(); const after = (e.clientY - rect.top) > rect.height/2; ebSongs.insertBefore(dragEl, after ? target.nextSibling : target); });
-      });
-    }
-
-    function wireEditRowActions() {
-      const ebSongs = document.getElementById('eb-songs');
-      if (!ebSongs) return;
-      ebSongs.querySelectorAll('.btn-row-delete').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-          e.preventDefault(); e.stopPropagation();
-          const tr = btn.closest('tr'); if (!tr) return;
-          const sid = tr.getAttribute('data-song-id');
-          const isNew = tr.getAttribute('data-new-song') === '1';
-          if (isNew) {
-            try { if (sid && window.__pendingNewSongs && typeof window.__pendingNewSongs.delete === 'function') window.__pendingNewSongs.delete(sid); } catch(_) {}
-          } else {
-            // Stage deletion; actual DB changes occur on Save
-            try {
-              window.__pendingSongDeletes = window.__pendingSongDeletes || new Set();
-              if (sid) window.__pendingSongDeletes.add(sid);
-            } catch(_) {}
-          }
-          tr.remove();
-          try { updateDisplayPages(); } catch(_) {}
-          try { createDirty = true; } catch(_) {}
-          window.__editDirtyConfirm = true;
-        });
-      });
-    }
-
-    // Add blank page in re-use edit section (within new-book modal)
-    document.addEventListener('click', (e) => {
-      if (e.target && e.target.id === 'btn-add-blank-page-nb') {
-        e.preventDefault();
-        const tbody = document.getElementById('eb-songs');
-        if (!tbody) return;
-        const tr = renderBlankEditRow();
-        tbody.appendChild(tr);
-        updateDisplayPages();
-        wireEditDrag();
-        wireEditRowActions();
-        window.__editDirtyConfirm = true;
-      }
-    });
-
-    // ---------- New custom song modal ----------
-    const nsModal = document.getElementById('new-song-modal');
-    const nsFilesWrap = document.getElementById('ns-files');
-    const nsPages = document.getElementById('ns-pages');
-    const nsTitle = document.getElementById('ns-title-input');
-    const nsAuthor = document.getElementById('ns-author-input');
-    const nsSave = document.getElementById('ns-save');
-    const nsCancel = document.getElementById('ns-cancel');
-    const nsHover = document.getElementById('ns-hover-preview');
-
-    // Persist selected files across re-render
-    let nsSelected = {};
-    function snapshotSelected(n) {
-      const res = {};
-      for (let i=1;i<=n;i++) {
-        const el = document.getElementById(`ns-file-${i}`);
-        if (el && el.files && el.files[0]) res[i] = el.files[0];
-      }
-      return res;
-    }
-
-    function applyFileToInput(input, file, prevImg) {
-      try {
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        input.files = dt.files;
-      } catch(_) { /* ignore */ }
-    }
-
-    function revokePreview(img) {
-      if (!img) return;
-      const prevUrl = img.getAttribute('data-url');
-      if (prevUrl) {
-        try { URL.revokeObjectURL(prevUrl); } catch(_) {}
-        img.removeAttribute('data-url');
-      }
-    }
-
-    function updateDropzoneState(dz, lab, defaultText, file, prev) {
-      if (!dz || !lab || !prev) return;
-      if (file) {
-        revokePreview(prev);
-        const url = URL.createObjectURL(file);
-        prev.src = url;
-        prev.setAttribute('data-url', url);
-        prev.style.display = 'block';
-        lab.textContent = file.name;
-        lab.style.fontWeight = '700';
-        dz.classList.add('filled');
-      } else {
-        revokePreview(prev);
-        prev.removeAttribute('src');
-        prev.style.display = 'none';
-        lab.textContent = defaultText;
-        lab.style.fontWeight = '600';
-        dz.classList.remove('filled');
-      }
-    }
-
-    function renderNsInputs(count, preserveSelections = true) {
-      // snapshot existing before rebuild (optional)
-      Array.from(nsFilesWrap.querySelectorAll('img[data-url]')).forEach(revokePreview);
-      if (preserveSelections) {
-        try { nsSelected = snapshotSelected(20); } catch(_) {}
-      } else {
-        nsSelected = {};
-      }
-      nsFilesWrap.innerHTML = '';
-      const c = Math.max(1, Math.min(20, parseInt(count||'1',10)||1));
-      for (let i=1;i<=c;i++) {
-        const row = document.createElement('div');
-        row.className = 'ns-file';
-        row.innerHTML = `
-          <label class=\"dropzone ns-dz\" for=\"ns-file-${i}\"><span class=\"dz-label\">Klikni nebo přetáhni obrázek sem (strana ${i})</span></label>
-          <div class=\"ns-prev\"><img id=\"ns-prev-${i}\" alt=\"Náhled ${i}\"/></div>
-          <input type=\"file\" id=\"ns-file-${i}\" accept=\"image/*\" style=\"display:none;\">
-        `;
-        nsFilesWrap.appendChild(row);
-        const input = row.querySelector(`#ns-file-${i}`);
-        const dz = row.querySelector('label.dropzone');
-        const lab = dz.querySelector('.dz-label');
-        const defaultText = `Klikni nebo přetáhni obrázek sem (strana ${i})`;
-        const prev = row.querySelector(`#ns-prev-${i}`);
-        dz.addEventListener('click', () => input.click());
-        input.addEventListener('change', () => {
-          const f = input.files && input.files[0];
-          notifyIfLargeFile(f);
-          if (f) nsSelected[i] = f; else delete nsSelected[i];
-          updateDropzoneState(dz, lab, defaultText, f, prev);
-          checkNsValidity();
-        });
-        ;['dragenter','dragover'].forEach(evt => dz.addEventListener(evt, (e)=>{e.preventDefault(); dz.style.background='#f1f1f1';}));
-        ;['dragleave','drop'].forEach(evt => dz.addEventListener(evt, (e)=>{e.preventDefault(); dz.style.background='';}));
-        dz.addEventListener('drop', (e)=>{ const files=e.dataTransfer.files; if(files&&files.length){ input.files=files; input.dispatchEvent(new Event('change')); }});
-        // Restore previous file if existed and still within range
-        if (preserveSelections && nsSelected[i]) {
-          try { applyFileToInput(input, nsSelected[i], prev); } catch(_) {}
-          updateDropzoneState(dz, lab, defaultText, nsSelected[i], prev);
-        } else {
-          updateDropzoneState(dz, lab, defaultText, null, prev);
-        }
-        // Hover large preview
-        function attachHover(el) {
-          el.addEventListener('mouseenter', (ev)=>{
-            const src = prev.getAttribute('src'); if (!src || !nsHover) return;
-            nsHover.style.display = 'block'; nsHover.querySelector('img').src = src;
-          });
-          el.addEventListener('mousemove', (ev)=>{
-            if (!nsHover || nsHover.style.display !== 'block') return;
-            const x = Math.min(window.innerWidth - 300, ev.clientX + 16);
-            const y = Math.min(window.innerHeight - 360, ev.clientY + 16);
-            nsHover.style.left = x + 'px'; nsHover.style.top = y + 'px';
-          });
-          el.addEventListener('mouseleave', ()=>{ if (nsHover) nsHover.style.display='none'; });
-        }
-        attachHover(prev.parentElement);
-        attachHover(dz);
-      }
-      checkNsValidity();
-    }
-
-    // Non-song mode reuses this modal: a page with images but no song, so it has
-    // no author and its title is optional (used only to recognise it in the editor).
-    function applyNonSongMode(isNonSong) {
-      window.__nsNonSong = !!isNonSong;
-      const head = document.getElementById('ns-title');
-      const authorWrap = document.getElementById('ns-author-wrap');
-      const pagesLabel = document.querySelector('label[for="ns-pages"]');
-      const titleLabel = document.querySelector('label[for="ns-title-input"]');
-      if (head) head.textContent = isNonSong ? 'Nová nepísničková stránka' : 'Nová písnička';
-      if (authorWrap) authorWrap.style.display = isNonSong ? 'none' : '';
-      if (titleLabel) titleLabel.textContent = isNonSong ? 'Název (nepovinný)' : 'Název';
-      if (pagesLabel) pagesLabel.textContent = isNonSong ? 'Počet stran' : 'Počet stran písničky';
-      if (nsTitle) nsTitle.placeholder = isNonSong ? 'např. Rejstřík' : 'Moje písnička';
-      // A non-song page carries no song, so there is nothing to add another of.
-      const plusWrap = document.getElementById('ns-add-song-wrap');
-      if (plusWrap) plusWrap.style.display = isNonSong ? 'none' : '';
-      const extraWrap = document.getElementById('ns-extra-songs');
-      if (isNonSong && extraWrap) extraWrap.innerHTML = '';
-    }
-
-    // Extra title/author rows: more than one song sitting on the same page
-    const nsExtraWrap = document.getElementById('ns-extra-songs');
-    const nsAddSongBtn = document.getElementById('ns-add-song');
-
-    function addExtraSongRow() {
-      if (!nsExtraWrap) return;
-      const row = document.createElement('div');
-      row.className = 'ns-row ns-extra-song';
-      row.style.marginTop = '8px';
-      row.innerHTML = `
-        <div>
-          <label>Název další písničky na této straně</label>
-          <input type="text" class="ns-extra-title" placeholder="Další písnička">
-        </div>
-        <div class="ns-extra-author-wrap">
-          <label>Autor</label>
-          <input type="text" class="ns-extra-author" placeholder="-">
-        </div>
-        <button type="button" class="ns-extra-remove"
-                style="align-self:end; background:none; border:none; cursor:pointer; font-size:18px;"
-                data-napoveda="Odebrat tuto písničku">&times;</button>`;
-      row.querySelector('.ns-extra-remove').addEventListener('click', () => row.remove());
-      if (window.__nsNonSong) {
-        row.querySelector('.ns-extra-author-wrap').style.display = 'none';
-      }
-      nsExtraWrap.appendChild(row);
-      row.querySelector('.ns-extra-title').focus();
-    }
-
-    if (nsAddSongBtn) nsAddSongBtn.addEventListener('click', addExtraSongRow);
-
-    function collectSongMembers(isNonSong) {
-      const members = [{
-        title: (nsTitle.value || '').trim(),
-        author: isNonSong ? '' : ((nsAuthor.value || '').trim() || '-'),
-      }];
-      // A non-song page is always a single entry; there is no song to add another of
-      if (isNonSong) return members;
-      if (nsExtraWrap) {
-        nsExtraWrap.querySelectorAll('.ns-extra-song').forEach(row => {
-          const t = (row.querySelector('.ns-extra-title')?.value || '').trim();
-          const a = (row.querySelector('.ns-extra-author')?.value || '').trim();
-          if (!t && !a) return;  // an empty extra row is just left over, skip it
-          members.push({ title: t, author: isNonSong ? '' : (a || '-') });
-        });
-      }
-      return members;
-    }
-
-    function openNewSongModal(isNonSong = false) {
-      if (!nsModal) return;
-      resetNewSongForm();
-      applyNonSongMode(isNonSong);
-      nsModal.style.display = 'flex';
-    }
-
-    function resetNewSongForm() {
-      if (!nsModal) return;
-      nsTitle.value = '';
-      nsAuthor.value = '';
-      const extraWrap = document.getElementById('ns-extra-songs');
-      if (extraWrap) extraWrap.innerHTML = '';
-      nsPages.value = 1;
-      nsSelected = {};
-      renderNsInputs(1, false);
-      checkNsValidity();
-      if (nsHover) nsHover.style.display = 'none';
-    }
-
-    function closeNewSongModal(reset = true) {
-      if (nsModal) nsModal.style.display='none';
-      if (reset) resetNewSongForm();
-    }
-
-    function checkNsValidity() {
-      // At least one page file must be present
-      let has = false;
-      const n = Math.max(1, Math.min(20, parseInt(nsPages.value||'1',10)||1));
-      for (let i=1;i<=n;i++) { const el = document.getElementById(`ns-file-${i}`); if (el && el.files && el.files.length) { has = true; break; } }
-      nsSave.disabled = !has;
-    }
-
-    if (nsPages) nsPages.addEventListener('input', () => { renderNsInputs(nsPages.value, true); });
-    if (nsCancel) nsCancel.addEventListener('click', () => closeNewSongModal(true));
-
-    document.addEventListener('click', (e) => {
-      const id = e.target && e.target.id;
-      if (id === 'btn-add-custom-song-nb') {
-        e.preventDefault(); openNewSongModal(false);
-      }
-      if (id === 'btn-add-nonsong-page-nb') {
-        e.preventDefault(); openNewSongModal(true);
-      }
-    });
-
-    async function refreshEditSongs(bookId) {
-      const ebSongs = document.getElementById('eb-songs');
-      if (!ebSongs) {
-        window.location.reload();
-        return;
-      }
-      window.__pendingNewSongs = new Map();
-      try {
-        const res = await fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/structure`);
-        if (!res.ok) throw new Error('Fetch failed');
-        const data = await res.json();
-        if (!data || !data.ok) throw new Error('Invalid payload');
-        const songs = (data.songbook && data.songbook.songs) || [];
-        ebSongs.innerHTML = '';
-        groupSongsByPage(songs).forEach(g => ebSongs.appendChild(renderEditRow(g)));
-        updateDisplayPages();
-        wireEditDrag();
-        wireEditRowActions();
-        try {
-          if (window.__pendingSongDeletes && typeof window.__pendingSongDeletes.clear === 'function') {
-            window.__pendingSongDeletes.clear();
-          } else {
-            window.__pendingSongDeletes = new Set();
-          }
-        } catch(_) { window.__pendingSongDeletes = new Set(); }
-        captureEditInitialStateFromCreate();
-        window.__editDirtyConfirm = false;
-      } catch (err) {
-        console.error('Failed to refresh song list', err);
-        window.location.reload();
-      }
-    }
-
-    if (nsSaveBtn) {
-      nsSaveBtn.addEventListener('click', async () => {
-        if (nsSaveBtn.disabled || nsSaveBtn.dataset.loading === '1') return;
-        toggleButtonLoading(nsSaveBtn, nsSaveSpinner, true, 'Ukládám…');
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        const tbody = document.getElementById('eb-songs');
-        if (!tbody) { alert('Chybí seznam písniček'); toggleButtonLoading(nsSaveBtn, nsSaveSpinner, false); return; }
-        const isNonSong = !!window.__nsNonSong;
-        const titleRaw = isNonSong
-          ? ((nsTitle.value || '').trim() || '<Prázdná strana>')
-          : ((nsTitle.value || '').trim() || 'Moje písnička');
-        const authorRaw = isNonSong ? '' : ((nsAuthor.value || '').trim() || '-');
-        const n = Math.max(1, Math.min(20, parseInt(nsPages.value || '1', 10) || 1));
-        const files = [];
-        for (let i = 1; i <= n; i++) {
-          const el = document.getElementById(`ns-file-${i}`);
-          if (el && el.files && el.files[0]) {
-            files.push(el.files[0]);
-          }
-        }
-        if (!files.length) { toggleButtonLoading(nsSaveBtn, nsSaveSpinner, false); return; }
-        if (!window.__pendingNewSongs || typeof window.__pendingNewSongs.set !== 'function') {
-          window.__pendingNewSongs = new Map();
-        }
-        const tempId = `__new_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-        const members = collectSongMembers(isNonSong);
-        members[0].title = titleRaw;
-        window.__pendingNewSongs.set(tempId, {
-          title: titleRaw,
-          author: authorRaw,
-          page_count: files.length,
-          non_song: isNonSong,
-          songs: members,
-          files
-        });
-        const displayTitle = escapeHtmlLite(titleRaw);
-        const displayAuthor = escapeHtmlLite(authorRaw);
-        const row = renderEditRow({
-          song_id: tempId,
-          title: displayTitle,
-          author: displayAuthor,
-          page_count: files.length,
-          is_private: true,
-          is_non_song: isNonSong,
-          pending: true,
-          members: members.map(m => ({
-            song_id: tempId,
-            title: escapeHtmlLite(m.title || (isNonSong ? '<Prázdná strana>' : 'Moje písnička')),
-            author: escapeHtmlLite(m.author || '')
-          }))
-        });
-        tbody.appendChild(row);
-        updateDisplayPages();
-        wireEditDrag();
-        wireEditRowActions();
-        window.__editDirtyConfirm = true;
-        try { createDirty = true; } catch(_) {}
-        toggleButtonLoading(nsSaveBtn, nsSaveSpinner, false);
-        closeNewSongModal(true);
-      });
-    }
-
-    function updateDisplayPages() {
-      const ebSongs = document.getElementById('eb-songs');
-      if (!ebSongs) return;
-      let next = 1;
-      Array.from(ebSongs.querySelectorAll('tr')).forEach(tr => {
-        const pageCount = parseInt(tr.getAttribute('data-page-count') || '1', 10) || 1;
-        const cell = tr.querySelector('.page-span');
-        const start = next;
-        let txt = '';
-        if (pageCount <= 1) {
-          txt = String(start);
-        } else if (pageCount <= 3) {
-          const extras = Array.from({length: pageCount - 1}, (_, i) => start + i + 1);
-          txt = `${start} (${extras.join(',')})`;
-        } else {
-          const last = start + pageCount - 1;
-          txt = `${start} (${start+1},...,${last})`;
-        }
-        if (cell) cell.textContent = txt;
-        next += pageCount;
-      });
-    }
 
     window.openEditSongbookModal = (bookId) => {
       window.__editMode = true; window.__editBookId = bookId;
-      window.__pendingNewSongs = new Map();
       const title = document.getElementById('nb-title'); if (title) title.textContent = 'Upravit zpěvník';
-      const primary = document.getElementById('nb-create'); if (primary) primary.textContent = 'Uložit';
-      resetUploads();
-      // Reset re-use removal flags
-      try { ['front_outer','front_inner','back_inner','back_outer'].forEach(k => { const el = document.getElementById('erem-' + k); if (el) el.value = '0'; }); } catch(_) {}
+      if (nbCreateBtn) nbCreateBtn.textContent = 'Uložit';
       openCreateModal();
-      ensureEditSection(modalContent);
-      const ebSongs = document.getElementById('eb-songs'); if (ebSongs) ebSongs.innerHTML = '';
-      fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/structure`).then(r=>r.json()).then(data => {
-        if (!data || !data.ok) return;
-        const sb = data.songbook || {};
-        const nameEl = document.getElementById('nb-name'); if (nameEl) nameEl.value = sb.title || '';
-        const hexInput = document.getElementById('hex-col');
-        if (hexInput) {
-          hexInput.value = (sb.color || '#ffffff');
-          // Update preview color without firing input handlers that mark dirty
-          try { const c = hexToRgb(hexInput.value); if (c) applyColor(c.r, c.g, c.b); } catch(_) {}
-        }
-        const covers = sb.covers || {};
-        const map = [
-          ['dz-front-outer','tex-front-outer','front_outer','front_outer_name'],
-          ['dz-front-inner','tex-front-inner','front_inner','front_inner_name'],
-          ['dz-back-inner','tex-back-inner','back_inner','back_inner_name'],
-          ['dz-back-outer','tex-back-outer','back_outer','back_outer_name'],
-        ];
-        map.forEach(([dzId, faceId, keyPath, keyName]) => {
+      fetch(`/api/zpevnik/${encodeURIComponent(bookId)}`).then(r => r.json()).then(data => {
+        if (!data || !data.ok || window.__editBookId !== bookId) return;
+        const z = data.zpevnik;
+        const nameEl = document.getElementById('nb-name'); if (nameEl) nameEl.value = z.nazev || '';
+        const c = hexToRgb(z.barva || '#ffffff'); if (c) applyColor(c.r, c.g, c.b);
+        [['front_outer', 'dz-front-outer', 'tex-front-outer'],
+         ['front_inner', 'dz-front-inner', 'tex-front-inner'],
+         ['back_inner', 'dz-back-inner', 'tex-back-inner'],
+         ['back_outer', 'dz-back-outer', 'tex-back-outer']].forEach(([role, dzId, faceId]) => {
+          const obalka = (z.obalky || {})[role] || {};
+          if (!obalka.cesta) return;
           const dz = document.getElementById(dzId);
           const lab = dz ? dz.querySelector('.dz-label') : null;
-          if (lab && covers[keyName]) { lab.textContent = covers[keyName]; lab.style.fontWeight='700'; dz.classList.add('filled'); }
+          if (lab) { lab.textContent = obalka.jmeno; lab.style.fontWeight = '700'; dz.classList.add('filled'); }
           const face = document.getElementById(faceId);
-          if (face && covers[keyPath]) face.style.backgroundImage = `url('/songbooks/${covers[keyPath]}')`;
+          if (face) face.style.backgroundImage = `url('/songbooks/${obalka.cesta}')`;
         });
-        if (ebSongs) {
-          groupSongsByPage(sb.songs).forEach(g => ebSongs.appendChild(renderEditRow(g)));
-          wireEditDrag();
-          updateDisplayPages();
-          wireEditRowActions();
-        }
-        const firstPageEl = document.getElementById('nb-first-page');
-        if (firstPageEl) firstPageEl.value = sb.first_page_number || 1;
-        // Ensure create/edit dirty flag remains clean after initial populate
-        try { createDirty = false; } catch(_) {}
-        // Capture initial state for dirty checks on close
-        captureEditInitialStateFromCreate();
+        EditorStran.nacti(z.strany, z.prvni_cislo);
+        createDirty = false;
       });
     };
 
-    // Intercept primary button when in edit mode
-    if (nbCreateBtn) {
-      nbCreateBtn.addEventListener('click', async (e) => {
-        if (!window.__editMode) return; // let create handler run
-        e.preventDefault(); e.stopPropagation();
-        if (nbCreateBtn.dataset.loading === '1') return;
-        toggleButtonLoading(nbCreateBtn, null, true, 'Ukládám…');
-        toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, 'Ukládám…');
-        const tbody = document.getElementById('eb-songs');
-        const rows = tbody ? Array.from(tbody.querySelectorAll('tr')) : [];
-        const order = rows.map(tr => {
-          const sid = tr.getAttribute('data-song-id');
-          if (sid) {
-            // Send every song on this page, so saving keeps the page intact
-            const ids = (tr.getAttribute('data-song-ids') || sid).split(',').filter(Boolean);
-            return ids.length > 1 ? { song_id: sid, song_ids: ids } : { song_id: sid };
-          }
-          if (tr.getAttribute('data-non-song') === '1') return { non_song: true };
-          return null;
-        }).filter(Boolean);
-        cleanupPendingNewSongs(computeSongOrderSignature());
-        const fd = new FormData();
-        fd.append('title', (document.getElementById('nb-name').value||'').trim());
-        const hex = (document.getElementById('hex-col') && document.getElementById('hex-col').value) || '#ffffff';
-        fd.append('color', hex);
-        fd.append('auto_numbering', '1');
-        const firstPageInput = document.getElementById('nb-first-page');
-        if (firstPageInput && firstPageInput.value) fd.append('first_page_number', firstPageInput.value);
-        const pendingNewSongs = [];
-        const pendingNewMap = (window.__pendingNewSongs && typeof window.__pendingNewSongs.forEach === 'function') ? window.__pendingNewSongs : null;
-        if (pendingNewMap) {
-          pendingNewMap.forEach((meta, tempId) => {
-            if (!meta || !tempId) return;
-            pendingNewSongs.push({
-              temp_id: tempId,
-              title: meta.title || '',
-              author: meta.author || '',
-              non_song: !!meta.non_song,
-              songs: meta.songs || null,
-              page_count: meta.page_count || (meta.files ? meta.files.length : 0)
-            });
-          });
-        }
-        try {
-          if (window.__pendingSongDeletes && window.__pendingSongDeletes.size) {
-            const deletions = Array.from(window.__pendingSongDeletes).filter(sid => sid && !String(sid).startsWith('__new_'));
-            if (deletions.length) fd.append('delete_songs', JSON.stringify(deletions));
-          }
-        } catch(_) {}
-        // Cover removal flags (re-use edit in this modal)
-        try {
-          ['front_outer','front_inner','back_inner','back_outer'].forEach(key => {
-            const v = document.getElementById('erem-' + key)?.value;
-            if (v === '1') fd.append('remove_' + key, '1');
-          });
-        } catch(_) {}
-        fd.append('order', JSON.stringify(order));
-        const files = {
-          front_outer: document.getElementById('file-front-outer'),
-          front_inner: document.getElementById('file-front-inner'),
-          back_inner: document.getElementById('file-back-inner'),
-          back_outer: document.getElementById('file-back-outer')
-        };
-        Object.entries(files).forEach(([k,inp]) => { if (inp && inp.files && inp.files[0]) fd.append(k, inp.files[0]); });
-        if (pendingNewSongs.length) {
-          fd.append('new_songs', JSON.stringify(pendingNewSongs));
-          pendingNewSongs.forEach(item => {
-            if (!item || !item.temp_id) return;
-            const meta = pendingNewMap ? pendingNewMap.get(item.temp_id) : null;
-            if (!meta || !meta.files || !meta.files.length) return;
-            meta.files.forEach((file, idx) => {
-              const fieldName = `new_song_${item.temp_id}_page_${idx+1}`;
-              fd.append(fieldName, file);
-            });
-          });
-        }
-        let resetLoading = true;
-        try {
-          const res = await fetch(`/api/my-songbooks/${encodeURIComponent(window.__editBookId)}/structure`, { method: 'POST', body: fd });
-          if (!res.ok) { const t = await res.text(); alert('Uložení selhalo: ' + (t || res.status)); return; }
-          window.location.reload();
-          resetLoading = false;
-          return;
-        } catch (_) { alert('Chyba při ukládání'); } finally {
-          if (resetLoading) {
-            toggleButtonLoading(nbCreateBtn, null, false);
-            toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, false);
-          }
-        }
-      }, true);
-    }
-
-    // Removed duplicate nb-cancel handler that reset layout prematurely during confirm
   });
   </script>
 {% endblock %}
