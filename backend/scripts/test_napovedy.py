@@ -326,7 +326,7 @@ def main():
             zkontroluj(editor is not None,
                        "u čísla první strany je ⓘ, ne vlastní otazník", str(editor))
             if editor:
-                zkontroluj("číslování" in editor["text"],
+                zkontroluj("číslují" in editor["text"],
                            "a vysvětluje, proč se to nastavuje", editor["text"][:50])
                 zkontroluj(editor["sirka"] == 15,
                            "a má stejnou velikost jako ⓘ v okně stahování",

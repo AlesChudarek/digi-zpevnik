@@ -71,9 +71,12 @@ def strany_db(zpevnik_id):
 
 
 def typy(page):
-    return page.eval_on_selector_all(
-        "#es-seznam .es-strana",
-        "els => els.map(e => [...e.classList].find(c => c.startsWith('es-typ-')).slice(7))")
+    """Typy stran tak, jak by odešly na server (editor je odvozuje, nevolí se)."""
+    return page.evaluate("EditorStran.data().map(s => s.typ)")
+
+
+def strana(page, i):
+    return page.locator("#es-seznam .es-strana").nth(i)
 
 
 def sedy_png(odstin, sirka=200):
@@ -142,8 +145,9 @@ def main():
         page.goto(base + "/my-songbooks")
         page.wait_for_load_state("networkidle")
         page.click(".add-card")
-        zkontroluj(page.is_visible("#editor-stran") and page.is_visible("#es-prazdno"),
-                   "okno nového zpěvníku má rovnou sekci stran")
+        zkontroluj(page.is_visible("#editor-stran") and page.is_visible("#es-prazdno")
+                   and page.is_visible("#es-pridat"),
+                   "okno nového zpěvníku má rovnou sekci stran a „Přidat stranu“")
         page.set_input_files("#es-soubory", [str(soubory / j) for j in ("10.png", "2.png", "1.png")])
         page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 3")
         page.wait_for_function("document.getElementById('es-stav-nahravani').hidden", timeout=20000)
@@ -151,38 +155,55 @@ def main():
             "#es-seznam .es-nahled img", "els => els.map(i => i.naturalWidth)")
         zkontroluj(sirky == [100, 200, 300], "soubory se seřadí podle jména (1, 2, 10)", sirky)
         zkontroluj(not page.is_visible("#es-prazdno"), "hláška o prázdném zpěvníku zmizí")
-        zkontroluj(typy(page) == ["pisen"] * 3, "nová strana je píseň", typy(page))
+        zkontroluj(page.locator("#es-seznam .es-nazev").count() == 3,
+                   "nahraná strana má rovnou pole pro název písně")
         aktivni = page.evaluate("document.activeElement.className")
         zkontroluj(aktivni == "es-nazev", "kurzor skočí do názvu první nové strany", aktivni)
 
-        radky = page.locator("#es-seznam .es-strana")
-        radky.nth(0).locator(".es-nazev").fill("Píseň A")
-        radky.nth(0).locator(".es-autor").fill("Autor A")
-        radky.nth(1).locator('.es-typ[data-typ="pokracovani"]').click()
-        navaz = page.locator("#es-seznam .es-strana").nth(1).locator(".es-navazuje").inner_text()
-        zkontroluj(navaz == "Pokračuje „Píseň A“", "pokračování ukáže, na co navazuje", navaz)
-        radky.nth(0).locator(".es-nazev").fill("Píseň A1")
-        navaz = page.locator("#es-seznam .es-strana").nth(1).locator(".es-navazuje").inner_text()
-        zkontroluj(navaz == "Pokračuje „Píseň A1“", "a mění se s psaním názvu", navaz)
-        radky.nth(2).locator('.es-typ[data-typ="bez"]').click()
-        page.locator("#es-seznam .es-strana").nth(2).locator(".es-popisek").fill("Úvod")
-        page.click("#es-pridat-prazdnou")
+        strana(page, 0).locator(".es-nazev").fill("Píseň A")
+        strana(page, 0).locator(".es-autor").fill("Autor A")
+        strana(page, 0).locator(".es-spojit").click()
+        zkontroluj(page.locator("#es-seznam .es-blok").count() == 2
+                   and "pripojena" in strana(page, 1).get_attribute("class"),
+                   "spojením se další strana připojí do jednoho bloku")
+        zkontroluj(strana(page, 1).locator(".es-nazev").count() == 0,
+                   "prázdné pole pro název z připojené strany zmizí")
+        zkontroluj(strana(page, 1).locator(".es-popisek").count() == 0,
+                   "a pokračování nemá popisek")
+        navaz = strana(page, 1).locator(".es-navazuje").inner_text()
+        zkontroluj(navaz == "pokračuje „Píseň A“", "připojená strana ukáže, co na ni pokračuje", navaz)
+        strana(page, 0).locator(".es-nazev").fill("Píseň A1")
+        navaz = strana(page, 1).locator(".es-navazuje").inner_text()
+        zkontroluj(navaz == "pokračuje „Píseň A1“", "a mění se s psaním názvu", navaz)
+        bloky = page.locator("#es-seznam .es-blok")
+        zkontroluj(bloky.nth(0).locator(".es-drzadlo").count() == 1
+                   and page.locator("#es-seznam .es-mezera").count() == 1,
+                   "blok má jedno držadlo a uvnitř se nic nevkládá")
+        strana(page, 2).locator(".es-odebrat-pisen").click()
+        zkontroluj(strana(page, 2).locator(".es-popis-strany").inner_text() == "strana bez písně",
+                   "strana s obrázkem bez písně se tak i popíše")
+        strana(page, 2).locator(".es-popisek").fill("Úvod")
+        page.click("#es-pridat")
+        zkontroluj(strana(page, 3).locator(".es-popis-strany").inner_text() == "prázdná strana"
+                   and strana(page, 3).locator(".es-nahrat-obrazek").count() == 1,
+                   "„Přidat stranu“ přidá prázdnou stranu s možností nahrát obrázek")
         page.fill("#es-prvni", "3")
         cisla = page.eval_on_selector_all("#es-seznam .es-cislo", "els => els.map(e => e.textContent)")
         zkontroluj(cisla == ["3", "4", "5", "6"], "čísla stran se řídí číslem první strany", cisla)
+        zkontroluj(typy(page) == ["pisen", "pokracovani", "bez", "prazdna"],
+                   "typy pro server se odvodí z obsahu stran", typy(page))
         page.fill("#nb-name", "Zpěvník z testu")
 
         print("\n── kontrola před uložením ──")
-        page.click("#es-pridat-prazdnou")
-        posledni = page.locator("#es-seznam .es-strana").nth(4)
-        posledni.locator('.es-typ[data-typ="pisen"]').click()
+        page.click("#es-pridat")
+        strana(page, 4).locator(".es-dalsi-pisen").click()
         page.click("#nb-save-top")
         page.wait_for_function("document.querySelector('#es-seznam .es-strana.ma-chybu')")
-        chyba = page.locator("#es-seznam .es-strana").nth(4).locator(".es-chyby").inner_text()
+        chyba = strana(page, 4).locator(".es-chyby").inner_text()
         zkontroluj("obrázek" in chyba and "název" in chyba,
                    "neúplná strana se vyznačí a neuloží", chyba)
         zkontroluj(dialogy and "doplnit" in dialogy[-1], "a řekne se proč", dialogy[-1:] or "")
-        page.locator("#es-seznam .es-strana").nth(4).locator(".es-odebrat").click()
+        strana(page, 4).locator(".es-odebrat").click()
 
         with page.expect_navigation():
             page.click("#nb-save-top")
@@ -198,28 +219,57 @@ def main():
         print("\n── úpravy ──")
         page.evaluate(f"window.openEditSongbookModal('{novy.id}')")
         page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
-        zkontroluj(typy(page) == ["pisen", "pokracovani", "bez", "prazdna"],
-                   "editor načte typy stran", typy(page))
+        zkontroluj(typy(page) == ["pisen", "pokracovani", "bez", "prazdna"]
+                   and page.locator("#es-seznam .es-blok").count() == 3,
+                   "editor načte strany i spojení", typy(page))
         zkontroluj(page.input_value("#es-prvni") == "3", "i číslo první strany")
-        page.locator("#es-seznam .es-strana").nth(0).locator(".es-nazev").focus()
+        strana(page, 0).locator(".es-nazev").focus()
         page.keyboard.press("Enter")
         aktivni = page.evaluate("document.activeElement.className")
         zkontroluj(aktivni == "es-popisek", "Enter přeskočí pokračování na další pole", aktivni)
-        # Šipkou dolů se píseň posune i se svým pokračováním za úvod
-        page.locator("#es-seznam .es-strana").nth(0).locator(".es-dolu").click()
+        page.locator("#es-seznam .es-blok").nth(0).locator(".es-dolu").click()
         zkontroluj(typy(page) == ["bez", "pisen", "pokracovani", "prazdna"],
                    "šipka přesune píseň i s pokračováním", typy(page))
-        # Tažením prázdnou stranu na začátek
-        page.locator("#es-seznam .es-strana").nth(3).locator(".es-drzadlo").drag_to(
-            page.locator("#es-seznam .es-strana").nth(0), target_position={"x": 20, "y": 5})
+        page.locator("#es-seznam .es-blok").nth(2).locator(".es-drzadlo").drag_to(
+            page.locator("#es-seznam .es-blok").nth(0), target_position={"x": 40, "y": 5})
         zkontroluj(typy(page) == ["prazdna", "bez", "pisen", "pokracovani"],
-                   "tažení přesune stranu", typy(page))
+                   "tažení přesune blok", typy(page))
+        # Na straně s pokračováním může začínat další píseň
+        strana(page, 3).locator(".es-dalsi-pisen").click()
+        strana(page, 3).locator(".es-nazev").fill("Krátká B")
+        with page.expect_file_chooser() as vyber:
+            strana(page, 0).locator(".es-nahrat-obrazek").click()
+        vyber.value.set_files(str(soubory / "2.png"))
+        page.wait_for_function("document.getElementById('es-stav-nahravani').hidden", timeout=20000)
+        zkontroluj(typy(page)[0] == "bez", "prázdná strana s nahraným obrázkem je strana bez písně",
+                   typy(page))
         with page.expect_navigation():
             page.click("#nb-save-top")
         page.wait_for_load_state("networkidle")
         s = strany_db(novy.id)
-        zkontroluj([x[3] for x in s] == [[], [], [("Píseň A1", 1)], [("Píseň A1", 2)]],
-                   "přesuny se uloží", [x[3] for x in s])
+        zkontroluj([x[3] for x in s] == [[], [], [("Píseň A1", 1)], [("Píseň A1", 2), ("Krátká B", 1)]]
+                   and s[0][1],
+                   "uloží se přesuny, obrázek i píseň začínající na pokračování",
+                   [(x[1], x[3]) for x in s])
+
+        print("\n── vyplňování z klávesnice ──")
+        page.evaluate("window.__editMode = false; window.__editBookId = null")
+        page.click(".add-card")
+        page.set_input_files("#es-soubory", [str(soubory / j) for j in ("1.png", "2.png", "10.png")])
+        page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 3")
+        page.keyboard.type("Dlouhá")
+        page.keyboard.press("Alt+ArrowDown")
+        aktivni = page.evaluate("[document.activeElement.className, "
+                                "[...document.querySelectorAll('#es-seznam .es-strana')].indexOf("
+                                "document.activeElement.closest('.es-strana'))]")
+        zkontroluj(typy(page)[:2] == ["pisen", "pokracovani"] and aktivni == ["es-nazev", 2],
+                   "Alt+↓ připojí další stranu a skočí za blok", (typy(page), aktivni))
+        page.keyboard.type("Další")
+        zkontroluj(page.evaluate("EditorStran.data().map(s => s.pisne.map(p => p.nazev))")
+                   == [["Dlouhá"], [], ["Další"]], "názvy se dají psát bez myši")
+        page.click("#nb-cancel") if page.is_visible("#nb-cancel") else None
+        page.goto(base + "/my-songbooks")
+        page.wait_for_load_state("networkidle")
 
         print("\n── import PDF a ZIP ──")
         page.goto(base + "/my-songbooks")

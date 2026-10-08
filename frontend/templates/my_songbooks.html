@@ -539,24 +539,20 @@
           <label class="es-prvni">Číslo první strany
             <input type="number" id="es-prvni" min="1" max="9999" value="1">
             <button type="button" class="napoveda-znak" aria-label="Co to znamená"
-                    data-napoveda="Někdo číslování začal titulkou, takže první píseň je na straně 3. Tady to nastavíš, aby čísla odpovídala tomu, co je na naskenovaných stránkách.">i</button>
+                    data-napoveda="Číslo vytištěné na první straně obsahu. Některé zpěvníky číslují už od titulní strany a první píseň je pak na straně 3.">i</button>
           </label>
         </div>
         <p class="es-zprava" id="es-zprava" hidden></p>
-        <p class="es-prazdno" id="es-prazdno">Zpěvník zatím nemá žádnou stranu. Přidej obrázky stran nebo celý zpěvník jako PDF či ZIP.</p>
+        <p class="es-prazdno" id="es-prazdno">Zpěvník zatím nemá žádnou stranu.</p>
         <ol class="es-seznam" id="es-seznam"></ol>
         <div class="es-pridavani">
-          <button type="button" class="btn primary" id="es-pridat">+ Přidat strany</button>
-          <button type="button" class="btn" id="es-pridat-prazdnou">+ Prázdná strana</button>
-          <span class="es-tip">Obrázky, PDF nebo ZIP. Jde je i přetáhnout sem.</span>
+          <button type="button" class="es-pridat-stranu" id="es-pridat">+ Přidat stranu</button>
+          <span class="es-tip">nebo sem přetáhni obrázky, PDF či ZIP, případně je
+            <button type="button" class="es-nahrat" id="es-nahrat">vyber ze souborů</button></span>
           <input type="file" id="es-soubory" accept="image/*,.pdf,application/pdf,.zip,application/zip" multiple hidden>
         </div>
         <p class="es-stav-nahravani" id="es-stav-importu" role="status" hidden></p>
         <p class="es-stav-nahravani" id="es-stav-nahravani" role="status" hidden></p>
-        <div class="es-nabidka" id="es-nabidka-vlozit" hidden>
-          <button type="button" data-akce="obrazky">Obrázky, PDF nebo ZIP…</button>
-          <button type="button" data-akce="prazdna">Prázdná strana</button>
-        </div>
         <datalist id="es-autori"></datalist>
       </section>
 

@@ -1950,7 +1950,8 @@ def api_share_songbook(songbook_id):
 #   pokracovani  - pokračuje na ni poslední píseň předchozí strany (a může na ní
 #                  začínat i další, i když to dnes žádný zpěvník nemá)
 #   bez          - obrázek bez písně (úvod, osmisměrka); může mít popisek
-#   prazdna      - strana bez obrázku
+#   prazdna      - strana bez obrázku; taky může mít popisek
+# Editor typy nevolí - odvozuje je z toho, co na straně je (viz static/js/editor.js).
 # Nové strany se nahrávají předem jedna po druhé (/api/strany/nahrat), takže uložení
 # posílá jen strukturu a obálky, ne stovky obrázků v jednom požadavku.
 
@@ -2227,7 +2228,9 @@ def _uloz_strany(sb, data, koren, ke_smazani):
         if strana.image_path and (novy_obrazek is None or novy_obrazek.id != strana.image_id):
             ke_smazani.add(strana.image_path)
         strana.image = novy_obrazek
-        strana.popisek = ((polozka.get('popisek') or '').strip() or None) if typ == 'bez' else None
+        # Popisek má strana bez písně, s obrázkem i bez něj („Rejstřík“, „Poznámky“).
+        strana.popisek = (((polozka.get('popisek') or '').strip() or None)
+                          if typ in ('bez', 'prazdna') else None)
 
         # Písně: nejdřív pokračování z předchozí strany, pak ty, které tu začínají
         vazby = []

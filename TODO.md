@@ -17,13 +17,15 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] Nový zpěvník / upravit zpěvník: kliknu uložit a zůstane okno s novým zpěvníkem otevřené
 - [ ] Tlačítko uložit při editaci se rozsvítí, když se udělá úprava
 - [X] **editor přes strany** (`static/js/editor.js`, `css/editor.css`). Jedno okno pro
-      nový i upravovaný zpěvník, jedno „+ Přidat strany“ (obrázky, PDF, ZIP) a „+ Prázdná
-      strana“, vkládání mezi strany. U každé strany volba Píseň (i víc písní) /
-      Pokračování / Bez písně (s popiskem) / Prázdná. Nová strana je píseň, Enter skočí
-      na další stranu, autoři se našeptávají. Přesouvání tažením i šipkami (na telefonu
-      tažení nejde), píseň se přesouvá i se svými pokračováními. Píseň z cizího zpěvníku
-      je zamčená (přejmenování by se projevilo všude). Kontrola před uložením vyznačí
-      neúplné strany. Strany se nahrávají hned po přidání (`/api/strany/nahrat`),
+      nový i upravovaný zpěvník. Strana nemá typ, který by se volil: má obrázek (nebo
+      ne), písně, které na ní začínají („+ Přidat píseň na stranu“), a popisek, když
+      písně nemá. Pokračování je spojení dvou stran („⛓ Píseň pokračuje na další stranu“,
+      v názvu písně Alt+↓) — spojené strany jsou jeden blok s jedním držadlem a
+      přesouvají se spolu; i na připojené straně může začínat další píseň. Pod seznamem
+      je vždycky „+ Přidat stranu“ (prázdná strana, obrázek se doplní na ní) a přetažení
+      obrázků, PDF či ZIPu; „+“ mezi bloky vkládá doprostřed. Nahrané strany mají rovnou
+      pole pro název, Enter skáče dál. Píseň z cizího zpěvníku je zamčená. Kontrola
+      před uložením vyznačí neúplné strany. Strany se nahrávají hned (`/api/strany/nahrat`),
       uložení (`/api/zpevnik`) posílá jen strukturu; neuložené nahrávky se po dni uklidí.
       Hlídá `test_editor.py` (API) a `test_editor_ui.py` (prohlížeč).
 - [ ] číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout
