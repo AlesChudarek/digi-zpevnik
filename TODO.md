@@ -69,13 +69,29 @@ Základní pravidlo: **každý bajt na serveru se počítá do limitu aspoň jed
 existujícímu člověku, který s tím souhlasil**, a smazání vždycky uvolní místo tomu,
 kdo maže.
 
-- [ ] **limit podle databáze, ne podle složky.** Počítají se různé obrázky ve všech
-      zpěvnících, které uživatel má (vlastní i rodinné), každý jednou — obrázek ve dvou
-      mých zpěvnících se počítá jednou. **Strany z veřejných zpěvníků za 0.** Do `images`
-      přibude sloupec s velikostí, ať se nemusí procházet disk. Složky
-      `uzivatele/<id>/` pak nic neznamenají (můžou zůstat, nové strany klidně ploše).
-      Jediná cesta přes limit: admin smaže veřejný zpěvník, ze kterého měl někdo písně
-      — nic se nemaže, jen dotyčný nemůže nahrávat, dokud si neuvolní místo.
+- [ ] **limit podle databáze, ne podle složky** (domluveno 12. 10.). Počítá se **každá
+      strana v každém zpěvníku, který uživatel má**, i duplikáty a kopie — nic se
+      neodečítá jen proto, že obrázek leží na disku jednou. Smazání zpěvníku tak vždycky
+      uvolní přesně tolik, kolik zabíral. Cena strany:
+      - vlastní nahraná strana: skutečná velikost obrázku
+      - strana z veřejného zpěvníku a prázdná strana: pevně 50 kB (cena za místo v DB)
+      - žádná strana méně než 50 kB (jinak pidiobrázek → tisíce stran zadarmo)
+      Obálky skutečnou velikostí. Cena i limit nastavitelné z prostředí. Strop tím je
+      ~6000 stran na účet, takže DB nejde zahltit duplikováním. Změřeno na lokálních
+      datech: nikdo se limitu ani nepřiblíží (nejvíc 69 MB z 300). Do `images` přibude
+      sloupec s velikostí. Jediná cesta přes limit: admin smaže veřejný zpěvník a jeho
+      strany zdraží — nic se nemaže, jen se nedá nahrávat.
+- [ ] **texty v rozhraní** — „rodina“ byl jen pracovní název, svádí k propojeným účtům.
+      Pojem pro uživatele: **společný zpěvník**. Volby sdílení „Poslat kopii“ a
+      „Upravovat společně“; „Ukončit společné úpravy“ (vlastník u člena), „Přestat
+      upravovat společně“ (člen), nabídka „Nechat si kopii / Zahodit“, u dlaždice
+      „Vytvořit kopii“ (duplikace vlastního zpěvníku, třeba pro jinou verzi). Návrh
+      všech textů a nápověd je v rozhovoru z 12. 10.
+- [ ] **kopie** = nové řádky v DB nad týmiž soubory (obrázky se nikdy nepřepisují, výměna
+      nahraje nový soubor), ale **s vlastními písněmi**, jinak by byly v obou kopiích
+      zamčené. Písně z veřejných zpěvníků zůstanou sdílené. Kopie vzniká **až při
+      přijetí** pozvánky, ne při odeslání — jinak by do přijetí ležela data, která se
+      nikomu nepočítají; když odesílatel originál mezitím smaže, pozvánka propadne.
 - [ ] **sdílení vyžaduje přijetí** a je dvojí:
       - **kopie** — příjemce dostane vlastní zpěvník ve stavu v době sdílení
         (na disku nic nepřibude, jen řádky v DB)
@@ -600,6 +616,9 @@ kdo maže.
       místech. Chce to promyslet, co má která role smět.
 - [X] vybraný motiv se pamatuje u účtu, ne jen v prohlížeči
 - [ ] další uživatelská nastavení, až budou (motiv už hotový)
+
+- [ ] (nápad, nízká priorita) **přátelé** — propojení účtů jako na Facebooku, ať se
+      při sdílení nemusí psát e-mail.
 
 ## Obsah a prezentace
 
