@@ -389,10 +389,15 @@ def main():
         with A.app.app_context():
             vlastni = A.Songbook.query.filter_by(title="Import z testu").first().id
         page.click(f'.btn-share[data-book-id="{vlastni}"]')
-        zkontroluj(page.is_visible("#share-druh-spolecny") and page.is_checked('input[name="share-druh"][value="kopie"]'),
-                   "vlastník vidí obě volby, výchozí je kopie")
-        page.check('input[name="share-druh"][value="spolecny"]')
+        zkontroluj(page.is_visible("#share-druh-spolecny")
+                   and page.evaluate("document.querySelectorAll('input[name=\"share-druh\"]:checked').length") == 0
+                   and page.is_disabled("#share-submit-btn"),
+                   "vlastník vidí obě volby, žádná není předvybraná a tlačítko čeká")
         page.fill("#share-email-input", EMAIL4)
+        page.click("#share-druh-spolecny")
+        zkontroluj(page.inner_text("#share-submit-btn") == "Pozvat ke společným úpravám"
+                   and page.is_enabled("#share-submit-btn"),
+                   "tlačítko řekne, co se stane", page.inner_text("#share-submit-btn"))
         page.click("#share-submit-btn")
         page.wait_for_function("document.getElementById('share-feedback').textContent.length > 0")
         zprava = page.inner_text("#share-feedback")
@@ -418,19 +423,26 @@ def main():
                    and not druhy.is_visible(".pozvanky"),
                    "po přijetí má zpěvník mezi svými a pozvánka zmizí")
         druhy.click(f'.btn-share[data-book-id="{vlastni}"]')
-        zkontroluj(druhy.is_hidden("#share-druh-spolecny"),
-                   "člen může poslat jen kopii, ke společným úpravám zve vlastník")
+        zkontroluj(druhy.is_hidden("#share-druh-spolecny")
+                   and druhy.is_checked('input[name="share-druh"][value="kopie"]'),
+                   "člen může poslat jen kopii (rovnou vybranou), ke společným úpravám zve vlastník")
         druhy.click("#share-cancel-btn")
         druhy.on("dialog", lambda d: d.accept())
         pocet = druhy.locator(".songbook-card .btn-edit").count()
-        druhy.click(f'.btn-kopie[data-book-id="{vlastni}"]')
+        zkontroluj(druhy.locator(f'.btn-dalsi[data-book-id="{vlastni}"]').count() == 1
+                   and druhy.locator(".songbook-card").first.locator(".icon-btn").count() == 4,
+                   "na dlaždici jsou 4 ikony, duplikovat a smazat jsou pod ⋯")
+        druhy.click(f'.btn-dalsi[data-book-id="{vlastni}"]')
+        zkontroluj(druhy.inner_text("#dalsi-nabidka .dalsi-smazat") == "Přestat upravovat společně",
+                   "u společného zpěvníku člen místo Smazat vidí Přestat upravovat společně")
+        druhy.click("#dalsi-nabidka .dalsi-duplikovat")
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         with druhy.expect_navigation():
             druhy.click("#app-confirm-ok")
         druhy.wait_for_load_state("networkidle")
         zkontroluj(druhy.locator(".songbook-card .btn-edit").count() == pocet + 1
                    and "Import z testu (kopie)" in druhy.inner_text(".grid-container"),
-                   "Vytvořit kopii přidá samostatný zpěvník")
+                   "Duplikovat přidá samostatný zpěvník")
         # Vlastník v okně sdílení ukončí společné úpravy - člen dostane kopii a upozornění
         page.goto(base + "/my-songbooks")
         page.wait_for_load_state("networkidle")
@@ -479,6 +491,18 @@ def main():
                        f"{sirka} px: dialog importu se vejde a „Přidat“ jde trefit", r)
             page.click("#es-import-zrusit")
             page.goto(base + "/my-songbooks")
+            page.wait_for_load_state("networkidle")
+            for i in range(page.locator(".btn-dalsi").count()):
+                page.locator(".btn-dalsi").nth(i).scroll_into_view_if_needed()
+                page.locator(".btn-dalsi").nth(i).click()
+                n = page.evaluate("""() => { const r = document.getElementById('dalsi-nabidka').getBoundingClientRect();
+                  return {vlevo: Math.round(r.left), vpravo: Math.round(r.right), nahore: Math.round(r.top),
+                          dole: Math.round(r.bottom), vyska: innerHeight}; }""")
+                if not (n["vlevo"] >= 0 and n["vpravo"] <= sirka and n["nahore"] >= 0 and n["dole"] <= n["vyska"]):
+                    break
+                page.keyboard.press("Escape")
+            zkontroluj(n["vlevo"] >= 0 and n["vpravo"] <= sirka and n["nahore"] >= 0 and n["dole"] <= n["vyska"],
+                       f"{sirka} px: nabídka ⋯ se u každé dlaždice vejde na obrazovku", n)
             page.wait_for_load_state("networkidle")
 
         zkontroluj(not chyby, "žádná chyba JavaScriptu", chyby[:3])

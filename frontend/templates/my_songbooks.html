@@ -149,7 +149,27 @@
   @media (max-width: 640px) {
     .songbook-actions { gap: 6px; }
   }
+  /* Na nejužších telefonech je dlaždice 141 px a čtyři ikony po 36 px s mezerami
+     (162 px) se nevešly na jeden řádek. 4 × 30 + 3 × 4 = 132 px. */
+  @media (max-width: 380px) {
+    .songbook-actions { gap: 4px; }
+    .songbook-actions .icon-btn { width: 30px; height: 30px; }
+    .songbook-actions .icon-btn img { width: 17px; height: 17px; }
+    .songbook-actions .tri-tecky { font-size: 19px; }
+  }
   .songbook-actions .icon-btn img { width: 20px; height: 20px; display: block; margin: auto; }
+  .songbook-actions .tri-tecky { font-size: 22px; line-height: 1; color: var(--brand-dark, #1b5e20); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Nabídka „⋯ Další“ u dlaždice. Leží na <body> a umisťuje se podle tlačítka: uvnitř
+     karty by se zvětšovala s ní (transform při najetí) a mohla vyjet z obrazovky. */
+  .dalsi-nabidka { position: fixed; z-index: 3500; min-width: 190px; display: flex; flex-direction: column;
+                   background: #fff; border: 1px solid var(--muted-border, #dbeadf); border-radius: 10px;
+                   box-shadow: 0 8px 24px rgba(0,0,0,0.2); overflow: hidden; }
+  .dalsi-nabidka[hidden] { display: none; }
+  .dalsi-nabidka button { border: none; background: #fff; color: var(--brand-dark, #1b5e20); text-align: left;
+                          padding: 11px 14px; font-size: 15px; cursor: pointer; }
+  .dalsi-nabidka button:hover, .dalsi-nabidka button:focus { background: var(--muted-bg, #e8f5e9); }
+  .dalsi-nabidka .nebezpecne { color: #b3261e; }
 
   .add-card { cursor: pointer; }
   .add-card .cover {
@@ -189,9 +209,18 @@
   #share-modal label { font-weight: 600; font-size: 14px; }
   #share-modal input[type="email"] { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); font-size: 15px; }
   #share-modal input[type="email"]:focus { outline: 2px solid rgba(46,125,50,0.25); outline-offset: 1px; }
-  #share-modal .share-druh { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  #share-modal .share-druh label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-  #share-modal .share-druh [hidden] { display: none; }
+  /* Dvě karty s volbou místo přepínačů: u každé je vidět, co se stane. Žádná není
+     předem vybraná - výchozí „Poslat kopii“ lidi mátlo, že se nic nevybírá. */
+  #share-modal .share-volby { display: flex; flex-direction: column; gap: 8px; }
+  #share-modal .share-volba { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: start;
+                              padding: 10px 12px; border: 2px solid var(--muted-border, #dbeadf); border-radius: 10px;
+                              background: #fff; cursor: pointer; font-weight: 400; }
+  #share-modal .share-volba[hidden] { display: none; }
+  #share-modal .share-volba input { grid-row: 1 / 3; margin-top: 3px; }
+  #share-modal .share-volba-nadpis { font-weight: 700; }
+  #share-modal .share-volba-popis { font-size: 13px; }
+  #share-modal .share-volba:has(input:checked) { border-color: var(--brand-strong, #2E7D32); }
+  #share-modal .share-poznamka { margin: 0; font-size: 13px; }
   #share-modal .share-clenove { font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
   #share-modal .share-clenove[hidden] { display: none; }
   #share-modal .share-clen { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -225,26 +254,29 @@
   
 </div>
 
-<div id="share-modal" role="dialog" aria-modal="true" aria-hidden="true">
+<div id="share-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="share-nadpis">
   <div class="panel" role="document">
-    <h3>Sdílet zpěvník</h3>
-    <p>Sdílíš <strong id="share-modal-book-title"></strong>. Dotyčný dostane pozvánku a sám
-       rozhodne, jestli ji přijme.</p>
-    <fieldset class="share-druh">
-      <label><input type="radio" name="share-druh" value="kopie" checked> Poslat kopii
-        <button type="button" class="napoveda-znak" aria-label="Co to znamená"
-                data-napoveda="Dostane vlastní kopii zpěvníku, jak vypadá teď. Vaše další úpravy se navzájem neovlivní.">i</button></label>
-      <label id="share-druh-spolecny"><input type="radio" name="share-druh" value="spolecny"> Upravovat společně
-        <button type="button" class="napoveda-znak" aria-label="Co to znamená"
-                data-napoveda="Zpěvník budete mít oba a úpravy kohokoli uvidí všichni. Počítá se do místa každému, kdo ho má.">i</button></label>
-    </fieldset>
-    <div class="share-clenove" id="share-clenove" hidden></div>
-    <label for="share-email-input">E-mail uživatele</label>
-    <input type="email" id="share-email-input" placeholder="uzivatel@example.com" autocomplete="email">
+    <h3 id="share-nadpis">Sdílet „<span id="share-modal-book-title"></span>“</h3>
+    <label for="share-email-input">Komu</label>
+    <input type="email" id="share-email-input" placeholder="e-mail, např. petr@example.com" autocomplete="email">
+    <div class="share-volby" role="radiogroup" aria-label="Jak sdílet">
+      <label class="share-volba">
+        <input type="radio" name="share-druh" value="kopie">
+        <span class="share-volba-nadpis">Poslat kopii</span>
+        <span class="share-volba-popis">Dostane vlastní zpěvník. Co pak upraví on nebo ty, se u druhého neprojeví.</span>
+      </label>
+      <label class="share-volba" id="share-druh-spolecny">
+        <input type="radio" name="share-druh" value="spolecny">
+        <span class="share-volba-nadpis">Upravovat společně</span>
+        <span class="share-volba-popis">Budete mít jeden zpěvník a každá úprava se projeví u všech. Počítá se do místa každému z vás.</span>
+      </label>
+    </div>
+    <p class="share-poznamka">Dostane pozvánku v Mých zpěvnících a sám rozhodne, jestli ji přijme.</p>
     <div id="share-feedback" class="feedback" role="alert" aria-live="polite"></div>
+    <div class="share-clenove" id="share-clenove" hidden></div>
     <div class="actions">
-      <button class="btn" id="share-cancel-btn">Zrušit</button>
-      <button class="btn primary" id="share-submit-btn">Sdílet</button>
+      <button class="btn" id="share-cancel-btn">Zavřít</button>
+      <button class="btn primary" id="share-submit-btn" disabled>Vyber, jak sdílet</button>
     </div>
   </div>
 </div>
@@ -361,27 +393,33 @@
             </button>
           </span>
         {% endif %}
-        {% if not manage_public %}
-          <span class="s-napovedou" data-napoveda="Vytvořit kopii: samostatný zpěvník, třeba pro jinou verzi">
-            <button class="icon-btn btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
-              <img src="{{ static_bust('img/icons/clone.svg') }}" alt="Vytvořit kopii">
-            </button>
-          </span>
-        {% endif %}
         <span class="s-napovedou" data-napoveda="Stáhnout zpěvník">
           <button class="icon-btn btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
           </button>
         </span>
         {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
-        <span class="s-napovedou" data-napoveda="{{ 'Přestat upravovat společně' if jsem_clen else 'Smazat zpěvník' }}">
-          <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
-                  data-clen="{{ '1' if jsem_clen else '0' }}"
-                  data-clenu="{{ (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 }}"
-                  onclick="event.preventDefault(); event.stopPropagation();">
-            <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
-          </button>
-        </span>
+        {% if manage_public %}
+          <span class="s-napovedou" data-napoveda="Smazat zpěvník">
+            <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
+                    data-clen="0" data-clenu="0" onclick="event.preventDefault(); event.stopPropagation();">
+              <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
+            </button>
+          </span>
+        {% else %}
+          {# Méně časté akce pod „⋯“: pět ikon se na dlaždici nevešlo, na telefonu
+             padala pátá na další řádek. Nabídka je jedna sdílená, viz #dalsi-nabidka. #}
+          <span class="s-napovedou" data-napoveda="Další: duplikovat, {{ 'přestat upravovat společně' if jsem_clen else 'smazat' }}">
+            <button class="icon-btn btn-dalsi" aria-haspopup="menu" aria-expanded="false"
+                    data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
+                    data-clen="{{ '1' if jsem_clen else '0' }}"
+                    data-clenu="{{ (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 }}"
+                    onclick="event.preventDefault(); event.stopPropagation();">
+              <span class="tri-tecky" aria-hidden="true">⋯</span>
+              <span class="sr-only">Další akce</span>
+            </button>
+          </span>
+        {% endif %}
       </div>
     </div>
   {% endfor %}
@@ -651,6 +689,11 @@
       </div>
     </div>
   </div>
+</div>
+
+<div class="dalsi-nabidka" id="dalsi-nabidka" role="menu" hidden>
+  <button type="button" role="menuitem" class="dalsi-duplikovat">Duplikovat</button>
+  <button type="button" role="menuitem" class="dalsi-smazat nebezpecne">Smazat</button>
 </div>
 
 <div class="es-lupa" id="es-lupa" hidden>
@@ -1374,36 +1417,35 @@ function openCreateModal() {
     // Smazání zpěvníku. Člen společného zpěvníku ho nemaže, jen přestane upravovat
     // společně (a může si nechat kopii); vlastník při mazání upozorní, že členové
     // dostanou kopii.
+    async function smazNeboOdejdi(data) {
+      let url = `/api/my-songbooks/${encodeURIComponent(data.id)}`;
+      if (data.clen) {
+        if (!(await window.showConfirm(`Přestat upravovat společně zpěvník „${data.title}“? Zmizí z tvých zpěvníků a uvolní se ti místo.`, 'Přestat'))) return;
+        if (await window.showConfirm('Chceš si nechat vlastní kopii, jak zpěvník vypadá teď? Bude se počítat do tvého místa.', 'Nechat si kopii')) {
+          url += '?kopie=1';
+        }
+      } else {
+        const zprava = data.clenu
+          ? `Zpěvník „${data.title}“ upravuješ společně s ${data.clenu === 1 ? 'jedním člověkem' : data.clenu + ' lidmi'}. Po smazání dostanou jeho kopii.`
+          : `Opravdu smazat zpěvník „${data.title}“?`;
+        if (!(await window.showConfirm(zprava, 'Smazat'))) return;
+      }
+      try {
+        const res = await fetch(url, { method: 'DELETE' });
+        if (!res.ok) {
+          const msg = await res.text();
+          alert('Nepovedlo se: ' + popisChyby(msg, res.status));
+          return;
+        }
+        window.location.reload();
+      } catch (_) {
+        alert('Chyba při komunikaci se serverem');
+      }
+    }
     document.querySelectorAll('.btn-delete').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-book-id');
-        if (!id) return;
-        const nazev = btn.getAttribute('data-book-title') || 'zpěvník';
-        let url = `/api/my-songbooks/${encodeURIComponent(id)}`;
-        if (btn.getAttribute('data-clen') === '1') {
-          if (!(await window.showConfirm(`Přestat upravovat společně zpěvník „${nazev}“? Zmizí z tvých zpěvníků a uvolní se ti místo.`, 'Přestat'))) return;
-          if (await window.showConfirm('Chceš si nechat vlastní kopii, jak zpěvník vypadá teď? Bude se počítat do tvého místa.', 'Nechat si kopii')) {
-            url += '?kopie=1';
-          }
-        } else {
-          const clenu = parseInt(btn.getAttribute('data-clenu') || '0', 10);
-          const zprava = clenu
-            ? `Zpěvník „${nazev}“ upravuješ společně s ${clenu === 1 ? 'jedním člověkem' : clenu + ' lidmi'}. Po smazání dostanou jeho kopii.`
-            : `Opravdu smazat zpěvník „${nazev}“?`;
-          if (!(await window.showConfirm(zprava, 'Smazat'))) return;
-        }
-        try {
-          const res = await fetch(url, { method: 'DELETE' });
-          if (!res.ok) {
-            const msg = await res.text();
-            alert('Nepovedlo se: ' + popisChyby(msg, res.status));
-            return;
-          }
-          window.location.reload();
-        } catch (_) {
-          alert('Chyba při komunikaci se serverem');
-        }
-      });
+      btn.addEventListener('click', () => smazNeboOdejdi({
+        id: btn.dataset.bookId, title: btn.dataset.bookTitle || 'zpěvník',
+        clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10) }));
     });
 
     function setShareFeedback(message, type) {
@@ -1419,10 +1461,11 @@ function openCreateModal() {
       if (!id) return;
       const title = button.getAttribute('data-book-title') || '';
       shareModal.dataset.bookId = id;
-      // Ke společným úpravám zve jen vlastník; ostatní můžou poslat kopii.
+      // Ke společným úpravám zve jen vlastník. Ostatní mají jedinou možnost - kopii -
+      // a ta je pak rovnou vybraná; vlastník vybírá sám, nic není předvybrané.
       const vlastnik = button.getAttribute('data-vlastnik') === '1';
       document.getElementById('share-druh-spolecny').hidden = !vlastnik;
-      shareModal.querySelector('input[name="share-druh"][value="kopie"]').checked = true;
+      shareModal.querySelectorAll('input[name="share-druh"]').forEach(r => { r.checked = !vlastnik && r.value === 'kopie'; });
       nactiCleny(id);
       shareModal.style.display = 'flex';
       shareModal.setAttribute('aria-hidden', 'false');
@@ -1431,12 +1474,21 @@ function openCreateModal() {
         shareEmailInput.value = '';
         try { shareEmailInput.focus(); } catch (_) {}
       }
-      if (shareSubmitBtn) {
-        shareSubmitBtn.disabled = false;
-        shareSubmitBtn.textContent = 'Sdílet';
-      }
       setShareFeedback('', null);
+      obnovTlacitkoSdileni();
     }
+
+    // Tlačítko říká, co se stane, a je vypnuté, dokud chybí e-mail nebo způsob.
+    function obnovTlacitkoSdileni() {
+      if (!shareSubmitBtn || shareSubmitBtn.dataset.posila === '1') return;
+      const druh = shareModal.querySelector('input[name="share-druh"]:checked')?.value;
+      const email = (shareEmailInput?.value || '').trim();
+      shareSubmitBtn.textContent = druh === 'spolecny' ? 'Pozvat ke společným úpravám'
+                                 : druh === 'kopie' ? 'Poslat kopii' : 'Vyber, jak sdílet';
+      shareSubmitBtn.disabled = !druh || !email;
+    }
+    shareModal?.querySelectorAll('input[name="share-druh"]').forEach(r => r.addEventListener('change', obnovTlacitkoSdileni));
+    shareEmailInput?.addEventListener('input', obnovTlacitkoSdileni);
 
     // Kdo zpěvník upravuje společně a komu čeká pozvánka. Vlastník může členovi
     // společné úpravy ukončit - ten dostane kopii a upozornění.
@@ -1527,13 +1579,52 @@ function openCreateModal() {
         odpovezNaPozvanku('/api/pozvanky/odmitnout-vse');
       }
     });
-    document.querySelectorAll('.btn-kopie').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const nazev = btn.getAttribute('data-book-title') || 'zpěvník';
-        if (!(await window.showConfirm(`Vytvořit kopii zpěvníku „${nazev}“? Kopie je samostatná a počítá se do tvého místa.`, 'Vytvořit kopii'))) return;
-        odpovezNaPozvanku(`/api/zpevnik/${encodeURIComponent(btn.getAttribute('data-book-id'))}/kopie`);
+    async function duplikuj(data) {
+      if (!(await window.showConfirm(`Duplikovat zpěvník „${data.title}“? Vznikne samostatný zpěvník, který se počítá do tvého místa.`, 'Duplikovat'))) return;
+      odpovezNaPozvanku(`/api/zpevnik/${encodeURIComponent(data.id)}/kopie`);
+    }
+
+    // Jedna sdílená nabídka „⋯ Další“ pro všechny dlaždice
+    const dalsiNabidka = document.getElementById('dalsi-nabidka');
+    let dalsiData = null, dalsiTlacitko = null;
+    function zavriDalsi() {
+      if (!dalsiNabidka || dalsiNabidka.hidden) return;
+      dalsiNabidka.hidden = true;
+      dalsiTlacitko?.setAttribute('aria-expanded', 'false');
+    }
+    document.querySelectorAll('.btn-dalsi').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (!dalsiNabidka.hidden && dalsiTlacitko === btn) { zavriDalsi(); return; }
+        dalsiTlacitko = btn;
+        dalsiData = { id: btn.dataset.bookId, title: btn.dataset.bookTitle || 'zpěvník',
+                      clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10) };
+        dalsiNabidka.querySelector('.dalsi-smazat').textContent =
+          dalsiData.clen ? 'Přestat upravovat společně' : 'Smazat';
+        dalsiNabidka.hidden = false;
+        btn.setAttribute('aria-expanded', 'true');
+        const r = btn.getBoundingClientRect();
+        const w = dalsiNabidka.offsetWidth, h = dalsiNabidka.offsetHeight;
+        const vlevo = Math.min(Math.max(8, r.right - w), window.innerWidth - w - 8);
+        const dole = r.bottom + 6 + h <= window.innerHeight;
+        dalsiNabidka.style.left = vlevo + 'px';
+        dalsiNabidka.style.top = (dole ? r.bottom + 6 : r.top - h - 6) + 'px';
+        dalsiNabidka.querySelector('button').focus();
       });
     });
+    dalsiNabidka?.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b || !dalsiData) return;
+      const data = dalsiData;
+      zavriDalsi();
+      if (b.classList.contains('dalsi-duplikovat')) duplikuj(data);
+      else if (b.classList.contains('dalsi-smazat')) smazNeboOdejdi(data);
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#dalsi-nabidka') && !e.target.closest('.btn-dalsi')) zavriDalsi();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') zavriDalsi(); });
+    window.addEventListener('scroll', zavriDalsi, true);
+    window.addEventListener('resize', zavriDalsi);
 
     document.querySelectorAll('.btn-share').forEach(btn => {
       btn.addEventListener('click', (event) => {
@@ -1585,7 +1676,9 @@ function openCreateModal() {
         return;
       }
 
-      const restoreText = shareSubmitBtn.textContent;
+      const druh = shareModal.querySelector('input[name="share-druh"]:checked')?.value;
+      if (!druh) { setShareFeedback('Vyber, jestli poslat kopii, nebo upravovat společně.', 'error'); return; }
+      shareSubmitBtn.dataset.posila = '1';
       shareSubmitBtn.disabled = true;
       shareSubmitBtn.textContent = 'Posílám…';
       setShareFeedback('', null);
@@ -1594,7 +1687,7 @@ function openCreateModal() {
         const res = await fetch(`/api/my-songbooks/${encodeURIComponent(id)}/share`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, druh: shareModal.querySelector('input[name="share-druh"]:checked')?.value || 'kopie' })
+          body: JSON.stringify({ email, druh })
         });
 
         let data = null;
@@ -1616,12 +1709,13 @@ function openCreateModal() {
           shareEmailInput.value = '';
           shareEmailInput.focus();
         }
+        nactiCleny(id);
         return;
       } catch (err) {
         setShareFeedback('Sdílení se nezdařilo. Zkus to prosím znovu.', 'error');
       } finally {
-        shareSubmitBtn.disabled = false;
-        shareSubmitBtn.textContent = restoreText;
+        delete shareSubmitBtn.dataset.posila;
+        obnovTlacitkoSdileni();
       }
     }
 

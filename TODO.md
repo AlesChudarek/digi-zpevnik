@@ -97,7 +97,7 @@ kdo maže.
       přijetí** pozvánky, ne při odeslání — jinak by do přijetí ležela data, která se
       nikomu nepočítají; když odesílatel originál mezitím smaže, pozvánka propadne.
 - [X] **sdílení vyžaduje přijetí** (hotovo 12. 10., tabulka `pozvanky`, sekce pozvánek v Mých
-      zpěvnících, strop 20 nevyřízených, „Vytvořit kopii“ u dlaždice) a je dvojí:
+      zpěvnících, strop 20 nevyřízených, „Duplikovat“ (pod ⋯ u dlaždice)) a je dvojí:
       - **kopie** — příjemce dostane vlastní zpěvník ve stavu v době sdílení
         (na disku nic nepřibude, jen řádky v DB)
       - **rodina** — společný zpěvník, upravují všichni. Vlastník je jediný, kdo zve

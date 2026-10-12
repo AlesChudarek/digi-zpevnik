@@ -2149,7 +2149,7 @@ def api_share_songbook(songbook_id):
         return jsonify({"ok": False, "error": "Neznámý způsob sdílení."}), 400
     if target.id == current_user.id:
         return jsonify({"ok": False, "error": "Sobě zpěvník nesdílíš - na kopii pro sebe je u "
-                        "zpěvníku tlačítko Vytvořit kopii."}), 400
+                        "zpěvníku Duplikovat (pod ⋯)."}), 400
     if druh == 'spolecny':
         # Ke společným úpravám zve jen vlastník; ostatní smějí poslat kopii.
         if sb.owner_id != current_user.id:
@@ -2238,12 +2238,12 @@ def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
 @app.route('/api/zpevnik/<songbook_id>/kopie', methods=['POST'])
 @login_required
 def vytvor_kopii(songbook_id):
-    """„Vytvořit kopii“ u vlastního nebo společného zpěvníku - třeba pro jinou verzi."""
+    """„Duplikovat“ u vlastního nebo společného zpěvníku - třeba pro jinou verzi."""
     sb = db.session.get(Songbook, songbook_id)
     if sb is None or not can_edit_songbook(current_user, sb) or sb.is_public:
         return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
     if is_guest(current_user) or not smi_tvorit(current_user):
-        return jsonify({'ok': False, 'error': 'Kopii může vytvořit jen ověřený účet.'}), 403
+        return jsonify({'ok': False, 'error': 'Duplikovat může jen ověřený účet.'}), 403
     pred = zjisti_mista([current_user.id])
     nova = kopiruj_zpevnik(sb, current_user.id, f"{sb.title} (kopie)")
     zkontroluj_limity(pred)

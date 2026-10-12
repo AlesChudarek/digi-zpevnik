@@ -1,16 +1,13 @@
 /* Editor stran zpěvníku (static/js/editor.js). Leží v bílém okně, takže drží kontrakt
    motivů: plochy --muted-bg, text --brand-dark, rámečky --muted-border.
 
-   Barvy: sekce stran má podklad --muted-bg, karty bloků jsou z poloviny tónované
-   (čistě bílé řezaly do očí a splývaly s oknem), náhledy stran zůstávají bílé se
-   stínem - papír na stole. */
+   Barvy: sekce stran je bílá jako okno a barvu motivu mají jen karty bloků (píseň se
+   svými pokračováními). Mezi písněmi jsou tak vidět bílé mezery. Náhledy stran jsou
+   bílé se stínem - papír na barevné kartě. */
 
 .editor-stran {
   position: relative;
   margin-top: 18px;
-  padding: 14px;
-  border-radius: 12px;
-  background: var(--muted-bg, #e8f5e9);
   /* Chyby jsou tmavě červené napevno: okno je ve všech motivech bílé, kdežto
      --panel-error je v tmavém motivu světlá, určená pro tmavé panely. */
   --es-chyba: #b3261e;
@@ -38,9 +35,7 @@
   padding: 10px;
   border: 1px solid var(--muted-border, #dbeadf);
   border-radius: 10px;
-  /* Napůl tónovaná karta: bílá vrstva přes barvu sekce. Bez color-mix, ten
-     prohlížeč hlásí ve tvaru, který kontrola kontrastu neumí přečíst. */
-  background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.55)), var(--muted-bg, #e8f5e9);
+  background: var(--muted-bg, #e8f5e9);
 }
 .es-blok.tazeny { opacity: 0.45; }
 .es-blok.cil-pred { box-shadow: 0 -3px 0 var(--brand-strong, #2E7D32); }
@@ -99,7 +94,7 @@
   color: var(--brand-dark, #1b5e20);
   font-size: 14px;
 }
-.es-pisen.zamcena input { background: var(--muted-bg, #e8f5e9); }
+.es-pisen.zamcena input { background: transparent; border-style: dashed; }
 .es-dalsi-pisen { align-self: flex-start; border: none; background: none; color: var(--brand-dark, #1b5e20); padding: 0; font-size: 13px; cursor: pointer; text-decoration: underline; }
 .es-chyby { font-size: 13px; color: var(--es-chyba, #b3261e); }
 
@@ -172,7 +167,6 @@
 .es-import-akce { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 560px) {
-  .editor-stran { padding: 10px; }
   .es-blok { grid-template-columns: minmax(0, 1fr) auto; padding: 8px; }
   .es-drzadlo { display: none; }
   .es-strana { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }

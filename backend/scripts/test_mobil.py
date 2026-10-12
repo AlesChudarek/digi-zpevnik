@@ -291,6 +291,10 @@ def main():
                            f"{sirka} px: žádná ikona nepřečuhuje z dlaždice",
                            f"dlaždice {v['karta']} px, {v['pocet']} ikon "
                            f"na {v['radku']} řádcích" if v else "dlaždice nenalezena")
+                # Ikony se na řádek vejdou vždycky - zalomení páté (dřív) vypadalo jako chyba.
+                zkontroluj(v is not None and v["radku"] == 1,
+                           f"{sirka} px: ikony jsou na jednom řádku",
+                           f"{v['pocet']} ikon na {v['radku']} řádcích" if v else "")
                 prekroceni = page.evaluate(
                     "() => document.documentElement.scrollWidth - window.innerWidth")
                 zkontroluj(prekroceni <= 0,
