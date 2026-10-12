@@ -105,6 +105,8 @@ IKONY_DLAZDICE = """() => {
   return {karta: Math.round(rk.width),
           pocet: ikony.length,
           venku: ikony.filter(i => i.x < rk.left - 0.5 || i.pravy > rk.right + 0.5).length,
+          v_radcich: Object.values([...akce.querySelectorAll('.icon-btn')].reduce((m, e) => {
+            const t = Math.round(e.getBoundingClientRect().top); m[t] = (m[t] || 0) + 1; return m; }, {})),
           radku: new Set([...akce.querySelectorAll('.icon-btn')]
                          .map(e => Math.round(e.getBoundingClientRect().top))).size};
 }"""
@@ -291,10 +293,12 @@ def main():
                            f"{sirka} px: žádná ikona nepřečuhuje z dlaždice",
                            f"dlaždice {v['karta']} px, {v['pocet']} ikon "
                            f"na {v['radku']} řádcích" if v else "dlaždice nenalezena")
-                # Ikony se na řádek vejdou vždycky - zalomení páté (dřív) vypadalo jako chyba.
-                zkontroluj(v is not None and v["radku"] == 1,
-                           f"{sirka} px: ikony jsou na jednom řádku",
-                           f"{v['pocet']} ikon na {v['radku']} řádcích" if v else "")
+                # Pět ikon: od 390 px na jednom řádku, na užších telefonech 3 + 2 - nikdy
+                # nesmí zbýt jedna osamocená na dalším řádku.
+                ocekavano = 1 if sirka >= 390 else 2
+                zkontroluj(v is not None and v["radku"] == ocekavano and v["v_radcich"][-1] >= 2,
+                           f"{sirka} px: ikony na {ocekavano} {'řádku' if ocekavano == 1 else 'řádcích'}, žádná osamocená",
+                           f"{v['pocet']} ikon po řádcích {v['v_radcich']}" if v else "")
                 prekroceni = page.evaluate(
                     "() => document.documentElement.scrollWidth - window.innerWidth")
                 zkontroluj(prekroceni <= 0,

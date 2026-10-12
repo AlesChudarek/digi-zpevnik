@@ -299,7 +299,7 @@ def main():
             if ma_sdileni:
                 najed(page, ".napoveda-kotva")
                 stav = page.evaluate(STAV)
-                zkontroluj(not stav["skryta"] and "Upravujete společně" in stav["text"],
+                zkontroluj(not stav["skryta"] and "Společné úpravy" in stav["text"],
                            "najetí na ikonu sdílení vypíše, s kým", stav["text"][:40])
                 zkontroluj(stav["vejde"],
                            "a na 390px displeji se celá vejde", str(stav["ram"]))

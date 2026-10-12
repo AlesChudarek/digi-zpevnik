@@ -571,13 +571,13 @@ def _kvota_prekrocena(chyba):
 
     zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
     if chyba.kdo is not None:
-        zprava = (f"Změna se nevejde do místa uživatele {chyba.kdo.email}: zbývá mu "
-                  f"{mb(zbyva)} a zpěvník by zabral o {mb(chyba.pridavek)} víc. Sdílený "
-                  f"zpěvník se počítá do místa každému, kdo ho má.")
+        zprava = (f"Změna se nevejde do limitu místa uživatele {chyba.kdo.email}: volných "
+                  f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Společný zpěvník "
+                  f"se započítává každému, kdo ho má.")
     else:
-        zprava = (f"Změna by překročila váš limit {mb(MAX_USER_STORAGE_BYTES)}. "
-                  f"Zbývá vám {mb(zbyva)} a zabrala by {mb(chyba.pridavek)}. "
-                  f"Uvolněte místo smazáním zpěvníku, který už nepotřebujete.")
+        zprava = (f"Změna by překročila limit místa {mb(MAX_USER_STORAGE_BYTES)}: volných "
+                  f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Místo uvolní "
+                  f"smazání nepotřebného zpěvníku.")
     return jsonify({
         'ok': False,
         'error': zprava,
@@ -2012,7 +2012,7 @@ def predej_kopie_clenum(sb, co_se_stalo, jen=None):
         kopie = kopiruj_zpevnik(sb, clen.user_id)
         db.session.add(Oznameni(
             user_id=clen.user_id, songbook_id=kopie.id, vytvoreno=datetime.now(),
-            text=co_se_stalo.format(nazev=sb.title) + " Máš jeho kopii, jak vypadal v tu chvíli."))
+            text=co_se_stalo.format(nazev=sb.title) + " Kopie v tehdejší podobě je mezi Mými zpěvníky."))
         db.session.delete(clen)
     db.session.flush()
 
@@ -2134,7 +2134,7 @@ def api_share_songbook(songbook_id):
     email = (payload.get('email') or request.form.get('email') or '').strip()
 
     if not email:
-        return jsonify({"ok": False, "error": "Zadej e-mail uživatele."}), 400
+        return jsonify({"ok": False, "error": "Chybí e-mail příjemce."}), 400
 
     normalized = email.lower()
     target = User.query.filter(func.lower(User.email) == normalized).first()
@@ -2148,28 +2148,27 @@ def api_share_songbook(songbook_id):
     if druh not in ('kopie', 'spolecny'):
         return jsonify({"ok": False, "error": "Neznámý způsob sdílení."}), 400
     if target.id == current_user.id:
-        return jsonify({"ok": False, "error": "Sobě zpěvník nesdílíš - na kopii pro sebe je u "
-                        "zpěvníku Duplikovat (pod ⋯)."}), 400
+        return jsonify({"ok": False, "error": "Sdílet sám se sebou nejde. Kopii vlastního "
+                        "zpěvníku vytvoří Duplikovat."}), 400
     if druh == 'spolecny':
         # Ke společným úpravám zve jen vlastník; ostatní smějí poslat kopii.
         if sb.owner_id != current_user.id:
-            return jsonify({"ok": False, "error": "Ke společným úpravám může zvát jen vlastník "
-                            "zpěvníku. Poslat kopii můžeš."}), 403
+            return jsonify({"ok": False, "error": "Ke společným úpravám zve jen vlastník "
+                            "zpěvníku."}), 403
         if target.id == sb.owner_id or UserSongbookAccess.query.filter_by(
                 user_id=target.id, songbook_id=sb.id).first():
-            return jsonify({"ok": False, "error": f"Zpěvník už s {target.email} upravujete společně."}), 400
+            return jsonify({"ok": False, "error": f"Uživatel {target.email} už zpěvník upravuje."}), 400
     if Pozvanka.query.filter_by(songbook_id=sb.id, komu_id=target.id, druh=druh).first():
         return jsonify({"ok": True, "message": f"Pozvánka pro {target.email} už čeká na odpověď."})
     # Strop nevyřízených pozvánek: kdo by chtěl někoho zahltit, narazí tady.
     if Pozvanka.query.filter_by(komu_id=target.id).count() >= MAX_POZVANEK:
-        return jsonify({"ok": False, "error": f"{target.email} má moc nevyřízených pozvánek. "
-                        "Zkus to později."}), 429
+        return jsonify({"ok": False, "error": f"Uživatel {target.email} má příliš mnoho "
+                        "nevyřízených pozvánek."}), 429
 
     db.session.add(Pozvanka(songbook_id=sb.id, od_id=current_user.id, komu_id=target.id,
                             druh=druh, vytvoreno=datetime.now()))
     db.session.commit()
-    return jsonify({"ok": True, "message": f"Pozvánka odeslána. {target.email} ji uvidí "
-                    "v Mých zpěvnících a rozhodne, jestli ji přijme."}), 200
+    return jsonify({"ok": True, "message": f"Pozvánka pro {target.email} byla odeslána."}), 200
 
 
 # ---------- Kopie a pozvánky ----------

@@ -131,7 +131,7 @@
         p.push('Strana s písní potřebuje obrázek.');
       }
       if (s.pisne.some(function (x) { return !x.nazev.trim(); })) {
-        p.push('Doplň název písně, nebo ji ze strany odeber.');
+        p.push('Chybí název písně.');
       }
       if (s.pokracuje && i === strany.length - 1) {
         p.push('Píseň má pokračovat na další stranu, ale žádná další není.');
@@ -375,7 +375,7 @@
       if (od < 1 || po > pocet || po < od) throw new Error('Rozsah „' + kus + '“ nesedí, soubor má ' + pocet + ' stran.');
       for (var n = od; n <= po; n++) if (vysledek.indexOf(n) < 0) vysledek.push(n);
     }
-    if (!vysledek.length) throw new Error('Zadej, které strany přidat.');
+    if (!vysledek.length) throw new Error('Chybí rozsah stran.');
     return vysledek;
   }
 
@@ -981,7 +981,7 @@
     // u stran a na první z nich posune.
     pripravKUlozeni: function () {
       if (importBezi || importy.length) {
-        return Promise.resolve({ ok: false, chyba: 'Ještě se rozkládá importovaný soubor, počkej, až doběhne.' });
+        return Promise.resolve({ ok: false, chyba: 'Import souboru ještě probíhá.' });
       }
       return cekejNaNahrani().then(function () {
         ukazovatChyby = true;
@@ -990,8 +990,8 @@
         if (!klice.length) return { ok: true };
         var div = $('es-seznam').querySelector('.es-strana[data-klic="' + klice[0] + '"]');
         if (div) div.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        return { ok: false, chyba: klice.length === 1 ? 'Jedna strana potřebuje doplnit.'
-                                                       : klice.length + ' stran potřebuje doplnit.' };
+        return { ok: false, chyba: klice.length === 1 ? 'Jedna strana není úplná.'
+                                                       : 'Některé strany nejsou úplné (' + klice.length + ').' };
       });
     },
     nahrava: function () { return nahravaSe || fronta.length > 0 || importBezi || importy.length > 0; },
