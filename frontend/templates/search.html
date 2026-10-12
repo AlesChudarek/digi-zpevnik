@@ -624,7 +624,7 @@
         const create = document.createElement('button');
         create.className = 'sb-picker-item sb-picker-create';
         create.innerHTML = `<img class="plus" src="${"{{ static_bust('img/icons/plus_circle.svg') }}"}" alt="+"> <span>Nový zpěvník</span>`;
-        create.addEventListener('click', () => { window.location.href = '/my-songbooks?create=1'; });
+        create.addEventListener('click', () => { window.location.href = '/my-songbooks?create=1&pisen=' + encodeURIComponent(songId); });
         panel.appendChild(create);
 
         // No explicit close button; click outside overlay closes the picker

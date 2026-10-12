@@ -425,6 +425,8 @@
   @keyframes btn-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
   .btn-top-save-wrap { position: absolute; right: 24px; top: 12px; display: flex; align-items: center; gap: 10px; z-index: 10; }
   .btn-top-save { padding: 20px 34px; font-size: 18px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); min-height: 56px; min-width: 160px; }
+  /* Dokud není co uložit, je Uložit tlumené; rozsvítí se s první změnou. */
+  .btn-top-save.bez-zmen { opacity: 0.45; box-shadow: none; cursor: default; }
   .section-title { margin: 18px 0 8px; font-size: 16px; color: var(--brand-dark, #1b5e20); }
   /* Hide bottom actions in create/edit modal; closing is via click outside */
   #new-book-modal .modal .modal-actions { display: none; }
@@ -937,7 +939,7 @@ function openCreateModal() {
   try { ['front_outer','front_inner','back_inner','back_outer'].forEach(k => { const el = document.getElementById('erem-' + k); if (el) el.value = '0'; }); } catch(_) {}
   // Strany obsluhuje static/js/editor.js; u úprav je pak naplní openEditSongbookModal.
   EditorStran.zacni({ zpevnikId: window.__editMode ? window.__editBookId : null,
-                      verejny: MANAGE_PUBLIC, naObalku: vlozObalku });
+                      verejny: MANAGE_PUBLIC, naObalku: vlozObalku, poZmene: obnovUlozit });
   // Reset heading/primary only when NOT in edit mode
   if (!window.__editMode) {
     const titleEl = document.getElementById('nb-title'); if (titleEl) titleEl.textContent = 'Nový zpěvník';
@@ -946,6 +948,7 @@ function openCreateModal() {
       // Cover toggle removed
   }
   modal.style.display = 'flex'; startAnim(); resetColorToRandom(); resetUploads(); justDragged = false; pointerDownOnOverlay = false; startedInsideContent = false;
+  obnovUlozit();
 }
 
       if (addCard) addCard.addEventListener('click', () => {
@@ -953,11 +956,27 @@ function openCreateModal() {
         window.__editMode = false; window.__editBookId = null;
         openCreateModal();
       });
-      // Auto-open when ?create=1 is present
-      try {
+      // Otevření z odkazu ?create=1 (hledání a čtečka: „Přidat píseň → Nový zpěvník“)
+      // se odkládá na konec inicializace. Dřív běželo tady uprostřed, ještě než vznikly
+      // ovládací prvky barvy obálky, takže openCreateModal spadlo a prázdné catch to
+      // spolklo - okno se ukázalo, ale zbytek se už nevykonal.
+      setTimeout(() => {
         const sp = new URLSearchParams(window.location.search);
-        if (sp.get('create') === '1') { window.__editMode = false; window.__editBookId = null; openCreateModal(); }
-      } catch(_) {}
+        if (sp.get('create') !== '1') return;
+        // Z adresy hned pryč, jinak by ji obnovení stránky po uložení otevřelo znovu
+        // a zpěvník s toutéž písní by šel založit podruhé.
+        history.replaceState(null, '', window.location.pathname);
+        window.__editMode = false; window.__editBookId = null;
+        openCreateModal();
+        // S id písně se nový zpěvník otevře rovnou s ní. Dřív se id neposílalo
+        // a vznikl prázdný zpěvník.
+        const pisen = sp.get('pisen');
+        if (!pisen) return;
+        fetch(`/api/pisen/${encodeURIComponent(pisen)}/strany`).then(r => r.json()).then(data => {
+          if (!data || !data.ok || window.__editMode) return;
+          EditorStran.nacti(data.strany, 1, { neulozeno: true });
+        }).catch(chyba => console.error('Píseň pro nový zpěvník se nenačetla', chyba));
+      }, 0);
       document.getElementById('nb-cancel').addEventListener('click', async (e) => {
         if (zmenyOkna()) {
           const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
@@ -1193,9 +1212,24 @@ function openCreateModal() {
     // struktura a obálky.
     function zmenyOkna() { return !!createDirty || EditorStran.zmeneno(); }
 
+    function obnovUlozit() {
+      if (!nbSaveTopBtn) return;
+      const zmeny = zmenyOkna();
+      nbSaveTopBtn.classList.toggle('bez-zmen', !zmeny);
+      nbSaveTopBtn.setAttribute('aria-disabled', zmeny ? 'false' : 'true');
+      if (zmeny) nbSaveTopBtn.removeAttribute('data-napoveda');
+      else nbSaveTopBtn.setAttribute('data-napoveda', 'Zatím není co uložit');
+    }
+    // Změna může přijít odkudkoli z okna (název, barva, obálka, strany), proto se stav
+    // tlačítka obnoví po každé akci v něm. Po vyhodnocení akce, ne před ním.
+    ['input', 'change', 'click', 'drop', 'keyup'].forEach(udalost => {
+      modal.addEventListener(udalost, () => setTimeout(obnovUlozit, 0));
+    });
+
     if (nbCreateBtn) {
       nbCreateBtn.addEventListener('click', async () => {
         if (nbCreateBtn.dataset.loading === '1') return;
+        if (!zmenyOkna()) return;
         const popisek = EditorStran.nahrava() ? 'Nahrávám strany…' : 'Ukládám…';
         toggleButtonLoading(nbCreateBtn, null, true, popisek);
         toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, popisek);
@@ -1440,6 +1474,7 @@ function openCreateModal() {
         });
         EditorStran.nacti(z.strany, z.prvni_cislo);
         createDirty = false;
+        obnovUlozit();
       });
     };
 

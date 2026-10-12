@@ -219,6 +219,13 @@ def main():
         print("\n── úpravy ──")
         page.evaluate(f"window.openEditSongbookModal('{novy.id}')")
         page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
+        zkontroluj("bez-zmen" in page.get_attribute("#nb-save-top", "class"),
+                   "Uložit je tlumené, dokud není co uložit")
+        page.fill("#nb-name", "Zpěvník z testu ")
+        page.fill("#nb-name", "Zpěvník z testu")
+        page.wait_for_timeout(50)
+        zkontroluj("bez-zmen" not in page.get_attribute("#nb-save-top", "class"),
+                   "a rozsvítí se se změnou")
         zkontroluj(typy(page) == ["pisen", "pokracovani", "bez", "prazdna"]
                    and page.locator("#es-seznam .es-blok").count() == 3,
                    "editor načte strany i spojení", typy(page))
@@ -262,6 +269,38 @@ def main():
                    and s[0][1],
                    "uloží se přesuny, obrázek i píseň začínající na pokračování",
                    [(x[1], x[3]) for x in s])
+
+        print("\n── přidat píseň → nový zpěvník ──")
+        with A.app.app_context():
+            radek = A.db.session.execute(A.text(
+                "SELECT p.song_id, COUNT(*) n, MIN(s.songbook_id) FROM pisne_na_strane p "
+                "JOIN strany s ON s.id = p.strana_id JOIN songbooks b ON b.id = s.songbook_id "
+                "WHERE b.is_public = 1 GROUP BY p.song_id, s.songbook_id HAVING n > 1 LIMIT 1")).first()
+            pisen_id, stran, _ = radek
+            nazev_pisne = A.db.session.get(A.Song, pisen_id).title
+            obrazky_pisne = [st.image_id for st in A.strany_pisne(pisen_id)]
+        page.goto(base + f"/my-songbooks?create=1&pisen={pisen_id}")
+        page.wait_for_function(f"document.querySelectorAll('#es-seznam .es-strana').length === {stran}")
+        zkontroluj(typy(page) == ["pisen"] + ["pokracovani"] * (stran - 1),
+                   "nový zpěvník se otevře rovnou s písní i jejími pokračováními", typy(page))
+        zkontroluj(strana(page, 0).locator(".es-nazev").input_value() == nazev_pisne
+                   and strana(page, 0).locator(".es-nazev").get_attribute("readonly") is not None,
+                   "píseň je zamčená jako každá cizí", nazev_pisne)
+        zkontroluj("bez-zmen" not in page.get_attribute("#nb-save-top", "class"),
+                   "a Uložit rovnou svítí")
+        page.fill("#nb-name", "S písní z hledání")
+        with page.expect_navigation():
+            page.click("#nb-save-top")
+        page.wait_for_load_state("networkidle")
+        zkontroluj(page.evaluate("location.search") == ""
+                   and page.evaluate("getComputedStyle(document.getElementById('new-book-modal')).display") == "none",
+                   "po uložení se okno samo znovu neotevře")
+        with A.app.app_context():
+            sb = A.Songbook.query.filter_by(title="S písní z hledání").first()
+            zkontroluj(sb is not None and [st.image_id for st in sb.strany] == obrazky_pisne
+                       and all(v.song_id == pisen_id for st in sb.strany for v in st.pisne),
+                       "uloží se s týmiž stranami a toutéž písní",
+                       sb and [st.image_id for st in sb.strany])
 
         print("\n── vyplňování z klávesnice ──")
         page.evaluate("window.__editMode = false; window.__editBookId = null")

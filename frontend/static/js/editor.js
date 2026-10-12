@@ -960,7 +960,9 @@
       vychozi = otisk();
     },
     // Ze serveru přijde typ; pokračování se převede na spojení s předchozí stranou.
-    nacti: function (seznam, prvni) {
+    // volby.neulozeno: strany ještě nejsou uložené (předvyplněný nový zpěvník), okno
+    // je tedy od začátku změněné - zavření se zeptá a Uložit svítí.
+    nacti: function (seznam, prvni, volby) {
       seznam = seznam || [];
       strany = seznam.map(function (z, i) {
         var s = novaStrana(z);
@@ -969,7 +971,8 @@
       });
       if ($('es-prvni')) $('es-prvni').value = prvni || 1;
       vykresli();
-      vychozi = otisk();
+      vychozi = (volby && volby.neulozeno) ? '' : otisk();
+      if (nastaveni.poZmene) nastaveni.poZmene();
     },
     data: data,
     prvniCislo: prvniCislo,

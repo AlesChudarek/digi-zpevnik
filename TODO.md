@@ -15,7 +15,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] odebrat možnost "Přidat obálku" - bude vždy
 - [X] opravit nový zpěvník = edit zpěvník
 - [X] Nový zpěvník / upravit zpěvník: kliknu uložit a zůstane okno s novým zpěvníkem otevřené
-- [ ] Tlačítko uložit při editaci se rozsvítí, když se udělá úprava
+- [X] Tlačítko uložit při editaci se rozsvítí, když se udělá úprava — do té doby je
+      tlumené a nic nedělá
 - [X] **editor přes strany** (`static/js/editor.js`, `css/editor.css`). Jedno okno pro
       nový i upravovaný zpěvník. Strana nemá typ, který by se volil: má obrázek (nebo
       ne), písně, které na ní začínají („+ Přidat píseň na stranu“), a popisek, když
@@ -29,7 +30,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       uložení (`/api/zpevnik`) posílá jen strukturu; neuložené nahrávky se po dni uklidí.
       Hlídá `test_editor.py` (API) a `test_editor_ui.py` (prohlížeč).
 - [ ] číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout
-- [ ] (?) přidat písničku → nový zpěvník: nepřidá písničku, ale vytvoří prázdný zpěvník
+- [X] **přidat písničku → nový zpěvník vytvořil prázdný zpěvník** — opraveno. Hledání ani
+      čtečka id písně vůbec neposílaly; teď jde v `?pisen=` a okno se otevře rovnou s jejími
+      stranami (`/api/pisen/<id>/strany`), píseň zamčená. Při opravě vyšly najevo dvě
+      skryté chyby: otevření z `?create=1` běželo uprostřed inicializace, padalo na ještě
+      nevzniklých ovládacích prvcích barvy a prázdné `catch` to spolklo; a obnovení stránky
+      po uložení by s parametry v adrese otevřelo okno znovu.
 
 ## Datový model
 

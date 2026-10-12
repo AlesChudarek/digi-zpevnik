@@ -2053,6 +2053,45 @@ def _uklid_neulozenych_stran():
         smaz_osirele_obrazky(kandidati)
 
 
+@app.route('/api/pisen/<song_id>/strany')
+@login_required
+def strany_pisne_pro_editor(song_id):
+    """Strany jedné písně ve tvaru pro editor, jako nové strany (bez id).
+
+    Pro „Přidat píseň → Nový zpěvník“: nový zpěvník se otevře rovnou s touhle písní.
+    Bere se ze zpěvníku, který uživatel vidí; píseň je zamčená jako každá cizí.
+    """
+    song = db.session.get(Song, song_id)
+    if song is None:
+        return jsonify({'ok': False, 'error': 'Píseň nenalezena.'}), 404
+    zdroj = None
+    for (sb_id,) in (db.session.query(Strana.songbook_id)
+                     .join(PisenNaStrane, PisenNaStrane.strana_id == Strana.id)
+                     .filter(PisenNaStrane.song_id == song_id).distinct()
+                     .order_by(Strana.songbook_id)):
+        kandidat = db.session.get(Songbook, sb_id)
+        if kandidat is not None and can_view_songbook(current_user, kandidat):
+            zdroj = kandidat
+            break
+    if zdroj is None:
+        return jsonify({'ok': False, 'error': 'Píseň nenalezena.'}), 404
+    strany = []
+    for poradi, strana in enumerate(strany_pisne(song_id, zdroj.id)):
+        strany.append({
+            'id': None,
+            'image_id': strana.image_id,
+            'nahled': url_strany(strana.image_path) if strana.image_path else None,
+            'obrazek': (url_for('serve_songbook_image', filename=strana.image_path)
+                        if strana.image_path else None),
+            'typ': 'pisen' if poradi == 0 else 'pokracovani',
+            'popisek': '',
+            'pisne': [] if poradi else [{
+                'song_id': song.id, 'nazev': song.title,
+                'autor': (song.author.name if song.author else '') or '', 'zamcena': True}],
+        })
+    return jsonify({'ok': True, 'nazev': song.title, 'strany': strany})
+
+
 @app.route('/api/autori')
 @login_required
 def seznam_autoru():
