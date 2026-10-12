@@ -432,6 +432,88 @@ def main():
                  if st.image_path and not (OBRAZKY / st.image_path).exists()]
     zkontroluj(not chybi, "žádná strana kopie nepřišla o obrázek", chybi)
 
+    print("\n── konec společných úprav ──")
+    def pozvi_a_prijmi(vlastnik, kid, uid, email):
+        vlastnik.post(f"/api/my-songbooks/{kid}/share", json={"email": email, "druh": "spolecny"})
+        with A.app.app_context():
+            pid = A.Pozvanka.query.filter_by(komu_id=uid, songbook_id=kid).first().id
+        return klient(uid).post(f"/api/pozvanky/{pid}/prijmout").status_code
+
+    def oznameni(uid):
+        with A.app.app_context():
+            return [(o.id, o.songbook_id, o.text) for o in A.Oznameni.query.filter_by(user_id=uid)]
+
+    def knihy(uid):
+        with A.app.app_context():
+            return sorted(b.id for b in A.Songbook.query.filter_by(owner_id=uid))
+
+    def clen(uid, kid):
+        with A.app.app_context():
+            return A.UserSongbookAccess.query.filter_by(user_id=uid, songbook_id=kid).first() is not None
+
+    _, w = nahraj(u3, "olive")
+    kod, telo = uloz(u3, nazev="Společný", strany=[
+        {"typ": "pisen", "image_id": w["image_id"], "pisne": [{"nazev": "Naše", "autor": "My"}]}])
+    spolecny = telo.get("id")
+    zkontroluj(pozvi_a_prijmi(u3, spolecny, 4, EMAIL4) == 200 and clen(4, spolecny), "u4 je členem")
+    pred_knihy = knihy(4)
+    r = u4.post(f"/api/zpevnik/{spolecny}/clenove/4/odebrat")
+    zkontroluj(r.status_code == 403, "člena odebírá jen vlastník", r.status_code)
+    r = u3.get(f"/api/zpevnik/{spolecny}/clenove").get_json()
+    zkontroluj(r["jsem_vlastnik"] and [c["email"] for c in r["clenove"]] == [EMAIL4],
+               "vlastník vidí seznam členů", r)
+    r = u3.post(f"/api/zpevnik/{spolecny}/clenove/4/odebrat")
+    nove = sorted(set(knihy(4)) - set(pred_knihy))
+    oz = oznameni(4)
+    zkontroluj(r.status_code == 200 and not clen(4, spolecny) and len(nove) == 1,
+               "odebraný člen přijde o přístup a dostane kopii", (r.status_code, nove))
+    zkontroluj(len(oz) == 1 and oz[0][1] == nove[0] and "ukončil společné úpravy" in oz[0][2],
+               "a upozornění s ní", oz)
+    u4.post(f"/api/oznameni/{oz[0][0]}/ponechat")
+    zkontroluj(not oznameni(4) and nove[0] in knihy(4), "Ponechat: upozornění zmizí, kopie zůstane")
+
+    pozvi_a_prijmi(u3, spolecny, 4, EMAIL4)
+    pred_knihy = knihy(4)
+    r = u4.delete(f"/api/my-songbooks/{spolecny}")
+    zkontroluj(r.status_code == 200 and not clen(4, spolecny) and knihy(4) == pred_knihy
+               and stav_knihy(spolecny) is not None,
+               "člen odejde bez kopie; zpěvník vlastníkovi zůstane")
+    pozvi_a_prijmi(u3, spolecny, 4, EMAIL4)
+    r = u4.delete(f"/api/my-songbooks/{spolecny}?kopie=1")
+    zkontroluj(r.status_code == 200 and not clen(4, spolecny) and len(knihy(4)) == len(pred_knihy) + 1,
+               "člen odejde a nechá si kopii")
+
+    pozvi_a_prijmi(u3, spolecny, 5, EMAIL5)
+    pred5 = knihy(5)
+    r = u3.delete(f"/api/my-songbooks/{spolecny}")
+    nove5 = sorted(set(knihy(5)) - set(pred5))
+    zkontroluj(r.status_code == 200 and stav_knihy(spolecny) is None and len(nove5) == 1 and oznameni(5),
+               "smazaný společný zpěvník: člen dostane kopii a upozornění (dřív na něj zpěvník přešel)",
+               (r.status_code, nove5))
+    with A.app.app_context():
+        kk = A.db.session.get(A.Songbook, nove5[0])
+        zkontroluj(all((OBRAZKY / st.image_path).exists() for st in kk.strany if st.image_path),
+                   "kopie po smazání originálu nepřišla o obrázky")
+    u5.post(f"/api/oznameni/{oznameni(5)[0][0]}/zahodit")
+    zkontroluj(not oznameni(5) and nove5[0] not in knihy(5), "Zahodit kopii: zpěvník zmizí")
+
+    _, q = nahraj(u5, "maroon")
+    kod, telo = uloz(u5, nazev="Pátého", strany=[
+        {"typ": "pisen", "image_id": q["image_id"], "pisne": [{"nazev": "Pátá", "autor": "-"}]}])
+    pateho = telo.get("id")
+    pozvi_a_prijmi(u5, pateho, 4, EMAIL4)
+    pred4 = knihy(4)
+    with A.app.app_context():
+        email5 = A.db.session.get(A.User, 5).email
+    r = u5.post("/smazat-ucet", data={"potvrzeni": email5})
+    nove4 = sorted(set(knihy(4)) - set(pred4))
+    with A.app.app_context():
+        zkontroluj(A.db.session.get(A.User, 5) is None and stav_knihy(pateho) is None,
+                   "zrušení účtu smaže jeho zpěvníky")
+        kk = A.db.session.get(A.Songbook, nove4[0]) if nove4 else None
+        zkontroluj(kk is not None and all((OBRAZKY / st.image_path).exists() for st in kk.strany if st.image_path),
+                   "členové o zpěvník nepřijdou - mají kopii i s obrázky", nove4)
+
     print("\n── veřejný zpěvník od admina ──")
     _, x = nahraj(admin, "green", verejny="1")
     kod, telo = uloz(admin, verejny="1", nazev="Veřejný test",

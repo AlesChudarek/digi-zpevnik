@@ -431,6 +431,25 @@ def main():
         zkontroluj(druhy.locator(".songbook-card .btn-edit").count() == pocet + 1
                    and "Import z testu (kopie)" in druhy.inner_text(".grid-container"),
                    "Vytvořit kopii přidá samostatný zpěvník")
+        # Vlastník v okně sdílení ukončí společné úpravy - člen dostane kopii a upozornění
+        page.goto(base + "/my-songbooks")
+        page.wait_for_load_state("networkidle")
+        page.click(f'.btn-share[data-book-id="{vlastni}"]')
+        page.wait_for_selector("#share-clenove:not([hidden])")
+        zkontroluj(EMAIL4 in page.inner_text("#share-clenove"), "okno sdílení ukáže členy",
+                   page.inner_text("#share-clenove"))
+        page.click("#share-clenove .share-clen button")
+        page.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
+        page.click("#app-confirm-ok")
+        page.wait_for_function("!document.getElementById('share-clenove').textContent.includes('Ukončit')")
+        page.click("#share-cancel-btn")
+        druhy.goto(base + "/my-songbooks")
+        druhy.wait_for_load_state("networkidle")
+        text = druhy.inner_text("[data-oznameni]") if druhy.locator("[data-oznameni]").count() else ""
+        zkontroluj("ukončil společné úpravy" in text, "člen uvidí upozornění s nabídkou kopie", text[:100])
+        with druhy.expect_navigation():
+            druhy.click(".oznameni-ponechat")
+        zkontroluj(druhy.locator("[data-oznameni]").count() == 0, "Ponechat upozornění zavře")
         druhy.close()
 
         print("\n── neuložené změny ──")

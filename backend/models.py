@@ -253,6 +253,27 @@ class Pozvanka(db.Model):
 
     songbook = db.relationship("Songbook")
     od = db.relationship("User", foreign_keys=[od_id])
+    komu = db.relationship("User", foreign_keys=[komu_id])
+
+
+class Oznameni(db.Model):
+    """Upozornění v Mých zpěvnících, že společné úpravy skončily a uživatel dostal kopii.
+
+    Kdo přijde o přístup ke společnému zpěvníku (vlastník ho odebral, zpěvník smazal
+    nebo zrušil účet), dostane rovnou vlastní kopii - a tohle upozornění s volbou
+    Ponechat / Zahodit kopii. Kopie se mu počítá do místa od začátku, takže nevznikají
+    data, která by nikomu nepatřila.
+    """
+
+    __tablename__ = "oznameni"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False)
+    text = db.Column(db.String, nullable=False)
+    vytvoreno = db.Column(db.DateTime, nullable=False)
+
+    songbook = db.relationship("Songbook")
 
 
 class UserSongbookAccess(db.Model):

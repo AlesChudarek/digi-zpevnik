@@ -58,9 +58,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
 - [X] editor mluví jazykem stran — starý protokol `structure` (řádek = píseň, strana bez
       písně jako `strana-<id>`) zanikl s novým editorem.
 
-## Sdílení: rodina a kopie
+## Sdílení: společný zpěvník a kopie
 
-Domluveno 7. 10. 2026, zatím nic z toho není naprogramované. Nahrazuje dnešní stav, kdy
+Domluveno 7. 10. 2026, hotovo a nasazeno 12. 10. ve třech krocích (limit podle DB,
+pozvánky, odchody). Nahrazuje dnešní stav, kdy
 se sdílený zpěvník po smazání převede na prvního ze sdílených a soubory dál zabírají
 limit tomu, kdo ho smazal (smazání sdíleného zpěvníku tak místo neuvolní), a kdy
 smazání účtu sdílené zpěvníky ostatním bez varování vezme.
@@ -106,14 +107,20 @@ kdo maže.
 - [X] **nahrání do rodinného zpěvníku musí projít limitem všech členů.** (hotovo v kroku 1) Jinak se dá
       člen přeplnit a pak opakovaně „nahrát, odejít“ — data by se hromadila bez stropu.
       Když se to někomu nevejde, hláška ho jmenuje a vlastník ho může odebrat.
-- [ ] **odchody a nabídka kopie.** Kdo přijde o přístup, dostane nabídku kopie stavu
+- [X] **odchody a nabídka kopie.** Zjednodušeno proti návrhu: místo zmrazeného zpěvníku
+      jen ke čtení dostane každý, kdo přijde o přístup, rovnou vlastní kopii a upozornění
+      (tabulka `oznameni`) s Ponechat / Zahodit kopii. Pro uživatele stejná volba, místo
+      se počítá stejně, ale odpadl celý zvláštní stav „zmrazený“ s vlastními právy.
+      Odebrání člena (vlastník v okně sdílení) a smazání společného zpěvníku vlastníkem
+      dají kopii všem dotčeným; člen, který odchází sám, se zeptá, jestli ji chce.
+      Původní zadání: Kdo přijde o přístup, dostane nabídku kopie stavu
       v okamžiku odchodu: odebraný člen (snímek se udělá při odebrání), člen, který odešel
       sám, i všichni členové, když vlastník rodinný zpěvník zruší. Kopie limit nezmění
       (tytéž obrázky už měl započítané), odmítnutí místo uvolní.
       Zrušený rodinný zpěvník zůstane členům jen ke čtení s nabídkou „kopie k sobě /
       smazat“ a zanikne, až se rozhodne poslední z nich. Žádné lhůty — drží ho jen ti,
       komu se počítá.
-- [ ] **smazání účtu** = smazání vlastních zpěvníků (s nabídkou kopie rodině) a odchod
+- [X] **smazání účtu** = smazání vlastních zpěvníků (s nabídkou kopie rodině) a odchod
       z cizích.
 - [X] **ukázat, kolik místa zpěvník zabírá** — tenký pruh pod názvem na dlaždici, procenta
       a MB v nápovědě. Dřív zadáno: — spíš obrázkem (podíl z pruhu limitu)
@@ -664,9 +671,9 @@ kdo maže.
       nikomu nezapočítávají, takže by mu svítila pořád nula.
       Změřeno v Chromiu ve všech třech stavech na 1280 i 390 px — na úzké obrazovce je
       panel pod burgerem, ale ukazatel je v něm stejný a nikde nepřečuhuje.
-- [ ] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
-      s někým a pak si je smažu" (zaplním mu schránku bordelem) — řeší ho návrh
-      v sekci „Sdílení: rodina a kopie“ (přijímání pozvánek, strop nevyřízených)
+- [X] bacha na attack stylem "vytvořím tisíc zpěvníků s nepěkným obrázkem, sdílím je
+      s někým a pak si je smažu" (zaplním mu schránku bordelem) — vyřešeno: sdílení je
+      pozvánka, kterou je potřeba přijmout, strop 20 nevyřízených a „Odmítnout všechny“
 - [X] **stránky neposílaly `Cache-Control`** — opraveno. Prohlížeč si sám rozhodl,
       jak dlouho si HTML nechá, a po nasazení servíroval starou verzi. Horší, než to
       zní: verze skriptů a stylů se nese v adrese (`static_bust` podle mtime), ale ta

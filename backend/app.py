@@ -382,12 +382,13 @@ try:
         User,
         UserSongbookAccess,
         Pozvanka,
+        Oznameni,
         LoginAttempt,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -1426,22 +1427,13 @@ def smazat_ucet():
 
         uid, email = current_user.id, current_user.email
         soubory = []
-        pisne = set()
         for sb in moje:
-            for sloupec, _ in SLOTY_OBALEK:
-                cesta = getattr(sb, sloupec, None)
-                if cesta:
-                    soubory.append(cesta)
-            soubory += [st.image_path for st in sb.strany if st.image_path]
-            pisne |= pisne_zpevniku(sb.id)
-            db.session.query(UserSongbookAccess).filter_by(songbook_id=sb.id).delete()
-            db.session.query(Pozvanka).filter_by(songbook_id=sb.id).delete()
-            db.session.delete(sb)
-        db.session.flush()
-        smaz_pisne_mimo_zpevniky(pisne)
-
+            # Členové společných úprav dostanou kopii, nepřijdou o ni se zrušeným účtem.
+            soubory += smaz_zpevnik(sb, f"Vlastník ({email}) zrušil účet i se společným "
+                                    "zpěvníkem „{nazev}“.")
         db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
         db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
+        db.session.query(Oznameni).filter_by(user_id=uid).delete()
         logout_user()
         db.session.query(User).filter_by(id=uid).delete()
         db.session.commit()
@@ -1988,72 +1980,146 @@ def api_delete_songbook(songbook_id):
     if not (is_admin or is_owner or has_edit_share):
         return jsonify({"ok": False, "error": "Forbidden"}), 403
 
-    # Shared user removing the songbook from their list simply revokes access
     if has_edit_share and not is_owner and not is_admin:
+        # Člen odchází ze společného zpěvníku; kopii si nechá, jen když o ni řekne.
+        if request.args.get('kopie') == '1':
+            kopiruj_zpevnik(sb, current_user.id)
         db.session.delete(access)
         db.session.commit()
-        return jsonify({"ok": True, "unshared": True})
+        return jsonify({"ok": True, "odesel": True})
 
-    # If owner removes songbook but it is still shared, transfer ownership to the first valid shared user
-    if current_user.role != 'admin' and is_owner:
-        shared_entries = UserSongbookAccess.query.filter_by(songbook_id=sb.id).all()
-        valid_shared = []
+    co = (f"Vlastník ({current_user.email}) smazal společný zpěvník „{{nazev}}“."
+          if is_owner else "Správce smazal společný zpěvník „{nazev}“.")
+    kandidati = smaz_zpevnik(sb, co)
+    db.session.commit()
+    smaz_osirele_obrazky(kandidati)
+    return jsonify({"ok": True})
 
-        for entry in shared_entries:
-            if entry.user_id == current_user.id:
-                db.session.delete(entry)
-                continue
-            user = User.query.get(entry.user_id)
-            if not user or user.role in ('admin', 'guest'):
-                db.session.delete(entry)
-                continue
-            valid_shared.append((entry, user))
 
-        if valid_shared:
-            valid_shared.sort(key=lambda item: item[1].email.lower())
-            chosen_entry, new_owner = valid_shared[0]
+def predej_kopie_clenum(sb, co_se_stalo, jen=None):
+    """Členům společných úprav (nebo jen jednomu) dá vlastní kopii zpěvníku a upozornění,
+    a ukončí jejich členství. Necommituje. `co_se_stalo` je první věta upozornění,
+    s {nazev} místo názvu zpěvníku.
 
-            # Soubory se nestěhují a cesty se nepřepisují. Dřív to nutné bylo, protože
-            # složka nesla jméno vlastníka a název zpěvníku; dnes je cesta uložená natvrdo
-            # a o tom, kdo zpěvník vlastní, rozhoduje jedině `owner_id`. Obrázky zůstávají
-            # v kořeni toho, kdo je nahrál - to je i správně pro počítání zabraného místa.
-            sb.owner_id = new_owner.id
-            db.session.delete(chosen_entry)
-            db.session.commit()
+    Dřív se zpěvník po smazání převedl na prvního ze sdílených podle abecedy - a jeho
+    soubory dál zabíraly místo tomu, kdo ho smazal. Teď si každý člen nechá svou kopii,
+    počítanou do svého místa, a sám rozhodne, jestli ji chce.
+    """
+    q = UserSongbookAccess.query.filter_by(songbook_id=sb.id)
+    if jen is not None:
+        q = q.filter_by(user_id=jen)
+    for clen in q.all():
+        kopie = kopiruj_zpevnik(sb, clen.user_id)
+        db.session.add(Oznameni(
+            user_id=clen.user_id, songbook_id=kopie.id, vytvoreno=datetime.now(),
+            text=co_se_stalo.format(nazev=sb.title) + " Máš jeho kopii, jak vypadal v tu chvíli."))
+        db.session.delete(clen)
+    db.session.flush()
 
-            return jsonify({"ok": True})
 
-    # Strany zpěvníku se posbírají ještě před smazáním, ale nemažou se natvrdo: tutéž
-    # stranu může mít ještě jiný zpěvník. Rozhodne až smaz_osirele_obrazky po commitu.
+def smaz_zpevnik(sb, co_se_stalo):
+    """Smaže zpěvník; členům společných úprav předtím dá kopii. Necommituje.
+
+    Vrací cesty obrázků, které po commitu zkontroluje smaz_osirele_obrazky - tutéž
+    stranu může mít ještě jiný zpěvník (třeba ty kopie).
+    """
+    predej_kopie_clenum(sb, co_se_stalo)
     song_ids = pisne_zpevniku(sb.id)
     kandidati = [st.image_path for st in sb.strany if st.image_path]
     kandidati += [c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
                               sb.img_path_cover_back_inner, sb.img_path_cover_back_outer,
                               sb.img_path_cover_preview) if c]
-
-    # Sdílení i nevyřízené pozvánky mizí se zpěvníkem. Dřív tu sdílení zůstávalo ležet
-    # a ukazovalo na zpěvník, který neexistuje (migrace na strany jeden takový našla).
     UserSongbookAccess.query.filter_by(songbook_id=sb.id).delete()
     Pozvanka.query.filter_by(songbook_id=sb.id).delete()
+    Oznameni.query.filter_by(songbook_id=sb.id).delete()
+    koren = _koren_pro_zpevnik(sb)
     db.session.delete(sb)
     db.session.flush()
-    # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
     smaz_pisne_mimo_zpevniky(song_ids)
-    db.session.commit()
-
-    smaz_osirele_obrazky(kandidati)
-
-    # Složka obálek se nemaže natvrdo: obrázky z ní uklidil smaz_osirele_obrazky výš,
-    # a jen ty, na které už nic neukazuje. Dřív tu bylo rmtree celé složky.
+    # Prázdná složka obálek může pryč; obrázky z ní uklidí smaz_osirele_obrazky.
     try:
-        adresar = IMAGES_DIR / _koren_pro_zpevnik(sb) / 'songbooks' / sb.id / 'covers'
+        adresar = IMAGES_DIR / koren / 'songbooks' / sb.id / 'covers'
         if adresar.is_dir() and not any(adresar.iterdir()):
             adresar.rmdir()
             adresar.parent.rmdir()
     except OSError:
         pass
+    return kandidati
 
-    return jsonify({"ok": True})
+
+@app.route('/api/zpevnik/<songbook_id>/clenove')
+@login_required
+def clenove_zpevniku(songbook_id):
+    """Kdo zpěvník upravuje společně a komu čeká pozvánka - pro okno sdílení."""
+    sb = db.session.get(Songbook, songbook_id)
+    if sb is None or not can_edit_songbook(current_user, sb):
+        return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+    clenove = [{'id': u.id, 'email': u.email} for u in
+               User.query.join(UserSongbookAccess, UserSongbookAccess.user_id == User.id)
+               .filter(UserSongbookAccess.songbook_id == sb.id).order_by(User.email)]
+    vlastnik = db.session.get(User, sb.owner_id) if sb.owner_id else None
+    pozvani = [{'email': p.komu.email if p.komu else '', 'druh': p.druh}
+               for p in Pozvanka.query.filter_by(songbook_id=sb.id)] if sb.owner_id == current_user.id else []
+    return jsonify({'ok': True, 'vlastnik': vlastnik.email if vlastnik else None,
+                    'jsem_vlastnik': sb.owner_id == current_user.id,
+                    'clenove': clenove, 'pozvani': pozvani})
+
+
+@app.route('/api/zpevnik/<songbook_id>/clenove/<int:user_id>/odebrat', methods=['POST'])
+@login_required
+def odeber_clena(songbook_id, user_id):
+    """Vlastník ukončí společné úpravy s jedním členem. Ten dostane kopii a upozornění."""
+    sb = db.session.get(Songbook, songbook_id)
+    if sb is None or not (sb.owner_id == current_user.id or is_admin(current_user)):
+        return jsonify({'ok': False, 'error': 'Členy odebírá jen vlastník zpěvníku.'}), 403
+    if not UserSongbookAccess.query.filter_by(songbook_id=sb.id, user_id=user_id).first():
+        return jsonify({'ok': False, 'error': 'Tenhle uživatel zpěvník neupravuje.'}), 404
+    predej_kopie_clenum(sb, f"Vlastník ({current_user.email}) ukončil společné úpravy "
+                            "zpěvníku „{nazev}“.", jen=user_id)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+def _moje_oznameni(oznameni_id):
+    o = db.session.get(Oznameni, oznameni_id)
+    return o if o is not None and o.user_id == current_user.id else None
+
+
+@app.route('/api/oznameni/<int:oznameni_id>/ponechat', methods=['POST'])
+@login_required
+def ponechej_kopii(oznameni_id):
+    o = _moje_oznameni(oznameni_id)
+    if o is not None:
+        db.session.delete(o)
+        db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/oznameni/<int:oznameni_id>/zahodit', methods=['POST'])
+@login_required
+def zahod_kopii(oznameni_id):
+    o = _moje_oznameni(oznameni_id)
+    if o is None:
+        return jsonify({'ok': True})
+    sb = o.songbook
+    kandidati = []
+    if sb is not None and sb.owner_id == current_user.id:
+        kandidati = smaz_zpevnik(sb, "Společný zpěvník „{nazev}“ byl smazán.")
+    else:
+        db.session.delete(o)
+    db.session.commit()
+    smaz_osirele_obrazky(kandidati)
+    return jsonify({'ok': True})
+
+
+def oznameni_pro(user):
+    if not getattr(user, 'is_authenticated', False) or is_guest(user):
+        return []
+    return [{'id': o.id, 'text': o.text, 'zpevnik': o.songbook_id}
+            for o in Oznameni.query.filter_by(user_id=user.id).order_by(Oznameni.vytvoreno)]
+
+
+app.jinja_env.globals['oznameni_pro'] = oznameni_pro
 
 
 # API: Share a private songbook with another user

@@ -170,7 +170,10 @@
 
 <!-- Reusable confirm modal -->
 <style>
-  #app-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4000; }
+  /* Potvrzení je vždycky ta poslední otázka, takže leží nad vším - i nad oknem sdílení
+     (4050), dialogem importu (4500) a zvětšeným náhledem (5000). Se 4000 zůstávalo
+     pod oknem sdílení a nedalo se na něj kliknout. */
+  #app-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 6000; }
   #app-confirm-overlay .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 16px; width: min(420px, 92vw); }
   #app-confirm-overlay .panel h3 { margin: 0 0 8px; font-size: 18px; }
   #app-confirm-overlay .panel p { margin: 0 0 12px; }
@@ -189,6 +192,10 @@
   #share-modal .share-druh { border: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
   #share-modal .share-druh label { display: flex; align-items: center; gap: 8px; font-weight: 600; }
   #share-modal .share-druh [hidden] { display: none; }
+  #share-modal .share-clenove { font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
+  #share-modal .share-clenove[hidden] { display: none; }
+  #share-modal .share-clen { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  #share-modal .share-clen button { padding: 5px 9px; font-size: 13px; }
   #share-modal .feedback { min-height: 20px; font-size: 14px; }
   #share-modal .feedback.error { color: #b00020; }
   #share-modal .feedback.success { color: var(--brand-strong, #2E7D32); }
@@ -231,6 +238,7 @@
         <button type="button" class="napoveda-znak" aria-label="Co to znamená"
                 data-napoveda="Zpěvník budete mít oba a úpravy kohokoli uvidí všichni. Počítá se do místa každému, kdo ho má.">i</button></label>
     </fieldset>
+    <div class="share-clenove" id="share-clenove" hidden></div>
     <label for="share-email-input">E-mail uživatele</label>
     <input type="email" id="share-email-input" placeholder="uzivatel@example.com" autocomplete="email">
     <div id="share-feedback" class="feedback" role="alert" aria-live="polite"></div>
@@ -266,6 +274,20 @@
 {% endif %}
 
 {% if not manage_public %}
+  {% set oznameni = oznameni_pro(current_user) %}
+  {% if oznameni %}
+    <section class="pozvanky" aria-label="Upozornění">
+      {% for o in oznameni %}
+        <div class="pozvanka" data-oznameni="{{ o.id }}">
+          <span class="pozvanka-text">{{ o.text }}</span>
+          <span class="pozvanka-akce">
+            <button type="button" class="btn primary oznameni-ponechat">Ponechat</button>
+            <button type="button" class="btn oznameni-zahodit">Zahodit kopii</button>
+          </span>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
   {% set pozvanky = pozvanky_pro(current_user) %}
   {% if pozvanky %}
     <section class="pozvanky" aria-label="Pozvánky">
@@ -351,8 +373,12 @@
             <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
           </button>
         </span>
-        <span class="s-napovedou" data-napoveda="Smazat zpěvník">
-          <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation();">
+        {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
+        <span class="s-napovedou" data-napoveda="{{ 'Přestat upravovat společně' if jsem_clen else 'Smazat zpěvník' }}">
+          <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
+                  data-clen="{{ '1' if jsem_clen else '0' }}"
+                  data-clenu="{{ (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 }}"
+                  onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/bin.svg') }}" alt="Smazat">
           </button>
         </span>
@@ -1345,18 +1371,32 @@ function openCreateModal() {
       });
     }
 
-    // Delete songbook buttons
+    // Smazání zpěvníku. Člen společného zpěvníku ho nemaže, jen přestane upravovat
+    // společně (a může si nechat kopii); vlastník při mazání upozorní, že členové
+    // dostanou kopii.
     document.querySelectorAll('.btn-delete').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
+      btn.addEventListener('click', async () => {
         const id = btn.getAttribute('data-book-id');
         if (!id) return;
-        const ok = await window.showConfirm('Opravdu chcete smazat tento zpěvník?', 'Odstranit');
-        if (!ok) return;
+        const nazev = btn.getAttribute('data-book-title') || 'zpěvník';
+        let url = `/api/my-songbooks/${encodeURIComponent(id)}`;
+        if (btn.getAttribute('data-clen') === '1') {
+          if (!(await window.showConfirm(`Přestat upravovat společně zpěvník „${nazev}“? Zmizí z tvých zpěvníků a uvolní se ti místo.`, 'Přestat'))) return;
+          if (await window.showConfirm('Chceš si nechat vlastní kopii, jak zpěvník vypadá teď? Bude se počítat do tvého místa.', 'Nechat si kopii')) {
+            url += '?kopie=1';
+          }
+        } else {
+          const clenu = parseInt(btn.getAttribute('data-clenu') || '0', 10);
+          const zprava = clenu
+            ? `Zpěvník „${nazev}“ upravuješ společně s ${clenu === 1 ? 'jedním člověkem' : clenu + ' lidmi'}. Po smazání dostanou jeho kopii.`
+            : `Opravdu smazat zpěvník „${nazev}“?`;
+          if (!(await window.showConfirm(zprava, 'Smazat'))) return;
+        }
         try {
-          const res = await fetch(`/api/my-songbooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+          const res = await fetch(url, { method: 'DELETE' });
           if (!res.ok) {
             const msg = await res.text();
-            alert('Smazání selhalo: ' + (msg || res.status));
+            alert('Nepovedlo se: ' + popisChyby(msg, res.status));
             return;
           }
           window.location.reload();
@@ -1383,6 +1423,7 @@ function openCreateModal() {
       const vlastnik = button.getAttribute('data-vlastnik') === '1';
       document.getElementById('share-druh-spolecny').hidden = !vlastnik;
       shareModal.querySelector('input[name="share-druh"][value="kopie"]').checked = true;
+      nactiCleny(id);
       shareModal.style.display = 'flex';
       shareModal.setAttribute('aria-hidden', 'false');
       if (shareTitleEl) shareTitleEl.textContent = title || 'tento zpěvník';
@@ -1395,6 +1436,59 @@ function openCreateModal() {
         shareSubmitBtn.textContent = 'Sdílet';
       }
       setShareFeedback('', null);
+    }
+
+    // Kdo zpěvník upravuje společně a komu čeká pozvánka. Vlastník může členovi
+    // společné úpravy ukončit - ten dostane kopii a upozornění.
+    async function nactiCleny(id) {
+      const box = document.getElementById('share-clenove');
+      box.hidden = true;
+      box.textContent = '';
+      try {
+        const data = await (await fetch(`/api/zpevnik/${encodeURIComponent(id)}/clenove`)).json();
+        if (!data.ok || (!data.clenove.length && !data.pozvani.length)) return;
+        if (data.clenove.length) {
+          const nadpis = document.createElement('strong');
+          nadpis.textContent = 'Upravujete společně:';
+          box.appendChild(nadpis);
+          if (data.vlastnik && !data.jsem_vlastnik) {
+            const v = document.createElement('div');
+            v.className = 'share-clen';
+            v.textContent = `${data.vlastnik} (vlastník)`;
+            box.appendChild(v);
+          }
+          data.clenove.forEach(c => {
+            const radek = document.createElement('div');
+            radek.className = 'share-clen';
+            const jmeno = document.createElement('span');
+            jmeno.textContent = c.email;
+            radek.appendChild(jmeno);
+            if (data.jsem_vlastnik) {
+              const b = document.createElement('button');
+              b.type = 'button';
+              b.className = 'btn';
+              b.textContent = 'Ukončit společné úpravy';
+              b.setAttribute('data-napoveda', `${c.email} si bude moct nechat kopii zpěvníku, jak vypadá teď.`);
+              b.addEventListener('click', async () => {
+                if (!(await window.showConfirm(`Ukončit společné úpravy s ${c.email}? Dostane kopii zpěvníku, jak vypadá teď.`, 'Ukončit'))) return;
+                const res = await fetch(`/api/zpevnik/${encodeURIComponent(id)}/clenove/${c.id}/odebrat`, { method: 'POST' });
+                const d = await res.json().catch(() => ({}));
+                if (!res.ok || !d.ok) { setShareFeedback(d.error || 'Nepovedlo se.', 'error'); return; }
+                nactiCleny(id);
+              });
+              radek.appendChild(b);
+            }
+            box.appendChild(radek);
+          });
+        }
+        if (data.pozvani.length) {
+          const cekaji = document.createElement('div');
+          cekaji.className = 'share-clen';
+          cekaji.textContent = 'Čeká na odpověď: ' + data.pozvani.map(p => `${p.email} (${p.druh === 'kopie' ? 'kopie' : 'společné úpravy'})`).join(', ');
+          box.appendChild(cekaji);
+        }
+        box.hidden = false;
+      } catch (_) { /* seznam je jen informace navíc */ }
     }
 
     function closeShareModal() {
@@ -1414,7 +1508,16 @@ function openCreateModal() {
         window.location.reload();
       } catch (_) { alert('Chyba při komunikaci se serverem'); }
     }
-    document.querySelectorAll('.pozvanka').forEach(el => {
+    document.querySelectorAll('[data-oznameni]').forEach(el => {
+      const id = el.dataset.oznameni;
+      el.querySelector('.oznameni-ponechat').addEventListener('click', () => odpovezNaPozvanku(`/api/oznameni/${id}/ponechat`));
+      el.querySelector('.oznameni-zahodit').addEventListener('click', async () => {
+        if (await window.showConfirm('Zahodit kopii? Zpěvník zmizí a uvolní se ti místo.', 'Zahodit')) {
+          odpovezNaPozvanku(`/api/oznameni/${id}/zahodit`);
+        }
+      });
+    });
+    document.querySelectorAll('.pozvanka[data-pozvanka]').forEach(el => {
       const id = el.dataset.pozvanka;
       el.querySelector('.pozvanka-prijmout').addEventListener('click', () => odpovezNaPozvanku(`/api/pozvanky/${id}/prijmout`));
       el.querySelector('.pozvanka-odmitnout').addEventListener('click', () => odpovezNaPozvanku(`/api/pozvanky/${id}/odmitnout`));
