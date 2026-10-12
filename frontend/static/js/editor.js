@@ -52,6 +52,7 @@
       nahled: z.nahled || null,
       obrazek: z.obrazek || z.nahled || null,
       soubor: null,
+      verze: 0,                // roste s každou změnou obrázku; viz nahravej()
       stav: 'hotovo',          // ceka | nahrava | hotovo | chyba
       chyba: '',
       popisek: z.popisek || '',
@@ -166,6 +167,8 @@
     if (!s || s.stav !== 'ceka' || !s.soubor) { nahravej(); return; }
     nahravaSe = true;
     s.stav = 'nahrava';
+    // Obrázek se mezitím může vyměnit nebo odebrat; výsledek pak už patří starému.
+    var verze = s.verze;
     prekresliStav(s);
     var fd = new FormData();
     fd.append('soubor', s.soubor);
@@ -178,11 +181,13 @@
       .then(function (v) {
         var r = v[0], j = v[1];
         if (!r.ok || !j.ok) throw new Error(j.error || (r.status === 413 ? 'Soubor je příliš velký.' : 'Nahrávání selhalo.'));
+        if (verze !== s.verze) return;
         s.image_id = j.image_id;
         s.stav = 'hotovo';
         s.soubor = null;
       })
       .catch(function (e) {
+        if (verze !== s.verze) return;
         s.stav = 'chyba';
         s.chyba = e.message || 'Nahrávání selhalo.';
       })
@@ -211,6 +216,7 @@
   function jeObrazek(f) { return /^image\//.test(f.type) || /\.(png|jpe?g|webp)$/i.test(f.name); }
 
   function nastavObrazek(s, f) {
+    s.verze++;
     s.soubor = f;
     s.image_id = null;
     s.nahled = s.obrazek = URL.createObjectURL(f);
@@ -697,6 +703,18 @@
     if (okno) { okno.hidden = true; okno.querySelector('img').removeAttribute('src'); }
   }
 
+  // Strana přijde o obrázek a zůstane z ní prázdná (písně a popisek jí zůstanou).
+  function odeberObrazek(s) {
+    s.verze++;
+    s.soubor = null;
+    s.image_id = null;
+    s.nahled = s.obrazek = null;
+    s.stav = 'hotovo';
+    s.chyba = '';
+    zavriObrazek();
+    vykresli();
+  }
+
   function vyberObrazek(s) {
     var vyber = document.createElement('input');
     vyber.type = 'file';
@@ -901,6 +919,7 @@
     lupa.addEventListener('click', function (e) {
       var s = najdi(Number(lupa.dataset.klic));
       if (e.target.closest('.es-vymenit') && s) vyberObrazek(s);
+      else if (e.target.closest('.es-odebrat-obrazek') && s) odeberObrazek(s);
       else if (e.target === lupa || e.target.closest('.es-zavrit')) zavriObrazek();
     });
     document.addEventListener('keydown', function (e) {

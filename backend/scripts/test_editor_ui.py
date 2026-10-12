@@ -243,10 +243,21 @@ def main():
         page.wait_for_function("document.getElementById('es-stav-nahravani').hidden", timeout=20000)
         zkontroluj(typy(page)[0] == "bez", "prázdná strana s nahraným obrázkem je strana bez písně",
                    typy(page))
+        # Odebrání obrázku ve zvětšeném náhledu: ze strany bez písně je prázdná strana
+        strana(page, 1).locator(".es-nahled").click()
+        page.wait_for_selector("#es-lupa:not([hidden])")
+        page.click("#es-lupa .es-odebrat-obrazek")
+        zkontroluj(page.is_hidden("#es-lupa") and typy(page)[1] == "prazdna"
+                   and strana(page, 1).locator(".es-nahrat-obrazek").count() == 1,
+                   "odebráním obrázku vznikne prázdná strana", typy(page))
+        zkontroluj(strana(page, 1).locator(".es-popisek").input_value() == "Úvod",
+                   "a popisek jí zůstane")
         with page.expect_navigation():
             page.click("#nb-save-top")
         page.wait_for_load_state("networkidle")
         s = strany_db(novy.id)
+        zkontroluj(s[1][1] is False and s[1][2] == "Úvod",
+                   "uloží se strana bez obrázku i s popiskem", s[1])
         zkontroluj([x[3] for x in s] == [[], [], [("Píseň A1", 1)], [("Píseň A1", 2), ("Krátká B", 1)]]
                    and s[0][1],
                    "uloží se přesuny, obrázek i píseň začínající na pokračování",
