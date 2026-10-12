@@ -91,7 +91,11 @@ def strany_db(zpevnik_id):
 
 
 def main():
+    global EMAIL3, EMAIL5
     admin, u3, u4, host = klient(1), klient(3), klient(4), klient(7)
+    with A.app.app_context():
+        EMAIL3 = A.db.session.get(A.User, 3).email
+        EMAIL5 = A.db.session.get(A.User, 5).email
 
     print("\n── nový zpěvník se všemi druhy stran ──")
     ids = []
@@ -235,6 +239,73 @@ def main():
     zkontroluj(kod == 413, "přes limit se nenahraje", kod)
     zkontroluj(po_soubory == pred_soubory, "a nezůstane po tom ani zarezervovaný soubor",
                po_soubory - pred_soubory)
+
+    print("\n── limit podle databáze ──")
+    MIN = A.MIN_CENA_STRANY
+
+    def misto(uid):
+        with A.app.app_context():
+            return A.zabrane_misto(uid)
+
+    def velikost(image_id):
+        with A.app.app_context():
+            return A.db.session.get(A.Obrazek, image_id).velikost
+
+    _, x = nahraj(u4, "orange")
+    zaklad = misto(4)
+    kod, telo = uloz(u4, nazev="Limit", strany=[{"typ": "bez", "image_id": x["image_id"]}])
+    limitni = telo.get("id")
+    zkontroluj(misto(4) == zaklad, "uložením se nahraná strana nezapočítá podruhé",
+               (zaklad, misto(4)))
+    vlastni = max(velikost(x["image_id"]), MIN)
+    pred = misto(4)
+    uloz(u4, limitni, strany=[{"typ": "bez", "image_id": x["image_id"]},
+                              {"typ": "bez", "image_id": x["image_id"]},
+                              {"typ": "prazdna"},
+                              {"typ": "bez", "image_id": verejna_obrazek}])
+    zkontroluj(misto(4) - pred == vlastni + MIN + MIN,
+               "duplikát stojí znovu, prázdná i veřejná strana pevnou cenu",
+               (misto(4) - pred, vlastni + 2 * MIN))
+    z = nacti(u4, limitni)
+    puvodni_limit = A.MAX_USER_STORAGE_BYTES
+    try:
+        A.MAX_USER_STORAGE_BYTES = misto(4) + MIN // 2
+        kod, telo = uloz(u4, limitni, strany=[
+            {k: st[k] for k in ("id", "typ", "image_id", "popisek", "pisne")} for st in z["strany"]]
+            + [{"typ": "prazdna"}])
+        zkontroluj(kod == 413, "strana navíc přes limit se neuloží", telo.get("error"))
+        kod, _ = uloz(u4, limitni, strany=[
+            {k: st[k] for k in ("id", "typ", "image_id", "popisek", "pisne")} for st in z["strany"][:2]])
+        zkontroluj(kod == 200, "ubírat jde vždycky, i těsně u limitu", kod)
+        A.MAX_USER_STORAGE_BYTES = misto(4) - 1
+        kod, _ = uloz(u4, limitni, nazev="Limit přejmenovaný")
+        zkontroluj(kod == 200, "kdo je přes limit, smí dál upravovat, co místo nepřidá", kod)
+        r = u4.post(f"/api/songbooks/{limitni}/add-song", json={"song_id": verejna_pisen})
+        zkontroluj(r.status_code == 413, "přes limit nejde přidat ani píseň z hledání",
+                   r.status_code)
+
+        A.MAX_USER_STORAGE_BYTES = puvodni_limit
+        pred3 = misto(3)
+        r = u4.post(f"/api/my-songbooks/{limitni}/share", json={"email": EMAIL3})
+        zkontroluj(r.status_code == 200 and misto(3) > pred3,
+                   "sdílený zpěvník se počítá i tomu, s kým se sdílí", (r.status_code, misto(3) - pred3))
+        A.MAX_USER_STORAGE_BYTES = misto(3) + 1
+        _, y = nahraj(u4, "navy", zpevnik_id=limitni)
+        z = nacti(u4, limitni)
+        kod, telo = uloz(u4, limitni, strany=[
+            {k: st[k] for k in ("id", "typ", "image_id", "popisek", "pisne")} for st in z["strany"]]
+            + [{"typ": "bez", "image_id": y["image_id"]}])
+        zkontroluj(kod == 413 and EMAIL3 in (telo.get("error") or ""),
+                   "nahrání do sdíleného se odmítne, když se nevejde druhému, a řekne komu",
+                   telo.get("error"))
+        A.MAX_USER_STORAGE_BYTES = misto(5) + 1
+        r = u4.post(f"/api/my-songbooks/{limitni}/share", json={"email": EMAIL5})
+        with A.app.app_context():
+            sdileno = A.UserSongbookAccess.query.filter_by(user_id=5, songbook_id=limitni).first()
+        zkontroluj(r.status_code == 413 and sdileno is None,
+                   "sdílet nejde tomu, komu se zpěvník nevejde", r.status_code)
+    finally:
+        A.MAX_USER_STORAGE_BYTES = puvodni_limit
 
     print("\n── veřejný zpěvník od admina ──")
     _, x = nahraj(admin, "green", verejny="1")

@@ -110,6 +110,10 @@
   .napoveda-bublina li.owner { font-weight: 600; }
   .napoveda-bublina .owner-tag { font-weight: 400; opacity: 0.7; margin-left: 4px; }
   
+  /* Pruh s místem, které zpěvník zabírá z limitu účtu */
+  .misto-zpevniku { height: 4px; margin: -4px 14px 6px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
+  .misto-zpevniku span { display: block; height: 100%; background: var(--brand-strong, #2E7D32); border-radius: 2px; }
+
   .songbook-title {
     margin: 10px;
     padding: 0;
@@ -270,6 +274,14 @@
           {% endif %}
         </div>
         <p style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ book.title }}">{{ book.title }}</p>
+        {% set misto_z = misto_zpevniku(book) %}
+        {% if misto_z %}
+          {# Kolik místa zpěvník zabírá: pruh, ne megabajty - ty lidem nic neřeknou. #}
+          <div class="misto-zpevniku" role="img" aria-label="Zabírá {{ misto_z.text }} tvého místa"
+               data-napoveda="Zpěvník zabírá {{ misto_z.text }} tvého místa ({{ mb(misto_z.bajtu) }}).{% if share_users %} Sdílený zpěvník se počítá každému, kdo ho má.{% endif %}">
+            <span style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
+          </div>
+        {% endif %}
       </a>
       <div class="songbook-actions">
         <span class="s-napovedou" data-napoveda="Upravit zpěvník">

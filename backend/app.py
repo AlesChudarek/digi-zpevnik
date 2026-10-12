@@ -51,6 +51,13 @@ try:
 except Exception:
     MAX_USER_STORAGE_MB = 300.0
 MAX_USER_STORAGE_BYTES = int(MAX_USER_STORAGE_MB * 1024 * 1024)
+# Nejnižší cena strany v limitu. Za tolik se počítá strana z veřejného zpěvníku a prázdná
+# strana, a pod tolik nejde ani vlastní nahraná. Bez toho by se daly zakládat tisíce
+# stran zadarmo (duplikováním veřejných nebo pidiobrázkem) a zahltit databázi.
+try:
+    MIN_CENA_STRANY = int(max(1.0, float(os.getenv("MIN_CENA_STRANY_KB", "50"))) * 1024)
+except ValueError:
+    MIN_CENA_STRANY = 50 * 1024
 
 MIN_RESIZE_DIMENSION = max(320, int(os.getenv("MIN_RESIZE_DIMENSION", "640")))
 RESIZE_SCALE_FACTOR = 0.85
@@ -208,18 +215,19 @@ def _prepare_image_bytes(file_storage, ext_hint=None, max_bytes=None):
 
 
 class KvotaPrekrocena(Exception):
-    """Účet by uploadem překročil svůj strop. Nese čísla, ať se dá říct o kolik."""
+    """Změna by někomu překročila limit. Nese čísla, ať se dá říct o kolik, a komu -
+    ve sdíleném zpěvníku to nemusí být ten, kdo zrovna ukládá."""
 
-    def __init__(self, zabrano: int, pridavek: int):
-        self.zabrano, self.pridavek = zabrano, pridavek
+    def __init__(self, zabrano: int, pridavek: int, kdo=None):
+        self.zabrano, self.pridavek, self.kdo = zabrano, pridavek, kdo
         super().__init__("překročena kvóta")
 
 
 def _uzivatel_z_cilove_cesty(dest_path: Path):
-    """Komu se soubor započítá. Veřejné zpěvníky nikomu - ty zakládá jen admin.
+    """Komu se nahraný, ještě neuložený soubor započítá: podle kořene, kam padl.
 
-    Bere se z cesty, ne z přihlášeného uživatele: cesta je to jediné, co rozhoduje,
-    kam bajty opravdu padnou, takže se kontrola nedá obejít jiným endpointem.
+    Strana nahraná do existujícího zpěvníku leží v kořeni jeho vlastníka, strana nového
+    zpěvníku v kořeni toho, kdo ho zakládá. Veřejný kořen se nepočítá nikomu.
     """
     try:
         rel = dest_path.resolve().relative_to(IMAGES_DIR.resolve())
@@ -232,18 +240,89 @@ def _uzivatel_z_cilove_cesty(dest_path: Path):
 
 
 def zabrane_misto(user_id: int) -> int:
-    """Kolik bajtů má účet nahraných. Pravdou je disk, ne databáze - sirotek, na který
-    už neukazuje žádný řádek, místo pořád zabírá."""
-    koren = IMAGES_DIR / 'uzivatele' / str(user_id)
-    try:
-        return sum(p.stat().st_size for p in koren.rglob('*') if p.is_file())
-    except OSError:
+    """Kolik místa z limitu účet zabírá. Pravidla (domluvená 12. 10. 2026):
+
+    - Počítá se každá strana v každém zpěvníku, který účet má (vlastní i sdílený
+      s ním), i když tentýž obrázek leží ve víc zpěvnících. Smazání zpěvníku tak
+      vždycky uvolní přesně tolik, kolik zabíral.
+    - Vlastní nahraná strana stojí svou velikost, ale aspoň MIN_CENA_STRANY.
+    - Strana z veřejného zpěvníku a prázdná strana stojí MIN_CENA_STRANY - cena za
+      místo v databázi, ne za soubor. Bez ní by šlo databázi zahltit zadarmo.
+    - Obálky stojí svou velikost.
+    - K tomu nahrané strany, které ještě nejsou v žádném zpěvníku (rozpracovaný
+      editor), jinak by se jich za den dalo nahrát kolik libo.
+    """
+    knihy = [r[0] for r in db.session.query(Songbook.id).filter(
+        Songbook.owner_id == user_id, Songbook.is_public != 1)]
+    knihy += [r[0] for r in db.session.query(UserSongbookAccess.songbook_id).filter(
+        UserSongbookAccess.user_id == user_id)]
+    celkem = cena_zpevniku(knihy)
+    celkem += db.session.execute(text("""
+        SELECT COALESCE(SUM(MAX(COALESCE(i.velikost, 0), :minimum)), 0) FROM images i
+        WHERE i.cesta LIKE :koren
+          AND NOT EXISTS (SELECT 1 FROM strany s WHERE s.image_id = i.id)
+          AND NOT EXISTS (SELECT 1 FROM songbooks b WHERE i.id IN (b.cover_preview_id,
+              b.cover_front_outer_id, b.cover_front_inner_id, b.cover_back_inner_id,
+              b.cover_back_outer_id))"""),
+        {'koren': f'uzivatele/{user_id}/%', 'minimum': MIN_CENA_STRANY}).scalar()
+    return int(celkem or 0)
+
+
+def cena_zpevniku(knihy) -> int:
+    """Kolik místa zabírají dané zpěvníky podle pravidel ze zabrane_misto (bez
+    neuložených nahrávek). Každý zpěvník zvlášť, i kdyby sdílely obrázky."""
+    knihy = list(knihy)
+    if not knihy:
         return 0
+    params = {f'k{i}': k for i, k in enumerate(knihy)}
+    seznam = ', '.join(f':k{i}' for i in range(len(knihy)))
+    strany = db.session.execute(text(f"""
+        SELECT COALESCE(SUM(CASE
+            WHEN s.image_id IS NULL THEN :minimum
+            WHEN EXISTS (SELECT 1 FROM strany v JOIN songbooks vb ON vb.id = v.songbook_id
+                         WHERE v.image_id = s.image_id AND vb.is_public = 1) THEN :minimum
+            ELSE MAX(COALESCE(i.velikost, 0), :minimum) END), 0)
+        FROM strany s LEFT JOIN images i ON i.id = s.image_id
+        WHERE s.songbook_id IN ({seznam})"""), {**params, 'minimum': MIN_CENA_STRANY}).scalar()
+    obalky = db.session.execute(text(f"""
+        SELECT COALESCE(SUM(COALESCE(i.velikost, 0)), 0) FROM songbooks b
+        JOIN images i ON i.id IN (b.cover_front_outer_id, b.cover_front_inner_id,
+                                  b.cover_back_inner_id, b.cover_back_outer_id)
+        WHERE b.id IN ({seznam})"""), params).scalar()
+    return int((strany or 0) + (obalky or 0))
+
+
+def drzitele_zpevniku(sb) -> list:
+    """Kdo zpěvník má, a komu se tedy počítá do limitu. Veřejný nikomu."""
+    if sb is None or sb.is_public:
+        return []
+    ids = [sb.owner_id] if sb.owner_id else []
+    ids += [r[0] for r in db.session.query(UserSongbookAccess.user_id).filter_by(
+        songbook_id=sb.id)]
+    return sorted(set(ids))
+
+
+def zjisti_mista(ids) -> dict:
+    return {uid: zabrane_misto(uid) for uid in ids}
+
+
+def zkontroluj_limity(pred: dict) -> None:
+    """Po změně (před commitem) ověří, že se nikomu nepřekročil limit.
+
+    Odmítne se jen změna, která místo přidala - kdo je přes limit (třeba proto, že
+    admin smazal veřejný zpěvník a jeho strany zdražily), smí dál mazat a přesouvat.
+    """
+    db.session.flush()
+    for uid, predtim in pred.items():
+        potom = zabrane_misto(uid)
+        if potom > MAX_USER_STORAGE_BYTES and potom > predtim:
+            kdo = None if uid == getattr(current_user, 'id', None) else db.session.get(User, uid)
+            raise KvotaPrekrocena(predtim, potom - predtim, kdo=kdo)
 
 
 def _zbyva_uzivateli(user_id: int) -> int:
     """Zbývající místo. V rámci jednoho požadavku se sečte jednou a pak se jen odečítá,
-    ať nahrání deseti stran neprochází složku desetkrát."""
+    ať nahrání víc souborů nepočítá totéž znovu."""
     try:
         cache = g._kvota_cache
     except (AttributeError, RuntimeError):
@@ -277,12 +356,18 @@ def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
     uid = _uzivatel_z_cilove_cesty(dest_path)
     if uid is not None:
         zbyva = _zbyva_uzivateli(uid)
-        if len(data) > zbyva:
+        if max(len(data), MIN_CENA_STRANY) > zbyva:
             raise KvotaPrekrocena(MAX_USER_STORAGE_BYTES - zbyva, len(data))
     with open(dest_path, 'wb') as fh:
         fh.write(data)
     if uid is not None:
-        _zapocti(uid, len(data), dest_path)
+        _zapocti(uid, max(len(data), MIN_CENA_STRANY), dest_path)
+    # Velikost rovnou do řádku obrázku, ať se limit počítá z databáze.
+    try:
+        obraz = Obrazek.ziskej(str(dest_path.resolve().relative_to(IMAGES_DIR.resolve())))
+        obraz.velikost = len(data)
+    except ValueError:
+        pass
 
 try:
     # Prefer balíčkové importy pro nasazení (backend.app jako modul)
@@ -438,6 +523,22 @@ def _dopln_chybejici_sloupce():
     with app.app_context():
         try:
             db.create_all()
+            sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(images)"))}
+            if sloupce and 'velikost' not in sloupce:
+                db.session.execute(text("ALTER TABLE images ADD COLUMN velikost INTEGER"))
+                db.session.commit()
+            # Velikosti, které ještě chybí (řádky z doby před sloupcem). Stat tisíce
+            # souborů trvá pár milisekund a po prvním doplnění už není co dělat.
+            chybi = db.session.execute(text(
+                "SELECT id, cesta FROM images WHERE velikost IS NULL")).fetchall()
+            for obraz_id, cesta in chybi:
+                soubor = IMAGES_DIR / cesta      # _abs_image_path je definovaná až níž
+                velikost = soubor.stat().st_size if soubor.is_file() else 0
+                db.session.execute(text("UPDATE images SET velikost = :v WHERE id = :i"),
+                                   {'v': velikost, 'i': obraz_id})
+            if chybi:
+                db.session.commit()
+                app.logger.info("doplněna velikost u %d obrázků", len(chybi))
             stare = db.session.execute(text(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='songbook_pages'"
             )).first()
@@ -448,7 +549,7 @@ def _dopln_chybejici_sloupce():
             # Gunicorn startuje víc workerů naráz; souběžné create_all může u některého
             # skončit na "already exists". Výsledek je správný.
             zprava = str(chyba).lower()
-            if 'already exists' not in zprava:
+            if 'already exists' not in zprava and 'duplicate column' not in zprava:
                 app.logger.warning("kontrola schématu neproběhla: %s", chyba)
 
 
@@ -467,11 +568,17 @@ def _kvota_prekrocena(chyba):
             pass
 
     zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
+    if chyba.kdo is not None:
+        zprava = (f"Změna se nevejde do místa uživatele {chyba.kdo.email}: zbývá mu "
+                  f"{mb(zbyva)} a zpěvník by zabral o {mb(chyba.pridavek)} víc. Sdílený "
+                  f"zpěvník se počítá do místa každému, kdo ho má.")
+    else:
+        zprava = (f"Změna by překročila váš limit {mb(MAX_USER_STORAGE_BYTES)}. "
+                  f"Zbývá vám {mb(zbyva)} a zabrala by {mb(chyba.pridavek)}. "
+                  f"Uvolněte místo smazáním zpěvníku, který už nepotřebujete.")
     return jsonify({
         'ok': False,
-        'error': (f"Nahrávání by překročilo váš limit {mb(MAX_USER_STORAGE_BYTES)}. "
-                  f"Zbývá vám {mb(zbyva)} a tenhle soubor má {mb(chyba.pridavek)}. "
-                  f"Uvolněte místo smazáním zpěvníku, který už nepotřebujete."),
+        'error': zprava,
         'kvota_bytes': MAX_USER_STORAGE_BYTES,
         'zabrano_bytes': chyba.zabrano,
     }), 413
@@ -1144,10 +1251,30 @@ def misto_uzivatele(user):
 def mb(bajtu):
     """Velikost pro člověka. Desetinné místo jen pod 100 MB, ať to neskáče."""
     h = (bajtu or 0) / 1024 / 1024
+    if h < 1:
+        # Pod megabajt v kB, jinak by strana za 50 kB vypadala jako „0,0 MB“.
+        return f"{(bajtu or 0) / 1024:.0f} kB"
     return (f"{h:.1f}".replace('.', ',') if h < 100 else f"{h:.0f}") + " MB"
 
 
+def misto_zpevniku(book):
+    """Kolik místa zpěvník zabírá, pro pruh u dlaždice. U veřejného, u admina a hosta
+    nic - jim se nic nepočítá."""
+    if (book is None or getattr(book, 'is_public', 0) or not current_user.is_authenticated
+            or getattr(current_user, 'role', None) in ('guest', 'admin')):
+        return None
+    bajtu = cena_zpevniku([book.id])
+    podil = bajtu / MAX_USER_STORAGE_BYTES if MAX_USER_STORAGE_BYTES else 0
+    procent = podil * 100
+    return {
+        'bajtu': bajtu,
+        'sirka': max(1.5, min(100.0, procent)),     # i malý zpěvník je v pruhu vidět
+        'text': ('méně než 1 %' if procent < 1 else f"{procent:.0f} %"),
+    }
+
+
 app.jinja_env.globals['misto_uzivatele'] = misto_uzivatele
+app.jinja_env.globals['misto_zpevniku'] = misto_zpevniku
 app.jinja_env.globals['mb'] = mb
 
 
@@ -1686,6 +1813,7 @@ def add_song_to_songbook(songbook_id):
     # tentýž (řádek v `images`), strana je vlastní - jejím pořadím tenhle zpěvník
     # nehýbe s nikým jiným. Když píseň ve zdroji sdílí stranu s jinou, přejde sem
     # obrázek celé strany, ale vazba jen na tuhle píseň.
+    pred = zjisti_mista(drzitele_zpevniku(sb))
     zdroj = strany_pisne(song.id)
     dalsi = len(sb.strany)
     added = 0
@@ -1696,6 +1824,7 @@ def add_song_to_songbook(songbook_id):
         dalsi += 1
         added += 1
 
+    zkontroluj_limity(pred)
     db.session.commit()
     # Přibyly strany, takže se změnila sekvence a s ní klíč exportu. Bez tohohle by
     # předpřipravené PDF přestalo platit a další stažení by na skládání čekalo.
@@ -1938,8 +2067,11 @@ def api_share_songbook(songbook_id):
             return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Oprávnění bylo aktualizováno na úpravy a mazání."})
         return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Uživatel má právo upravovat i mazat."})
 
+    pred = zjisti_mista([target.id])
     access = UserSongbookAccess(user_id=target.id, songbook_id=sb.id, permission='edit')
     db.session.add(access)
+    # Sdílený zpěvník se počítá do místa i tomu, s kým se sdílí.
+    zkontroluj_limity(pred)
     db.session.commit()
 
     return jsonify({"ok": True, "message": f"Zpěvník byl sdílen s {target.email}."}), 200
@@ -2374,6 +2506,8 @@ def uloz_zpevnik(songbook_id=None):
 
     koren = _koren_pro_zpevnik(sb)
     ke_smazani = set()
+    # Místo všech, kdo zpěvník mají, před změnou - u nového jen zakladatel.
+    pred = zjisti_mista(drzitele_zpevniku(sb))
     try:
         nazev = (request.form.get('nazev') or '').strip()
         if nazev:
@@ -2394,6 +2528,7 @@ def uloz_zpevnik(songbook_id=None):
             except ValueError:
                 raise ChybaEditoru('Neplatný seznam stran.')
             _uloz_strany(sb, strany, koren, ke_smazani)
+        zkontroluj_limity(pred)
         db.session.commit()
     except ChybaEditoru as chyba:
         db.session.rollback()

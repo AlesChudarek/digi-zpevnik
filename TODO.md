@@ -69,7 +69,9 @@ Základní pravidlo: **každý bajt na serveru se počítá do limitu aspoň jed
 existujícímu člověku, který s tím souhlasil**, a smazání vždycky uvolní místo tomu,
 kdo maže.
 
-- [ ] **limit podle databáze, ne podle složky** (domluveno 12. 10.). Počítá se **každá
+- [X] **limit podle databáze, ne podle složky** (domluveno a hotovo 12. 10., `zabrane_misto`,
+      `cena_zpevniku`; kontrola u nahrání, uložení, přidání písně i sdílení, a to pro
+      každého, kdo zpěvník má — změna, která místo nepřidává, projde vždycky). Počítá se **každá
       strana v každém zpěvníku, který uživatel má**, i duplikáty a kopie — nic se
       neodečítá jen proto, že obrázek leží na disku jednou. Smazání zpěvníku tak vždycky
       uvolní přesně tolik, kolik zabíral. Cena strany:
@@ -111,7 +113,8 @@ kdo maže.
       komu se počítá.
 - [ ] **smazání účtu** = smazání vlastních zpěvníků (s nabídkou kopie rodině) a odchod
       z cizích.
-- [ ] **ukázat, kolik místa zpěvník zabírá** — spíš obrázkem (podíl z pruhu limitu)
+- [X] **ukázat, kolik místa zpěvník zabírá** — tenký pruh pod názvem na dlaždici, procenta
+      a MB v nápovědě. Dřív zadáno: — spíš obrázkem (podíl z pruhu limitu)
       než v MB, gigabajty lidem nic neřeknou.
 - [ ] **převod dnešních dat:** dnešní sdílení = rodina s přijatým členstvím, vlastník
       zůstává.

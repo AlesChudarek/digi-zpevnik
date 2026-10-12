@@ -16,6 +16,7 @@ Co se kontroluje:
   - v datech neleží soubor, na který nikdo neukazuje
   - struktura stran drží: pořadí bez mezer, každá píseň na souvislých stranách
     a s pořadím v písni 1..N, žádná píseň bez zpěvníku, žádný řádek images bez odkazu
+  - velikost obrázku v DB sedí se souborem (počítá se z ní limit účtu)
 
     python backend/scripts/kontrola_zpevniku.py
     python backend/scripts/kontrola_zpevniku.py --vse    # vypíše i to, co je v pořádku
@@ -166,6 +167,15 @@ def main():
         if nepouzite:
             nalezy.append(f"{len(nepouzite)} řádků images, na které nic neukazuje: "
                           f"{[r[0] for r in nepouzite[:5]]}")
+        # Z velikosti v DB se počítá limit účtu, takže musí sedět se souborem.
+        nesedi = []
+        for obraz in Obrazek.query.all():
+            soubor = IMAGES_DIR / obraz.cesta
+            skutecna = soubor.stat().st_size if soubor.is_file() else None
+            if skutecna is not None and obraz.velikost != skutecna:
+                nesedi.append(f"{obraz.cesta} ({obraz.velikost} v DB, {skutecna} na disku)")
+        if nesedi:
+            nalezy.append(f"{len(nesedi)} obrázků má v DB jinou velikost než na disku: {nesedi[:3]}")
         for radek in db.session.execute(text("PRAGMA foreign_key_check")).fetchall():
             nalezy.append(f"porušený cizí klíč: {tuple(radek)}")
         if db.session.execute(text("SELECT 1 FROM sqlite_master WHERE name = "

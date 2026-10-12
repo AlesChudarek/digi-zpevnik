@@ -27,6 +27,10 @@ class Obrazek(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     cesta = db.Column(db.String, unique=True, nullable=False, index=True)
+    # Velikost souboru v bajtech. Z ní se počítá zabrané místo účtu, ať se kvůli každé
+    # kontrole nemusí procházet disk. Doplňuje se při zápisu souboru a při startu
+    # aplikace u řádků, které ji ještě nemají.
+    velikost = db.Column(db.Integer, nullable=True)
 
     @classmethod
     def ziskej(cls, cesta):
