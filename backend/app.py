@@ -381,12 +381,13 @@ try:
         Author,
         User,
         UserSongbookAccess,
+        Pozvanka,
         LoginAttempt,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -693,6 +694,9 @@ def _abs_image_path(rel_path: str):
 
 ROLE_OBALEK = {'coverfrontout': 'front-out', 'coverfrontin': 'front-in',
                'coverbackin': 'back-in', 'coverbackout': 'back-out'}
+# Slot obálky (jak mu říká formulář a sloupce img_path_cover_*) -> role v ROLE_OBALEK
+ROLE_OBALEK_PODLE_SLOTU = {'front_outer': 'coverfrontout', 'front_inner': 'coverfrontin',
+                           'back_inner': 'coverbackin', 'back_outer': 'coverbackout'}
 
 
 def _koren_pro_zpevnik(book) -> str:
@@ -737,6 +741,17 @@ def _nova_cesta_strany(koren: str, pripona: str) -> str:
             return rel
         except FileExistsError:
             cislo += 1
+
+
+def _nove_id_zpevniku(user_id) -> str:
+    """Id soukromého zpěvníku. Ze sekund - dvě kopie založené v téže sekundě by se
+    jinak srazily, proto se při kolizi přidá pořadí."""
+    zaklad = f"u{user_id}-{int(time.time())}"
+    kandidat, n = zaklad, 1
+    while db.session.get(Songbook, kandidat) is not None:
+        n += 1
+        kandidat = f"{zaklad}-{n}"
+    return kandidat
 
 
 def _next_public_songbook_id() -> str:
@@ -1420,11 +1435,13 @@ def smazat_ucet():
             soubory += [st.image_path for st in sb.strany if st.image_path]
             pisne |= pisne_zpevniku(sb.id)
             db.session.query(UserSongbookAccess).filter_by(songbook_id=sb.id).delete()
+            db.session.query(Pozvanka).filter_by(songbook_id=sb.id).delete()
             db.session.delete(sb)
         db.session.flush()
         smaz_pisne_mimo_zpevniky(pisne)
 
         db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
+        db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
         logout_user()
         db.session.query(User).filter_by(id=uid).delete()
         db.session.commit()
@@ -2014,9 +2031,10 @@ def api_delete_songbook(songbook_id):
                               sb.img_path_cover_back_inner, sb.img_path_cover_back_outer,
                               sb.img_path_cover_preview) if c]
 
-    # Sdílení mizí se zpěvníkem. Dřív tu zůstávalo ležet a ukazovalo na zpěvník, který
-    # neexistuje (migrace na strany jeden takový záznam našla).
+    # Sdílení i nevyřízené pozvánky mizí se zpěvníkem. Dřív tu sdílení zůstávalo ležet
+    # a ukazovalo na zpěvník, který neexistuje (migrace na strany jeden takový našla).
     UserSongbookAccess.query.filter_by(songbook_id=sb.id).delete()
+    Pozvanka.query.filter_by(songbook_id=sb.id).delete()
     db.session.delete(sb)
     db.session.flush()
     # Písně, které po smazání nebudou v žádném zpěvníku, nemá smysl držet.
@@ -2025,13 +2043,15 @@ def api_delete_songbook(songbook_id):
 
     smaz_osirele_obrazky(kandidati)
 
-    # Složka obálek zpěvníku už na nic neukazuje, ta může celá.
+    # Složka obálek se nemaže natvrdo: obrázky z ní uklidil smaz_osirele_obrazky výš,
+    # a jen ty, na které už nic neukazuje. Dřív tu bylo rmtree celé složky.
     try:
-        adresar = IMAGES_DIR / _koren_pro_zpevnik(sb) / 'songbooks' / sb.id
-        if adresar.exists() and adresar.resolve() != IMAGES_DIR.resolve():
-            shutil.rmtree(adresar, ignore_errors=True)
-    except Exception:
-        pass  # ignore file removal errors
+        adresar = IMAGES_DIR / _koren_pro_zpevnik(sb) / 'songbooks' / sb.id / 'covers'
+        if adresar.is_dir() and not any(adresar.iterdir()):
+            adresar.rmdir()
+            adresar.parent.rmdir()
+    except OSError:
+        pass
 
     return jsonify({"ok": True})
 
@@ -2055,26 +2075,185 @@ def api_share_songbook(songbook_id):
 
     if not target or target.role in ('admin', 'guest'):
         return jsonify({"ok": False, "error": "Uživatel s tímto e-mailem neexistuje."}), 404
+    if sb.is_public:
+        return jsonify({"ok": False, "error": "Veřejný zpěvník vidí všichni, není potřeba ho sdílet."}), 400
 
-    if target.id == sb.owner_id:
-        return jsonify({"ok": False, "error": "Tento uživatel již zpěvník sdílí."}), 400
+    druh = (payload.get('druh') or request.form.get('druh') or 'kopie').strip()
+    if druh not in ('kopie', 'spolecny'):
+        return jsonify({"ok": False, "error": "Neznámý způsob sdílení."}), 400
+    if target.id == current_user.id:
+        return jsonify({"ok": False, "error": "Sobě zpěvník nesdílíš - na kopii pro sebe je u "
+                        "zpěvníku tlačítko Vytvořit kopii."}), 400
+    if druh == 'spolecny':
+        # Ke společným úpravám zve jen vlastník; ostatní smějí poslat kopii.
+        if sb.owner_id != current_user.id:
+            return jsonify({"ok": False, "error": "Ke společným úpravám může zvát jen vlastník "
+                            "zpěvníku. Poslat kopii můžeš."}), 403
+        if target.id == sb.owner_id or UserSongbookAccess.query.filter_by(
+                user_id=target.id, songbook_id=sb.id).first():
+            return jsonify({"ok": False, "error": f"Zpěvník už s {target.email} upravujete společně."}), 400
+    if Pozvanka.query.filter_by(songbook_id=sb.id, komu_id=target.id, druh=druh).first():
+        return jsonify({"ok": True, "message": f"Pozvánka pro {target.email} už čeká na odpověď."})
+    # Strop nevyřízených pozvánek: kdo by chtěl někoho zahltit, narazí tady.
+    if Pozvanka.query.filter_by(komu_id=target.id).count() >= MAX_POZVANEK:
+        return jsonify({"ok": False, "error": f"{target.email} má moc nevyřízených pozvánek. "
+                        "Zkus to později."}), 429
 
-    existing = UserSongbookAccess.query.filter_by(user_id=target.id, songbook_id=sb.id).first()
-    if existing:
-        if existing.permission != 'edit':
-            existing.permission = 'edit'
-            db.session.commit()
-            return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Oprávnění bylo aktualizováno na úpravy a mazání."})
-        return jsonify({"ok": True, "message": f"Zpěvník je už sdílen s {target.email}. Uživatel má právo upravovat i mazat."})
+    db.session.add(Pozvanka(songbook_id=sb.id, od_id=current_user.id, komu_id=target.id,
+                            druh=druh, vytvoreno=datetime.now()))
+    db.session.commit()
+    return jsonify({"ok": True, "message": f"Pozvánka odeslána. {target.email} ji uvidí "
+                    "v Mých zpěvnících a rozhodne, jestli ji přijme."}), 200
 
-    pred = zjisti_mista([target.id])
-    access = UserSongbookAccess(user_id=target.id, songbook_id=sb.id, permission='edit')
-    db.session.add(access)
-    # Sdílený zpěvník se počítá do místa i tomu, s kým se sdílí.
+
+# ---------- Kopie a pozvánky ----------
+MAX_POZVANEK = 20
+
+
+def verejne_pisne(song_ids):
+    """Které z písní jsou ve veřejném zpěvníku. Ty kopie sdílí (a jsou zamčené)."""
+    if not song_ids:
+        return set()
+    return {r[0] for r in db.session.query(PisenNaStrane.song_id)
+            .join(Strana, Strana.id == PisenNaStrane.strana_id)
+            .join(Songbook, Songbook.id == Strana.songbook_id)
+            .filter(PisenNaStrane.song_id.in_(list(song_ids)), Songbook.is_public == 1).distinct()}
+
+
+def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
+    """Samostatná kopie zpěvníku pro daného vlastníka. Necommituje.
+
+    Strany ukazují na tytéž obrázky - obrázek se nikdy nepřepisuje (výměna nahraje nový
+    soubor), takže se to sdílet dá a na disku nic nepřibude. Písně ale dostane kopie
+    vlastní, jinak by byly v obou zpěvnících zamčené; jen písně z veřejných zpěvníků
+    zůstanou sdílené. Obálky se zkopírují jako soubory, protože se při výměně přepisují
+    na místě a změna v originálu by se jinak projevila i v kopii.
+    """
+    nova = Songbook(id=_nove_id_zpevniku(vlastnik_id), title=nazev or sb.title,
+                    owner_id=vlastnik_id, is_public=0, first_page_side=sb.first_page_side,
+                    color=sb.color, prvni_cislo_strany=sb.prvni_cislo_strany or 1)
+    db.session.add(nova)
+    db.session.flush()
+    for role in ('front_outer', 'front_inner', 'back_inner', 'back_outer'):
+        cesta = getattr(sb, f'img_path_cover_{role}')
+        zdroj = _abs_image_path(cesta) if cesta else None
+        if not zdroj or not zdroj.is_file():
+            continue
+        rel = _cesta_obalky(nova, ROLE_OBALEK_PODLE_SLOTU[role], zdroj.suffix.lower())
+        cil = IMAGES_DIR / rel
+        cil.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(zdroj, cil)
+        setattr(nova, f'img_path_cover_{role}', rel)
+        Obrazek.ziskej(rel).velikost = cil.stat().st_size
+    nova.img_path_cover_preview = nova.img_path_cover_front_outer
+
+    vsechny = {v.song_id for st in sb.strany for v in st.pisne}
+    sdilene = verejne_pisne(vsechny)
+    nove_id = {}
+    for st in sb.strany:
+        kopie = Strana(songbook_id=nova.id, poradi=st.poradi, image_id=st.image_id,
+                       popisek=st.popisek)
+        for v in st.pisne:
+            sid = v.song_id
+            if sid not in sdilene:
+                if sid not in nove_id:
+                    puvodni = v.song
+                    nova_pisen = Song(id=f"custom_{uuid4().hex[:12]}", title=puvodni.title,
+                                      author_id=puvodni.author_id)
+                    db.session.add(nova_pisen)
+                    nove_id[sid] = nova_pisen.id
+                sid = nove_id[sid]
+            kopie.pisne.append(PisenNaStrane(song_id=sid, poradi_v_pisni=v.poradi_v_pisni))
+        db.session.add(kopie)
+    db.session.flush()
+    return nova
+
+
+@app.route('/api/zpevnik/<songbook_id>/kopie', methods=['POST'])
+@login_required
+def vytvor_kopii(songbook_id):
+    """„Vytvořit kopii“ u vlastního nebo společného zpěvníku - třeba pro jinou verzi."""
+    sb = db.session.get(Songbook, songbook_id)
+    if sb is None or not can_edit_songbook(current_user, sb) or sb.is_public:
+        return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+    if is_guest(current_user) or not smi_tvorit(current_user):
+        return jsonify({'ok': False, 'error': 'Kopii může vytvořit jen ověřený účet.'}), 403
+    pred = zjisti_mista([current_user.id])
+    nova = kopiruj_zpevnik(sb, current_user.id, f"{sb.title} (kopie)")
     zkontroluj_limity(pred)
     db.session.commit()
+    schedule_export_warm(nova.id)
+    return jsonify({'ok': True, 'id': nova.id})
 
-    return jsonify({"ok": True, "message": f"Zpěvník byl sdílen s {target.email}."}), 200
+
+def _moje_pozvanka(pozvanka_id):
+    p = db.session.get(Pozvanka, pozvanka_id)
+    if p is None or p.komu_id != current_user.id:
+        return None
+    return p
+
+
+@app.route('/api/pozvanky/<int:pozvanka_id>/prijmout', methods=['POST'])
+@login_required
+def prijmi_pozvanku(pozvanka_id):
+    p = _moje_pozvanka(pozvanka_id)
+    if p is None:
+        return jsonify({'ok': False, 'error': 'Pozvánka už neplatí.'}), 404
+    sb = p.songbook
+    pred = zjisti_mista([current_user.id])
+    if p.druh == 'spolecny':
+        if not UserSongbookAccess.query.filter_by(user_id=current_user.id, songbook_id=sb.id).first():
+            db.session.add(UserSongbookAccess(user_id=current_user.id, songbook_id=sb.id,
+                                              permission='edit'))
+        cil = sb
+    else:
+        # Kopie vzniká až teď, ne při odeslání: do přijetí by jinak ležela data, která se
+        # nikomu nepočítají do místa.
+        cil = kopiruj_zpevnik(sb, current_user.id)
+    db.session.delete(p)
+    zkontroluj_limity(pred)
+    db.session.commit()
+    if cil is not sb:
+        schedule_export_warm(cil.id)
+    return jsonify({'ok': True, 'id': cil.id})
+
+
+@app.route('/api/pozvanky/<int:pozvanka_id>/odmitnout', methods=['POST'])
+@login_required
+def odmitni_pozvanku(pozvanka_id):
+    p = _moje_pozvanka(pozvanka_id)
+    if p is not None:
+        db.session.delete(p)
+        db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/pozvanky/odmitnout-vse', methods=['POST'])
+@login_required
+def odmitni_vse():
+    Pozvanka.query.filter_by(komu_id=current_user.id).delete()
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+def pozvanky_pro(user):
+    """Nevyřízené pozvánky pro stránku Moje zpěvníky, i s tím, kolik by zabraly."""
+    if not getattr(user, 'is_authenticated', False) or is_guest(user):
+        return []
+    vysledek = []
+    for p in Pozvanka.query.filter_by(komu_id=user.id).order_by(Pozvanka.vytvoreno):
+        cena = cena_zpevniku([p.songbook_id])
+        vysledek.append({
+            'id': p.id, 'druh': p.druh, 'nazev': p.songbook.title,
+            'od': p.od.email if p.od else '',
+            'procent': ('méně než 1 %' if cena < MAX_USER_STORAGE_BYTES / 100
+                        else f"{cena * 100 / MAX_USER_STORAGE_BYTES:.0f} %"),
+        })
+    return vysledek
+
+
+app.jinja_env.globals['pozvanky_pro'] = pozvanky_pro
+
 
 # ---------- Editor zpěvníku ----------
 # Zpěvník se v editoru upravuje jako řada stran. Strana má typ podle toho, co na ní je:
@@ -2303,9 +2482,7 @@ def _uloz_obalky(sb, ke_smazani):
     Odebrání platí jen tehdy, když ve stejném slotu nepřišel nový soubor. Dřív se
     zpracovávalo až po nahrání, takže „odebrat a nahrát jinou“ novou obálku zase smazalo.
     """
-    role_jmen = {'front_outer': 'coverfrontout', 'front_inner': 'coverfrontin',
-                 'back_inner': 'coverbackin', 'back_outer': 'coverbackout'}
-    for role, jmeno in role_jmen.items():
+    for role, jmeno in ROLE_OBALEK_PODLE_SLOTU.items():
         sloupec = f'img_path_cover_{role}'
         stara = getattr(sb, sloupec)
         soubor = request.files.get(role)
@@ -2493,7 +2670,7 @@ def uloz_zpevnik(songbook_id=None):
         if verejny and not is_admin(current_user):
             return jsonify({'ok': False, 'error': 'Veřejný zpěvník může vytvořit jen admin.'}), 403
         sb = Songbook(
-            id=_next_public_songbook_id() if verejny else f"u{current_user.id}-{int(time.time())}",
+            id=_next_public_songbook_id() if verejny else _nove_id_zpevniku(current_user.id),
             title='Nový zpěvník', owner_id=None if verejny else current_user.id,
             is_public=1 if verejny else 0, first_page_side='right', color='#FFFFFF',
             prvni_cislo_strany=1)

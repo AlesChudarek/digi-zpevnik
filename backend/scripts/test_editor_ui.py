@@ -44,8 +44,11 @@ HESLO = "editor-ui"
 with A.app.app_context():
     uzivatel = A.db.session.get(A.User, 3)
     uzivatel.password = generate_password_hash(HESLO, method="pbkdf2:sha256:1000")
+    druhy = A.db.session.get(A.User, 4)
+    druhy.password = uzivatel.password
     A.db.session.commit()
     EMAIL = uzivatel.email
+    EMAIL4 = druhy.email
 
 selhani = []
 
@@ -379,6 +382,56 @@ def main():
                        and not imp.img_path_cover_front_inner,
                        "importovaný zpěvník se uloží i s obálkami",
                        imp and (len(imp.strany), imp.img_path_cover_front_outer))
+
+        print("\n── sdílení a kopie ──")
+        page.goto(base + "/my-songbooks")
+        page.wait_for_load_state("networkidle")
+        with A.app.app_context():
+            vlastni = A.Songbook.query.filter_by(title="Import z testu").first().id
+        page.click(f'.btn-share[data-book-id="{vlastni}"]')
+        zkontroluj(page.is_visible("#share-druh-spolecny") and page.is_checked('input[name="share-druh"][value="kopie"]'),
+                   "vlastník vidí obě volby, výchozí je kopie")
+        page.check('input[name="share-druh"][value="spolecny"]')
+        page.fill("#share-email-input", EMAIL4)
+        page.click("#share-submit-btn")
+        page.wait_for_function("document.getElementById('share-feedback').textContent.length > 0")
+        zprava = page.inner_text("#share-feedback")
+        zkontroluj("Pozvánka odeslána" in zprava, "sdílení pošle pozvánku", zprava)
+        page.click("#share-cancel-btn")
+
+        druhy = prohlizec.new_page(viewport={"width": 1280, "height": 900})
+        druhy.on("pageerror", lambda e: chyby.append("druhý účet: " + str(e)))
+        druhy.goto(base + "/login")
+        druhy.fill('input[name="email"]', EMAIL4)
+        druhy.fill('input[name="password"]', HESLO)
+        druhy.click('button[type="submit"], input[type="submit"]')
+        druhy.wait_for_load_state("networkidle")
+        druhy.goto(base + "/my-songbooks")
+        druhy.wait_for_load_state("networkidle")
+        text = druhy.inner_text(".pozvanky") if druhy.is_visible(".pozvanky") else ""
+        zkontroluj("zve ke společným úpravám" in text and "Import z testu" in text,
+                   "příjemce vidí pozvánku nahoře v Mých zpěvnících", text[:120])
+        with druhy.expect_navigation():
+            druhy.click(".pozvanka-prijmout")
+        druhy.wait_for_load_state("networkidle")
+        zkontroluj(druhy.locator(f'.songbook-card .btn-edit[data-book-id="{vlastni}"]').count() == 1
+                   and not druhy.is_visible(".pozvanky"),
+                   "po přijetí má zpěvník mezi svými a pozvánka zmizí")
+        druhy.click(f'.btn-share[data-book-id="{vlastni}"]')
+        zkontroluj(druhy.is_hidden("#share-druh-spolecny"),
+                   "člen může poslat jen kopii, ke společným úpravám zve vlastník")
+        druhy.click("#share-cancel-btn")
+        druhy.on("dialog", lambda d: d.accept())
+        pocet = druhy.locator(".songbook-card .btn-edit").count()
+        druhy.click(f'.btn-kopie[data-book-id="{vlastni}"]')
+        druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
+        with druhy.expect_navigation():
+            druhy.click("#app-confirm-ok")
+        druhy.wait_for_load_state("networkidle")
+        zkontroluj(druhy.locator(".songbook-card .btn-edit").count() == pocet + 1
+                   and "Import z testu (kopie)" in druhy.inner_text(".grid-container"),
+                   "Vytvořit kopii přidá samostatný zpěvník")
+        druhy.close()
 
         print("\n── neuložené změny ──")
         page.evaluate(f"window.openEditSongbookModal('{novy.id}')")

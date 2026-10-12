@@ -229,6 +229,32 @@ class ExportPokus(db.Model):
     __table_args__ = (db.UniqueConstraint("user_id", "den", name="uq_export_pokus_den"),)
 
 
+class Pozvanka(db.Model):
+    """Nevyřízená nabídka zpěvníku jinému uživateli. Dokud ji nepřijme, nic nevidí
+    a nic se mu nepočítá do místa.
+
+    `druh`:
+      kopie     - po přijetí dostane vlastní kopii zpěvníku, jak vypadá v tu chvíli
+      spolecny  - po přijetí upravují zpěvník společně (řádek v user_songbook_access)
+
+    Samostatná tabulka, ne stav v user_songbook_access: ten tak dál znamená jen „má
+    přístup“ a žádné z míst, která ho čtou, se nemusí učit rozlišovat pozvánku.
+    """
+
+    __tablename__ = "pozvanky"
+    __table_args__ = (db.UniqueConstraint("songbook_id", "komu_id", "druh", name="uq_pozvanka"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False, index=True)
+    od_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    komu_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    druh = db.Column(db.String, nullable=False)
+    vytvoreno = db.Column(db.DateTime, nullable=False)
+
+    songbook = db.relationship("Songbook")
+    od = db.relationship("User", foreign_keys=[od_id])
+
+
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
 

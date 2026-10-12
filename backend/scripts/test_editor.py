@@ -286,9 +286,12 @@ def main():
 
         A.MAX_USER_STORAGE_BYTES = puvodni_limit
         pred3 = misto(3)
-        r = u4.post(f"/api/my-songbooks/{limitni}/share", json={"email": EMAIL3})
+        u4.post(f"/api/my-songbooks/{limitni}/share", json={"email": EMAIL3, "druh": "spolecny"})
+        with A.app.app_context():
+            pid = A.Pozvanka.query.filter_by(komu_id=3, songbook_id=limitni).first().id
+        r = u3.post(f"/api/pozvanky/{pid}/prijmout")
         zkontroluj(r.status_code == 200 and misto(3) > pred3,
-                   "sdílený zpěvník se počítá i tomu, s kým se sdílí", (r.status_code, misto(3) - pred3))
+                   "společný zpěvník se počítá i tomu, kdo ho přijal", (r.status_code, misto(3) - pred3))
         A.MAX_USER_STORAGE_BYTES = misto(3) + 1
         _, y = nahraj(u4, "navy", zpevnik_id=limitni)
         z = nacti(u4, limitni)
@@ -298,14 +301,136 @@ def main():
         zkontroluj(kod == 413 and EMAIL3 in (telo.get("error") or ""),
                    "nahrání do sdíleného se odmítne, když se nevejde druhému, a řekne komu",
                    telo.get("error"))
-        A.MAX_USER_STORAGE_BYTES = misto(5) + 1
-        r = u4.post(f"/api/my-songbooks/{limitni}/share", json={"email": EMAIL5})
-        with A.app.app_context():
-            sdileno = A.UserSongbookAccess.query.filter_by(user_id=5, songbook_id=limitni).first()
-        zkontroluj(r.status_code == 413 and sdileno is None,
-                   "sdílet nejde tomu, komu se zpěvník nevejde", r.status_code)
     finally:
         A.MAX_USER_STORAGE_BYTES = puvodni_limit
+    u4.delete(f"/api/my-songbooks/{limitni}/songs/x")
+    with A.app.app_context():
+        # sdílení z testu limitu by se pletlo do testů sdílení níž
+        A.UserSongbookAccess.query.filter_by(songbook_id=limitni).delete()
+        A.db.session.commit()
+
+    print("\n── sdílení: kopie a společné úpravy ──")
+    u5 = klient(5)
+    with A.app.app_context():
+        EMAIL4 = A.db.session.get(A.User, 4).email
+    _, v = nahraj(u3, "teal")
+    kod, telo = uloz(u3, nazev="Originál", front_outer=(png("pink"), "obalka.png"), strany=[
+        {"typ": "pisen", "image_id": v["image_id"], "pisne": [{"nazev": "Vlastní píseň", "autor": "Já"}]},
+        {"typ": "pisen", "image_id": verejna_obrazek,
+         "pisne": [{"song_id": verejna_pisen, "nazev": verejny_nazev, "autor": ""}]}])
+    original = telo.get("id")
+
+    def stav_knihy(kid):
+        with A.app.app_context():
+            A.db.session.expire_all()
+            sb = A.db.session.get(A.Songbook, kid)
+            if sb is None:
+                return None
+            obalka = sb.img_path_cover_front_outer
+            return {"strany": [(st.image_id, [(v.song_id, v.song.title) for v in st.pisne]) for st in sb.strany],
+                    "obalka": obalka, "obalka_bajty": (OBRAZKY / obalka).read_bytes() if obalka else None,
+                    "vlastnik": sb.owner_id}
+
+    def pozvanky(uid, druh=None):
+        with A.app.app_context():
+            q = A.Pozvanka.query.filter_by(komu_id=uid)
+            return q.filter_by(druh=druh).all() if druh else q.all()
+
+    r = u3.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL3})
+    zkontroluj(r.status_code == 400, "sám sobě sdílet nejde (na to je Vytvořit kopii)", r.status_code)
+    pred4 = misto(4)
+    r = u3.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL4, "druh": "kopie"})
+    zkontroluj(r.status_code == 200 and len(pozvanky(4, "kopie")) == 1, "pozvánka s kopií se odešle",
+               r.get_json())
+    zkontroluj(u4.get(f"/songbook/{original}").status_code == 403 and misto(4) == pred4,
+               "dokud ji nepřijme, nic nevidí a nic mu nezabírá")
+    pid = pozvanky(4, "kopie")[0].id
+    r = u4.post(f"/api/pozvanky/{pid}/prijmout")
+    kopie = (r.get_json() or {}).get("id")
+    o, k = stav_knihy(original), stav_knihy(kopie or "x")
+    zkontroluj(r.status_code == 200 and k and k["vlastnik"] == 4 and not pozvanky(4),
+               "přijetím vznikne kopie, kterou vlastní příjemce", r.get_json())
+    zkontroluj(k and [x[0] for x in k["strany"]] == [x[0] for x in o["strany"]],
+               "kopie ukazuje na tytéž obrázky stran - na disku nic nepřibude")
+    zkontroluj(k and k["strany"][0][1][0][0] != o["strany"][0][1][0][0]
+               and k["strany"][0][1][0][1] == "Vlastní píseň",
+               "vlastní píseň dostane kopie vlastní (ať jde přejmenovat)")
+    zkontroluj(k and k["strany"][1][1][0][0] == verejna_pisen,
+               "píseň z veřejného zpěvníku zůstane sdílená")
+    zkontroluj(k and k["obalka"] != o["obalka"] and k["obalka_bajty"] == o["obalka_bajty"],
+               "obálka je zkopírovaná jako vlastní soubor")
+    zkontroluj(misto(4) > pred4, "kopie se počítá do místa příjemce", misto(4) - pred4)
+    zk = nacti(u4, kopie)
+    zk["strany"][0]["pisne"][0]["nazev"] = "Přejmenovaná v kopii"
+    uloz(u4, kopie, strany=[{kk: st[kk] for kk in ("id", "typ", "image_id", "popisek", "pisne")}
+                            for st in zk["strany"]])
+    uloz(u3, original, front_outer=(png("black"), "jina.png"))
+    o, k = stav_knihy(original), stav_knihy(kopie)
+    zkontroluj(o["strany"][0][1][0][1] == "Vlastní píseň" and k["strany"][0][1][0][1] == "Přejmenovaná v kopii",
+               "přejmenování v kopii originál nezmění")
+    zkontroluj(o["obalka_bajty"] != k["obalka_bajty"], "a výměna obálky v originálu nezmění kopii")
+    kod, _ = uloz(u4, kopie, nazev="Kopie, moje")
+    zkontroluj(kod == 200, "kopii si příjemce upravuje sám")
+
+    r = u4.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL3, "druh": "spolecny"})
+    zkontroluj(r.status_code in (403, 404), "ke společným úpravám nezve nikdo jiný než vlastník",
+               r.status_code)
+    r = u3.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL4, "druh": "spolecny"})
+    zkontroluj(r.status_code == 200 and u4.get(f"/api/zpevnik/{original}").status_code == 404,
+               "pozvánka ke společným úpravám ještě nedává přístup")
+    pred4 = misto(4)
+    r = u4.post(f"/api/pozvanky/{pozvanky(4, 'spolecny')[0].id}/prijmout")
+    zkontroluj(r.status_code == 200 and u4.get(f"/api/zpevnik/{original}").status_code == 200,
+               "po přijetí zpěvník upravují společně")
+    zkontroluj(misto(4) > pred4, "a počítá se do místa i jemu", misto(4) - pred4)
+    r = u3.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL4, "druh": "spolecny"})
+    zkontroluj(r.status_code == 400, "podruhé pozvat člena nejde", r.get_json())
+
+    r = u3.post(f"/api/my-songbooks/{original}/share", json={"email": EMAIL5, "druh": "kopie"})
+    r = u5.post(f"/api/pozvanky/{pozvanky(5)[0].id}/odmitnout")
+    with A.app.app_context():
+        knih5 = A.Songbook.query.filter_by(owner_id=5).count()
+    zkontroluj(not pozvanky(5) and knih5 == 0, "odmítnutá pozvánka zmizí a nic nevznikne")
+    puvodni_strop = A.MAX_POZVANEK
+    A.MAX_POZVANEK = 2
+    try:
+        kody = [u3.post(f"/api/my-songbooks/{kid}/share", json={"email": EMAIL5, "druh": "kopie"}).status_code
+                for kid in (original, kopie if False else original, novy)]
+        u4.post(f"/api/my-songbooks/{kopie}/share", json={"email": EMAIL5, "druh": "kopie"})
+        r = u4.post(f"/api/my-songbooks/{kopie}/share", json={"email": EMAIL5, "druh": "kopie"})
+        zkontroluj(len(pozvanky(5)) == 2, "nevyřízených pozvánek má každý nejvýš strop",
+                   (kody, len(pozvanky(5))))
+    finally:
+        A.MAX_POZVANEK = puvodni_strop
+    A.MAX_USER_STORAGE_BYTES = misto(5) + 1
+    try:
+        r = u5.post(f"/api/pozvanky/{pozvanky(5)[0].id}/prijmout")
+        zkontroluj(r.status_code == 413 and len(pozvanky(5)) == 2,
+                   "pozvánku, která se nevejde, přijmout nejde a zůstane", r.status_code)
+    finally:
+        A.MAX_USER_STORAGE_BYTES = puvodni_limit
+    u5.post("/api/pozvanky/odmitnout-vse")
+    zkontroluj(not pozvanky(5), "odmítnout všechny")
+
+    r = u3.post(f"/api/zpevnik/{original}/kopie")
+    vlastni_kopie = (r.get_json() or {}).get("id")
+    with A.app.app_context():
+        vk = A.db.session.get(A.Songbook, vlastni_kopie) if vlastni_kopie else None
+        zkontroluj(r.status_code == 200 and vk and vk.title == "Originál (kopie)" and vk.owner_id == 3,
+                   "Vytvořit kopii vlastního zpěvníku", r.get_json())
+    # Mazání zpěvníku se členy společných úprav přepíše krok 3 (nabídka kopie); tady
+    # se maže zpěvník bez členů - vlastní kopie, která sdílí obrázky stran s ostatními.
+    u3.post(f"/api/my-songbooks/{vlastni_kopie}/share", json={"email": EMAIL5, "druh": "kopie"})
+    r = u3.delete(f"/api/my-songbooks/{vlastni_kopie}")
+    k = stav_knihy(kopie)
+    zkontroluj(r.status_code == 200 and stav_knihy(vlastni_kopie) is None and not pozvanky(5),
+               "smazáním zpěvníku zmizí i jeho nevyřízené pozvánky", r.status_code)
+    zkontroluj(k and k["obalka_bajty"] and (OBRAZKY / k["obalka"]).exists(),
+               "smazání jiné kopie nerozbije tuhle (obálka i strany zůstanou)")
+    with A.app.app_context():
+        chybi = [st.image_path for st in A.db.session.get(A.Songbook, kopie).strany
+                 if st.image_path and not (OBRAZKY / st.image_path).exists()]
+    zkontroluj(not chybi, "žádná strana kopie nepřišla o obrázek", chybi)
 
     print("\n── veřejný zpěvník od admina ──")
     _, x = nahraj(admin, "green", verejny="1")

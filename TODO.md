@@ -83,25 +83,27 @@ kdo maže.
       datech: nikdo se limitu ani nepřiblíží (nejvíc 69 MB z 300). Do `images` přibude
       sloupec s velikostí. Jediná cesta přes limit: admin smaže veřejný zpěvník a jeho
       strany zdraží — nic se nemaže, jen se nedá nahrávat.
-- [ ] **texty v rozhraní** — „rodina“ byl jen pracovní název, svádí k propojeným účtům.
+- [X] **texty v rozhraní** (hotovo pro krok 2; odchody a nabídky kopie v kroku 3) — „rodina“ byl jen pracovní název, svádí k propojeným účtům.
       Pojem pro uživatele: **společný zpěvník**. Volby sdílení „Poslat kopii“ a
       „Upravovat společně“; „Ukončit společné úpravy“ (vlastník u člena), „Přestat
       upravovat společně“ (člen), nabídka „Nechat si kopii / Zahodit“, u dlaždice
       „Vytvořit kopii“ (duplikace vlastního zpěvníku, třeba pro jinou verzi). Návrh
       všech textů a nápověd je v rozhovoru z 12. 10.
-- [ ] **kopie** = nové řádky v DB nad týmiž soubory (obrázky se nikdy nepřepisují, výměna
+- [X] **kopie** (hotovo 12. 10., `kopiruj_zpevnik`; obálky se kopírují jako soubory, protože se
+      při výměně přepisují na místě) = nové řádky v DB nad týmiž soubory (obrázky se nikdy nepřepisují, výměna
       nahraje nový soubor), ale **s vlastními písněmi**, jinak by byly v obou kopiích
       zamčené. Písně z veřejných zpěvníků zůstanou sdílené. Kopie vzniká **až při
       přijetí** pozvánky, ne při odeslání — jinak by do přijetí ležela data, která se
       nikomu nepočítají; když odesílatel originál mezitím smaže, pozvánka propadne.
-- [ ] **sdílení vyžaduje přijetí** a je dvojí:
+- [X] **sdílení vyžaduje přijetí** (hotovo 12. 10., tabulka `pozvanky`, sekce pozvánek v Mých
+      zpěvnících, strop 20 nevyřízených, „Vytvořit kopii“ u dlaždice) a je dvojí:
       - **kopie** — příjemce dostane vlastní zpěvník ve stavu v době sdílení
         (na disku nic nepřibude, jen řádky v DB)
       - **rodina** — společný zpěvník, upravují všichni. Vlastník je jediný, kdo zve
         a odebírá. Členové smějí sdílet dál jen jako kopii.
       Pozvánka do přijetí nic nezabírá. Strop na počet nevyřízených pozvánek pro
       příjemce, tlačítko „odmítnout všechny“ (útok „tisíc zpěvníků s nepěkným obrázkem“).
-- [ ] **nahrání do rodinného zpěvníku musí projít limitem všech členů.** Jinak se dá
+- [X] **nahrání do rodinného zpěvníku musí projít limitem všech členů.** (hotovo v kroku 1) Jinak se dá
       člen přeplnit a pak opakovaně „nahrát, odejít“ — data by se hromadila bez stropu.
       Když se to někomu nevejde, hláška ho jmenuje a vlastník ho může odebrat.
 - [ ] **odchody a nabídka kopie.** Kdo přijde o přístup, dostane nabídku kopie stavu
@@ -116,8 +118,8 @@ kdo maže.
 - [X] **ukázat, kolik místa zpěvník zabírá** — tenký pruh pod názvem na dlaždici, procenta
       a MB v nápovědě. Dřív zadáno: — spíš obrázkem (podíl z pruhu limitu)
       než v MB, gigabajty lidem nic neřeknou.
-- [ ] **převod dnešních dat:** dnešní sdílení = rodina s přijatým členstvím, vlastník
-      zůstává.
+- [X] **převod dnešních dat:** dnešní sdílení = společný zpěvník s přijatým členstvím —
+      nebylo co převádět, `user_songbook_access` dál znamená člena a pozvánky jsou zvlášť.
 - Předávání vlastnictví se dělat nebude: kdo chce pokračovat bez vlastníka, udělá si
   kopii a pozve ostatní do nové rodiny.
 
