@@ -288,6 +288,24 @@ def main():
                    and s[0][1],
                    "uloží se přesuny, obrázek i píseň začínající na pokračování",
                    [(x[1], x[3]) for x in s])
+        # Jen výměna obrázku musí rozsvítit Uložit. Výběr souboru je mimo okno a dřív
+        # se o změně tlačítko nedozvědělo.
+        page.evaluate(f"window.openEditSongbookModal('{novy.id}')")
+        page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
+        page.wait_for_timeout(100)
+        pred = "bez-zmen" in page.get_attribute("#nb-save-top", "class")
+        strana(page, 0).locator(".es-nahled").click()
+        page.wait_for_selector("#es-lupa:not([hidden])")
+        with page.expect_file_chooser() as vyber:
+            page.click("#es-lupa .es-vymenit")
+        vyber.value.set_files(str(soubory / "10.png"))
+        page.wait_for_function("document.getElementById('es-stav-nahravani').hidden", timeout=20000)
+        page.wait_for_timeout(50)
+        zkontroluj(pred and "bez-zmen" not in page.get_attribute("#nb-save-top", "class"),
+                   "výměna obrázku strany rozsvítí Uložit")
+        with page.expect_navigation():
+            page.click("#nb-save-top")
+        page.wait_for_load_state("networkidle")
 
         print("\n── přidat píseň → nový zpěvník ──")
         with A.app.app_context():

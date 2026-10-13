@@ -1,3 +1,7 @@
+{# Ikona tady, protože _theme.html je v hlavičce každého rámu stránky. Dřív byla jen
+   v dashboard_base, a přihlašovací stránka (úvod na holé doméně) ji neměla - záložka
+   prohlížeče pak zůstala bez ikony. #}
+<link rel="icon" type="image/x-icon" href="{{ static_bust('img/icons/favicon.ico') }}">
 <script>
   window.__dzPrihlasen = {{ (logged_in and not guest) | tojson if logged_in is defined else 'false' }};
   (function(){

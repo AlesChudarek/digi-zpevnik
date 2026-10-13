@@ -478,6 +478,15 @@ def main():
             page.set_viewport_size({"width": 1280, "height": 800})
             page.wait_for_timeout(200)
 
+            print("\n── tisk ve čtečce ──")
+            page.evaluate("() => document.getElementById('print-toggle').click()")
+            page.wait_for_timeout(800)
+            nadpis = page.evaluate("() => document.getElementById('stahovani-nadpis').textContent")
+            zkontroluj(nadpis == "Vytisknout zpěvník", "tlačítko Tisk ve čtečce otevře okno tisku", nadpis)
+            page.evaluate("() => document.getElementById('stahovani-zavrit').click()")
+            page.evaluate("() => document.getElementById('download-toggle').click()")
+            page.wait_for_timeout(800)
+
             print("\n── stažení předvolbou ──")
             page.evaluate("() => document.querySelector('input[name=predvolba][value=small]').click()")
             page.wait_for_timeout(400)

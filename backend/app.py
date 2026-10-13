@@ -1030,6 +1030,14 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ---------- ROUTY ----------
+@app.route('/favicon.ico')
+def favicon():
+    """Prohlížeče si o ikonu říkají i samy na kořeni domény (záložky, historie), bez
+    ohledu na <link rel="icon"> ve stránce."""
+    return send_from_directory(app.static_folder, 'img/icons/favicon.ico',
+                               mimetype='image/vnd.microsoft.icon', max_age=86400)
+
+
 @app.route('/')
 def index():
     return render_template('index.html')

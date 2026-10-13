@@ -504,7 +504,7 @@
   /* --- Stažení zpěvníku ------------------------------------------------------
      Nastavení i postup jsou ve sdíleném okně, viz static/js/stahovani.js. */
   /* Zašedlá ikona stahování pro hosty a neověřené účty. */
-  #download-toggle.zakazano { opacity: .4; cursor: not-allowed; }
+  #download-toggle.zakazano, #print-toggle.zakazano { opacity: .4; cursor: not-allowed; }
 
 
   /* Shared fade behaviour for side UI groups */
@@ -778,6 +778,19 @@
               else ('Stahování je jen pro přihlášené uživatele' if guest
                     else 'Stahování bude dostupné po ověření e-mailové adresy') }}">
       <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
+    </button>
+  </div>
+
+  {# Tisk: totéž okno v režimu tisku (static/js/stahovani.js), stejná pravidla jako
+     stažení - hotové PDF prochází týmž exportem. #}
+  <div class="button-container" id="print-button">
+    <button onclick="otevriStahovani(event, 'tisk')" id="print-toggle"
+            {% if not smi_stahovat %}class="zakazano" aria-disabled="true"{% endif %}
+            data-napoveda="{{
+              'Vytisknout zpěvník' if smi_stahovat
+              else ('Tisk je jen pro přihlášené uživatele' if guest
+                    else 'Tisk bude dostupný po ověření e-mailové adresy') }}">
+      <img src="{{ static_bust('img/icons/print.svg') }}" alt="Tisk">
     </button>
   </div>
 </div>
@@ -1854,14 +1867,15 @@ const DUVOD_ZAKAZU = {{ ('Stahování je jen pro přihlášené uživatele' if g
 
 /* Okno s nastavením i se skládáním je ve sdíleném static/js/stahovani.js - stejné
    okno používá seznam v Mých zpěvnících a správa veřejných zpěvníků. */
-function otevriStahovani(event) {
+function otevriStahovani(event, rezim) {
   if (event) event.stopPropagation();
   if (!SMI_STAHOVAT) {
     // Rovnou důvod, ne okno s volbami, ze kterých žádná nezafunguje.
-    oznam(DUVOD_ZAKAZU, { druh: 'info', nadpis: 'Stažení není dostupné' });
+    oznam(DUVOD_ZAKAZU, { druh: 'info',
+                          nadpis: rezim === 'tisk' ? 'Tisk není dostupný' : 'Stažení není dostupné' });
     return;
   }
-  Stahovani.otevri(DOWNLOAD_BOOK_ID, SONGBOOK_TITLE);
+  Stahovani.otevri(DOWNLOAD_BOOK_ID, SONGBOOK_TITLE, rezim);
 }
 
 /* --- Automatické sjíždění v rolovacím módu ----------------------------------------

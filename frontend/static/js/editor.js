@@ -648,6 +648,9 @@
       }
     }
     hlasStav();
+    // Výměna obrázku jde přes výběr souboru mimo okno a nahrání doběhne samo - ani
+    // jedno nevyvolá událost, podle které okno obnovuje tlačítko Uložit.
+    if (nastaveni.poZmene) nastaveni.poZmene();
   }
 
   function hlasStav() {

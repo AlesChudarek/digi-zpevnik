@@ -29,6 +29,9 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       před uložením vyznačí neúplné strany. Strany se nahrávají hned (`/api/strany/nahrat`),
       uložení (`/api/zpevnik`) posílá jen strukturu; neuložené nahrávky se po dni uklidí.
       Hlídá `test_editor.py` (API) a `test_editor_ui.py` (prohlížeč).
+- [X] **Uložit se nerozsvítilo po pouhé výměně obrázku strany** (13. 10.). Výběr souboru
+      leží mimo okno, takže okno nedostalo událost, podle které tlačítko obnovuje; teď
+      editor hlásí každou změnu stavu nahrávání (`poZmene`). Hlídá `test_editor_ui.py`.
 - [X] ~~číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout~~
       — podle Aleše (13. 10.) to není problém
 - [X] **přidat písničku → nový zpěvník vytvořil prázdný zpěvník** — opraveno. Hledání ani
@@ -339,8 +342,9 @@ kdo maže.
       tiskový dialog neumí. Hotové PDF (`?tisk=1` → `inline`) jde do skrytého rámu
       a zavolá se na něm tisk; v okně zůstane odkaz „otevřete PDF“ pro prohlížeče, kde
       to nejde (telefony, Safari). Hlídá `test_export_ui.py`.
-- [ ] tisk i ve čtečce (zatím jen v nabídce dlaždice); a ověřit tisk ze skrytého
-      rámu v Safari a na telefonu
+- [X] tisk i ve čtečce — tlačítko pod stažením, stejná pravidla (host a neověřený
+      účet ho mají zašedlé)
+- [ ] ověřit tisk ze skrytého rámu v Safari a na telefonu
 - [X] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká —
       Aleš 13. 10.: takhle je to správně, nepředgenerovávat.
       Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
@@ -680,6 +684,10 @@ kdo maže.
 
 ## Provoz a bezpečnost
 
+- [X] **přihlašovací stránka (úvod na holé doméně) neměla favicon** (13. 10.) — záložka
+      zůstala bez ikony. Odkaz na ikonu byl jen v `dashboard_base.html`; teď je
+      v `_theme.html`, který mají všechny rámy stránek, a `/favicon.ico` na kořeni
+      domény ikonu vrací (prohlížeče se tam ptají samy). Hlídá `test_mobil.py`.
 - [X] nasadit na Oracle
 - [X] doména digizpevnik.cz a HTTPS (Caddy + Let's Encrypt, obnova sama)
 - [X] ověření e-mailu při registraci; stávající účty označeny za ověřené
@@ -760,4 +768,3 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-prihlasovaci uvodni stranka, ktera je na ciste domene nema favicon

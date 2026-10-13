@@ -141,7 +141,12 @@ def main():
         zkontroluj(html.headers.get("Cache-Control") == "no-cache",
                    "HTML odpovídá s no-cache, aby po nasazení nešla stará stránka",
                    str(html.headers.get("Cache-Control")))
-        html.read()
+        telo_loginu = html.read().decode("utf-8", "replace")
+        zkontroluj('rel="icon"' in telo_loginu,
+                   "přihlašovací stránka má ikonu (záložky na holé doméně)")
+        ikona = urllib.request.urlopen(base + "/favicon.ico", timeout=5)
+        zkontroluj(ikona.status == 200 and len(ikona.read()) > 100,
+                   "/favicon.ico na kořeni domény vrací ikonu")
         # Statické soubory posílá Flask sám a `no-cache` na nich měl už předtím;
         # tahle kontrola hlídá, že jim to `after_request` nepřepsal na něco jiného.
         # (Že by se daly cachovat natvrdo, když je `static_bust` verzuje adresou,
