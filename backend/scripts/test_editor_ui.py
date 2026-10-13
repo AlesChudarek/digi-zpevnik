@@ -59,6 +59,13 @@ def zkontroluj(podminka, popis, detail=""):
         selhani.append(popis)
 
 
+def akce(page, trida, zpevnik_id):
+    """Otevře nabídku Možnosti u dlaždice zpěvníku a klikne na položku."""
+    karta = page.locator(f'.songbook-card[data-book-id="{zpevnik_id}"]')
+    karta.locator(".akce-spoustec").click()
+    karta.locator(f".{trida}").click()
+
+
 def png(sirka):
     b = io.BytesIO()
     Image.new("RGB", (sirka, int(sirka * 2480 / 1748)), (200, 120, 40)).save(b, "PNG")
@@ -397,7 +404,7 @@ def main():
         page.wait_for_load_state("networkidle")
         with A.app.app_context():
             vlastni = A.Songbook.query.filter_by(title="Import z testu").first().id
-        page.click(f'.btn-share[data-book-id="{vlastni}"]')
+        akce(page, "btn-share", vlastni)
         zkontroluj(page.is_visible("#share-druh-spolecny")
                    and page.evaluate("document.querySelectorAll('input[name=\"share-druh\"]:checked').length") == 0
                    and page.is_disabled("#share-submit-btn"),
@@ -431,7 +438,7 @@ def main():
         zkontroluj(druhy.locator(f'.songbook-card .btn-edit[data-book-id="{vlastni}"]').count() == 1
                    and not druhy.is_visible(".pozvanky"),
                    "po přijetí má zpěvník mezi svými a pozvánka zmizí")
-        druhy.click(f'.btn-share[data-book-id="{vlastni}"]')
+        akce(druhy, "btn-share", vlastni)
         zkontroluj(druhy.is_visible("#share-druh-spolecny")
                    and druhy.is_disabled('#share-druh-spolecny input')
                    and EMAIL in druhy.inner_text("#share-proc-spolecny")
@@ -441,14 +448,13 @@ def main():
         druhy.click("#share-cancel-btn")
         druhy.on("dialog", lambda d: d.accept())
         pocet = druhy.locator(".songbook-card .btn-edit").count()
-        zkontroluj(druhy.locator(".songbook-card").first.locator(".icon-btn").count() == 5,
-                   "na dlaždici je pět ikon, mazání je koš")
+        zkontroluj(druhy.locator(".songbook-card").first.locator(".akce-polozka").count() == 5,
+                   "v nabídce dlaždice je pět položek")
         napoveda = (druhy.get_attribute(f'.btn-delete[data-book-id="{vlastni}"]', "data-clen"),
-                    druhy.evaluate("id => document.querySelector(`.btn-delete[data-book-id='${id}']`)"
-                                   ".closest('[data-napoveda]').dataset.napoveda", vlastni))
-        zkontroluj(napoveda[0] == "1" and "Odebrat ze svých zpěvníků" in napoveda[1],
-                   "u cizího společného zpěvníku koš říká, že se jen odebere", napoveda[1])
-        druhy.click(f'.btn-delete[data-book-id="{vlastni}"]')
+                    (druhy.text_content(f'.btn-delete[data-book-id="{vlastni}"]') or "").strip())
+        zkontroluj(napoveda == ("1", "Odebrat"),
+                   "u cizího společného zpěvníku položka říká Odebrat, ne Smazat", napoveda)
+        akce(druhy, "btn-delete", vlastni)
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         tlacitka = druhy.evaluate("[...document.querySelectorAll('#app-confirm-overlay button')]"
                                   ".filter(b => b.offsetParent).map(b => b.textContent.trim())")
@@ -474,10 +480,21 @@ def main():
         zkontroluj(len(pruhy) >= 2 and len({p["celkem"] for p in pruhy}) == 1
                    and all(p["tento"] <= p["celkem"] for p in pruhy),
                    "pruh místa: celkem u všech dlaždic stejně, podíl zpěvníku nikdy víc", pruhy)
+        poradi = "() => [...document.querySelectorAll('.songbook-card[draggable=true]')].map(k => k.dataset.bookId)"
+        pred = page.evaluate(poradi)
+        if len(pred) >= 2:
+            page.drag_and_drop(f'.songbook-card[data-book-id="{pred[-1]}"]',
+                               f'.songbook-card[data-book-id="{pred[0]}"]', target_position={"x": 5, "y": 60})
+            page.wait_for_timeout(400)
+            page.reload()
+            page.wait_for_load_state("networkidle")
+            zkontroluj(page.evaluate(poradi) == [pred[-1]] + pred[:-1],
+                       "přetažená dlaždice zůstane i po obnovení stránky na novém místě",
+                       f"{pred} → {page.evaluate(poradi)}")
         druhy.wait_for_timeout(1500)
         nacita = druhy.locator(".cover-preview.nacita").count()
         zkontroluj(nacita == 0, "po načtení žádná obálka nezůstane s kolečkem", nacita)
-        druhy.click(f'.btn-kopie[data-book-id="{vlastni}"]')
+        akce(druhy, "btn-kopie", vlastni)
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         with druhy.expect_navigation():
             druhy.click("#app-confirm-ok")
@@ -488,7 +505,7 @@ def main():
         # Vlastník v okně sdílení ukončí společné úpravy - člen dostane kopii a upozornění
         page.goto(base + "/my-songbooks")
         page.wait_for_load_state("networkidle")
-        page.click(f'.btn-share[data-book-id="{vlastni}"]')
+        akce(page, "btn-share", vlastni)
         page.wait_for_selector("#share-clenove:not([hidden])")
         zkontroluj(EMAIL4 in page.inner_text("#share-clenove"), "okno sdílení ukáže členy",
                    page.inner_text("#share-clenove"))
@@ -535,7 +552,7 @@ def main():
             page.goto(base + "/my-songbooks")
             page.wait_for_load_state("networkidle")
             zkontroluj(page.evaluate("document.documentElement.scrollWidth") <= sirka,
-                       f"{sirka} px: dlaždice s pěti ikonami stránku nerozšíří")
+                       f"{sirka} px: dlaždice s nabídkou Možnosti stránku nerozšíří")
             page.wait_for_load_state("networkidle")
 
         zkontroluj(not chyby, "žádná chyba JavaScriptu", chyby[:3])

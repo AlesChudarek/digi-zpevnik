@@ -93,24 +93,26 @@ TREFA = """(sel) => {
   return (t === b || b.contains(t)) ? 'ano' : 'překrývá .' + (t.className || t.tagName);
 }"""
 
-IKONY_DLAZDICE = """() => {
-  const akce = document.querySelector('.songbook-actions');
+# Otevře nabídku Možnosti u první dlaždice a změří ji. Položky musí být celé na
+# obrazovce, na jednom řádku a navrchu (ne pod dlaždicí o řádek níž).
+NABIDKA_DLAZDICE = """() => {
+  const akce = document.querySelector('.songbook-akce');
   if (!akce) return null;
-  const karta = akce.closest('.songbook-card');
-  const rk = karta.getBoundingClientRect();
-  const ikony = [...akce.querySelectorAll('.icon-btn')].map(e => {
-    const r = e.getBoundingClientRect();
-    return {x: Math.round(r.left), pravy: Math.round(r.right)};
+  const karta = akce.closest('.songbook-card'), rk = karta.getBoundingClientRect();
+  const spoustec = akce.querySelector('.akce-spoustec'), rs = spoustec.getBoundingClientRect();
+  if (akce.querySelector('.akce-nabidka').hidden) spoustec.click();
+  const polozky = [...akce.querySelectorAll('.akce-polozka')].map(e => {
+    const r = e.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const t = document.elementFromPoint(x, Math.min(y, window.innerHeight - 1));
+    return {l: r.left, p: r.right, v: Math.round(r.height),
+            navrchu: y > window.innerHeight || (t && (t === e || e.contains(t)))};
   });
-  return {karta: Math.round(rk.width),
-          pocet: ikony.length,
-          venku: ikony.filter(i => i.x < rk.left - 0.5 || i.pravy > rk.right + 0.5).length,
-          okraj: Math.round(Math.min(...[...akce.querySelectorAll('.icon-btn')].map(e => {
-            const r = e.getBoundingClientRect(); return Math.min(r.left - rk.left, rk.right - r.right); }))),
-          v_radcich: Object.values([...akce.querySelectorAll('.icon-btn')].reduce((m, e) => {
-            const t = Math.round(e.getBoundingClientRect().top); m[t] = (m[t] || 0) + 1; return m; }, {})),
-          radku: new Set([...akce.querySelectorAll('.icon-btn')]
-                         .map(e => Math.round(e.getBoundingClientRect().top))).size};
+  spoustec.click();
+  return {karta: Math.round(rk.width), pocet: polozky.length,
+          spoustec_venku: rs.left < rk.left - 0.5 || rs.right > rk.right + 0.5,
+          mimo_obrazovku: polozky.filter(i => i.l < 0 || i.p > window.innerWidth).length,
+          vyska: Math.max(...polozky.map(i => i.v)),
+          prekryte: polozky.filter(i => !i.navrchu).length};
 }"""
 
 
@@ -290,32 +292,21 @@ def main():
                 page.goto(base + "/my-songbooks")
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(600)
-                v = page.evaluate(IKONY_DLAZDICE)
-                zkontroluj(v is not None and v["venku"] == 0,
-                           f"{sirka} px: žádná ikona nepřečuhuje z dlaždice",
-                           f"dlaždice {v['karta']} px, {v['pocet']} ikon "
-                           f"na {v['radku']} řádcích" if v else "dlaždice nenalezena")
-                # Rozložení ikon je na všech šířkách stejné: 3 + 2. Průjezd po 10 px, protože
-                # dřív se podle šířky střídalo 5, 4 + 1 a 3 + 2 a pevné šířky to nechytily.
+                v = page.evaluate(NABIDKA_DLAZDICE)
+                zkontroluj(v is not None and not v["spoustec_venku"] and v["pocet"] == 5
+                           and not v["mimo_obrazovku"] and not v["prekryte"] and v["vyska"] < 44,
+                           f"{sirka} px: nabídka Možnosti má pět položek, celých, na jednom řádku a navrchu",
+                           str(v))
                 if sirka == SIRKY_TELEFONU[0]:
                     spatne = []
                     for s in range(320, 1281, 10):
                         page.set_viewport_size({"width": s, "height": 800})
-                        u = page.evaluate(IKONY_DLAZDICE)
-                        if not u or u["v_radcich"] != [3, 2] or u["okraj"] < 8:
-                            spatne.append((s, u and u["v_radcich"], u and u["okraj"]))
+                        u = page.evaluate(NABIDKA_DLAZDICE)
+                        if not u or u["spoustec_venku"] or u["mimo_obrazovku"] or u["vyska"] >= 44:
+                            spatne.append((s, u))
                     page.set_viewport_size({"width": sirka, "height": 800})
-                    zkontroluj(not spatne, "320-1280 px po 10 px: ikony vždy 3 + 2 a aspoň 8 px od kraje",
-                               str(spatne[:8]))
-                    # Obrázek v tlačítku musí být čtverec a uprostřed - výchozí padding
-                    # tlačítka ho jednou zdeformoval na 10 × 16 px.
-                    tvar = page.evaluate("""() => [...document.querySelectorAll('.songbook-actions .icon-btn')].map(btn => {
-                      const r = btn.getBoundingClientRect(), i = btn.querySelector('img').getBoundingClientRect();
-                      return {w: +i.width.toFixed(1), h: +i.height.toFixed(1), tlacitko: Math.round(r.width),
-                              posun: +Math.max(Math.abs(i.left + i.width / 2 - r.left - r.width / 2),
-                                               Math.abs(i.top + i.height / 2 - r.top - r.height / 2)).toFixed(1)}; })""")
-                    zkontroluj(all(abs(t["w"] - t["h"]) < 0.5 and t["posun"] < 0.6 and t["w"] >= 18 for t in tvar),
-                               f"{sirka} px: obrázky ikon jsou čtverce aspoň 18 px, uprostřed tlačítka", str(tvar[:1]))
+                    zkontroluj(not spatne, "320-1280 px po 10 px: nabídka vždy celá a položky na jednom řádku",
+                               str(spatne[:4]))
                 prekroceni = page.evaluate(
                     "() => document.documentElement.scrollWidth - window.innerWidth")
                 zkontroluj(prekroceni <= 0,

@@ -383,12 +383,13 @@ try:
         UserSongbookAccess,
         Pozvanka,
         Oznameni,
+        PoradiZpevniku,
         LoginAttempt,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -1449,6 +1450,7 @@ def smazat_ucet():
         db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
         db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
         db.session.query(Oznameni).filter_by(user_id=uid).delete()
+        db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
         logout_user()
         db.session.query(User).filter_by(id=uid).delete()
         db.session.commit()
@@ -1902,7 +1904,7 @@ def manage_public_songbooks():
         flash("Na správu veřejných zpěvníků nemáš právo.", "error")
         return redirect(url_for('public_songbooks'))
     books = db.session.execute(
-        db.select(Songbook).where(Songbook.is_public == 1)
+        db.select(Songbook).where(Songbook.is_public == 1).order_by(Songbook.id)
     ).scalars().all()
     return render_template(
         'my_songbooks.html',
@@ -1912,6 +1914,42 @@ def manage_public_songbooks():
         max_upload_mb=MAX_IMAGE_UPLOAD_MB,
         manage_public=True,
     )
+
+def serad_zpevniky(books, user):
+    """Pořadí dlaždic v Mých zpěvnících: nejdřív, jak si je uživatel přetáhl, zbytek
+    podle data založení (nejstarší první, nový tedy u dlaždice „Přidat zpěvník“).
+
+    Dřív se řadilo podle id jako textu - cizí sdílené zpěvníky vycházely podle čísla
+    účtu (`u10-` před `u2-`) a admin měl svůj nový zpěvník skoro na začátku.
+    Datum je v id (`u<účet>-<sekundy>`); starší id bez něj (`00101`) jdou na začátek.
+    """
+    ulozene = {r.songbook_id: r.poradi
+               for r in PoradiZpevniku.query.filter_by(user_id=user.id)}
+
+    def zalozeno(sb):
+        m = re.match(r'u\d+-(\d+)', sb.id)
+        return int(m.group(1)) if m else 0
+
+    return sorted(books, key=lambda sb: (sb.id not in ulozene, ulozene.get(sb.id, 0),
+                                         zalozeno(sb), sb.id))
+
+
+@app.route('/api/poradi-zpevniku', methods=['POST'])
+@login_required
+def uloz_poradi_zpevniku():
+    """Uloží pořadí dlaždic po přetažení. Posílá se celé, jak je na stránce."""
+    ids = (request.get_json(silent=True) or {}).get('ids')
+    if not isinstance(ids, list) or not all(isinstance(i, str) for i in ids):
+        return jsonify({"ok": False, "error": "Chybí seznam zpěvníků."}), 400
+    existujici = {sid for (sid,) in db.session.query(Songbook.id)
+                  .filter(Songbook.id.in_(ids))}
+    PoradiZpevniku.query.filter_by(user_id=current_user.id).delete()
+    for i, sid in enumerate(dict.fromkeys(ids)):
+        if sid in existujici:
+            db.session.add(PoradiZpevniku(user_id=current_user.id, songbook_id=sid, poradi=i))
+    db.session.commit()
+    return jsonify({"ok": True})
+
 
 @app.route('/my-songbooks')
 @login_required
@@ -1975,7 +2013,7 @@ def my_songbooks():
         shared_users_map[book_id] = filtered
     return render_template(
         'my_songbooks.html',
-        songbooks=books,
+        songbooks=serad_zpevniky(books, current_user),
         shared_users_map=shared_users_map,
         max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
         max_upload_mb=MAX_IMAGE_UPLOAD_MB,
@@ -2047,6 +2085,7 @@ def smaz_zpevnik(sb, co_se_stalo):
     UserSongbookAccess.query.filter_by(songbook_id=sb.id).delete()
     Pozvanka.query.filter_by(songbook_id=sb.id).delete()
     Oznameni.query.filter_by(songbook_id=sb.id).delete()
+    PoradiZpevniku.query.filter_by(songbook_id=sb.id).delete()
     koren = _koren_pro_zpevnik(sb)
     db.session.delete(sb)
     db.session.flush()

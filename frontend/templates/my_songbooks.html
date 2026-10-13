@@ -148,33 +148,39 @@
     max-width: 100%;
   }
 
-  /* `flex-wrap` je tu jako pojistka: na telefonu jsou dlaždice v mřížce od 130 px
-     a čtyři ikony po 36 px s mezerami potřebují 174 px, takže na užší obrazovce
-     přetekly ven z dlaždice. Naměřeno na 320 px: 33 px přes okraj. Teď se místo toho
-     zalomí na druhý řádek. */
-  /* Pět akcí vždycky ve dvou řádcích 3 + 2. Šířka kontejneru je přesně na tři ikony,
-     takže zalomení nezávisí na šířce dlaždice - dřív se podle ní střídalo 5, 4 + 1
-     a 3 + 2 a ikony se lepily ke krajům. */
-  .songbook-actions {
-    --ikona: 40px;
-    --mezera: 8px;
-    display: flex; flex-wrap: wrap; justify-content: center; gap: var(--mezera);
-    width: calc(3 * var(--ikona) + 2 * var(--mezera));
-    margin: 0 auto; padding: 10px 0 14px;
+  /* Akce zpěvníku: jedno tlačítko „Možnosti“ a pod ním nabídka. Nabídka leží přes
+     dlaždice pod sebou (position: absolute), takže se mřížka při otevření nehýbe. */
+  .songbook-akce { position: relative; margin-top: auto; padding: 4px 10px 10px; }
+  .akce-spoustec {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
+    background: var(--muted-bg, #e8f5e9); color: var(--brand-dark, #1b5e20);
+    border: none; border-radius: 8px; padding: 7px 10px; font: inherit; font-weight: 600;
+    font-size: 14px; cursor: pointer;
   }
-  /* padding: 0 je nutný: výchozí vnitřní okraj tlačítka (1 px × 6 px) zmenšoval
-     prostor pro obrázek nerovnoměrně a ikony vycházely zdeformované (10 × 16 px). */
-  .songbook-actions .icon-btn {
-    background: white; border: none; border-radius: 50%; width: var(--ikona); height: var(--ikona);
-    padding: 0; display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.25); cursor: pointer; transition: transform 0.2s;
+  .akce-spoustec:hover, .akce-spoustec[aria-expanded="true"] { filter: brightness(0.95); }
+  .akce-sipka { transition: transform 0.15s; }
+  .akce-spoustec[aria-expanded="true"] .akce-sipka { transform: rotate(180deg); }
+  .akce-nabidka {
+    position: absolute; left: 10px; right: 10px; top: calc(100% - 6px); z-index: 30;
+    display: flex; flex-direction: column; padding: 4px;
+    background: #fff; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
   }
-  .songbook-actions .icon-btn:hover { transform: scale(1.08); }
-  .songbook-actions .icon-btn img { width: calc(var(--ikona) * 0.55); height: calc(var(--ikona) * 0.55); display: block; }
-  /* Nejužší dlaždice bývá kolem 132 px (okna 450 a 600 px): 3 × 34 + 2 × 6 = 114. */
-  @media (max-width: 640px) {
-    .songbook-actions { --ikona: 34px; --mezera: 6px; }
+  .akce-nabidka[hidden] { display: none; }
+  .akce-polozka {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: none; border: none; border-radius: 6px; padding: 8px 10px;
+    font: inherit; font-size: 14px; font-weight: 600; text-align: left;
+    color: var(--brand-dark, #1b5e20); cursor: pointer;
   }
+  .akce-polozka:hover, .akce-polozka:focus-visible { background: var(--muted-bg, #e8f5e9); outline: none; }
+  .akce-polozka img { width: 18px; height: 18px; flex: none; }
+  .akce-polozka.akce-nevratna { color: #b42318; }
+  /* Otevřená nabídka musí ležet i přes dlaždice o řádek níž. */
+  .songbook-card.akce-otevrene { z-index: 25; }
+
+  /* Přetahování dlaždic (pořadí v Mých zpěvnících) */
+  .songbook-card[draggable="true"] { cursor: grab; }
+  .songbook-card.tazena { opacity: 0.4; transform: none; }
 
   .add-card { cursor: pointer; }
   .add-card .cover {
@@ -338,9 +344,11 @@
 {% endif %}
 
 <div class="grid-container">
-  {% for book in songbooks|sort(attribute='id') %}
-    <div class="songbook-card">
-      <a href="{{ url_for('songbook_detail', book_id=book.id) }}" style="text-decoration:none; color:inherit;">
+  {# Pořadí určuje server (serad_zpevniky); v Mých zpěvnících jde měnit přetažením. #}
+  {% set lze_radit = not manage_public and current_user.role != 'guest' %}
+  {% for book in songbooks %}
+    <div class="songbook-card" data-book-id="{{ book.id }}"{% if lze_radit %} draggable="true"{% endif %}>
+      <a href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" style="text-decoration:none; color:inherit;">
         <div class="cover-preview{% if book.img_path_cover_preview %} nacita{% endif %}" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
             {# Náhled se při prvním zobrazení teprve vyrábí (nová kopie, nová obálka) -
@@ -378,45 +386,36 @@
           </div>
         {% endif %}
       </a>
-      <div class="songbook-actions">
-        <span class="s-napovedou" data-napoveda="Upravit zpěvník">
-          <button class="icon-btn btn-edit" data-book-id="{{ book.id }}" onclick="event.preventDefault(); event.stopPropagation(); window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
-            <img src="{{ static_bust('img/icons/edit.svg') }}" alt="Upravit">
+      {# Akce v rozbalovací nabídce, ne jako řada ikon: s tiskem jich bude šest a dlaždice
+         by se natahovala donekonečna. Třídy btn-* drží obsluhu níž v JS. #}
+      {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
+      {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
+      <div class="songbook-akce">
+        <button type="button" class="akce-spoustec" aria-haspopup="menu" aria-expanded="false">
+          Možnosti <span class="akce-sipka" aria-hidden="true">▾</span>
+        </button>
+        <div class="akce-nabidka" role="menu" hidden>
+          <button type="button" role="menuitem" class="akce-polozka btn-edit" data-book-id="{{ book.id }}" onclick="window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
+            <img src="{{ static_bust('img/icons/edit.svg') }}" alt=""><span>Upravit</span>
           </button>
-        </span>
-        {% if not manage_public %}
-          {# Public songbooks are visible to everyone, so sharing is meaningless #}
-          <span class="s-napovedou" data-napoveda="Sdílet zpěvník">
-            <button class="icon-btn btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first) or '' }}" onclick="event.preventDefault(); event.stopPropagation();">
-              <img src="{{ static_bust('img/icons/share.svg') }}" alt="Sdílet">
+          {% if not manage_public %}
+            {# Veřejný zpěvník vidí všichni, sdílení ani kopie u něj nemají smysl. #}
+            <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first) or '' }}">
+              <img src="{{ static_bust('img/icons/share.svg') }}" alt=""><span>Sdílet</span>
             </button>
-          </span>
-        {% endif %}
-        {% if not manage_public %}
-          <span class="s-napovedou" data-napoveda="Duplikovat: samostatná kopie zpěvníku">
-            <button class="icon-btn btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
-              <img src="{{ static_bust('img/icons/clone.svg') }}" alt="Duplikovat">
+            <button type="button" role="menuitem" class="akce-polozka btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
+              <img src="{{ static_bust('img/icons/clone.svg') }}" alt=""><span>Duplikovat</span>
             </button>
-          </span>
-        {% endif %}
-        <span class="s-napovedou" data-napoveda="Stáhnout zpěvník">
-          <button class="icon-btn btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" onclick="event.preventDefault(); event.stopPropagation();">
-            <img src="{{ static_bust('img/icons/download.svg') }}" alt="Stáhnout">
+          {% endif %}
+          <button type="button" role="menuitem" class="akce-polozka btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
+            <img src="{{ static_bust('img/icons/download.svg') }}" alt=""><span>Stáhnout</span>
           </button>
-        </span>
-        {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
-        {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
-        {% if jsem_clen %}{% set co_kos = 'Odebrat ze svých zpěvníků – ostatním zůstane beze změny' %}
-        {% elif clenu %}{% set co_kos = 'Smazat zpěvník – ostatní dostanou jeho kopii' %}
-        {% else %}{% set co_kos = 'Smazat zpěvník' %}{% endif %}
-        <span class="s-napovedou" data-napoveda="{{ co_kos }}">
-          <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
+          <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
                   data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
-                  data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}"
-                  onclick="event.preventDefault(); event.stopPropagation();">
-            <img src="{{ static_bust('img/icons/bin.svg') }}" alt="{{ co_kos }}">
+                  data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
+            <img src="{{ static_bust('img/icons/bin.svg') }}" alt=""><span>{{ 'Odebrat' if jsem_clen else 'Smazat' }}</span>
           </button>
-        </span>
+        </div>
       </div>
     </div>
   {% endfor %}
@@ -1640,6 +1639,74 @@ function openCreateModal() {
         Stahovani.otevri(btn.dataset.bookId, btn.dataset.bookTitle || '');
       });
     });
+
+    /* Nabídka Možnosti u dlaždice. Otevřená je vždycky nanejvýš jedna; zavře ji klik
+       kamkoli jinam, Escape nebo výběr položky. */
+    function zavriNabidky(krome) {
+      document.querySelectorAll('.songbook-akce').forEach(akce => {
+        if (akce === krome) return;
+        akce.querySelector('.akce-nabidka').hidden = true;
+        akce.querySelector('.akce-spoustec').setAttribute('aria-expanded', 'false');
+        akce.closest('.songbook-card').classList.remove('akce-otevrene');
+      });
+    }
+    document.querySelectorAll('.songbook-akce').forEach(akce => {
+      const spoustec = akce.querySelector('.akce-spoustec');
+      const nabidka = akce.querySelector('.akce-nabidka');
+      spoustec.addEventListener('click', () => {
+        const otevrit = nabidka.hidden;
+        zavriNabidky(akce);
+        nabidka.hidden = !otevrit;
+        spoustec.setAttribute('aria-expanded', String(otevrit));
+        akce.closest('.songbook-card').classList.toggle('akce-otevrene', otevrit);
+        if (otevrit) nabidka.querySelector('.akce-polozka')?.focus();
+      });
+      nabidka.addEventListener('click', (e) => { if (e.target.closest('.akce-polozka')) zavriNabidky(); });
+    });
+    document.addEventListener('click', (e) => { if (!e.target.closest('.songbook-akce')) zavriNabidky(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') zavriNabidky(); });
+
+    /* Pořadí dlaždic přetažením. Ukládá se celé pořadí pro přihlášeného uživatele
+       (/api/poradi-zpevniku); u společného zpěvníku má každý své. */
+    (function () {
+      const mrizka = document.querySelector('.grid-container');
+      const karty = () => [...mrizka.querySelectorAll('.songbook-card[draggable="true"]')];
+      if (!mrizka || !karty().length) return;
+      let tazena = null, puvodni = '';
+      mrizka.addEventListener('dragstart', (e) => {
+        tazena = e.target.closest?.('.songbook-card[draggable="true"]');
+        if (!tazena) return;
+        zavriNabidky();
+        puvodni = karty().map(k => k.dataset.bookId).join(',');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', tazena.dataset.bookId);
+        requestAnimationFrame(() => tazena && tazena.classList.add('tazena'));
+      });
+      mrizka.addEventListener('dragover', (e) => {
+        if (!tazena) return;
+        e.preventDefault();
+        const cil = e.target.closest('.songbook-card[draggable="true"]');
+        if (!cil || cil === tazena) return;
+        const r = cil.getBoundingClientRect();
+        mrizka.insertBefore(tazena, e.clientX > r.left + r.width / 2 ? cil.nextSibling : cil);
+      });
+      mrizka.addEventListener('drop', (e) => { if (tazena) e.preventDefault(); });
+      mrizka.addEventListener('dragend', async () => {
+        if (!tazena) return;
+        tazena.classList.remove('tazena');
+        tazena = null;
+        const ids = karty().map(k => k.dataset.bookId);
+        if (ids.join(',') === puvodni) return;
+        try {
+          const res = await fetch('/api/poradi-zpevniku', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }) });
+          if (!res.ok) throw new Error();
+        } catch (_) {
+          oznam('Nové pořadí zůstane jen do obnovení stránky.', { nadpis: 'Pořadí se neuložilo' });
+        }
+      });
+    })();
 
     if (shareCancelBtn) {
       shareCancelBtn.addEventListener('click', (event) => {

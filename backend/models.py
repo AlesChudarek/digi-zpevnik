@@ -276,6 +276,18 @@ class Oznameni(db.Model):
     songbook = db.relationship("Songbook")
 
 
+class PoradiZpevniku(db.Model):
+    """Pořadí dlaždic v Mých zpěvnících, jak si je uživatel přetáhl. Každý má své,
+    i u společného zpěvníku. Zpěvník bez řádku (nový, nebo uživatel nikdy neřadil)
+    jde za seřazené podle data založení - viz `serad_zpevniky` v app.py."""
+
+    __tablename__ = "poradi_zpevniku"
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), primary_key=True)
+    poradi = db.Column(db.Integer, nullable=False)
+
+
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
 

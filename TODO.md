@@ -29,7 +29,8 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       před uložením vyznačí neúplné strany. Strany se nahrávají hned (`/api/strany/nahrat`),
       uložení (`/api/zpevnik`) posílá jen strukturu; neuložené nahrávky se po dni uklidí.
       Hlídá `test_editor.py` (API) a `test_editor_ui.py` (prohlížeč).
-- [ ] číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout
+- [X] ~~číslo strany ve spodním čtverečku je pouze pro písničky, pro non-song se nedá překliknout~~
+      — podle Aleše (13. 10.) to není problém
 - [X] **přidat písničku → nový zpěvník vytvořil prázdný zpěvník** — opraveno. Hledání ani
       čtečka id písně vůbec neposílaly; teď jde v `?pisen=` a okno se otevře rovnou s jejími
       stranami (`/api/pisen/<id>/strany`), píseň zamčená. Při opravě vyšly najevo dvě
@@ -37,13 +38,20 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       nevzniklých ovládacích prvcích barvy a prázdné `catch` to spolklo; a obnovení stránky
       po uložení by s parametry v adrese otevřelo okno znovu.
 
-- [ ] **pořadí zpěvníků v Mých zpěvnících** (13. 10.). Dnes se řadí podle id jako
-      textu: `u<účet>-<čas založení>`, takže vlastní zpěvníky vyjdou podle data založení,
-      ale cizí sdílené podle čísla účtu (a textově: `u10-` je před `u2-`); admin, který
-      vidí soukromé zpěvníky všech, má svůj nový zpěvník skoro na začátku. Nikdo to tak
-      nenavrhl. Chce to (a) rozumné výchozí pořadí nezávislé na tvaru id (třeba podle
-      data založení nebo abecedy) a (b) vlastní řazení přetahováním dlaždic, uložené
-      zvlášť pro každého uživatele (u společného zpěvníku má každý své pořadí).
+- [X] **pořadí zpěvníků v Mých zpěvnících** (13. 10.). Dřív se řadilo podle id jako
+      textu (`u10-` před `u2-`, admin měl nový zpěvník skoro na začátku). Teď
+      `serad_zpevniky`: nejdřív pořadí, které si uživatel přetáhl (tabulka
+      `poradi_zpevniku`, každý své, i u společného zpěvníku), zbytek podle data založení
+      z id, nejstarší první - nový zpěvník je tedy u „Přidat zpěvník“. Přetahování dlaždic
+      myší (HTML5 drag & drop, na dotyku zatím ne). Naše zpěvníky zůstávají podle čísla.
+      Hlídá `test_editor_ui.py` (přetažení přežije obnovení stránky).
+- [X] **akce zpěvníku v rozbalovací nabídce** (13. 10.). Dlaždice má jen obálku, název,
+      pruh místa a tlačítko „Možnosti ▾“; pod ním seznam Upravit / Sdílet / Duplikovat /
+      Stáhnout / Smazat (u cizího společného Odebrat). Dřív pět ikon 3 + 2 - s tiskem by
+      jich bylo šest a dlaždice by se dál natahovala. Totéž v Našich zpěvnících (tam bez
+      Sdílet a Duplikovat). `test_mobil.py` měří nabídku na 320-1280 px.
+- [ ] na dotyku se dlaždice přetáhnout nedají (HTML5 drag & drop telefon neumí) -
+      až budeme řešit mobil
 
 ## Datový model
 
@@ -213,7 +221,8 @@ kdo maže.
 - [X] nasadit úklid na server
 - [X] nasadit lepší rozlišení z archivu: 4 průhledné obálky (00011, 00015), 3 obálky bez
       průhlednosti (00016, 00026) a 36 vnitřních stran
-- [ ] **dodat průhledné obálky, kde chybí.** Změřeno 16. 9. 2026
+- [X] ~~**dodat průhledné obálky, kde chybí.**~~ Aleš 13. 10.: není potřeba, některé
+      obálky zprůhlednit prostě nejde. Změřeno 16. 9. 2026
       (`odebrat_prazdne_obalky.py`): barvu nejde měnit u 00026 a 00101. U 00101 mají
       všechny čtyři obálky alfa kanál, ale 0,0 % průhledných pixelů. Tři průhledné
       varianty pro něj leží v `~/Downloads/zpevnik-unikatni-obalky/`; čtvrtá (zadní
@@ -304,16 +313,27 @@ kdo maže.
       Ověřeno smířením DB proti disku: 1093 souborů a na každý něco z DB ukazuje, volně
       ležící soubor není ani jeden.
 - [X] velký check čtečka vs. PDF — `backend/scripts/kontrola_zpevniku.py`, pouští se kdykoliv
-- [ ] ZIP balí originály, takže po povýšení obálek v něm budou průhledné PNG bez barvy
+- [ ] **ZIP balí průhledné obálky bez barvy — opravit** (Aleš 13. 10.: určitě). ZIP balí
+      originály, takže průhledné PNG obálek v něm nemají barvu zpěvníku. Při balení
+      se musí podložit barevným pozadím, stejně jako v PDF.
+- [ ] (?) **po smazání zpěvníků zůstaly soubory obálek.** Lokálně 13. 10. hlásí
+      `kontrola_zpevniku` 15 souborů obálek ve složkách zpěvníků účtu 2
+      (`u2-1791879641` … `u2-1791882393`, založené 10:20-11:06 při zkoušení), které už
+      v DB nejsou, plus 2 neuložené strany. Strany uklidí `_uklid_neulozenych_stran`,
+      obálky nejspíš ne. Ověřit, jestli mazání kopie/duplikátu nenechává obálky na disku
+      (`smaz_zpevnik` → `smaz_osirele_obrazky`), a podívat se, jestli to je i na serveru.
 - [X] **exporty veřejných zpěvníků se z cache nevyhazují** — stažení veřejného zpěvníku
       má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
       změní klíč v názvu souboru. Strop se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
 - [ ] **tisk rovnou z webu**, bez stahování souboru (ze schránky 13. 10.). Okno stahování
       už umí recept „na tisk“ i brožuru; chybí cesta, která hotové PDF rovnou pošle do
-      tisku prohlížeče místo stažení. Rozmyslet, jestli tlačítko Tisknout v okně
-      stahování, nebo v čtečce.
-- [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká.
+      tisku prohlížeče místo stažení. Aleš zvažuje dvě podoby: (a) v okně stahování
+      volba poslat hotovou verzi rovnou na tisk, nebo (b) samostatná položka „Tisk“
+      v nabídce Možnosti s vlastním oknem - po navolení se PDF vygeneruje a pošle
+      do tisku. Nabídka u dlaždice je na šestou položku připravená.
+- [X] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká —
+      Aleš 13. 10.: takhle je to správně, nepředgenerovávat.
       Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
       zpěvníků × ~8 MB je zhruba 260 MB, takže by se muselo zvednout `EXPORTS_TOTAL_LIMIT_BYTES`
       z 500 MB (volného místa je 38 GB, takže to jde).
@@ -600,7 +620,8 @@ kdo maže.
       `--brand-dark` (text) a `.book-type` v hledání měl natvrdo `#607d8b`.
       Hlídá `backend/scripts/test_kontrast.py` — projde každý viditelný text proti
       jeho skutečnému pozadí ve všech dvanácti motivech na pěti obrazovkách.
-- [ ] **bílý text v liště je pod normou v devíti motivech.** `--brand-contrast` na
+- [X] **bílý text v liště je pod normou v devíti motivech.** Aleš 13. 10.: teď neřešit,
+      bere se jako hotové. `--brand-contrast` na
       `--brand`: Cyan 2,43 : 1, Teal 2,49, Emerald 2,54, Blue 2,57, Purple/Indigo/
       Rose/Pink podobně, Amber 3,30. Norma je 4,5 : 1. Spraví se to ztmavením
       `--brand` v každém motivu, ale je to zásah do vzhledu — a u Blue je `#00B0D5`
@@ -712,12 +733,21 @@ kdo maže.
       konkrétního zpěvníku. Háček: offline se uživatel nepřihlásí, takže by čtečka musela
       umět běžet z cache bez ověření session. Výrazně by tomu pomohly náhledové verze.
 
+## Velké projekty na později
 
+> Nezačínat, dokud nejsou hotové a odladěné úkoly výš. Zapsané, ať se na ně nezapomene.
 
-
-
-
-
-
+- [ ] **vlastní textově-grafický editor písní s akordy** (13. 10.). Dnes je píseň
+      obrázek strany (sken nebo nahraný soubor); editor by umožnil napsat text písně
+      přímo v aplikaci, umístit akordy nad slabiky a nechat z toho vysázet stranu,
+      která se vloží do zpěvníku stejně jako nahraná. Rozmyslet před začátkem:
+      - **formát uložení** — text s akordy v hranatých závorkách (ChordPro a podobné)
+        místo hotového obrázku, ať jde píseň později upravit, transponovat a přesázet;
+      - **sazba** — jak z textu vznikne strana: v prohlížeči, nebo na serveru stejnou
+        cestou jako export PDF; písmo, velikost, sloky/refrén, píseň přes víc stran;
+      - **napojení na model stran** (`docs/model-stran.md`) — strana s vysázenou písní
+        vs. strana s obrázkem, započítání do limitu místa, sdílení a kopie;
+      - **co navíc to umožní** — transpozice, hledání v textu písní, čtečka bez obrázků
+        (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
