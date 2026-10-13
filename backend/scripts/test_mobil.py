@@ -306,7 +306,16 @@ def main():
                             spatne.append((s, u and u["v_radcich"], u and u["okraj"]))
                     page.set_viewport_size({"width": sirka, "height": 800})
                     zkontroluj(not spatne, "320-1280 px po 10 px: ikony vždy 3 + 2 a aspoň 8 px od kraje",
-                               spatne[:5])
+                               str(spatne[:8]))
+                    # Obrázek v tlačítku musí být čtverec a uprostřed - výchozí padding
+                    # tlačítka ho jednou zdeformoval na 10 × 16 px.
+                    tvar = page.evaluate("""() => [...document.querySelectorAll('.songbook-actions .icon-btn')].map(btn => {
+                      const r = btn.getBoundingClientRect(), i = btn.querySelector('img').getBoundingClientRect();
+                      return {w: +i.width.toFixed(1), h: +i.height.toFixed(1), tlacitko: Math.round(r.width),
+                              posun: +Math.max(Math.abs(i.left + i.width / 2 - r.left - r.width / 2),
+                                               Math.abs(i.top + i.height / 2 - r.top - r.height / 2)).toFixed(1)}; })""")
+                    zkontroluj(all(abs(t["w"] - t["h"]) < 0.5 and t["posun"] < 0.6 and t["w"] >= 18 for t in tvar),
+                               f"{sirka} px: obrázky ikon jsou čtverce aspoň 18 px, uprostřed tlačítka", str(tvar[:1]))
                 prekroceni = page.evaluate(
                     "() => document.documentElement.scrollWidth - window.innerWidth")
                 zkontroluj(prekroceni <= 0,

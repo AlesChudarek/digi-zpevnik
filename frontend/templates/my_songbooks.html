@@ -139,23 +139,26 @@
      zalomí na druhý řádek. */
   /* Pět akcí vždycky ve dvou řádcích 3 + 2. Šířka kontejneru je přesně na tři ikony,
      takže zalomení nezávisí na šířce dlaždice - dřív se podle ní střídalo 5, 4 + 1
-     a 3 + 2 a ikony se lepily ke krajům. Nejužší dlaždice (141 px na 320px displeji)
-     nechá i tak kolem ikon okraj. */
+     a 3 + 2 a ikony se lepily ke krajům. */
   .songbook-actions {
-    --ikona: 36px;
+    --ikona: 40px;
     --mezera: 8px;
     display: flex; flex-wrap: wrap; justify-content: center; gap: var(--mezera);
     width: calc(3 * var(--ikona) + 2 * var(--mezera));
     margin: 0 auto; padding: 10px 0 14px;
   }
+  /* padding: 0 je nutný: výchozí vnitřní okraj tlačítka (1 px × 6 px) zmenšoval
+     prostor pro obrázek nerovnoměrně a ikony vycházely zdeformované (10 × 16 px). */
   .songbook-actions .icon-btn {
     background: white; border: none; border-radius: 50%; width: var(--ikona); height: var(--ikona);
+    padding: 0; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 2px 5px rgba(0,0,0,0.25); cursor: pointer; transition: transform 0.2s;
   }
   .songbook-actions .icon-btn:hover { transform: scale(1.08); }
-  .songbook-actions .icon-btn img { width: 56%; height: 56%; display: block; margin: auto; }
+  .songbook-actions .icon-btn img { width: calc(var(--ikona) * 0.55); height: calc(var(--ikona) * 0.55); display: block; }
+  /* Nejužší dlaždice bývá kolem 132 px (okna 450 a 600 px): 3 × 34 + 2 × 6 = 114. */
   @media (max-width: 640px) {
-    .songbook-actions { --ikona: 30px; }
+    .songbook-actions { --ikona: 34px; --mezera: 6px; }
   }
 
   .add-card { cursor: pointer; }
