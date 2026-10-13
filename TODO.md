@@ -43,10 +43,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       `serad_zpevniky`: nejdřív pořadí, které si uživatel přetáhl (tabulka
       `poradi_zpevniku`, každý své, i u společného zpěvníku), zbytek podle data založení
       z id, nejstarší první - nový zpěvník je tedy u „Přidat zpěvník“. Přetahování dlaždic
-      myší (HTML5 drag & drop, na dotyku zatím ne). Naše zpěvníky zůstávají podle čísla.
+      myší (HTML5 drag & drop, na dotyku zatím ne); ostatní dlaždice uhýbají plynule
+      (FLIP animace), ne skokem. Naše zpěvníky zůstávají podle čísla.
       Hlídá `test_editor_ui.py` (přetažení přežije obnovení stránky).
-- [X] **akce zpěvníku v rozbalovací nabídce** (13. 10.). Dlaždice má jen obálku, název,
-      pruh místa a tlačítko „Možnosti ▾“; pod ním seznam Upravit / Sdílet / Duplikovat /
+- [X] **akce zpěvníku v rozbalovací nabídce** (13. 10.). Dlaždice má jen obálku, název
+      se šipkou ▾ (tlačítko „Možnosti“ přes celou šířku Alešovi přišlo divné) a pruh
+      místa; pod šipkou seznam Upravit / Sdílet / Duplikovat /
       Stáhnout / Smazat (u cizího společného Odebrat). Dřív pět ikon 3 + 2 - s tiskem by
       jich bylo šest a dlaždice by se dál natahovala. Totéž v Našich zpěvnících (tam bez
       Sdílet a Duplikovat). `test_mobil.py` měří nabídku na 320-1280 px.
@@ -313,6 +315,9 @@ kdo maže.
       Ověřeno smířením DB proti disku: 1093 souborů a na každý něco z DB ukazuje, volně
       ležící soubor není ani jeden.
 - [X] velký check čtečka vs. PDF — `backend/scripts/kontrola_zpevniku.py`, pouští se kdykoliv
+- [X] **rozsah stran ve stahování odklikl obálku** — opraveno 13. 10. Bylo to schválně
+      (aby „3-4“ nevyšlo na 6 stran), ale působilo to jako chyba. Teď volba zůstane,
+      jmenuje se „obálka i strany“ a souhrn řekne „z toho 4 strany obálky“.
 - [X] **ZIP balil průhledné obálky bez barvy** — opraveno 13. 10. Obálka s průhledností
       se v `render_songbook_zip` podloží barvou zpěvníku a uloží jako PNG (bezztrátově),
       chybějící strana obálky je barevná plocha jako v PDF. Vnitřní strany dál originály.

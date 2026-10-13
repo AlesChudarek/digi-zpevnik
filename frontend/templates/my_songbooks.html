@@ -121,7 +121,7 @@
   .napoveda-bublina .owner-tag { font-weight: 400; opacity: 0.7; margin-left: 4px; }
   
   /* Pruh s místem, které zpěvník zabírá z limitu účtu */
-  .misto-zpevniku { height: 4px; margin: -4px 14px 6px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
+  .misto-zpevniku { height: 4px; margin: 0 14px 12px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
   /* Světlý pruh = obsazené místo celkem (u všech dlaždic stejný), tmavý = podíl tohoto
      zpěvníku, šedá = volné. Dřív byl jen podíl zpěvníku a dva zpěvníky po 50 % vypadaly,
      jako by se do každého vešlo ještě jednou tolik. */
@@ -150,18 +150,23 @@
 
   /* Akce zpěvníku: jedno tlačítko „Možnosti“ a pod ním nabídka. Nabídka leží přes
      dlaždice pod sebou (position: absolute), takže se mřížka při otevření nehýbe. */
-  .songbook-akce { position: relative; margin-top: auto; padding: 4px 10px 10px; }
-  .akce-spoustec {
-    width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px;
-    background: var(--muted-bg, #e8f5e9); color: var(--brand-dark, #1b5e20);
-    border: none; border-radius: 8px; padding: 7px 10px; font: inherit; font-weight: 600;
-    font-size: 14px; cursor: pointer;
+  /* Řádek s názvem: název (odkaz do čtečky) a vedle něj šipka s nabídkou akcí. */
+  .songbook-radek { display: flex; align-items: center; gap: 4px; margin: 8px 6px 8px 10px; }
+  .songbook-nazev {
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: var(--brand-dark, #1b5e20); text-decoration: none; text-align: left;
   }
-  .akce-spoustec:hover, .akce-spoustec[aria-expanded="true"] { filter: brightness(0.95); }
+  .songbook-akce { position: relative; flex: none; }
+  .akce-spoustec {
+    width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    background: none; color: var(--brand-dark, #1b5e20); border: none; border-radius: 50%;
+    padding: 0; font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
+  }
+  .akce-spoustec:hover, .akce-spoustec[aria-expanded="true"] { background: var(--muted-bg, #e8f5e9); }
   .akce-sipka { transition: transform 0.15s; }
   .akce-spoustec[aria-expanded="true"] .akce-sipka { transform: rotate(180deg); }
   .akce-nabidka {
-    position: absolute; left: 10px; right: 10px; top: calc(100% - 6px); z-index: 30;
+    position: absolute; right: 0; top: calc(100% + 2px); z-index: 30; width: max-content; min-width: 140px;
     display: flex; flex-direction: column; padding: 4px;
     background: #fff; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
   }
@@ -375,7 +380,41 @@
             </span>
           {% endif %}
         </div>
-        <p style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="{{ book.title }}">{{ book.title }}</p>
+      </a>
+      {# Akce v rozbalovací nabídce za šipkou u názvu, ne jako řada ikon: s tiskem jich
+         bude šest a dlaždice by se natahovala donekonečna. Třídy btn-* drží obsluhu v JS. #}
+      {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
+      {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
+      <div class="songbook-radek">
+        <a class="songbook-nazev" href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" title="{{ book.title }}">{{ book.title }}</a>
+        <div class="songbook-akce">
+          <button type="button" class="akce-spoustec" aria-haspopup="menu" aria-expanded="false" aria-label="Možnosti zpěvníku">
+            <span class="akce-sipka" aria-hidden="true">▾</span>
+          </button>
+          <div class="akce-nabidka" role="menu" hidden>
+            <button type="button" role="menuitem" class="akce-polozka btn-edit" data-book-id="{{ book.id }}" onclick="window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
+              <img src="{{ static_bust('img/icons/edit.svg') }}" alt=""><span>Upravit</span>
+            </button>
+            {% if not manage_public %}
+              {# Veřejný zpěvník vidí všichni, sdílení ani kopie u něj nemají smysl. #}
+              <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first) or '' }}">
+                <img src="{{ static_bust('img/icons/share.svg') }}" alt=""><span>Sdílet</span>
+              </button>
+              <button type="button" role="menuitem" class="akce-polozka btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
+                <img src="{{ static_bust('img/icons/clone.svg') }}" alt=""><span>Duplikovat</span>
+              </button>
+            {% endif %}
+            <button type="button" role="menuitem" class="akce-polozka btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
+              <img src="{{ static_bust('img/icons/download.svg') }}" alt=""><span>Stáhnout</span>
+            </button>
+            <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
+                    data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
+                    data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
+              <img src="{{ static_bust('img/icons/bin.svg') }}" alt=""><span>{{ 'Odebrat' if jsem_clen else 'Smazat' }}</span>
+            </button>
+          </div>
+        </div>
+      </div>
         {% set misto_z = misto_zpevniku(book) %}
         {% if misto_z %}
           {# Kolik místa zpěvník zabírá: pruh, ne megabajty - ty lidem nic neřeknou. #}
@@ -385,38 +424,6 @@
             <span class="tento" style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
           </div>
         {% endif %}
-      </a>
-      {# Akce v rozbalovací nabídce, ne jako řada ikon: s tiskem jich bude šest a dlaždice
-         by se natahovala donekonečna. Třídy btn-* drží obsluhu níž v JS. #}
-      {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
-      {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
-      <div class="songbook-akce">
-        <button type="button" class="akce-spoustec" aria-haspopup="menu" aria-expanded="false">
-          Možnosti <span class="akce-sipka" aria-hidden="true">▾</span>
-        </button>
-        <div class="akce-nabidka" role="menu" hidden>
-          <button type="button" role="menuitem" class="akce-polozka btn-edit" data-book-id="{{ book.id }}" onclick="window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
-            <img src="{{ static_bust('img/icons/edit.svg') }}" alt=""><span>Upravit</span>
-          </button>
-          {% if not manage_public %}
-            {# Veřejný zpěvník vidí všichni, sdílení ani kopie u něj nemají smysl. #}
-            <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first) or '' }}">
-              <img src="{{ static_bust('img/icons/share.svg') }}" alt=""><span>Sdílet</span>
-            </button>
-            <button type="button" role="menuitem" class="akce-polozka btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
-              <img src="{{ static_bust('img/icons/clone.svg') }}" alt=""><span>Duplikovat</span>
-            </button>
-          {% endif %}
-          <button type="button" role="menuitem" class="akce-polozka btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
-            <img src="{{ static_bust('img/icons/download.svg') }}" alt=""><span>Stáhnout</span>
-          </button>
-          <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
-                  data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
-                  data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
-            <img src="{{ static_bust('img/icons/bin.svg') }}" alt=""><span>{{ 'Odebrat' if jsem_clen else 'Smazat' }}</span>
-          </button>
-        </div>
-      </div>
     </div>
   {% endfor %}
 
@@ -1659,7 +1666,14 @@ function openCreateModal() {
         nabidka.hidden = !otevrit;
         spoustec.setAttribute('aria-expanded', String(otevrit));
         akce.closest('.songbook-card').classList.toggle('akce-otevrene', otevrit);
-        if (otevrit) nabidka.querySelector('.akce-polozka')?.focus();
+        if (otevrit) {
+          // Nabídka je širší než úzká dlaždice: u kraje obrazovky ji posunout dovnitř.
+          nabidka.style.right = '';
+          const r = nabidka.getBoundingClientRect(), okraj = 8;
+          if (r.left < okraj) nabidka.style.right = `${r.left - okraj}px`;
+          else if (r.right > window.innerWidth - okraj) nabidka.style.right = `${r.right - window.innerWidth + okraj}px`;
+          nabidka.querySelector('.akce-polozka')?.focus();
+        }
       });
       nabidka.addEventListener('click', (e) => { if (e.target.closest('.akce-polozka')) zavriNabidky(); });
     });
@@ -1682,13 +1696,31 @@ function openCreateModal() {
         e.dataTransfer.setData('text/plain', tazena.dataset.bookId);
         requestAnimationFrame(() => tazena && tazena.classList.add('tazena'));
       });
+      /* Dlaždice uhýbají plynule (FLIP): zapamatovat polohy, přesunout v DOM a každou
+         odsunout zpátky transformací, která pak doběhne do nuly. Dlaždice, která se
+         ještě hýbe, se za cíl nebere - jinak by se pod kurzorem přehazovala tam a zpět. */
+      const vPohybu = new Set();
+      function presun(pred) {
+        const polohy = new Map(karty().map(k => [k, k.getBoundingClientRect()]));
+        mrizka.insertBefore(tazena, pred);
+        polohy.forEach((r, k) => {
+          const n = k.getBoundingClientRect(), dx = r.left - n.left, dy = r.top - n.top;
+          if (!dx && !dy) return;
+          vPohybu.add(k);
+          const anim = k.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }],
+                                 { duration: 220, easing: 'cubic-bezier(.2,.7,.3,1)' });
+          anim.onfinish = anim.oncancel = () => vPohybu.delete(k);
+        });
+      }
       mrizka.addEventListener('dragover', (e) => {
         if (!tazena) return;
         e.preventDefault();
         const cil = e.target.closest('.songbook-card[draggable="true"]');
-        if (!cil || cil === tazena) return;
+        if (!cil || cil === tazena || vPohybu.has(cil)) return;
         const r = cil.getBoundingClientRect();
-        mrizka.insertBefore(tazena, e.clientX > r.left + r.width / 2 ? cil.nextSibling : cil);
+        const pred = e.clientX > r.left + r.width / 2 ? cil.nextElementSibling : cil;
+        if (pred === tazena || pred === tazena.nextElementSibling) return;
+        presun(pred);
       });
       mrizka.addEventListener('drop', (e) => { if (tazena) e.preventDefault(); });
       mrizka.addEventListener('dragend', async () => {

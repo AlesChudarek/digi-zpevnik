@@ -68,7 +68,6 @@ window.Stahovani = (function () {
   let bezi = null;          // klíč běhu, na který se zrovna ptáme
   let zpevnik = null;       // id zpěvníku, se kterým je okno otevřené
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
-  let melRozsah = false;    // bylo pole s rozsahem stran vyplněné při minulé změně?
 
   /* ---------- stavba okna ---------- */
 
@@ -133,7 +132,7 @@ window.Stahovani = (function () {
               {hodnota: 'high', popisek: 'plné rozlišení'},
             ], 'kvalita')}
             ${poleVolby('obsah', 'Části', [
-              {hodnota: 'vse', popisek: 'vše', vychozi: true},
+              {hodnota: 'vse', popisek: 'obálka i strany', vychozi: true},
               {hodnota: 'jen-obsah', popisek: 'jen strany'},
               {hodnota: 'jen-obalka', popisek: 'jen obálka'},
             ], 'obsah')}
@@ -244,7 +243,7 @@ window.Stahovani = (function () {
     okno.nastaveni.addEventListener('change', zmenaVyberu);
     // `change` u textového pole přijde až při opuštění, to je na živý souhrn pozdě.
     okno.nastaveni.addEventListener('input', (e) => {
-      if (e.target.type === 'text') { srovnejPodleRozsahu(); obnovStav(); }
+      if (e.target.type === 'text') obnovStav();
     });
     // Seznam zbylých písní se staví za běhu a je to HTML, takže se do atributu
     // nevejde a sdílený modul se o něj poprosí ručně. Na dotykové obrazovce najetí
@@ -308,21 +307,6 @@ window.Stahovani = (function () {
     const dvojice = Object.keys(parametry).sort()
       .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(parametry[k])}`);
     return dvojice.length ? '?' + dvojice.join('&') : '';
-  }
-
-  /* Kdo si vypíše strany, myslí tím ty strany - ne je i s celou obálkou. Bez tohohle
-     zadal někdo „3-4" a dole mu naskočilo „vyjde na 6 stran", protože čtyři strany
-     obálky zůstaly. Přepíná se jen ve chvíli, kdy se pole poprvé vyplní, takže kdo si
-     obálku vrátí, o ni znovu nepřijde. */
-  function srovnejPodleRozsahu() {
-    const pole = okno.zaclona.querySelector('#stahovani-strany');
-    const maRozsah = pole.value.trim() !== '';
-    if (maRozsah && !melRozsah && hodnota('obsah') === 'vse') {
-      const bezObalky = okno.zaclona.querySelector(
-        'input[name="obsah"][value="jen-obsah"]');
-      if (bezObalky) { bezObalky.checked = true; zmenaVyberu(); }
-    }
-    melRozsah = maRozsah;
   }
 
   /* Kombinace, které projdou, ale výsledek nebude ten, co člověk čeká. Nezakazují se -
@@ -509,7 +493,6 @@ window.Stahovani = (function () {
     o.zaclona.querySelector('#stahovani-strany').value = '';
     const vseObsah = o.zaclona.querySelector('input[name="obsah"][value="vse"]');
     if (vseObsah) vseObsah.checked = true;
-    melRozsah = false;
     o.souhrn.classList.remove('stahovani-chyba');
     o.zaclona.hidden = false;
     zmenaVyberu();

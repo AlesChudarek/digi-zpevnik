@@ -227,8 +227,8 @@ def main():
             page.wait_for_timeout(800)
 
             print("\n── rozsah stran ──")
-            # Zpátky na celý zpěvník: kdo si výslovně zvolil „jen obálku", o ni přijít
-            # nemá, takže se rozsah do volby obsahu plete jen z výchozího stavu.
+            # Rozsah stran s volbou „obálka i strany" obálku nechá - dřív ji odklikl
+            # a Aleš (13. 10.) to bral jako chybu: obálka mu ze stažení zmizela.
             page.evaluate("() => document.querySelector("
                           "     'input[name=obsah][value=vse]').click()")
             page.wait_for_timeout(700)
@@ -239,9 +239,13 @@ def main():
             rozsah = page.evaluate("""() => ({
               souhrn: document.getElementById('stahovani-souhrn').textContent,
               obsah: document.querySelector('input[name=obsah]:checked').value})""")
-            zkontroluj(rozsah["obsah"] == "jen-obsah",
-                       "vyplnění rozsahu odklikne obálku, ať nevyjde víc stran, než kdo zadal",
-                       rozsah["obsah"])
+            zkontroluj(rozsah["obsah"] == "vse" and "obálky" in rozsah["souhrn"],
+                       "vyplnění rozsahu obálku neodklikne, v souhrnu je", str(rozsah))
+            page.evaluate("() => document.querySelector("
+                          "     'input[name=obsah][value=\"jen-obsah\"]').click()")
+            page.wait_for_timeout(1000)
+            rozsah = page.evaluate("""() => ({
+              souhrn: document.getElementById('stahovani-souhrn').textContent})""")
             zkontroluj("2 strany" in rozsah["souhrn"],
                        "rozsah 3-4 vyjde na dvě strany", rozsah["souhrn"])
             pisne = page.evaluate("""() => ({
@@ -256,18 +260,6 @@ def main():
                 "obě, když jsou jen dvě")
             zkontroluj(not pisne["ma_dalsi"],
                        "u dvou písní není co schovávat pod „a dalších“")
-
-            # Ale jen z výchozího stavu. Kdo si obálku vrátí, o ni znovu nepřijde.
-            page.evaluate("() => document.querySelector("
-                          "     'input[name=obsah][value=vse]').click()")
-            page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
-                          "        e.value = '3-5';"
-                          "        e.dispatchEvent(new Event('input', {bubbles: true})); }")
-            page.wait_for_timeout(900)
-            zkontroluj(page.evaluate(
-                       "() => document.querySelector('input[name=obsah]:checked').value")
-                       == "vse",
-                       "ale výslovnou volbu obsahu už nepřepíše")
 
             page.evaluate("() => { const e = document.getElementById('stahovani-strany');"
                           "        e.value = '31-24';"
