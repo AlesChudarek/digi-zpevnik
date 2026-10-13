@@ -361,44 +361,6 @@
     z-index: 4000;
   }
 
-  #app-confirm-overlay .panel {
-    background: var(--muted-bg, #fff);
-    color: var(--brand-dark, #1b5e20);
-    border-radius: 12px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-    padding: 16px;
-    width: min(420px, 92vw);
-  }
-
-  #app-confirm-overlay .panel h3 {
-    margin: 0 0 8px;
-    font-size: 18px;
-  }
-
-  #app-confirm-overlay .panel p {
-    margin: 0 0 12px;
-  }
-
-  #app-confirm-overlay .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-
-  #app-confirm-overlay .btn {
-    background: white;
-    color: var(--brand-dark, #1b5e20);
-    border: 1px solid var(--muted-border, #cfe6d3);
-    padding: 8px 12px;
-    border-radius: 10px;
-    cursor: pointer;
-    font-weight: 600;
-  }
-
-  #app-confirm-overlay .btn.primary {
-    background: var(--muted-bg, #e8f5e9);
-    border-color: var(--muted-border, #a7d7b0);
-  }
 </style>
 
 <style>
@@ -778,7 +740,7 @@
   </div>
 
 <div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="panel">
+  <div class="panel okno">
     <h3>Potvrzení</h3>
     <p id="app-confirm-message">Opravdu provést akci?</p>
     <div class="actions">
@@ -908,8 +870,9 @@
         msgEl.textContent = message || 'Potvrdit akci?';
         btnOk.textContent = okText || 'Pokračovat';
         if (btnSave) btnSave.style.display = 'none';
-        btnOk.classList.remove('primary');
-        btnCancel.classList.add('primary');
+        // Zvýrazněná je akce, o kterou jde, ne Zrušit
+        btnCancel.classList.remove('primary');
+        btnOk.classList.add('primary');
         overlay.style.display = 'flex';
         overlay.setAttribute('aria-hidden', 'false');
 

@@ -158,11 +158,12 @@
 /* Dialog importu PDF a ZIP. Leží na <body> nad oknem zpěvníku. */
 .es-import { position: fixed; inset: 0; z-index: 4500; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .es-import[hidden] { display: none; }
-.es-import-okno { box-sizing: border-box; width: min(460px, 100%); background: #fff; color: var(--brand-dark, #1b5e20); border-radius: 12px; padding: 18px 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); display: flex; flex-direction: column; gap: 12px; }
+/* Barvy a tlačítka ze společného stylu oken (css/okna.css, třída okno). */
+.es-import-okno { width: min(460px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .es-import-okno h3 { margin: 0; overflow-wrap: anywhere; }
 .es-import-volba { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 14px; }
-.es-import-volba input[type="text"], .es-import-volba select { flex: 1 1 160px; min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); background: #fff; color: var(--brand-dark, #1b5e20); }
-.es-import-chyba { margin: 0; font-size: 13px; color: #b3261e; }
+.es-import-volba input[type="text"], .es-import-volba select { flex: 1 1 160px; min-width: 0; }
+.es-import-chyba { margin: 0; font-size: 13px; color: var(--panel-error, #b3261e); }
 .es-import-chyba[hidden] { display: none; }
 .es-import-akce { display: flex; justify-content: flex-end; gap: 10px; }
 

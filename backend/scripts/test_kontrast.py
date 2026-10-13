@@ -165,6 +165,17 @@ def main():
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(600)
                 vysl += page.evaluate(AUDIT, "moje zpěvníky")
+                # Vyskakovací okna (css/okna.css): sdílení a potvrzení
+                if page.locator(".btn-share").count():
+                    page.evaluate("() => document.querySelector('.btn-share').click()")
+                    page.wait_for_timeout(700)
+                    vysl += page.evaluate(AUDIT, "okno sdílení")
+                    page.evaluate("() => document.getElementById('share-cancel-btn').click()")
+                page.evaluate("() => { window.showConfirm('Smazat zpěvník? Smazání nejde vrátit.', 'Smazat', { nebezpecne: true }); }")
+                page.wait_for_timeout(300)
+                vysl += page.evaluate(AUDIT, "potvrzení")
+                page.evaluate("() => document.getElementById('app-confirm-cancel').click()")
+                page.wait_for_timeout(200)
                 page.evaluate("() => document.querySelector('.btn-edit').click()")
                 page.wait_for_timeout(2200)
                 vysl += page.evaluate(AUDIT, "editor zpěvníku")

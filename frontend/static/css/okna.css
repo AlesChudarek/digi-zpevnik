@@ -1,0 +1,77 @@
+/* Společný vzhled vyskakovacích oken (potvrzení, sdílení, import…), podle okna
+   stahování (css/stahovani.css). Načítá se v dashboard_base, takže platí všude.
+
+   Panel stojí na proměnných --panel-*: ve světlých motivech je bílý, v tmavém tmavý.
+   Hlavní tlačítko je plné v barvě --brand-dark s bílým textem, vedlejší tiché šedé,
+   nevratná akce (Smazat, Zahodit) červená. Dřív měla okna barevné pozadí --muted-bg
+   a hlavní tlačítko se zvýrazňovalo bílou výplní - obrácené, a potvrzení navíc
+   zvýrazňovalo Zrušit místo akce, o kterou jde.
+
+   Použití: panelu okna třída `okno`; tlačítka `.btn`, hlavní `.btn.primary`,
+   nevratné `.btn.nebezpecne`. */
+
+.okno {
+  background: var(--panel-bg, #fff);
+  color: var(--panel-text, #222);
+  border-radius: 14px;
+  padding: 22px 24px;
+  width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+  text-align: left;
+}
+.okno h2, .okno h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: inherit; }
+.okno p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; color: inherit; }
+.okno label { color: inherit; }
+.okno .actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+.okno .btn {
+  background: var(--panel-btn-bg, #f0f0f0);
+  color: var(--panel-btn-text, #333);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 400;
+  font-family: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.okno .btn:hover { background: var(--panel-btn-hover, #e2e2e2); }
+/* --brand-dark, ne --brand-strong: je tmavý ve všech motivech, bílý text na něm drží. */
+.okno .btn.primary {
+  background: var(--brand-dark, #1b5e20);
+  color: #fff;
+  font-weight: 600;
+  padding: 10px 20px;
+  font-size: 15px;
+}
+.okno .btn.primary:hover { background: var(--brand-dark, #1b5e20); filter: brightness(1.25); }
+.okno .btn.nebezpecne { background: #b3261e; color: #fff; font-weight: 600; padding: 10px 20px; font-size: 15px; }
+.okno .btn.nebezpecne:hover { background: #b3261e; filter: brightness(1.15); }
+.okno .btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+
+.okno input[type="text"], .okno input[type="email"], .okno input[type="number"], .okno select {
+  background: var(--panel-btn-bg, #f0f0f0);
+  color: var(--panel-text, #222);
+  border: 1px solid var(--panel-border, #ddd);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 15px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.okno input:focus, .okno select:focus { outline: 2px solid var(--panel-text, #222); outline-offset: 1px; }
+
+.okno .chyba-okna, .okno .feedback.error { color: var(--panel-error, #b3261e); }
+.okno .uspech-okna, .okno .feedback.success { color: var(--panel-text, #222); font-weight: 600; }
+.okno .tlumene { color: var(--panel-muted, #666); }
+
+/* V tmavém motivu je --brand-dark skoro stejně tmavý jako panel (15,23,42 na 22,28,43)
+   a hlavní tlačítko s oknem splývalo - text čitelný, tlačítko neviditelné. Tam je proto
+   světlé s tmavým textem. */
+html.theme-dark .okno .btn.primary,
+html.theme-dark .okno .btn.primary:hover {
+  background: var(--panel-text, #e6eaf2);
+  color: var(--panel-bg, #161c2b);
+}

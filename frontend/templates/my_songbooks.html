@@ -184,58 +184,43 @@
      (4050), dialogem importu (4500) a zvětšeným náhledem (5000). Se 4000 zůstávalo
      pod oknem sdílení a nedalo se na něj kliknout. */
   #app-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 6000; }
-  #app-confirm-overlay .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 16px; width: min(420px, 92vw); }
-  #app-confirm-overlay .panel h3 { margin: 0 0 8px; font-size: 18px; }
-  #app-confirm-overlay .panel p { margin: 0 0 12px; }
-  #app-confirm-overlay .actions { display: flex; justify-content: flex-end; gap: 10px; }
-  #app-confirm-overlay .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 8px 12px; border-radius: 10px; cursor: pointer; font-weight: 600; }
-  #app-confirm-overlay .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
 </style>
 
 <style>
   #share-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4050; }
-  #share-modal .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 18px 20px; width: min(420px, 92vw); display: flex; flex-direction: column; gap: 10px; }
-  #share-modal .panel h3 { margin: 0; font-size: 18px; }
+  #share-modal .panel { display: flex; flex-direction: column; gap: 10px; }
+  #share-modal .panel h3 { margin: 0; }
   #share-modal label { font-weight: 600; font-size: 14px; }
-  #share-modal input[type="email"] { padding: 9px 10px; border-radius: 8px; border: 1px solid var(--muted-border, #dbeadf); font-size: 15px; }
-  #share-modal input[type="email"]:focus { outline: 2px solid rgba(46,125,50,0.25); outline-offset: 1px; }
   /* Dvě karty s volbou místo přepínačů: u každé je vidět, co se stane. Žádná není
      předem vybraná - výchozí „Poslat kopii“ lidi mátlo, že se nic nevybírá. */
   #share-modal .share-volby { display: flex; flex-direction: column; gap: 8px; }
   #share-modal .share-volba { display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: start;
-                              padding: 10px 12px; border: 2px solid var(--muted-border, #dbeadf); border-radius: 10px;
-                              background: #fff; cursor: pointer; font-weight: 400; }
+                              padding: 10px 12px; border: 2px solid var(--panel-border, #ddd); border-radius: 10px;
+                              background: transparent; cursor: pointer; font-weight: 400; }
   #share-modal .share-volba[hidden] { display: none; }
   #share-modal .share-volba.nedostupna { opacity: 0.55; cursor: not-allowed; }
   #share-modal .share-volba-proc { grid-column: 2; font-size: 13px; font-style: italic; }
   #share-modal .share-volba-proc[hidden] { display: none; }
   #share-modal .share-volba input { grid-row: 1 / 3; margin-top: 3px; }
   #share-modal .share-volba-nadpis { font-weight: 700; }
-  #share-modal .share-volba-popis { font-size: 13px; }
-  #share-modal .share-volba:has(input:checked) { border-color: var(--brand-strong, #2E7D32); }
+  #share-modal .share-volba-popis { font-size: 13px; color: var(--panel-muted, #666); }
+  #share-modal .share-volba:has(input:checked) { border-color: var(--panel-text, #222); }
   #share-modal .share-poznamka { margin: 0; font-size: 13px; }
   #share-modal .share-clenove { font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
   #share-modal .share-clenove[hidden] { display: none; }
   #share-modal .share-clen { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   #share-modal .share-clen button { padding: 5px 9px; font-size: 13px; }
   #share-modal .feedback { min-height: 20px; font-size: 14px; }
-  #share-modal .feedback.error { color: #b00020; }
-  #share-modal .feedback.success { color: var(--brand-strong, #2E7D32); }
   #share-modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
 </style>
 
 <style>
   #image-resize-notice { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 4075; }
-  #image-resize-notice .panel { background: var(--muted-bg, #fff); color: var(--brand-dark, #1b5e20); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 18px 22px; width: min(420px, 92vw); }
-  #image-resize-notice h3 { margin: 0 0 8px; font-size: 18px; }
-  #image-resize-notice p { margin: 0 0 12px; font-size: 14px; line-height: 1.4; }
   #image-resize-notice label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; user-select: none; }
-  #image-resize-notice .actions { display: flex; justify-content: flex-end; margin-top: 14px; }
-  #resize-notice-ok { background: #fff !important; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #dbeadf); }
 </style>
 
 <div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="panel">
+  <div class="panel okno">
     <h3>Potvrzení</h3>
     <p id="app-confirm-message">Opravdu provést akci?</p>
     <div class="actions">
@@ -248,7 +233,7 @@
 </div>
 
 <div id="share-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="share-nadpis">
-  <div class="panel" role="document">
+  <div class="panel okno" role="document">
     <h3 id="share-nadpis">Sdílet „<span id="share-modal-book-title"></span>“</h3>
     <label for="share-email-input">Komu</label>
     <input type="email" id="share-email-input" placeholder="e-mail, např. petr@example.com" autocomplete="email">
@@ -276,7 +261,7 @@
 </div>
 
 <div id="image-resize-notice" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="panel" role="document">
+  <div class="panel okno" role="document">
     <h3>Velký obrázek</h3>
     <p>Tento obrázek má více než {{ "{:.1f}".format(upload_limit_mb) }}&nbsp;MB. Automaticky ho zmenšíme, aby nezabral zbytečně moc místa.</p>
     <label><input type="checkbox" id="resize-notice-hide"> Příště už nezobrazovat</label>
@@ -533,7 +518,9 @@
 
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
-  .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
+  /* Hlavní tlačítko jako v oknech (css/okna.css): plné v barvě motivu, bílý text. */
+  .btn.primary { background: var(--brand-dark, #1b5e20); border-color: var(--brand-dark, #1b5e20); color: #fff; }
+  .btn.primary:hover { filter: brightness(1.25); }
   .btn[disabled] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
   .btn-spinner { width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(27,94,32,0.25); border-top-color: var(--brand-strong, #2E7D32); animation: btn-spin 0.8s linear infinite; display: inline-block; visibility: hidden; opacity: 0; transition: opacity 0.2s ease; flex-shrink: 0; }
   .btn-spinner.active { visibility: visible; opacity: 1; }
@@ -692,7 +679,7 @@
 </div>
 
 <div class="es-import" id="es-import" hidden role="dialog" aria-modal="true" aria-labelledby="es-import-nadpis">
-  <div class="es-import-okno">
+  <div class="es-import-okno okno">
     <h3 id="es-import-nadpis"></h3>
     <label class="es-import-volba"><input type="radio" name="es-rozsah" value="vse" checked> Přidat všechny strany</label>
     <label class="es-import-volba"><input type="radio" name="es-rozsah" value="vyber"> Jen strany
@@ -715,8 +702,6 @@
 <!-- Styly sdílené okny zpěvníku -->
 <style>
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
-  .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
-  .btn.primary { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #a7d7b0); }
 
   /* Phone layout for the songbook dialogs. Kept at the very end of the styles so it
      wins over the base rules - putting mobile overrides earlier silently lost to
@@ -750,7 +735,8 @@
 
   <script>
     // Global confirm dialog helper (theme-aware)
-    window.showConfirm = function(message, okText) {
+    // volby.nebezpecne: potvrzovací tlačítko červené (Smazat, Zahodit).
+    window.showConfirm = function(message, okText, volby) {
       return new Promise((resolve) => {
         const overlay = document.getElementById('app-confirm-overlay');
         const msgEl = document.getElementById('app-confirm-message');
@@ -764,10 +750,12 @@
         }
         msgEl.textContent = message || 'Potvrdit akci?';
         if (btnOk) btnOk.textContent = okText || 'Pokračovat';
-        // Generic confirm: ensure save is hidden and make Cancel primary (swap colors)
+        // Zvýrazněná je akce, o kterou jde - ne Zrušit (dřív se to prohazovalo, aby
+        // tlačítko vyniklo na barevném pozadí okna).
         if (btnSave) btnSave.style.display = 'none';
-        btnOk.classList.remove('primary');
-        btnCancel.classList.add('primary');
+        btnCancel.classList.remove('primary', 'nebezpecne');
+        btnOk.classList.toggle('nebezpecne', !!(volby && volby.nebezpecne));
+        btnOk.classList.toggle('primary', !(volby && volby.nebezpecne));
         overlay.style.display = 'flex';
         overlay.setAttribute('aria-hidden', 'false');
 
@@ -808,11 +796,11 @@
         msgEl.textContent = message || 'Zahodit neuložené změny?';
         btnOk.textContent = (popisky && popisky.discard) || 'Zahodit';
         btnSave.textContent = (popisky && popisky.save) || 'Uložit';
-        // Show Save; make Cancel and Discard primary (colored), Save white
+        // Hlavní je Uložit (u odebrání „Odebrat a ponechat kopii“); Zahodit a Zrušit tichá.
         btnSave.style.display = '';
-        btnSave.classList.remove('primary');
-        btnCancel.classList.add('primary');
-        btnOk.classList.add('primary');
+        btnSave.classList.add('primary');
+        btnCancel.classList.remove('primary', 'nebezpecne');
+        btnOk.classList.remove('primary', 'nebezpecne');
         overlay.style.display = 'flex';
         overlay.setAttribute('aria-hidden', 'false');
 
@@ -824,10 +812,10 @@
           btnSave.removeEventListener('click', onSave);
           overlay.removeEventListener('click', onOverlay);
           document.removeEventListener('keydown', onKey);
-          // Hide save and clear button primary states; next dialog sets them explicitly
+          // Zpátky do výchozího stavu: hlavní je zase potvrzení
           btnSave.style.display = 'none';
           btnSave.classList.remove('primary');
-          btnOk.classList.remove('primary');
+          btnOk.classList.add('primary');
           btnCancel.classList.remove('primary');
         };
         const onDiscard = () => { cleanup(); resolve('discard'); };
@@ -1417,7 +1405,7 @@ function openCreateModal() {
         const zprava = data.clenu
           ? `Smazat zpěvník „${data.title}“? Upravuje ho společně ještě ${data.clenu === 1 ? 'jeden uživatel' : data.clenu + ' uživatelé'}; každý dostane jeho kopii v aktuální podobě.`
           : `Smazat zpěvník „${data.title}“? Smazání nejde vrátit.`;
-        if (!(await window.showConfirm(zprava, 'Smazat'))) return;
+        if (!(await window.showConfirm(zprava, 'Smazat', { nebezpecne: true }))) return;
       }
       try {
         const res = await fetch(url, { method: 'DELETE' });
@@ -1560,7 +1548,7 @@ function openCreateModal() {
       const id = el.dataset.oznameni;
       el.querySelector('.oznameni-ponechat').addEventListener('click', () => odpovezNaPozvanku(`/api/oznameni/${id}/ponechat`));
       el.querySelector('.oznameni-zahodit').addEventListener('click', async () => {
-        if (await window.showConfirm('Zahodit kopii? Zpěvník se smaže a uvolní místo.', 'Zahodit')) {
+        if (await window.showConfirm('Zahodit kopii? Zpěvník se smaže a uvolní místo.', 'Zahodit', { nebezpecne: true })) {
           odpovezNaPozvanku(`/api/oznameni/${id}/zahodit`);
         }
       });
