@@ -105,6 +105,8 @@ IKONY_DLAZDICE = """() => {
   return {karta: Math.round(rk.width),
           pocet: ikony.length,
           venku: ikony.filter(i => i.x < rk.left - 0.5 || i.pravy > rk.right + 0.5).length,
+          okraj: Math.round(Math.min(...[...akce.querySelectorAll('.icon-btn')].map(e => {
+            const r = e.getBoundingClientRect(); return Math.min(r.left - rk.left, rk.right - r.right); }))),
           v_radcich: Object.values([...akce.querySelectorAll('.icon-btn')].reduce((m, e) => {
             const t = Math.round(e.getBoundingClientRect().top); m[t] = (m[t] || 0) + 1; return m; }, {})),
           radku: new Set([...akce.querySelectorAll('.icon-btn')]
@@ -293,12 +295,18 @@ def main():
                            f"{sirka} px: žádná ikona nepřečuhuje z dlaždice",
                            f"dlaždice {v['karta']} px, {v['pocet']} ikon "
                            f"na {v['radku']} řádcích" if v else "dlaždice nenalezena")
-                # Pět ikon: od 390 px na jednom řádku, na užších telefonech 3 + 2 - nikdy
-                # nesmí zbýt jedna osamocená na dalším řádku.
-                ocekavano = 1 if sirka >= 390 else 2
-                zkontroluj(v is not None and v["radku"] == ocekavano and v["v_radcich"][-1] >= 2,
-                           f"{sirka} px: ikony na {ocekavano} {'řádku' if ocekavano == 1 else 'řádcích'}, žádná osamocená",
-                           f"{v['pocet']} ikon po řádcích {v['v_radcich']}" if v else "")
+                # Rozložení ikon je na všech šířkách stejné: 3 + 2. Průjezd po 10 px, protože
+                # dřív se podle šířky střídalo 5, 4 + 1 a 3 + 2 a pevné šířky to nechytily.
+                if sirka == SIRKY_TELEFONU[0]:
+                    spatne = []
+                    for s in range(320, 1281, 10):
+                        page.set_viewport_size({"width": s, "height": 800})
+                        u = page.evaluate(IKONY_DLAZDICE)
+                        if not u or u["v_radcich"] != [3, 2] or u["okraj"] < 8:
+                            spatne.append((s, u and u["v_radcich"], u and u["okraj"]))
+                    page.set_viewport_size({"width": sirka, "height": 800})
+                    zkontroluj(not spatne, "320-1280 px po 10 px: ikony vždy 3 + 2 a aspoň 8 px od kraje",
+                               spatne[:5])
                 prekroceni = page.evaluate(
                     "() => document.documentElement.scrollWidth - window.innerWidth")
                 zkontroluj(prekroceni <= 0,
