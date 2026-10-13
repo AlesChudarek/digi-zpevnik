@@ -1669,11 +1669,16 @@ function openCreateModal() {
         spoustec.setAttribute('aria-expanded', String(otevrit));
         akce.closest('.songbook-card').classList.toggle('akce-otevrene', otevrit);
         if (otevrit) {
-          // Nabídka je širší než úzká dlaždice: u kraje obrazovky ji posunout dovnitř.
+          // Nabídka visí pravým krajem pod šipkou. U krátkého názvu by tak ujela doleva
+          // mimo dlaždici, proto smí nejdál na střed dlaždice. A u kraje obrazovky se
+          // posune dovnitř, protože bývá širší než úzká dlaždice.
           nabidka.style.right = '';
           const r = nabidka.getBoundingClientRect(), okraj = 8;
-          if (r.left < okraj) nabidka.style.right = `${r.left - okraj}px`;
-          else if (r.right > window.innerWidth - okraj) nabidka.style.right = `${r.right - window.innerWidth + okraj}px`;
+          const k = akce.closest('.songbook-card').getBoundingClientRect();
+          let posun = Math.max(0, (k.left + k.right) / 2 - (r.left + r.right) / 2);
+          if (r.right + posun > window.innerWidth - okraj) posun = window.innerWidth - okraj - r.right;
+          if (r.left + posun < okraj) posun = okraj - r.left;
+          if (posun) nabidka.style.right = `${-posun}px`;
           nabidka.querySelector('.akce-polozka')?.focus();
         }
       });
