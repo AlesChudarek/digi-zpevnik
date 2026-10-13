@@ -409,6 +409,9 @@
             <button type="button" role="menuitem" class="akce-polozka btn-download" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
               <img src="{{ static_bust('img/icons/download.svg') }}" alt=""><span>Stáhnout</span>
             </button>
+            <button type="button" role="menuitem" class="akce-polozka btn-tisk" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
+              <img src="{{ static_bust('img/icons/print.svg') }}" alt=""><span>Tisk</span>
+            </button>
             <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
                     data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
                     data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
@@ -1641,6 +1644,10 @@ function openCreateModal() {
     /* Stažení zpěvníku rovnou ze seznamu, bez otevírání čtečky. Nastavení i průběh
        ukazuje totéž okno jako čtečka, viz static/js/stahovani.js. Tady dřív bývala
        vlastní nabídka formátů a k ní holý text s uběhlými sekundami. */
+    document.querySelectorAll('.btn-tisk').forEach(btn => {
+      btn.addEventListener('click', () => Stahovani.tiskni(btn.dataset.bookId, btn.dataset.bookTitle || ''));
+    });
+
     document.querySelectorAll('.btn-download').forEach(btn => {
       btn.addEventListener('click', (event) => {
         event.preventDefault();

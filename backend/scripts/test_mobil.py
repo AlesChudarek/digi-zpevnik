@@ -293,9 +293,9 @@ def main():
                 page.wait_for_load_state("networkidle")
                 page.wait_for_timeout(600)
                 v = page.evaluate(NABIDKA_DLAZDICE)
-                zkontroluj(v is not None and not v["spoustec_venku"] and v["pocet"] == 5
+                zkontroluj(v is not None and not v["spoustec_venku"] and v["pocet"] == 6
                            and not v["mimo_obrazovku"] and not v["prekryte"] and v["vyska"] < 44,
-                           f"{sirka} px: nabídka Možnosti má pět položek, celých, na jednom řádku a navrchu",
+                           f"{sirka} px: nabídka Možnosti má šest položek, celých, na jednom řádku a navrchu",
                            str(v))
                 if sirka == SIRKY_TELEFONU[0]:
                     spatne = []

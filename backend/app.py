@@ -3094,7 +3094,8 @@ def recept_z_parametru(args, kind=None):
     # Neznámý parametr je chyba, ne něco k přehlédnutí. Kdyby se ignoroval, dostal by
     # člověk s překlepem v `?prazdn=0` výchozí nastavení a soubor, o který nežádal,
     # a nic by mu to neřeklo.
-    povolene = {'q'} | set(RECEPT_VYCHOZI)
+    # `tisk` recept nemění, jen to, jestli se hotové PDF stáhne, nebo zobrazí (tisk).
+    povolene = {'q', 'tisk'} | set(RECEPT_VYCHOZI)
     if kind is not None:
         povolene.discard('format')   # ten je v příponě, v dotazu by si mohly odporovat
     for klic in args.keys():
@@ -3852,9 +3853,10 @@ def songbook_export(book_id, kind):
             os.utime(paths['final'])
         except OSError:
             pass  # pořadí úklidu je pohodlí, ne podmínka
+        # Při tisku se PDF otevírá ve skrytém rámu stránky, takže musí přijít k zobrazení.
         return send_file(
             paths['final'],
-            as_attachment=True,
+            as_attachment=request.args.get('tisk') != '1',
             download_name=f"{slugify(songbook.title) or songbook.id}.{kind}",
             mimetype='application/pdf' if kind == 'pdf' else 'application/zip',
             conditional=True,

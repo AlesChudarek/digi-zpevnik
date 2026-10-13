@@ -235,3 +235,7 @@ html.theme-dark .stahovani-tlacitka button.hlavni:hover {
   background: var(--panel-text, #e6eaf2);
   color: var(--panel-bg, #161c2b);
 }
+
+/* Režim tisku schovává předvolby a řádky, které nastaví tiskový dialog. Vlastní
+   `display` výš by atribut hidden přebil. */
+.stahovani-predvolby[hidden], .stahovani-radek[hidden] { display: none; }

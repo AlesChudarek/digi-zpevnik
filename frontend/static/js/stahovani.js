@@ -11,8 +11,15 @@
  * hlásí, že žije, jen mezi požadavky, takže by dlouhý export spadl na 30s timeout.
  * Klient se proto ptá endpointu export-status, dokud nedostane 'ready'.
  *
+ * Tisk je totéž okno v jiném režimu: bez předvoleb a voleb, které si člověk nastaví
+ * v tiskovém dialogu sám (barvy), vždy v plném rozlišení. Zbývají jen volby, které
+ * tiskový dialog neumí - brožura - nebo by v něm mátly: čísla stran zpěvníku se
+ * s čísly stran PDF nekryjí, protože před nimi je obálka. Hotové PDF se otevře ve
+ * skrytém rámu a zavolá se na něm tisk.
+ *
  * Veřejné API:
  *   Stahovani.otevri(bookId, nazev)   otevře okno s nastavením
+ *   Stahovani.tiskni(bookId, nazev)   totéž okno pro tisk
  */
 window.Stahovani = (function () {
   'use strict';
@@ -68,6 +75,8 @@ window.Stahovani = (function () {
   let bezi = null;          // klíč běhu, na který se zrovna ptáme
   let zpevnik = null;       // id zpěvníku, se kterým je okno otevřené
   let dotazNaHotovo = null; // časovač odloženého dotazu u vlastního nastavení
+  let tisk = false;         // okno je otevřené pro tisk, ne pro stažení
+  const JEN_STAZENI = ['format', 'kvalita', 'prazdne', 'barvy'];  // řádky, které tisk nemá
 
   /* ---------- stavba okna ---------- */
 
@@ -177,8 +186,6 @@ window.Stahovani = (function () {
           <div class="stahovani-pruh"><span id="stahovani-vypln"></span></div>
           <p class="stahovani-cislo" id="stahovani-cislo">Začínám…</p>
           <p class="stahovani-rada" id="stahovani-rada">
-            Můžeš počkat a soubor se stáhne sám. Nebo okno zavřít a vrátit se později —
-            skládání poběží dál a příště bude ke stažení hned.
           </p>
         </div>
         </div>
@@ -269,6 +276,7 @@ window.Stahovani = (function () {
   /* ---------- nastavení ---------- */
 
   function vybranaPredvolba() {
+    if (tisk) return 'vlastni';
     const zvolena = okno.zaclona.querySelector('input[name="predvolba"]:checked');
     return zvolena ? zvolena.value : 'small';
   }
@@ -280,6 +288,7 @@ window.Stahovani = (function () {
 
   /** Recept jako dvojice {format, parametry} - přesně to, co pochopí server. */
   function recept() {
+    if (tisk) return receptTisku();
     const volba = vybranaPredvolba();
     if (volba !== 'vlastni') {
       const p = PREDVOLBY.find(x => x.klic === volba);
@@ -301,6 +310,20 @@ window.Stahovani = (function () {
       if (okno.zaclona.querySelector('#stahovani-brozura').checked) parametry.brozura = '1';
     }
     return {format, parametry};
+  }
+
+  /* Bez úprav je to předvolba „PDF pro tisk“ - tatáž adresa i soubor v cache. */
+  function receptTisku() {
+    const obsah = hodnota('obsah') || 'vse';
+    const strany = okno.zaclona.querySelector('#stahovani-strany').value.trim();
+    const brozura = okno.zaclona.querySelector('#stahovani-brozura').checked;
+    if (obsah === 'vse' && !strany && !brozura) {
+      return {format: 'pdf', parametry: {q: 'high'}};
+    }
+    const parametry = {obsah, kvalita: 'high'};
+    if (strany && obsah !== 'jen-obalka') parametry.strany = strany;
+    if (brozura) parametry.brozura = '1';
+    return {format: 'pdf', parametry};
   }
 
   function dotazRetezec(parametry) {
@@ -473,15 +496,29 @@ window.Stahovani = (function () {
      přijde až za okamžik - a blikání tvrdilo něco, co ještě nikdo nevěděl. */
   function nastavTlacitko(hotovo) {
     okno.spustit.disabled = false;
-    okno.spustit.textContent = hotovo ? 'Stáhnout' : 'Připravit';
+    okno.spustit.textContent = tisk ? 'Tisknout' : (hotovo ? 'Stáhnout' : 'Připravit');
   }
 
   /* ---------- otevření a zavření ---------- */
 
-  function otevri(bookId, nazev) {
+  function otevri(bookId, nazev, rezim) {
     const o = postavOkno();
     zpevnik = bookId;
-    o.nadpis.textContent = 'Stáhnout zpěvník';
+    tisk = rezim === 'tisk';
+    o.nadpis.textContent = tisk ? 'Vytisknout zpěvník' : 'Stáhnout zpěvník';
+    o.predvolby.hidden = tisk;
+    JEN_STAZENI.forEach(pole => {
+      o.zaclona.querySelector(`[data-pole="${pole}"]`).hidden = tisk;
+    });
+    if (tisk) {
+      o.zaclona.querySelector('#stahovani-brozura').checked = false;
+      o.zaclona.querySelector('#stahovani-bez-prazdnych').checked = false;
+    }
+    o.rada.textContent = tisk
+      ? 'Po dokončení se otevře tiskový dialog. Okno jde zavřít, skládání poběží dál ' +
+        'a příště bude tisk hned.'
+      : 'Soubor se po dokončení stáhne sám. Okno jde zavřít, skládání poběží dál ' +
+        'a příště bude soubor ke stažení hned.';
     o.co.textContent = nazev || '';
     o.nastaveni.hidden = false;
     o.postup.hidden = true;
@@ -498,6 +535,8 @@ window.Stahovani = (function () {
     zmenaVyberu();
     oznacHotove(bookId);
   }
+
+  function tiskni(bookId, nazev) { otevri(bookId, nazev, 'tisk'); }
 
   function zavri() {
     if (okno) okno.zaclona.hidden = true;
@@ -549,9 +588,16 @@ window.Stahovani = (function () {
   /* Okno po stažení nezmizí samo. Zmizet by znamenalo, že se v prohlížeči nenápadně
      objeví soubor a nikde nezůstane, že se to povedlo - uživatel, který odešel k jiné
      záložce, by se vrátil k obrazovce beze stopy po tom, na co čekal. */
-  function dokonceno() {
+  function dokonceno(url) {
     okno.nadpis.textContent = 'Dokončeno';
     okno.cislo.textContent = 'Soubor je hotový a stahuje se.';
+    if (tisk) {
+      // Na telefonu a v některých prohlížečích se tisk ze skrytého rámu neotevře;
+      // odkaz je pak jediná cesta, proto je vidět vždycky.
+      okno.cislo.innerHTML = 'Otevírá se tiskový dialog. Pokud se neotevře, ' +
+        `<a href="${doAtributu(url)}" target="_blank" rel="noopener">otevřete PDF</a> ` +
+        'a vytiskněte ho z prohlížeče.';
+    }
     okno.cislo.classList.remove('stahovani-chyba');
     okno.vypln.classList.remove('ceka');
     okno.vypln.style.width = '100%';
@@ -579,6 +625,7 @@ window.Stahovani = (function () {
     const { format, parametry } = recept();
     const dotaz = dotazRetezec(parametry);
     const url = `/songbook/${encodeURIComponent(zpevnik)}/export.${format}${dotaz}`;
+    const urlTisku = url + (dotaz ? '&' : '?') + 'tisk=1';
     const klic = `${format}${dotaz}`;
 
     let odpoved;
@@ -592,6 +639,12 @@ window.Stahovani = (function () {
     // Výhradně 200, ne response.ok: to je pravdivé i pro 202, tedy "začal jsem to
     // skládat" - a na tom se dá odnavigovat na JSON místo stažení souboru.
     if (odpoved.status === 200) {
+      if (tisk) {
+        ukazPostup();
+        dokonceno(urlTisku);
+        vytiskni(urlTisku);
+        return;
+      }
       window.location = url;   // hotové, server ho vydá ze své cache
       zavri();
       return;
@@ -630,8 +683,13 @@ window.Stahovani = (function () {
 
       if (j.state === 'ready') {
         bezi = null;
-        dokonceno();
-        window.location = url;
+        if (tisk) {
+          dokonceno(urlTisku);
+          vytiskni(urlTisku);
+        } else {
+          dokonceno();
+          window.location = url;
+        }
         return;
       }
       if (j.state === 'error') { chyba('Skládání souboru selhalo.'); return; }
@@ -649,5 +707,22 @@ window.Stahovani = (function () {
     setTimeout(dotazSeNaStav, 700);
   }
 
-  return { otevri, zavri };
+  /* PDF do skrytého rámu a na něm tisk. Rám nesmí mít display: none - takový
+     prohlížeč nevykreslí a tisknout by nebylo co. */
+  function vytiskni(url) {
+    document.getElementById('stahovani-tisk')?.remove();
+    const ram = document.createElement('iframe');
+    ram.id = 'stahovani-tisk';
+    ram.title = 'Tisk zpěvníku';
+    ram.style.cssText = 'position:fixed; right:0; bottom:0; width:1px; height:1px; border:0; opacity:0;';
+    ram.addEventListener('load', () => {
+      setTimeout(() => {
+        try { ram.contentWindow.focus(); ram.contentWindow.print(); } catch (e) { /* zbývá odkaz */ }
+      }, 300);
+    });
+    ram.src = url;
+    document.body.appendChild(ram);
+  }
+
+  return { otevri, tiskni, zavri };
 })();

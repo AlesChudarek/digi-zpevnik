@@ -64,7 +64,7 @@ def start_server(db_copy):
         [str(VENV_PY), "-c",
          'import os, sys\n'
          'sys.path[:0] = os.environ["PYTHONPATH"].split(":")\n'
-         'from backend.app import app, db, User\n'
+         'from backend.app import app, db, User, ExportPokus\n'
          'from werkzeug.security import generate_password_hash\n'
          'with app.app_context():\n'
          '    u = User.query.filter_by(email="admin@test.com").first()\n'
@@ -72,6 +72,9 @@ def start_server(db_copy):
          '    u.role = "admin"\n'
          '    b = User.query.filter_by(email="user@test.com").first()\n'
          f'    b.password = generate_password_hash("{UZIVATEL[1]}", method="pbkdf2:sha256")\n'
+         # Kopie nese i dnešní skládání ze zkoušení na účtu 2 - denní limit by
+         # byl vyčerpaný dřív, než ho test začne měřit.
+         '    ExportPokus.query.delete()\n'
          '    db.session.commit()\n'],
         env=env, check=True, capture_output=True)
 

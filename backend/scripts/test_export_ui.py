@@ -602,6 +602,40 @@ def main():
                 zkontroluj(Path(ze_seznamu.path()).read_bytes()[:5] == b"%PDF-",
                            "a stáhne se PDF", ze_seznamu.suggested_filename)
 
+            print("\n── tisk ──")
+            page.evaluate("() => document.querySelector('.btn-tisk').click()")
+            page.wait_for_timeout(1200)
+            tisk = page.evaluate("""() => {
+              const o = document.getElementById('stahovani-okno');
+              const videt = s => { const e = o.querySelector(s); return !!e && !e.closest('[hidden]'); };
+              return {nadpis: document.getElementById('stahovani-nadpis').textContent,
+                      tlacitko: document.getElementById('stahovani-spustit').textContent,
+                      predvolby: videt('#stahovani-predvolby'),
+                      skryte: ['format', 'kvalita', 'prazdne', 'barvy'].filter(p => !videt(`[data-pole="${p}"]`)),
+                      zbyva: ['obsah', 'strany', 'brozura'].filter(p => videt(`[data-pole="${p}"]`))};
+            }""")
+            zkontroluj(tisk["nadpis"] == "Vytisknout zpěvník" and tisk["tlacitko"] == "Tisknout"
+                       and not tisk["predvolby"] and len(tisk["skryte"]) == 4 and len(tisk["zbyva"]) == 3,
+                       "Tisk otevře okno jen s částmi, stranami a brožurou", str(tisk))
+            page.evaluate("() => document.getElementById('stahovani-spustit').click()")
+            page.wait_for_function("() => document.getElementById('stahovani-nadpis').textContent === 'Dokončeno'",
+                                   timeout=300000)
+            ram = page.evaluate("() => document.getElementById('stahovani-tisk')?.getAttribute('src') || ''")
+            hlavicka = page.evaluate("""async u => (await fetch(u)).headers.get('Content-Disposition')""", ram)
+            zkontroluj("q=high" in ram and "tisk=1" in ram and (hlavicka or "").startswith("inline"),
+                       "hotové PDF pro tisk (plné rozlišení) jde do rámu k zobrazení, ne ke stažení",
+                       f"{ram} → {hlavicka}")
+            zkontroluj(page.locator("#stahovani-cislo a[target=_blank]").count() == 1,
+                       "v okně zůstane odkaz na PDF, kdyby se tiskový dialog neotevřel")
+            page.evaluate("() => document.getElementById('stahovani-zavrit').click()")
+            page.evaluate("() => document.querySelector('.btn-download').click()")
+            page.wait_for_timeout(800)
+            zpet = page.evaluate("""() => ({nadpis: document.getElementById('stahovani-nadpis').textContent,
+              predvolby: !document.getElementById('stahovani-predvolby').hidden,
+              kvalita: !document.querySelector('[data-pole=kvalita]').hidden})""")
+            zkontroluj(zpet == {"nadpis": "Stáhnout zpěvník", "predvolby": True, "kvalita": True},
+                       "stažení po tisku má zase všechny volby", str(zpet))
+
             print("\n── chyby v konzoli ──")
             zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
 

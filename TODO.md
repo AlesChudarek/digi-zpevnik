@@ -332,12 +332,15 @@ kdo maže.
       má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
       změní klíč v názvu souboru. Strop se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
-- [ ] **tisk rovnou z webu**, bez stahování souboru (ze schránky 13. 10.). Okno stahování
-      už umí recept „na tisk“ i brožuru; chybí cesta, která hotové PDF rovnou pošle do
-      tisku prohlížeče místo stažení. Aleš zvažuje dvě podoby: (a) v okně stahování
-      volba poslat hotovou verzi rovnou na tisk, nebo (b) samostatná položka „Tisk“
-      v nabídce Možnosti s vlastním oknem - po navolení se PDF vygeneruje a pošle
-      do tisku. Nabídka u dlaždice je na šestou položku připravená.
+- [X] **tisk rovnou z webu** (13. 10.). Položka „Tisk“ v nabídce dlaždice otevře okno
+      stahování v režimu tisku (`Stahovani.tiskni`): vždy plné rozlišení, bez
+      předvoleb, kvality, barev a prázdných stran - ty nastaví tiskový dialog. Zůstaly
+      Části, Strany (čísla zpěvníku, ne PDF - před nimi je obálka) a Brožura, kterou
+      tiskový dialog neumí. Hotové PDF (`?tisk=1` → `inline`) jde do skrytého rámu
+      a zavolá se na něm tisk; v okně zůstane odkaz „otevřete PDF“ pro prohlížeče, kde
+      to nejde (telefony, Safari). Hlídá `test_export_ui.py`.
+- [ ] tisk i ve čtečce (zatím jen v nabídce dlaždice); a ověřit tisk ze skrytého
+      rámu v Safari a na telefonu
 - [X] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká —
       Aleš 13. 10.: takhle je to správně, nepředgenerovávat.
       Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
@@ -757,3 +760,4 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+prihlasovaci uvodni stranka, ktera je na ciste domene nema favicon

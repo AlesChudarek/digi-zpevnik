@@ -448,8 +448,8 @@ def main():
         druhy.click("#share-cancel-btn")
         druhy.on("dialog", lambda d: d.accept())
         pocet = druhy.locator(".songbook-card .btn-edit").count()
-        zkontroluj(druhy.locator(".songbook-card").first.locator(".akce-polozka").count() == 5,
-                   "v nabídce dlaždice je pět položek")
+        zkontroluj(druhy.locator(".songbook-card").first.locator(".akce-polozka").count() == 6,
+                   "v nabídce dlaždice je šest položek")
         napoveda = (druhy.get_attribute(f'.btn-delete[data-book-id="{vlastni}"]', "data-clen"),
                     (druhy.text_content(f'.btn-delete[data-book-id="{vlastni}"]') or "").strip())
         zkontroluj(napoveda == ("1", "Odebrat"),
