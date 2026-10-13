@@ -76,3 +76,6 @@ scripts/uklid-a-nahrat.sh
 # ale do repozitáře nepatří - většinou jde o odložené verze (edit_old, jump_up_old)
 # nebo o návrhy, které se nakonec nepoužily.
 frontend/static/img/icons/nepouzite/
+
+# Předávka mezi sessions, ne do gitu
+HANDOFF.md
