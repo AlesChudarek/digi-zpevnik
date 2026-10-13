@@ -301,6 +301,10 @@ kdo maže.
       má být vždycky hned a aktuální. Nahradí je jedině změna v samotném zpěvníku, kdy se
       změní klíč v názvu souboru. Strop se tak vztahuje jen na soukromé exporty.
       Ověřeno: při překročení stropu zůstaly všechny veřejné a odcházely jen soukromé.
+- [ ] **tisk rovnou z webu**, bez stahování souboru (ze schránky 13. 10.). Okno stahování
+      už umí recept „na tisk“ i brožuru; chybí cesta, která hotové PDF rovnou pošle do
+      tisku prohlížeče místo stažení. Rozmyslet, jestli tlačítko Tisknout v okně
+      stahování, nebo v čtečce.
 - [ ] `data/exports`: předgenerovaná je jen varianta `small`, na `high` se čeká.
       Předgenerovat i `high` by čekání odstranilo úplně, ne jen zkrátilo: 31 veřejných
       zpěvníků × ~8 MB je zhruba 260 MB, takže by se muselo zvednout `EXPORTS_TOTAL_LIMIT_BYTES`
