@@ -313,9 +313,10 @@ kdo maže.
       Ověřeno smířením DB proti disku: 1093 souborů a na každý něco z DB ukazuje, volně
       ležící soubor není ani jeden.
 - [X] velký check čtečka vs. PDF — `backend/scripts/kontrola_zpevniku.py`, pouští se kdykoliv
-- [ ] **ZIP balí průhledné obálky bez barvy — opravit** (Aleš 13. 10.: určitě). ZIP balí
-      originály, takže průhledné PNG obálek v něm nemají barvu zpěvníku. Při balení
-      se musí podložit barevným pozadím, stejně jako v PDF.
+- [X] **ZIP balil průhledné obálky bez barvy** — opraveno 13. 10. Obálka s průhledností
+      se v `render_songbook_zip` podloží barvou zpěvníku a uloží jako PNG (bezztrátově),
+      chybějící strana obálky je barevná plocha jako v PDF. Vnitřní strany dál originály.
+      Starší ZIPy v cache neplatí (klíč `zip-obalky-v2`). Hlídá `test_export.py`.
 - [ ] (?) **po smazání zpěvníků zůstaly soubory obálek.** Lokálně 13. 10. hlásí
       `kontrola_zpevniku` 15 souborů obálek ve složkách zpěvníků účtu 2
       (`u2-1791879641` … `u2-1791882393`, založené 10:20-11:06 při zkoušení), které už

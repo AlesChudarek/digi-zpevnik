@@ -220,6 +220,13 @@ def main():
         zkontroluj(len(zip_data) > len(pdf),
                    "ZIP originálů je větší než překódované PDF",
                    f"ZIP {len(zip_data) // 1024} kB, PDF {len(pdf) // 1024} kB")
+        import io as _io, zipfile as _zf
+        from PIL import Image as _Im
+        with _zf.ZipFile(_io.BytesIO(zip_data)) as _z:
+            _obalky = [n for n in _z.namelist() if "obalka" in n]
+            _alfa = [n for n in _obalky if _Im.open(_io.BytesIO(_z.read(n))).mode in ("RGBA", "LA", "PA")]
+        zkontroluj(not _alfa, "obálky v ZIPu jsou podložené barvou, žádná průhledná",
+                   f"{len(_obalky)} obálek, průhledné: {_alfa}")
 
         print("\n── cache klíčovaná obsahem ──")
         soubory_pred = sorted(p.name for p in EXPORTS_DIR.glob("*.pdf"))

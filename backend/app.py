@@ -3247,6 +3247,9 @@ def songbook_export_key(sequence, token):
     # Token, ne celý recept: u předvoleb je to jejich jméno, takže se klíč nezměnil
     # zavedením receptů a hotová cache zůstala platná.
     digest.update(token.encode())
+    if token == 'orig':
+        # ZIP podkládá obálky barvou (render_songbook_zip); starší ZIPy v cache ji nemají.
+        digest.update(b'|zip-obalky-v2')
     for item in sequence:
         rel = item['file']
         digest.update(rel.encode())
@@ -3493,22 +3496,49 @@ def render_songbook_zip(sequence, out_path, on_page=None):
     order, and then say what the page is. A bare number would sort right but lose which
     file is a cover and which printed page a scan actually is - and the two do not match,
     because a songbook can start numbering at 3.
+
+    Výjimkou jsou obálky. Průhledná obálka dostává barvu až od zpěvníku, takže holý
+    originál byl v ZIPu bez barvy; teď se podloží barvou a uloží jako PNG (pořád
+    bezztrátově). Chybějící strana obálky je barevná plocha jako v PDF - jinak by
+    se posunulo skládání listů.
     """
     with zipfile.ZipFile(out_path, 'w', compression=zipfile.ZIP_STORED) as archive:
         # ZIP_STORED, ne DEFLATE: PNG i JPEG jsou už komprimované, takže by se procesor
         # spálil za setiny procenta.
         for index, item in enumerate(sequence, start=1):
             abs_path = None if item['file'] == 'blank' else _abs_image_path(item['file'])
-            if abs_path is None or not abs_path.exists():
-                continue
             if item['kind'] == 'content' and item.get('page_number') is not None:
                 popis = f"strana-{item['page_number']}"
             else:
                 popis = {'cover': 'obalka', 'intro': 'uvod', 'outro': 'zaver'}.get(
                     item['kind'], item['kind'])
-            archive.write(abs_path, f"{index:04d}-{popis}{abs_path.suffix.lower()}")
+            jmeno = f"{index:04d}-{popis}"
+            if item['kind'] == 'cover' and 'bg' in item:
+                obrazek = _obalka_s_barvou(abs_path, _hex_to_rgb(item['bg']))
+                if obrazek is not None:
+                    buf = BytesIO()
+                    obrazek.save(buf, 'PNG')
+                    archive.writestr(jmeno + '.png', buf.getvalue())
+                    if on_page:
+                        on_page(index)
+                    continue
+            if abs_path is None or not abs_path.exists():
+                continue
+            archive.write(abs_path, jmeno + abs_path.suffix.lower())
             if on_page:
                 on_page(index)
+
+
+def _obalka_s_barvou(abs_path, pozadi):
+    """Obálka podložená barvou zpěvníku, nebo None, když se dá zabalit originál
+    (nemá průhlednost). Chybějící soubor je prázdná strana v barvě."""
+    if abs_path is None or not abs_path.exists():
+        return Image.new('RGB', PAGE_PX, pozadi)
+    with Image.open(abs_path) as raw:
+        if raw.mode not in ('RGBA', 'LA', 'PA') and 'transparency' not in raw.info:
+            return None
+        raw.load()
+        return _flatten_to_rgb(raw, pozadi)
 
 
 def _prune_exports(keep_path, sibling_glob):
