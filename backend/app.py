@@ -1,6 +1,7 @@
 import os
 import mimetypes
 import sys
+import subprocess
 import json
 import click
 from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file, g
@@ -2273,6 +2274,17 @@ def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
         setattr(nova, f'img_path_cover_{role}', rel)
         Obrazek.ziskej(rel).velikost = cil.stat().st_size
     nova.img_path_cover_preview = nova.img_path_cover_front_outer
+    # Obálka je kopie téhož souboru (copy2 nechá čas změny), takže má i týž klíč
+    # náhledu - stačí zkopírovat hotový náhled, ne ho znovu vyrábět.
+    try:
+        n = _nahledy()
+        zdroj = _abs_image_path(sb.img_path_cover_preview) if sb.img_path_cover_preview else None
+        k = n.klic(zdroj, n.OBALKA) if zdroj else None
+        hotovy = n.soubor_nahledu(NAHLEDY_DIR, sb.id, k) if k else None
+        if hotovy and hotovy.exists():
+            shutil.copy2(hotovy, n.soubor_nahledu(NAHLEDY_DIR, nova.id, k))
+    except OSError:
+        pass   # vyrobí se jako dřív
 
     vsechny = {v.song_id for st in sb.strany for v in st.pisne}
     sdilene = verejne_pisne(vsechny)
@@ -2913,27 +2925,23 @@ def schedule_export_warm(book_id):
     The stale file needs no deleting: the cache key is derived from the page list and the
     files' mtimes, so an edited songbook resolves to a different name and the old build is
     pruned as a superseded sibling.
+
+    Samostatný proces s nejnižší prioritou, ne vlákno. Vlákno v gunicorn workeru drželo
+    jediné slabé jádro serveru: worker pak nestihl hlásit, že žije, a po 60 s ho
+    gunicorn zabil - i s rozpracovaným PDF a s požadavkem, který zrovna vyřizoval
+    (13. 10.: po duplikování se 1+ minutu točila stránka). Proces s `nice 19` dostane
+    procesor, jen když ho požadavky nepotřebují, a skládá přes `flask export-warm`,
+    tedy i se zámkem a postupem, které vidí okno stahování.
     """
     def prace():
         try:
-            with app.app_context():
-                songbook = Songbook.query.get(book_id)
-                if songbook is None:
-                    return
-                recept = normalizuj_recept(**PREDVOLBY[PREDGENEROVANA_VARIANTA])
-                sequence = build_songbook_export_sequence(songbook, recept)
-                if not sequence or len(sequence) > EXPORT_MAX_PAGES:
-                    return
-                token = PREDGENEROVANA_VARIANTA
-                key = songbook_export_key(sequence, token)
-                paths = _export_paths(book_id, token, 'pdf', key)
-                if paths['final'].exists() or paths['lock'].exists():
-                    return
-                EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
-                render_songbook_pdf(sequence, paths['part'], recept)
-                os.replace(paths['part'], paths['final'])
-                _prune_exports(paths['final'], paths['siblings'])
-                _drop_stale_exports(songbook)
+            proces = subprocess.Popen(
+                ['nice', '-n', '19', sys.executable, '-m', 'flask', '--app', 'backend.app',
+                 'export-warm', '--variant', PREDGENEROVANA_VARIANTA, '--all',
+                 '--songbook', book_id],
+                cwd=str(Path(__file__).resolve().parent.parent),
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+            proces.wait()   # jen ať nezůstane zombie; vlákno přitom nic nepočítá
         except Exception:  # noqa: BLE001 - uložení zpěvníku tím nesmí být dotčené
             pass
 
@@ -4459,6 +4467,8 @@ def export_warm(variant, public_only, songbook_ids):
             paths['lock'].unlink(missing_ok=True)
 
         _prune_exports(paths['final'], paths['siblings'])
+        if songbook_ids:
+            _drop_stale_exports(songbook)
         velikost = paths['final'].stat().st_size
         celkem_bytu += velikost
         postaveno += 1

@@ -684,6 +684,12 @@ kdo maže.
 
 ## Provoz a bezpečnost
 
+- [X] **duplikování na serveru se točilo přes minutu** (13. 10.). Předpřipravení PDF
+      po uložení/kopii běželo jako vlákno v gunicorn workeru a drželo jediné jádro:
+      worker nestihl hlásit, že žije, a gunicorn ho po 60 s zabil (i s PDF a s
+      požadavkem na náhled obálky, který tak taky nedoběhl). Teď běží jako samostatný
+      proces `nice -n 19 flask export-warm --songbook <id>` a kopie dostane hotový
+      náhled obálky z originálu (obálka je týž soubor, klíč náhledu sedí).
 - [X] **přihlašovací stránka (úvod na holé doméně) neměla favicon** (13. 10.) — záložka
       zůstala bez ikony. Odkaz na ikonu byl jen v `dashboard_base.html`; teď je
       v `_theme.html`, který mají všechny rámy stránek, a `/favicon.ico` na kořeni
