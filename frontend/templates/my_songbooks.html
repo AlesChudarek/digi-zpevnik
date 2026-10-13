@@ -151,9 +151,11 @@
   /* Akce zpěvníku: jedno tlačítko „Možnosti“ a pod ním nabídka. Nabídka leží přes
      dlaždice pod sebou (position: absolute), takže se mřížka při otevření nehýbe. */
   /* Řádek s názvem: název (odkaz do čtečky) a vedle něj šipka s nabídkou akcí. */
-  .songbook-radek { display: flex; align-items: center; gap: 4px; margin: 8px 6px 8px 10px; }
+  /* Název i šipka uprostřed jako jeden celek; dlouhý název se zkrátí výpustkou
+     a šipka zůstane hned za ním. */
+  .songbook-radek { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 8px 8px; }
   .songbook-nazev {
-    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--brand-dark, #1b5e20); text-decoration: none; text-align: left;
   }
   .songbook-akce { position: relative; flex: none; }
