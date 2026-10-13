@@ -492,7 +492,7 @@
           const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(bookId)}/songs/${encodeURIComponent(songId)}`, { method: 'DELETE' });
           if (!resp.ok) {
             const text = await resp.text();
-            oznam('Odstranění selhalo: ' + popisChyby(text, resp.status));
+            oznam(popisChyby(text, resp.status), { nadpis: 'Odstranění se nepovedlo' });
             return;
           }
           tr.remove();
@@ -501,7 +501,7 @@
           }
           bindRemoveButtons();
         } catch (_) {
-          oznam('Chyba při komunikaci se serverem');
+          oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
         }
       });
     });
@@ -600,14 +600,14 @@
               fd.append('song_id', songId);
               const res = await fetch(`/api/songbooks/${encodeURIComponent(it.id)}/add-song`, { method: 'POST', body: fd });
               if (!res.ok) {
-                const t = await res.text(); oznam('Přidání selhalo: ' + popisChyby(t, res.status));
+                const t = await res.text(); oznam(popisChyby(t, res.status), { nadpis: 'Přidání se nepovedlo' });
               } else {
                 overlay.remove();
                 // Refresh to show the new entry in the target songbook
                 window.location.reload();
               }
             } catch (_) {
-              oznam('Chyba při komunikaci se serverem');
+              oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
             }
           });
           wrapper.appendChild(b);

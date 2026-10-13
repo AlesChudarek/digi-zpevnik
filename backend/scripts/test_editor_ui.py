@@ -208,7 +208,11 @@ def main():
         page.wait_for_selector(".oznameni-zaclona .okno")
         text = page.inner_text(".oznameni-zaclona .okno")
         zkontroluj("není úplná" in text and not dialogy,
-                   "a řekne se proč - ve vlastním okně, ne v alertu prohlížeče", text)
+                   "a řekne se proč - ve vlastním okně, ne v alertu prohlížeče", text.replace("\n", " | "))
+        vzhled = page.evaluate("""() => { const o = document.querySelector('.oznameni-zaclona .okno');
+          return {varovani: o.classList.contains('okno-varovani'), znak: !!o.querySelector('.okno-znak'),
+                  pruh: getComputedStyle(o).boxShadow.includes('inset')}; }""")
+        zkontroluj(all(vzhled.values()), "oznámení vypadá jako varování (znak a pruh)", vzhled)
         page.keyboard.press("Enter")
         zkontroluj(page.locator(".oznameni-zaclona").count() == 0, "oznámení zavře Enter")
         strana(page, 4).locator(".es-odebrat").click()

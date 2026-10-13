@@ -577,16 +577,31 @@
 
     // Oznámení ve vlastním okně místo alert() prohlížeče - stejný vzhled jako ostatní
     // okna (css/okna.css). Vrací Promise, která se splní po zavření.
-    window.oznam = function (text, nadpis) {
+    //   oznam(text, { nadpis, druh })   druh: 'chyba' (výchozí), 'varovani', 'info'
+    // Chyba a varování mají barevný pruh a znak u nadpisu - jinak okno vypadalo
+    // stejně jako běžné potvrzení a dalo se snadno přehlédnout, že se něco nepovedlo.
+    const VYCHOZI_NADPIS = { chyba: 'Nepovedlo se', varovani: 'Pozor', info: 'Upozornění' };
+    window.oznam = function (text, volby) {
+      if (typeof volby === 'string') volby = { nadpis: volby };
+      const druh = (volby && volby.druh) || 'chyba';
+      const nadpis = (volby && volby.nadpis) || VYCHOZI_NADPIS[druh];
       return new Promise(function (hotovo) {
         const zaclona = document.createElement('div');
         zaclona.className = 'oznameni-zaclona';
         zaclona.setAttribute('role', 'alertdialog');
         zaclona.setAttribute('aria-modal', 'true');
         const okno = document.createElement('div');
-        okno.className = 'okno';
+        okno.className = 'okno okno-' + druh;
         const h = document.createElement('h3');
-        h.textContent = nadpis || 'Upozornění';
+        h.className = 'okno-nadpis';
+        if (druh !== 'info') {
+          const znak = document.createElement('span');
+          znak.className = 'okno-znak';
+          znak.setAttribute('aria-hidden', 'true');
+          znak.textContent = '!';
+          h.appendChild(znak);
+        }
+        h.appendChild(document.createTextNode(nadpis));
         const p = document.createElement('p');
         p.textContent = text;
         const akce = document.createElement('div');
@@ -618,7 +633,7 @@
   <script>
     function showGuestAlert(event) {
       event.preventDefault();
-      oznam("Tato funkce je dostupná pouze pro přihlášené uživatele.");
+      oznam("Tato funkce je dostupná pouze pro přihlášené uživatele.", { druh: 'info', nadpis: 'Jen pro přihlášené' });
     }
     // Narrow screens only: opens the stacked menu under the bar
     function toggleNavMenu() {

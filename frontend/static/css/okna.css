@@ -93,3 +93,20 @@ html.theme-dark .okno .btn.primary:hover {
   position: fixed; inset: 0; z-index: 6100; background: rgba(0, 0, 0, 0.5);
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
+
+/* Druhy oznámení (oznam v dashboard_base). Chyba a varování mají pruh na levém kraji,
+   znak a barevný nadpis, ať je na první pohled jasné, že se něco nepovedlo. */
+.okno .okno-nadpis { display: flex; align-items: center; gap: 10px; }
+.okno .okno-znak {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-size: 16px; font-weight: 800; line-height: 1;
+}
+.okno.okno-chyba { box-shadow: inset 6px 0 0 #b3261e, 0 10px 40px rgba(0, 0, 0, 0.35); }
+.okno.okno-chyba .okno-znak { background: #b3261e; }
+.okno.okno-chyba .okno-nadpis { color: var(--panel-error, #b3261e); }
+/* Jantarová tmavší než výstražná žlutá: bílý vykřičník a nadpis na ní musí jít přečíst. */
+.okno.okno-varovani { box-shadow: inset 6px 0 0 #8a6116, 0 10px 40px rgba(0, 0, 0, 0.35); }
+.okno.okno-varovani .okno-znak { background: #8a6116; }
+.okno.okno-varovani .okno-nadpis { color: #8a6116; }
+html.theme-dark .okno.okno-varovani .okno-nadpis { color: #f0c46b; }

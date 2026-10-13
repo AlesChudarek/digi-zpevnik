@@ -1384,7 +1384,8 @@ function openCreateModal() {
           }
           const pripraveno = await EditorStran.pripravKUlozeni();
           if (!pripraveno.ok) {
-            oznam(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.');
+            oznam(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.',
+                  { druh: 'varovani', nadpis: 'Zpěvník zatím nejde uložit' });
             return;
           }
           const fd = new FormData();
@@ -1404,14 +1405,14 @@ function openCreateModal() {
           const res = await fetch(url, { method: 'POST', body: fd });
           const odpoved = await res.json().catch(() => ({}));
           if (!res.ok || !odpoved.ok) {
-            oznam('Uložení se nepovedlo: ' + (odpoved.error || `chyba serveru ${res.status}`));
+            oznam(odpoved.error || `Chyba serveru ${res.status}.`, { nadpis: 'Uložení se nepovedlo' });
             return;
           }
           createDirty = false;
           window.location.reload();
           resetLoading = false;
         } catch (e) {
-          oznam('Chyba při komunikaci se serverem');
+          oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
         } finally {
           if (resetLoading) {
             toggleButtonLoading(nbCreateBtn, null, false);
@@ -1459,12 +1460,12 @@ function openCreateModal() {
         const res = await fetch(url, { method: 'DELETE' });
         if (!res.ok) {
           const msg = await res.text();
-          oznam('Nepovedlo se: ' + popisChyby(msg, res.status));
+          oznam(popisChyby(msg, res.status), { nadpis: data.clen ? 'Odebrání se nepovedlo' : 'Smazání se nepovedlo' });
           return;
         }
         window.location.reload();
       } catch (_) {
-        oznam('Chyba při komunikaci se serverem');
+        oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
       }
     }
     document.querySelectorAll('.btn-delete').forEach(btn => {
@@ -1589,9 +1590,9 @@ function openCreateModal() {
       try {
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) { oznam(data.error || `Nepovedlo se (chyba ${res.status}).`); return; }
+        if (!res.ok || !data.ok) { oznam(data.error || `Chyba serveru ${res.status}.`); return; }
         window.location.reload();
-      } catch (_) { oznam('Chyba při komunikaci se serverem'); }
+      } catch (_) { oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' }); }
     }
     document.querySelectorAll('[data-oznameni]').forEach(el => {
       const id = el.dataset.oznameni;

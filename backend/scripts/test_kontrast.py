@@ -175,6 +175,11 @@ def main():
                 page.wait_for_timeout(300)
                 vysl += page.evaluate(AUDIT, "potvrzení")
                 page.evaluate("() => document.getElementById('app-confirm-cancel').click()")
+                for druh in ("chyba", "varovani"):
+                    page.evaluate(f"() => {{ oznam('Změna by překročila limit místa.', {{ druh: '{druh}', nadpis: 'Uložení se nepovedlo' }}); }}")
+                    page.wait_for_timeout(200)
+                    vysl += page.evaluate(AUDIT, f"oznámení ({druh})")
+                    page.keyboard.press("Escape")
                 page.wait_for_timeout(200)
                 page.evaluate("() => document.querySelector('.btn-edit').click()")
                 page.wait_for_timeout(2200)
