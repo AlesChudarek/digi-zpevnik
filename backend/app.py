@@ -1280,12 +1280,27 @@ def misto_zpevniku(book):
             or getattr(current_user, 'role', None) in ('guest', 'admin')):
         return None
     bajtu = cena_zpevniku([book.id])
-    podil = bajtu / MAX_USER_STORAGE_BYTES if MAX_USER_STORAGE_BYTES else 0
-    procent = podil * 100
+    # Celek účtu je u všech dlaždic stejný, počítá se jednou za požadavek.
+    try:
+        celkem = g._misto_uctu
+    except AttributeError:
+        celkem = g._misto_uctu = zabrane_misto(current_user.id)
+    limit = MAX_USER_STORAGE_BYTES or 1
+
+    def procenta(b):
+        p = b * 100 / limit
+        return p, ('méně než 1 %' if p < 1 else f"{p:.0f} %")
+
+    procent, text_ = procenta(bajtu)
+    procent_celkem, text_celkem = procenta(max(celkem, bajtu))
     return {
         'bajtu': bajtu,
         'sirka': max(1.5, min(100.0, procent)),     # i malý zpěvník je v pruhu vidět
-        'text': ('méně než 1 %' if procent < 1 else f"{procent:.0f} %"),
+        'text': text_,
+        'celkem_bajtu': max(celkem, bajtu),
+        'celkem_sirka': max(1.5, min(100.0, procent_celkem)),
+        'celkem_text': text_celkem,
+        'limit': MAX_USER_STORAGE_BYTES,
     }
 
 
@@ -2247,8 +2262,32 @@ def vytvor_kopii(songbook_id):
     nova = kopiruj_zpevnik(sb, current_user.id, f"{sb.title} (kopie)")
     zkontroluj_limity(pred)
     db.session.commit()
+    predvyrob_nahled(nova.id)
     schedule_export_warm(nova.id)
     return jsonify({'ok': True, 'id': nova.id})
+
+
+def predvyrob_nahled(book_id):
+    """Vyrobí zmenšený náhled obálky na pozadí, ať ho dlaždice nemusí čekat.
+
+    Bez toho vzniká až při prvním zobrazení Mých zpěvníků - u nové kopie nebo nové
+    obálky tak chvíli chyběl. Selhání nevadí, náhled se pak vyrobí jako dřív.
+    """
+    def prace():
+        try:
+            with app.app_context():
+                sb = db.session.get(Songbook, book_id)
+                rel = sb.img_path_cover_preview if sb else None
+                zdroj = _abs_image_path(rel) if rel else None
+                n = _nahledy()
+                k = n.klic(zdroj, n.OBALKA) if zdroj else None
+                if k:
+                    cil = n.soubor_nahledu(NAHLEDY_DIR, book_id, k)
+                    if not cil.exists():
+                        n.vyrob(zdroj, cil, n.OBALKA)
+        except Exception:  # noqa: BLE001 - jen urychlení, nic na tom nezávisí
+            pass
+    threading.Thread(target=prace, daemon=True).start()
 
 
 def _moje_pozvanka(pozvanka_id):
@@ -2279,6 +2318,7 @@ def prijmi_pozvanku(pozvanka_id):
     zkontroluj_limity(pred)
     db.session.commit()
     if cil is not sb:
+        predvyrob_nahled(cil.id)
         schedule_export_warm(cil.id)
     return jsonify({'ok': True, 'id': cil.id})
 
@@ -2777,6 +2817,7 @@ def uloz_zpevnik(songbook_id=None):
         return jsonify({'ok': False, 'error': str(chyba)}), 400
 
     smaz_osirele_obrazky(ke_smazani)
+    predvyrob_nahled(sb.id)
     schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'id': sb.id})
 

@@ -443,10 +443,31 @@ def main():
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         tlacitka = druhy.evaluate("[...document.querySelectorAll('#app-confirm-overlay button')]"
                                   ".filter(b => b.offsetParent).map(b => b.textContent.trim())")
-        zkontroluj(sorted(tlacitka) == sorted(["Zrušit", "Odebrat", "Odebrat a ponechat kopii"])
+        zkontroluj(tlacitka == ["Odebrat a ponechat kopii", "Odebrat", "Zrušit"]
                    and "zůstane beze změny" in druhy.inner_text("#app-confirm-message"),
-                   "koš u cizího zpěvníku nabídne Zrušit / Odebrat / Odebrat a ponechat kopii", tlacitka)
+                   "koš u cizího zpěvníku nabídne Odebrat a ponechat kopii / Odebrat / Zrušit", tlacitka)
+        rozlozeni = druhy.evaluate("""() => [...document.querySelectorAll('#app-confirm-overlay button')]
+          .filter(b => b.offsetParent).map(b => { const r = b.getBoundingClientRect(), c = getComputedStyle(b);
+            return {x: Math.round(r.left), w: Math.round(r.width), y: Math.round(r.top), pozadi: c.backgroundColor, barva: c.color}; })""")
+        zkontroluj(len({(t["x"], t["w"]) for t in rozlozeni}) == 1
+                   and [t["y"] for t in rozlozeni] == sorted(t["y"] for t in rozlozeni),
+                   "tlačítka jsou pod sebou a stejně široká", rozlozeni)
+        zkontroluj(rozlozeni[1]["pozadi"] == "rgb(179, 38, 30)" and rozlozeni[0]["barva"] == "rgb(179, 38, 30)"
+                   and rozlozeni[0]["pozadi"] in ("rgba(0, 0, 0, 0)", "transparent"),
+                   "Odebrat je plně červené, Odebrat a ponechat kopii jen červeně orámované",
+                   [(t["pozadi"], t["barva"]) for t in rozlozeni])
         druhy.click("#app-confirm-cancel")
+        page.goto(base + "/my-songbooks")
+        page.wait_for_load_state("networkidle")
+        pruhy = page.evaluate("""() => [...document.querySelectorAll('.misto-zpevniku')].map(m => ({
+          celkem: Math.round(m.querySelector('.celkem').getBoundingClientRect().width),
+          tento: Math.round(m.querySelector('.tento').getBoundingClientRect().width)}))""")
+        zkontroluj(len(pruhy) >= 2 and len({p["celkem"] for p in pruhy}) == 1
+                   and all(p["tento"] <= p["celkem"] for p in pruhy),
+                   "pruh místa: celkem u všech dlaždic stejně, podíl zpěvníku nikdy víc", pruhy)
+        druhy.wait_for_timeout(1500)
+        nacita = druhy.locator(".cover-preview.nacita").count()
+        zkontroluj(nacita == 0, "po načtení žádná obálka nezůstane s kolečkem", nacita)
         druhy.click(f'.btn-kopie[data-book-id="{vlastni}"]')
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         with druhy.expect_navigation():

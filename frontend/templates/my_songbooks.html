@@ -81,6 +81,16 @@
     background: transparent;
     border-radius: 10px 10px 0 0;
   }
+  .cover-preview.nacita::after {
+    content: ""; position: absolute; width: 34px; height: 34px; border-radius: 50%;
+    border: 4px solid rgba(0, 0, 0, 0.12); border-top-color: rgba(0, 0, 0, 0.45);
+    animation: nahled-toci 0.9s linear infinite;
+  }
+  @keyframes nahled-toci { to { transform: rotate(360deg); } }
+  .cover-preview.chybi::after {
+    content: "Náhled se nenačetl"; color: #fff; font-size: 13px; font-weight: 600;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45); padding: 0 10px; text-align: center;
+  }
   .cover-preview .no-cover {
     color: #ffffff;
     font-weight: 600;
@@ -112,7 +122,12 @@
   
   /* Pruh s místem, které zpěvník zabírá z limitu účtu */
   .misto-zpevniku { height: 4px; margin: -4px 14px 6px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
-  .misto-zpevniku span { display: block; height: 100%; background: var(--brand-strong, #2E7D32); border-radius: 2px; }
+  /* Světlý pruh = obsazené místo celkem (u všech dlaždic stejný), tmavý = podíl tohoto
+     zpěvníku, šedá = volné. Dřív byl jen podíl zpěvníku a dva zpěvníky po 50 % vypadaly,
+     jako by se do každého vešlo ještě jednou tolik. */
+  .misto-zpevniku { position: relative; }
+  .misto-zpevniku span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; background: var(--brand-strong, #2E7D32); }
+  .misto-zpevniku span.celkem { opacity: 0.35; }
 
   /* Pozvánky ke sdílení nad dlaždicemi */
   .pozvanky { max-width: 900px; margin: 0 auto 16px; display: flex; flex-direction: column; gap: 8px; padding: 0 12px; }
@@ -326,10 +341,14 @@
   {% for book in songbooks|sort(attribute='id') %}
     <div class="songbook-card">
       <a href="{{ url_for('songbook_detail', book_id=book.id) }}" style="text-decoration:none; color:inherit;">
-        <div class="cover-preview" style="background: {{ book.color or '#ffffff' }};">
+        <div class="cover-preview{% if book.img_path_cover_preview %} nacita{% endif %}" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
+            {# Náhled se při prvním zobrazení teprve vyrábí (nová kopie, nová obálka) -
+               do té doby točící se kolečko, ať místo není prázdné. #}
             <img src="{{ url_nahledu(book) or ('/songbooks/' + book.img_path_cover_preview) }}"
-                 loading="lazy" alt="Náhled obalu">
+                 loading="lazy" alt="Náhled obalu"
+                 onload="this.parentElement.classList.remove('nacita')"
+                 onerror="this.parentElement.classList.remove('nacita'); this.parentElement.classList.add('chybi'); this.remove()">
           {% else %}
             <div class="no-cover"></div>
           {% endif %}
@@ -353,8 +372,9 @@
         {% if misto_z %}
           {# Kolik místa zpěvník zabírá: pruh, ne megabajty - ty lidem nic neřeknou. #}
           <div class="misto-zpevniku" role="img" aria-label="Zabírá {{ misto_z.text }} limitu místa"
-               data-napoveda="Zabírá {{ misto_z.text }} limitu místa ({{ mb(misto_z.bajtu) }}).{% if share_users %} Společný zpěvník se započítává každému, kdo ho má.{% endif %}">
-            <span style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
+               data-napoveda="Tento zpěvník zabírá {{ misto_z.text }} limitu místa ({{ mb(misto_z.bajtu) }}), všechny zpěvníky dohromady {{ misto_z.celkem_text }} ({{ mb(misto_z.celkem_bajtu) }} z {{ mb(misto_z.limit) }}).{% if share_users %} Společný zpěvník se započítává každému, kdo ho má.{% endif %}">
+            <span class="celkem" style="width: {{ '%.1f'|format(misto_z.celkem_sirka) }}%"></span>
+            <span class="tento" style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
           </div>
         {% endif %}
       </a>
@@ -778,8 +798,10 @@
       });
     };
     // Three-option confirm for unsaved changes (Cancel/Discard/Save)
-    // Popisky jdou předat, ať se dialog dá použít i mimo neuložené změny (např.
-    // Zrušit / Odebrat / Odebrat a ponechat kopii). Vrací 'discard', 'save' nebo 'cancel'.
+    // Popisky a styly jdou předat, ať se dialog dá použít i mimo neuložené změny, např.
+    // { discard: 'Odebrat', save: 'Odebrat a ponechat kopii',
+    //   discardStyl: 'nebezpecne', saveStyl: 'mekke-nebezpecne' }.
+    // Tlačítka jsou pod sebou (třída svisle). Vrací 'discard', 'save' nebo 'cancel'.
     window.showUnsavedConfirm = function(message, popisky) {
       return new Promise((resolve) => {
         const overlay = document.getElementById('app-confirm-overlay');
@@ -796,11 +818,18 @@
         msgEl.textContent = message || 'Zahodit neuložené změny?';
         btnOk.textContent = (popisky && popisky.discard) || 'Zahodit';
         btnSave.textContent = (popisky && popisky.save) || 'Uložit';
-        // Hlavní je Uložit (u odebrání „Odebrat a ponechat kopii“); Zahodit a Zrušit tichá.
+        // Pořadí shora: Uložit, Zahodit, Zrušit. Výchozí styly pro neuložené změny,
+        // jinak podle popisky (u odebrání obě volby červené, jedna bez výplně).
+        const STYLY = ['primary', 'nebezpecne', 'mekke-nebezpecne'];
         btnSave.style.display = '';
-        btnSave.classList.add('primary');
-        btnCancel.classList.remove('primary', 'nebezpecne');
-        btnOk.classList.remove('primary', 'nebezpecne');
+        btnSave.classList.remove(...STYLY);
+        btnOk.classList.remove(...STYLY);
+        btnCancel.classList.remove(...STYLY);
+        btnSave.classList.add((popisky && popisky.saveStyl) || 'primary');
+        btnOk.classList.add((popisky && popisky.discardStyl) || 'mekke-nebezpecne');
+        const akce = btnOk.parentElement;
+        akce.classList.add('svisle');
+        akce.append(btnSave, btnOk, btnCancel);
         overlay.style.display = 'flex';
         overlay.setAttribute('aria-hidden', 'false');
 
@@ -812,11 +841,14 @@
           btnSave.removeEventListener('click', onSave);
           overlay.removeEventListener('click', onOverlay);
           document.removeEventListener('keydown', onKey);
-          // Zpátky do výchozího stavu: hlavní je zase potvrzení
+          // Zpátky do výchozího stavu: vedle sebe Zrušit a hlavní potvrzení
           btnSave.style.display = 'none';
-          btnSave.classList.remove('primary');
+          ['primary', 'nebezpecne', 'mekke-nebezpecne'].forEach(c => { btnSave.classList.remove(c); btnOk.classList.remove(c); });
           btnOk.classList.add('primary');
           btnCancel.classList.remove('primary');
+          const akce = btnOk.parentElement;
+          akce.classList.remove('svisle');
+          akce.append(btnCancel, btnOk, btnSave);
         };
         const onDiscard = () => { cleanup(); resolve('discard'); };
         const onCancel = () => { cleanup(); resolve('cancel'); };
@@ -1398,7 +1430,8 @@ function openCreateModal() {
       if (data.clen) {
         const volba = await window.showUnsavedConfirm(
           `Odebrat zpěvník „${data.title}“ ze svých zpěvníků? Ostatním, kdo ho upravují, zůstane beze změny. Kopie v aktuální podobě se dá ponechat; započítá se do limitu místa.`,
-          { discard: 'Odebrat', save: 'Odebrat a ponechat kopii' });
+          { discard: 'Odebrat', save: 'Odebrat a ponechat kopii',
+            discardStyl: 'nebezpecne', saveStyl: 'mekke-nebezpecne' });
         if (volba === 'cancel') return;
         if (volba === 'save') url += '?kopie=1';
       } else {
