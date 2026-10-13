@@ -265,12 +265,13 @@
       display: flex; justify-content: space-between; align-items: center;
       gap: 10px; font-size: 12px; color: #555; margin-bottom: 6px;
     }
-    .ucet-panel .ucet-misto-cislo { color: #333; white-space: nowrap; }
+    /* Znak a číslo vedle sebe jako flex: vertical-align na inline kroužku seděl na
+       účaří textu, ne na jeho středu, a vykřičník byl proti číslu níž. */
+    .ucet-panel .ucet-misto-cislo { color: #333; white-space: nowrap; display: inline-flex; align-items: center; gap: 4px; }
     .ucet-panel .ucet-misto-znak {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 14px; height: 14px; border-radius: 50%; margin-right: 4px;
-      font-size: 10px; font-weight: 700; color: #fff; cursor: help;
-      vertical-align: -2px;
+      width: 14px; height: 14px; border-radius: 50%; flex: 0 0 auto;
+      font-size: 10px; font-weight: 700; line-height: 1; color: #fff; cursor: help;
     }
     .ucet-panel .ucet-misto-pruh {
       height: 4px; border-radius: 999px; background: #e9e9e9; overflow: hidden;
@@ -573,12 +574,51 @@
       } catch (e) { /* nebyl to JSON, použijeme text tak jak je */ }
       return text.length > 200 ? ('chyba ' + kod) : text;
     }
+
+    // Oznámení ve vlastním okně místo alert() prohlížeče - stejný vzhled jako ostatní
+    // okna (css/okna.css). Vrací Promise, která se splní po zavření.
+    window.oznam = function (text, nadpis) {
+      return new Promise(function (hotovo) {
+        const zaclona = document.createElement('div');
+        zaclona.className = 'oznameni-zaclona';
+        zaclona.setAttribute('role', 'alertdialog');
+        zaclona.setAttribute('aria-modal', 'true');
+        const okno = document.createElement('div');
+        okno.className = 'okno';
+        const h = document.createElement('h3');
+        h.textContent = nadpis || 'Upozornění';
+        const p = document.createElement('p');
+        p.textContent = text;
+        const akce = document.createElement('div');
+        akce.className = 'actions';
+        const ok = document.createElement('button');
+        ok.type = 'button';
+        ok.className = 'btn primary';
+        ok.textContent = 'Zavřít';
+        akce.appendChild(ok);
+        okno.append(h, p, akce);
+        zaclona.appendChild(okno);
+        document.body.appendChild(zaclona);
+        ok.focus();
+        function zavri() {
+          zaclona.remove();
+          document.removeEventListener('keydown', klavesa, true);
+          hotovo();
+        }
+        function klavesa(e) {
+          if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); zavri(); }
+        }
+        ok.addEventListener('click', zavri);
+        zaclona.addEventListener('click', function (e) { if (e.target === zaclona) zavri(); });
+        document.addEventListener('keydown', klavesa, true);
+      });
+    };
   </script>
 
   <script>
     function showGuestAlert(event) {
       event.preventDefault();
-      alert("Tato funkce je dostupná pouze pro přihlášené uživatele.");
+      oznam("Tato funkce je dostupná pouze pro přihlášené uživatele.");
     }
     // Narrow screens only: opens the stacked menu under the bar
     function toggleNavMenu() {

@@ -37,6 +37,14 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       nevzniklých ovládacích prvcích barvy a prázdné `catch` to spolklo; a obnovení stránky
       po uložení by s parametry v adrese otevřelo okno znovu.
 
+- [ ] **pořadí zpěvníků v Mých zpěvnících** (13. 10.). Dnes se řadí podle id jako
+      textu: `u<účet>-<čas založení>`, takže vlastní zpěvníky vyjdou podle data založení,
+      ale cizí sdílené podle čísla účtu (a textově: `u10-` je před `u2-`); admin, který
+      vidí soukromé zpěvníky všech, má svůj nový zpěvník skoro na začátku. Nikdo to tak
+      nenavrhl. Chce to (a) rozumné výchozí pořadí nezávislé na tvaru id (třeba podle
+      data založení nebo abecedy) a (b) vlastní řazení přetahováním dlaždic, uložené
+      zvlášť pro každého uživatele (u společného zpěvníku má každý své pořadí).
+
 ## Datový model
 
 - [X] **zpěvník je řada stran** — nasazeno 7. 10. 2026. Tabulky

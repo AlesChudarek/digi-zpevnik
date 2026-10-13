@@ -514,6 +514,13 @@ def main():
         zkontroluj(kk is not None and all((OBRAZKY / st.image_path).exists() for st in kk.strany if st.image_path),
                    "členové o zpěvník nepřijdou - mají kopii i s obrázky", nove4)
 
+    print("\n── admin a cizí zpěvník ──")
+    z = admin.get(f"/api/zpevnik/{kopie}").get_json()["zpevnik"]
+    zkontroluj(z["cizi"] and z["vlastnik"] == EMAIL4,
+               "editor ví, že admin upravuje cizí zpěvník a čí", (z["cizi"], z["vlastnik"]))
+    z = u4.get(f"/api/zpevnik/{kopie}").get_json()["zpevnik"]
+    zkontroluj(not z["cizi"], "vlastníkovi se nic nehlásí")
+
     print("\n── veřejný zpěvník od admina ──")
     _, x = nahraj(admin, "green", verejny="1")
     kod, telo = uloz(admin, verejny="1", nazev="Veřejný test",

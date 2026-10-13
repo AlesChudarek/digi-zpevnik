@@ -2428,10 +2428,17 @@ def nacti_zpevnik_pro_editor(songbook_id):
     for role in ('front_outer', 'front_inner', 'back_inner', 'back_outer'):
         cesta = getattr(sb, f'img_path_cover_{role}')
         obalky[role] = {'cesta': cesta, 'jmeno': Path(cesta).name if cesta else None}
+    # Admin smí upravit cizí soukromý zpěvník; editor ho pak před uložením upozorní,
+    # že se změna projeví vlastníkovi (a těm, kdo ho upravují společně).
+    vlastnik = db.session.get(User, sb.owner_id) if sb.owner_id else None
+    cizi = bool(vlastnik and vlastnik.id != current_user.id and not sb.is_public)
     return jsonify({
         'ok': True,
         'zpevnik': {
             'id': sb.id,
+            'cizi': cizi,
+            'vlastnik': vlastnik.email if vlastnik else None,
+            'clenu': UserSongbookAccess.query.filter_by(songbook_id=sb.id).count(),
             'nazev': sb.title,
             'barva': sb.color or '#FFFFFF',
             'prvni_cislo': sb.prvni_cislo_strany or 1,

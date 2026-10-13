@@ -412,6 +412,7 @@
         <span class="s-napovedou" data-napoveda="{{ co_kos }}">
           <button class="icon-btn btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
                   data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
+                  data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}"
                   onclick="event.preventDefault(); event.stopPropagation();">
             <img src="{{ static_bust('img/icons/bin.svg') }}" alt="{{ co_kos }}">
           </button>
@@ -1373,9 +1374,17 @@ function openCreateModal() {
         toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, popisek);
         let resetLoading = true;
         try {
+          // Admin ukládá cizí zpěvník: změnu uvidí vlastník a ti, kdo ho upravují společně.
+          const info = window.__editMode ? window.__editInfo : null;
+          if (info && info.cizi) {
+            const zprava = `Zpěvník patří uživateli ${info.vlastnik}`
+              + (info.clenu ? ` a upravují ho společně další (${info.clenu})` : '')
+              + '. Změna se projeví u nich.';
+            if (!(await window.showConfirm(zprava, 'Uložit cizí zpěvník'))) return;
+          }
           const pripraveno = await EditorStran.pripravKUlozeni();
           if (!pripraveno.ok) {
-            alert(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.');
+            oznam(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.');
             return;
           }
           const fd = new FormData();
@@ -1395,14 +1404,14 @@ function openCreateModal() {
           const res = await fetch(url, { method: 'POST', body: fd });
           const odpoved = await res.json().catch(() => ({}));
           if (!res.ok || !odpoved.ok) {
-            alert('Uložení se nepovedlo: ' + (odpoved.error || `chyba serveru ${res.status}`));
+            oznam('Uložení se nepovedlo: ' + (odpoved.error || `chyba serveru ${res.status}`));
             return;
           }
           createDirty = false;
           window.location.reload();
           resetLoading = false;
         } catch (e) {
-          alert('Chyba při komunikaci se serverem');
+          oznam('Chyba při komunikaci se serverem');
         } finally {
           if (resetLoading) {
             toggleButtonLoading(nbCreateBtn, null, false);
@@ -1430,13 +1439,19 @@ function openCreateModal() {
       if (data.clen) {
         const volba = await window.showUnsavedConfirm(
           `Odebrat zpěvník „${data.title}“ ze svých zpěvníků? Ostatním, kdo ho upravují, zůstane beze změny. Kopie v aktuální podobě se dá ponechat; započítá se do limitu místa.`,
-          { discard: 'Odebrat', save: 'Odebrat a ponechat kopii',
+          { discard: 'Odebrat', save: 'Odebrat a ponechat vlastní kopii',
             discardStyl: 'nebezpecne', saveStyl: 'mekke-nebezpecne' });
         if (volba === 'cancel') return;
         if (volba === 'save') url += '?kopie=1';
+      } else if (data.ciziVlastnik) {
+        // Admin maže cizí zpěvník: vlastník o něj přijde, ať se to nestane omylem.
+        const zprava = `Zpěvník „${data.title}“ patří uživateli ${data.ciziVlastnik}. Smazáním o něj vlastník přijde`
+          + (data.clenu ? `; ostatní, kdo ho upravují společně (${data.clenu}), dostanou jeho kopii.` : '.')
+          + ' Smazání nejde vrátit.';
+        if (!(await window.showConfirm(zprava, 'Smazat cizí zpěvník', { nebezpecne: true }))) return;
       } else {
         const zprava = data.clenu
-          ? `Smazat zpěvník „${data.title}“? Upravuje ho společně ještě ${data.clenu === 1 ? 'jeden uživatel' : data.clenu + ' uživatelé'}; každý dostane jeho kopii v aktuální podobě.`
+          ? `Smazat zpěvník „${data.title}“? Ostatní, kdo ho upravují společně (${data.clenu}), dostanou jeho kopii v aktuální podobě.`
           : `Smazat zpěvník „${data.title}“? Smazání nejde vrátit.`;
         if (!(await window.showConfirm(zprava, 'Smazat', { nebezpecne: true }))) return;
       }
@@ -1444,18 +1459,19 @@ function openCreateModal() {
         const res = await fetch(url, { method: 'DELETE' });
         if (!res.ok) {
           const msg = await res.text();
-          alert('Nepovedlo se: ' + popisChyby(msg, res.status));
+          oznam('Nepovedlo se: ' + popisChyby(msg, res.status));
           return;
         }
         window.location.reload();
       } catch (_) {
-        alert('Chyba při komunikaci se serverem');
+        oznam('Chyba při komunikaci se serverem');
       }
     }
     document.querySelectorAll('.btn-delete').forEach(btn => {
       btn.addEventListener('click', () => smazNeboOdejdi({
         id: btn.dataset.bookId, title: btn.dataset.bookTitle || 'zpěvník',
-        clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10) }));
+        clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10),
+        ciziVlastnik: btn.dataset.ciziVlastnik || '' }));
     });
 
     function setShareFeedback(message, type) {
@@ -1573,9 +1589,9 @@ function openCreateModal() {
       try {
         const res = await fetch(url, { method: 'POST' });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) { alert(data.error || `Nepovedlo se (chyba ${res.status}).`); return; }
+        if (!res.ok || !data.ok) { oznam(data.error || `Nepovedlo se (chyba ${res.status}).`); return; }
         window.location.reload();
-      } catch (_) { alert('Chyba při komunikaci se serverem'); }
+      } catch (_) { oznam('Chyba při komunikaci se serverem'); }
     }
     document.querySelectorAll('[data-oznameni]').forEach(el => {
       const id = el.dataset.oznameni;
@@ -1719,7 +1735,7 @@ function openCreateModal() {
     window.__editBookId = null;
 
     window.openEditSongbookModal = (bookId) => {
-      window.__editMode = true; window.__editBookId = bookId;
+      window.__editMode = true; window.__editBookId = bookId; window.__editInfo = null;
       const title = document.getElementById('nb-title'); if (title) title.textContent = 'Upravit zpěvník';
       if (nbCreateBtn) nbCreateBtn.textContent = 'Uložit';
       openCreateModal();
@@ -1740,6 +1756,7 @@ function openCreateModal() {
           const face = document.getElementById(faceId);
           if (face) face.style.backgroundImage = `url('/songbooks/${obalka.cesta}')`;
         });
+        window.__editInfo = { cizi: !!z.cizi, vlastnik: z.vlastnik, clenu: z.clenu || 0 };
         EditorStran.nacti(z.strany, z.prvni_cislo);
         createDirty = false;
         obnovUlozit();

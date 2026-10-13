@@ -1473,8 +1473,8 @@ function animateModeTogglePreview(showTarget, force = false) {
                   try {
                     const fd = new FormData(); fd.append('song_id', songId);
                     const res = await fetch(`/api/songbooks/${encodeURIComponent(it.id)}/add-song`, { method: 'POST', body: fd });
-                    if (!res.ok) { const t = await res.text(); alert('Přidání selhalo: ' + popisChyby(t, res.status)); } else { overlay.remove(); }
-                  } catch(_) { alert('Chyba při komunikaci se serverem'); }
+                    if (!res.ok) { const t = await res.text(); oznam('Přidání selhalo: ' + popisChyby(t, res.status)); } else { overlay.remove(); }
+                  } catch(_) { oznam('Chyba při komunikaci se serverem'); }
                 });
                 list.appendChild(b);
               });
@@ -1518,13 +1518,13 @@ function animateModeTogglePreview(showTarget, force = false) {
                   const resp = await fetch(`/api/my-songbooks/${encodeURIComponent(BOOK_ID)}/songs/${encodeURIComponent(entry.song_id)}`, { method: 'DELETE' });
                   if (!resp.ok) {
                     const text = await resp.text();
-                    alert('Mazání písničky selhalo: ' + popisChyby(text, resp.status));
+                    oznam('Mazání písničky selhalo: ' + popisChyby(text, resp.status));
                     return;
                   }
                   window.location.reload();
                 } catch (err) {
                   console.error(err);
-                  alert('Chyba při mazání písničky.');
+                  oznam('Chyba při mazání písničky.');
                 }
               });
 
@@ -1858,7 +1858,7 @@ function otevriStahovani(event) {
   if (event) event.stopPropagation();
   if (!SMI_STAHOVAT) {
     // Rovnou důvod, ne okno s volbami, ze kterých žádná nezafunguje.
-    alert(DUVOD_ZAKAZU);
+    oznam(DUVOD_ZAKAZU);
     return;
   }
   Stahovani.otevri(DOWNLOAD_BOOK_ID, SONGBOOK_TITLE);

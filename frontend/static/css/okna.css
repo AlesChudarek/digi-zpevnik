@@ -87,3 +87,9 @@ html.theme-dark .okno .btn.primary:hover {
   background: var(--panel-text, #e6eaf2);
   color: var(--panel-bg, #161c2b);
 }
+
+/* Zaclona pro oznam() z dashboard_base - nad vším, stejně jako potvrzení. */
+.oznameni-zaclona {
+  position: fixed; inset: 0; z-index: 6100; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}

@@ -205,7 +205,12 @@ def main():
         chyba = strana(page, 4).locator(".es-chyby").inner_text()
         zkontroluj("obrázek" in chyba and "název" in chyba,
                    "neúplná strana se vyznačí a neuloží", chyba)
-        zkontroluj(dialogy and "není úplná" in dialogy[-1], "a řekne se proč", dialogy[-1:] or "")
+        page.wait_for_selector(".oznameni-zaclona .okno")
+        text = page.inner_text(".oznameni-zaclona .okno")
+        zkontroluj("není úplná" in text and not dialogy,
+                   "a řekne se proč - ve vlastním okně, ne v alertu prohlížeče", text)
+        page.keyboard.press("Enter")
+        zkontroluj(page.locator(".oznameni-zaclona").count() == 0, "oznámení zavře Enter")
         strana(page, 4).locator(".es-odebrat").click()
 
         with page.expect_navigation():
@@ -443,9 +448,9 @@ def main():
         druhy.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
         tlacitka = druhy.evaluate("[...document.querySelectorAll('#app-confirm-overlay button')]"
                                   ".filter(b => b.offsetParent).map(b => b.textContent.trim())")
-        zkontroluj(tlacitka == ["Odebrat a ponechat kopii", "Odebrat", "Zrušit"]
+        zkontroluj(tlacitka == ["Odebrat a ponechat vlastní kopii", "Odebrat", "Zrušit"]
                    and "zůstane beze změny" in druhy.inner_text("#app-confirm-message"),
-                   "koš u cizího zpěvníku nabídne Odebrat a ponechat kopii / Odebrat / Zrušit", tlacitka)
+                   "koš u cizího zpěvníku nabídne Odebrat a ponechat vlastní kopii / Odebrat / Zrušit", tlacitka)
         rozlozeni = druhy.evaluate("""() => [...document.querySelectorAll('#app-confirm-overlay button')]
           .filter(b => b.offsetParent).map(b => { const r = b.getBoundingClientRect(), c = getComputedStyle(b);
             return {x: Math.round(r.left), w: Math.round(r.width), y: Math.round(r.top), pozadi: c.backgroundColor, barva: c.color}; })""")
