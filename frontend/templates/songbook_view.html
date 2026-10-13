@@ -914,6 +914,19 @@
     };
   }
 
+  /* Nová adresa do rámečku strany. Prohlížeč jinak ukazuje starý obrázek, dokud se
+     nový nenačte - u pomalu se načítající obálky tak v jejím rámečku visela strana,
+     ze které se přelistovalo (13. 10., čerstvá kopie zpěvníku). Bez adresy rámeček
+     ukáže jen podklad (barvu obálky nebo bílou), dokud nová strana nedorazí. */
+  function nastavObrazekStrany(img, adresa) {
+    const nova = new URL(adresa, location.href).href;
+    // Ostrý originál téže strany (zajistiOstrost) se nesmí vrátit na náhled.
+    const plna = img.dataset.full ? new URL(img.dataset.full, location.href).href : '';
+    if (img.src === nova || (plna && img.src === plna)) return;
+    img.removeAttribute('src');
+    img.src = nova;
+  }
+
   function updatePages() {
     // Save lastDoublePage for memory
     lastDoublePage = currentPage;
@@ -964,7 +977,7 @@
     if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
       leftPage.style.display = 'block';
       leftPage.dataset.full = `/songbooks/${leftPageFile.file}`;
-      leftPage.src = adresaStrany(leftPageFile.file);
+      nastavObrazekStrany(leftPage, adresaStrany(leftPageFile.file));
       stylePageImg(leftPage, leftPageFile);
       // Hide blank canvas if present
       const blank = document.getElementById('left-page-blank');
@@ -991,7 +1004,7 @@
     if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
       rightPage.style.display = 'block';
       rightPage.dataset.full = `/songbooks/${rightPageFile.file}`;
-      rightPage.src = adresaStrany(rightPageFile.file);
+      nastavObrazekStrany(rightPage, adresaStrany(rightPageFile.file));
       stylePageImg(rightPage, rightPageFile);
       const blank = document.getElementById('right-page-blank');
       if (blank) blank.style.display = 'none';

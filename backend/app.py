@@ -2248,6 +2248,21 @@ def verejne_pisne(song_ids):
             .filter(PisenNaStrane.song_id.in_(list(song_ids)), Songbook.is_public == 1).distinct()}
 
 
+def _prevezmi_nahled_strany(stara, nova, zdroj):
+    """Zkopírovaná obálka má jinou cestu, a tedy jiné jméno náhledu pro čtečku - ten by
+    se jinak vyráběl znovu při prvním otevření. Na slabém serveru to u čtyř obálek
+    trvalo desítky sekund a čtečka mezitím obálku neukázala. Obsah i čas změny jsou
+    stejné (copy2), takže hotový náhled originálu platí i pro kopii."""
+    try:
+        n = _nahledy()
+        k = n.klic(zdroj, n.STRANA)
+        hotovy = n.soubor_strany(NAHLEDY_DIR, n.otisk_cesty(stara), k) if k else None
+        if hotovy and hotovy.exists():
+            shutil.copy2(hotovy, n.soubor_strany(NAHLEDY_DIR, n.otisk_cesty(nova), k))
+    except OSError:
+        pass   # vyrobí se při prvním zobrazení jako dřív
+
+
 def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
     """Samostatná kopie zpěvníku pro daného vlastníka. Necommituje.
 
@@ -2271,6 +2286,7 @@ def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
         cil = IMAGES_DIR / rel
         cil.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(zdroj, cil)
+        _prevezmi_nahled_strany(cesta, rel, zdroj)
         setattr(nova, f'img_path_cover_{role}', rel)
         Obrazek.ziskej(rel).velikost = cil.stat().st_size
     nova.img_path_cover_preview = nova.img_path_cover_front_outer

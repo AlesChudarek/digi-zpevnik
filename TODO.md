@@ -190,6 +190,11 @@ kdo maže.
 
 ## Čtečka
 
+- [X] **v rámečku obálky visela cizí strana** (13. 10.). Prohlížeč ukazuje starý obrázek,
+      dokud se nový nenačte; u pomalé obálky (čerstvá kopie, náhled se teprve vyráběl)
+      tak po přelistování zpátky zůstala vidět strana 1. `nastavObrazekStrany` rámeček
+      nejdřív vyprázdní, takže je vidět barva zpěvníku. Kopie zpěvníku navíc přebírá
+      hotové náhledy obálek pro čtečku (`_prevezmi_nahled_strany`), nic se nevyrábí.
 - [X] zvýraznit režim, ve kterém jsem, nebo jedna ikona, co se mění
 - [X] každá stránka po načtení sjede o pár pixelů dolů
 - [X] ukazatel rychlosti je přilepený k ostatním tlačítkům: mizí s nimi a jejich schování
