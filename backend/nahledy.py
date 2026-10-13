@@ -100,7 +100,15 @@ def vyrob(zdroj: Path, cil: Path, profil: Profil = OBALKA) -> bool:
         # pak přejmenovával něco, co už neexistovalo.
         docasny = cil.with_name(f"{cil.stem}.{os.getpid()}-{uuid4().hex[:8]}.rozepsany")
         try:
-            nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=6)
+            # S průhledností je method=6 patologicky pomalý: obálka 1748 × 2480 (LA)
+            # trvala 30 s na Macu a 145 s na serveru, takže požadavek vždycky spadl
+            # na 60s limit a náhled nevznikl nikdy (13. 10.). method=4 to zvládne za
+            # 0,6 s, alpha_quality=70 k tomu soubor zhruba způlí. Bez alfy (strany)
+            # je method=6 rychlý a dává menší soubor, tam zůstává.
+            if nahled.mode == 'RGBA':
+                nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=4, alpha_quality=70)
+            else:
+                nahled.save(docasny, 'WEBP', quality=profil.kvalita, method=6)
             docasny.replace(cil)
         except Exception:
             # Ať po nepovedeném pokusu nezůstane rozepsaný soubor ležet. Úklid starých

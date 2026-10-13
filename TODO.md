@@ -190,6 +190,11 @@ kdo maže.
 
 ## Čtečka
 
+- [X] **průhledné obálky neměly náhled nikdy** (13. 10.). WebP s alfou v `method=6`
+      trval u obálky 1748 × 2480 (LA) 145 s na serveru, požadavek padal na 60s limit
+      gunicornu a náhled nevznikl - čtečka obálku neukázala ani u originálu, ani
+      u kopie. `nahledy.vyrob` teď pro obrázky s alfou bere `method=4, alpha_quality=70`
+      (0,5 s, poloviční soubor); strany bez alfy dál `method=6`.
 - [X] **v rámečku obálky visela cizí strana** (13. 10.). Prohlížeč ukazuje starý obrázek,
       dokud se nový nenačte; u pomalé obálky (čerstvá kopie, náhled se teprve vyráběl)
       tak po přelistování zpátky zůstala vidět strana 1. `nastavObrazekStrany` rámeček
