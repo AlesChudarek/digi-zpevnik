@@ -335,7 +335,15 @@ kdo maže.
       se v `render_songbook_zip` podloží barvou zpěvníku a uloží jako PNG (bezztrátově),
       chybějící strana obálky je barevná plocha jako v PDF. Vnitřní strany dál originály.
       Starší ZIPy v cache neplatí (klíč `zip-obalky-v2`). Hlídá `test_export.py`.
-- [ ] (?) **po smazání zpěvníků zůstaly soubory obálek.** Lokálně 13. 10. hlásí
+- [X] **po nepovedeném duplikování zůstávaly soubory obálek** (14. 10.). Příčina nebylo
+      mazání: kopie zkopírovala obálky dřív, než se zkontroloval limit místa, a při
+      odmítnutí se vrátila jen databáze. Totéž přijetí pozvánky. A výměna obálky v editoru
+      přepisovala soubor na místě - při odmítnutí uložení byla stará obálka pryč a úklid
+      ji rovnou smazal. Teď: obálka vždy pod novým jménem (`front-out-2.png`), stará se
+      maže až po uložení; zapsané soubory se po každém nepovedeném uložení uklidí
+      (`_uklid_zapsane`). Na serveru nic neleželo, lokálně smazáno 18 souborů (4,8 MB).
+      Hlídá `test_editor.py`.
+- [X] ~~(?) **po smazání zpěvníků zůstaly soubory obálek.** Lokálně 13. 10. hlásí
       `kontrola_zpevniku` 15 souborů obálek ve složkách zpěvníků účtu 2
       (`u2-1791879641` … `u2-1791882393`, založené 10:20-11:06 při zkoušení), které už
       v DB nejsou, plus 2 neuložené strany. Strany uklidí `_uklid_neulozenych_stran`,
@@ -681,7 +689,8 @@ kdo maže.
 
 - [ ] **využít role pro zpřístupnění funkcí.** Role už v aplikaci jsou (`admin`, `user`,
       `guest`, viz `is_admin` v [app.py:193](backend/app.py#L193)), ale rozhodují jen o pár
-      místech. Chce to promyslet, co má která role smět.
+      místech. Aleš 14. 10.: zatím nechat, jen admin má extra práva. Později možná
+      placená úroveň (pay wall) pro některé funkce - pak se role budou hodit.
 - [X] vybraný motiv se pamatuje u účtu, ne jen v prohlížeči
 - [ ] další uživatelská nastavení, až budou (motiv už hotový)
 
@@ -690,7 +699,8 @@ kdo maže.
 
 ## Obsah a prezentace
 
-- [ ] odkaz a lepší propagace organizace Handicap, případně i fotky
+- [ ] odkaz a lepší propagace organizace Handicap, případně i fotky — **až úplně poslední
+      krok**, po veškeré funkčnosti webu (Aleš 14. 10.). Nenavrhovat dřív.
 
 ## Provoz a bezpečnost
 

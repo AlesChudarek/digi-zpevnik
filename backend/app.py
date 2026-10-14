@@ -560,16 +560,33 @@ def _dopln_chybejici_sloupce():
 _dopln_chybejici_sloupce()
 
 
-@app.errorhandler(KvotaPrekrocena)
-def _kvota_prekrocena(chyba):
-    """Upload přes strop účtu. Vrátí se to, co se stihlo zapsat, aby po nepovedeném
-    nahrání nezůstaly na disku kusy, které by se do kvóty počítaly."""
-    db.session.rollback()
+def _uklid_zapsane():
+    """Smaže soubory, které tenhle požadavek zapsal, když se jeho změna nakonec
+    neuložila. Zapisují se sem jen nové soubory (nové jméno), nikdy už existující."""
     for cesta in getattr(g, '_zapsane_soubory', []):
         try:
             Path(cesta).unlink(missing_ok=True)
         except OSError:
             pass
+    g._zapsane_soubory = []
+
+
+@app.teardown_request
+def _uklid_po_chybe(chyba):
+    # Neošetřená výjimka: databáze se vrátí sama, soubory ne.
+    if chyba is not None:
+        try:
+            _uklid_zapsane()
+        except RuntimeError:
+            pass
+
+
+@app.errorhandler(KvotaPrekrocena)
+def _kvota_prekrocena(chyba):
+    """Upload přes strop účtu. Vrátí se to, co se stihlo zapsat, aby po nepovedeném
+    nahrání nezůstaly na disku kusy, které by se do kvóty počítaly."""
+    db.session.rollback()
+    _uklid_zapsane()
 
     zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
     if chyba.kdo is not None:
@@ -715,8 +732,17 @@ def _koren_pro_zpevnik(book) -> str:
 
 
 def _cesta_obalky(book, role: str, pripona: str) -> str:
-    """Obálky mají pevná jména, protože jsou právě čtyři a každá má jinou roli."""
-    return f"{_koren_pro_zpevnik(book)}/songbooks/{book.id}/covers/{ROLE_OBALEK.get(role, role)}{pripona}"
+    """Cesta pro novou obálku. Jméno podle role, ale nikdy ne přes existující soubor:
+    přepsání na místě znamenalo, že při nepovedeném uložení (limit místa) byla stará
+    obálka pryč, i když databáze ukazovala dál na ni - a úklid po chybě pak ten soubor
+    rovnou smazal. S novým jménem zůstane stará obálka netknutá, dokud se uložení
+    nepovede; pak ji uklidí smaz_osirele_obrazky."""
+    zaklad = f"{_koren_pro_zpevnik(book)}/songbooks/{book.id}/covers/{ROLE_OBALEK.get(role, role)}"
+    rel, n = f"{zaklad}{pripona}", 1
+    while (IMAGES_DIR / rel).exists() or db.session.query(Obrazek.id).filter_by(cesta=rel).first():
+        n += 1
+        rel = f"{zaklad}-{n}{pripona}"
+    return rel
 
 
 def _nova_cesta_strany(koren: str, pripona: str) -> str:
@@ -2318,6 +2344,8 @@ def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
         cil = IMAGES_DIR / rel
         cil.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(zdroj, cil)
+        # Když kopie nakonec neprojde (limit místa), soubor se zase smaže.
+        _zapocti(vlastnik_id, 0, cil)
         _prevezmi_nahled_strany(cesta, rel, zdroj)
         setattr(nova, f'img_path_cover_{role}', rel)
         Obrazek.ziskej(rel).velikost = cil.stat().st_size
@@ -2934,6 +2962,7 @@ def uloz_zpevnik(songbook_id=None):
         db.session.commit()
     except ChybaEditoru as chyba:
         db.session.rollback()
+        _uklid_zapsane()
         return jsonify({'ok': False, 'error': str(chyba)}), 400
 
     smaz_osirele_obrazky(ke_smazani)

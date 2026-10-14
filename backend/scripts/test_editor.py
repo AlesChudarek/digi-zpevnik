@@ -210,6 +210,25 @@ def main():
     zkontroluj(kod == 200 and obalka and (OBRAZKY / obalka).exists(),
                "„odebrat a nahrát jinou“ novou obálku nesmaže", obalka)
     zkontroluj(nahled == obalka, "přední obálka je i náhledem")
+    stara_data = (OBRAZKY / obalka).read_bytes()
+    puvodni = A.MAX_USER_STORAGE_BYTES
+    A.MAX_USER_STORAGE_BYTES = 1
+    try:
+        kod, _ = uloz(u3, novy, front_outer=(png("orange"), "jina.png"))
+    finally:
+        A.MAX_USER_STORAGE_BYTES = puvodni
+    soubory_obalek = sorted(p.name for p in (OBRAZKY / obalka).parent.iterdir())
+    zkontroluj(kod == 413 and (OBRAZKY / obalka).read_bytes() == stara_data
+               and len(soubory_obalek) == 1,
+               "výměna obálky přes limit nechá starou obálku netknutou a nic nepřidá",
+               (kod, soubory_obalek))
+    kod, _ = uloz(u3, novy, front_outer=(png("orange"), "jina.png"))
+    with A.app.app_context():
+        nova_obalka = A.db.session.get(A.Songbook, novy).img_path_cover_front_outer
+    zkontroluj(kod == 200 and nova_obalka != obalka and (OBRAZKY / nova_obalka).exists()
+               and not (OBRAZKY / obalka).exists(),
+               "výměna obálky zapíše nový soubor a starý po uložení smaže", (obalka, nova_obalka))
+    obalka = nova_obalka
     kod, _ = uloz(u3, novy, remove_front_outer="1")
     with A.app.app_context():
         sb = A.db.session.get(A.Songbook, novy)
@@ -403,10 +422,16 @@ def main():
     finally:
         A.MAX_POZVANEK = puvodni_strop
     A.MAX_USER_STORAGE_BYTES = misto(5) + 1
+    def soubory_uctu(uid):
+        koren = OBRAZKY / "uzivatele" / str(uid)
+        return {str(p) for p in koren.rglob("*") if p.is_file()} if koren.exists() else set()
     try:
+        pred = soubory_uctu(5)
         r = u5.post(f"/api/pozvanky/{pozvanky(5)[0].id}/prijmout")
         zkontroluj(r.status_code == 413 and len(pozvanky(5)) == 2,
                    "pozvánku, která se nevejde, přijmout nejde a zůstane", r.status_code)
+        zkontroluj(soubory_uctu(5) == pred,
+                   "nepřijatá kopie po sobě nenechá soubory obálek", sorted(soubory_uctu(5) - pred))
     finally:
         A.MAX_USER_STORAGE_BYTES = puvodni_limit
     u5.post("/api/pozvanky/odmitnout-vse")
