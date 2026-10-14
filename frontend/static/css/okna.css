@@ -110,3 +110,16 @@ html.theme-dark .okno .btn.primary:hover {
 .okno.okno-varovani .okno-znak { background: #8a6116; }
 .okno.okno-varovani .okno-nadpis { color: #8a6116; }
 html.theme-dark .okno.okno-varovani .okno-nadpis { color: #f0c46b; }
+
+/* Uživatel jako kolečko: profilová fotka, nebo iniciály v barvě podle id
+   (BARVY_INICIAL v app.py). Velikost přes --avatar, kterou nastaví avatar(). */
+.avatar {
+  --avatar: 32px;
+  width: var(--avatar); height: var(--avatar); flex: 0 0 auto;
+  border-radius: 50%; object-fit: cover; display: inline-block; vertical-align: middle;
+}
+.avatar-inicialy {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; font-weight: 700; font-size: calc(var(--avatar) * 0.42); line-height: 1;
+  letter-spacing: 0.02em; user-select: none;
+}

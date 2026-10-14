@@ -1,0 +1,22 @@
+{# Přezdívka a profilová fotka. Na stránce profilu i hned po registraci (vitejte.html).
+   Obsluha: static/js/profil.js. #}
+<div class="karta" id="profil-udaje">
+  <h2>Profil</h2>
+  <p>Přezdívka a fotka se ostatním ukazují místo e-mailu, třeba u sdílení a v přátelích.
+     Obojí je nepovinné.</p>
+  <div class="profil-fotka">
+    {{ avatar(current_user, 96) }}
+    <div class="profil-fotka-akce">
+      <label class="vedlejsi">{{ 'Změnit fotku' if current_user.fotka else 'Nahrát fotku' }}
+        <input type="file" accept="image/*" id="profil-soubor" hidden>
+      </label>
+      <button type="button" class="vedlejsi" id="profil-odebrat"{% if not current_user.fotka %} hidden{% endif %}>Odebrat fotku</button>
+    </div>
+  </div>
+  <label class="pole" for="profil-prezdivka">Přezdívka</label>
+  <div class="profil-radek">
+    <input type="text" id="profil-prezdivka" maxlength="40" autocomplete="nickname"
+           value="{{ current_user.prezdivka or '' }}" placeholder="{{ current_user.email }}">
+    <button type="button" id="profil-ulozit">Uložit</button>
+  </div>
+</div>

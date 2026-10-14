@@ -226,6 +226,8 @@
     .ucet-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ucet-tecka { width: 8px; height: 8px; border-radius: 50%; background: #ffd970; flex: 0 0 auto; }
     .ucet-sipka { font-size: 11px; opacity: .8; }
+    .ucet .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
+    .ucet-jmeno { font-weight: 700; margin-bottom: 2px; }
     @media (max-width: 820px) { .ucet-email { display: none; } }
 
     .ucet-panel {
@@ -449,13 +451,15 @@
         <span class="ucet-obal">
           <button class="ucet" id="ucet-btn" onclick="prepniUcet(event)"
                   aria-expanded="false" aria-haspopup="true" data-napoveda="Můj účet">
-            <span class="ucet-email">{{ current_user.email }}</span>
+            {{ avatar(current_user, 26) }}
+            <span class="ucet-email">{{ jmeno(current_user) }}</span>
             {% if not current_user.email_verified %}<span class="ucet-tecka" data-napoveda="Neověřená adresa"></span>{% endif %}
             <span class="ucet-sipka" aria-hidden="true">▾</span>
           </button>
 
           <div class="ucet-panel" id="ucet-panel" role="menu" aria-hidden="true">
             <div class="ucet-hlava">
+              {% if current_user.prezdivka %}<div class="ucet-jmeno">{{ current_user.prezdivka }}</div>{% endif %}
               <div class="ucet-adresa">{{ current_user.email }}</div>
               <div>
                 {% if current_user.email_verified %}
@@ -580,6 +584,28 @@
     // Chyba a varování mají barevný pruh a znak u nadpisu - jinak okno vypadalo
     // stejně jako běžné potvrzení a dalo se snadno přehlédnout, že se něco nepovedlo.
     const VYCHOZI_NADPIS = { chyba: 'Nepovedlo se', varovani: 'Pozor', info: 'Upozornění' };
+    // Kolečko uživatele v JS - totéž, co avatar() v šablonách (app.py). `info` je
+    // uzivatel_info: {jmeno, fotka, inicialy, barva}.
+    window.avatarEl = function (info, velikost) {
+      velikost = velikost || 32;
+      let el;
+      if (info && info.fotka) {
+        el = document.createElement('img');
+        el.src = info.fotka;
+        el.alt = '';
+      } else {
+        el = document.createElement('span');
+        el.className = 'avatar-inicialy';
+        el.textContent = (info && info.inicialy) || '?';
+        el.style.background = (info && info.barva) || '#607d8b';
+        el.setAttribute('aria-hidden', 'true');
+      }
+      el.classList.add('avatar');
+      el.style.setProperty('--avatar', velikost + 'px');
+      if (info && info.jmeno) el.title = info.jmeno;
+      return el;
+    };
+
     window.oznam = function (text, volby) {
       if (typeof volby === 'string') volby = { nadpis: volby };
       const druh = (volby && volby.druh) || 'chyba';

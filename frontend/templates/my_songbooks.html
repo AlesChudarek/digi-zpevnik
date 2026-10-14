@@ -375,7 +375,7 @@
                 <strong>Společné úpravy:</strong>
                 <ul>
                   {% for user in share_users %}
-                    <li class="{% if user.is_owner %}owner{% endif %}">{{ user.email }}{% if user.is_owner %}<span class="owner-tag">(vlastník)</span>{% endif %}</li>
+                    <li class="{% if user.is_owner %}owner{% endif %}">{{ avatar(user.user, 20) }} {{ user.jmeno }}{% if user.is_owner %}<span class="owner-tag">(vlastník)</span>{% endif %}</li>
                   {% endfor %}
                 </ul>
               </div>
@@ -399,7 +399,7 @@
             </button>
             {% if not manage_public %}
               {# Veřejný zpěvník vidí všichni, sdílení ani kopie u něj nemají smysl. #}
-              <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first) or '' }}">
+              <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='jmeno')|first) or '' }}">
                 <img src="{{ static_bust('img/icons/share.svg') }}" alt=""><span>Sdílet</span>
               </button>
               <button type="button" role="menuitem" class="akce-polozka btn-kopie" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
@@ -414,7 +414,7 @@
             </button>
             <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
                     data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
-                    data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='email')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
+                    data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='jmeno')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
               <img src="{{ static_bust('img/icons/bin.svg') }}" alt=""><span>{{ 'Odebrat' if jsem_clen else 'Smazat' }}</span>
             </button>
           </div>
@@ -1551,14 +1551,14 @@ function openCreateModal() {
           if (data.vlastnik && !data.jsem_vlastnik) {
             const v = document.createElement('div');
             v.className = 'share-clen';
-            v.textContent = `${data.vlastnik} (vlastník)`;
+            v.append(avatarEl(data.vlastnik, 22), ` ${data.vlastnik.jmeno} (vlastník)`);
             box.appendChild(v);
           }
           data.clenove.forEach(c => {
             const radek = document.createElement('div');
             radek.className = 'share-clen';
             const jmeno = document.createElement('span');
-            jmeno.textContent = c.email;
+            jmeno.append(avatarEl(c, 22), ` ${c.jmeno}`);
             radek.appendChild(jmeno);
             if (data.jsem_vlastnik) {
               const b = document.createElement('button');
@@ -1567,7 +1567,7 @@ function openCreateModal() {
               b.textContent = 'Ukončit společné úpravy';
               b.setAttribute('data-napoveda', `Uživatel obdrží kopii zpěvníku v aktuální podobě.`);
               b.addEventListener('click', async () => {
-                if (!(await window.showConfirm(`Ukončit společné úpravy s ${c.email}? Uživatel obdrží kopii zpěvníku v aktuální podobě.`, 'Ukončit'))) return;
+                if (!(await window.showConfirm(`Ukončit společné úpravy s ${c.jmeno}? Uživatel obdrží kopii zpěvníku v aktuální podobě.`, 'Ukončit'))) return;
                 const res = await fetch(`/api/zpevnik/${encodeURIComponent(id)}/clenove/${c.id}/odebrat`, { method: 'POST' });
                 const d = await res.json().catch(() => ({}));
                 if (!res.ok || !d.ok) { setShareFeedback(d.error || 'Nepovedlo se.', 'error'); return; }
@@ -1581,7 +1581,7 @@ function openCreateModal() {
         if (data.pozvani.length) {
           const cekaji = document.createElement('div');
           cekaji.className = 'share-clen';
-          cekaji.textContent = 'Čeká na odpověď: ' + data.pozvani.map(p => `${p.email} (${p.druh === 'kopie' ? 'kopie' : 'společné úpravy'})`).join(', ');
+          cekaji.textContent = 'Čeká na odpověď: ' + data.pozvani.map(p => `${p.jmeno} (${p.druh === 'kopie' ? 'kopie' : 'společné úpravy'})`).join(', ');
           box.appendChild(cekaji);
         }
         box.hidden = false;

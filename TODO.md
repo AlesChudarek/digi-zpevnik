@@ -815,3 +815,5 @@ pridat watermark na vsechny obrazky, pripadne aspon propagacni text s odkazem na
 pridat detekci formatu vstupnich dat. dnes to v klidu prijme svg a pak ho to neumi zobrazit (predpokladam ze to je tim prevodem do webp??)
 
 Pokud je zpevnik bez coveru uplne, kdyz se zobrazuje v knizni ctecce, mozna by se mel ukazovat jakoze uplne obal nema. Takze ne ze tam je ale prazdny, ale ze tam neni vubec. Navic ted to jeste udela divnou nekonzistenci tak, ze se prida jedna prazdana strana pro vnitrni predni cover (a to jeste bila a ne v barve coveru), ale vnejsi predni cover neni. takze jsme dodali jen jednu stranu coveru? - nekonzistentni
+
+Zapnuty autoscroll nedovoli skok nahoru - mel by skocit a pokracovat v animaci dolu.

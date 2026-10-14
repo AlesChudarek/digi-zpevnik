@@ -19,6 +19,7 @@ import hashlib
 import threading
 import zipfile
 from pathlib import Path
+from markupsafe import Markup, escape
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func, text
 import shutil
@@ -527,6 +528,11 @@ def _dopln_chybejici_sloupce():
     with app.app_context():
         try:
             db.create_all()
+            uzivatele = {r[1] for r in db.session.execute(text("PRAGMA table_info(users)"))}
+            for sloupec in ('prezdivka', 'fotka'):
+                if uzivatele and sloupec not in uzivatele:
+                    db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} TEXT"))
+                    db.session.commit()
             sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(images)"))}
             if sloupce and 'velikost' not in sloupce:
                 db.session.execute(text("ALTER TABLE images ADD COLUMN velikost INTEGER"))
@@ -1161,7 +1167,7 @@ def register():
             else:
                 flash('Registrace proběhla, ale ověřovací e-mail se nepodařilo odeslat. '
                       'Zkuste ho poslat znovu později.', 'error')
-            return redirect(url_for('dashboard'))
+            return redirect(url_for('vitejte'))
 
     return render_template('auth.html')
 
@@ -1230,6 +1236,64 @@ ZNAME_MOTIVY = {'green', 'blue', 'dark', 'purple', 'amber', 'slate', 'teal',
 
 
 NAHLEDY_DIR = Path(__file__).parent.parent / 'data' / 'nahledy'
+# Profilové fotky. Mimo data/images schválně: nejsou stranou ani obálkou, do limitu
+# místa se nepočítají a kontrola osiřelých obrázků o nich nemá co vědět.
+PROFILY_DIR = Path(__file__).parent.parent / 'data' / 'profily'
+PROFILOVKA_PX = 256
+MAX_PREZDIVKA = 40
+
+# Barvy koleček s iniciálami. Podle id uživatele, aby měl každý pořád tutéž a lidé
+# v seznamu přátel šli od sebe rozeznat i bez fotky. Všechny nesou bílý text (>= 4,5 : 1).
+BARVY_INICIAL = ['#2E7D32', '#1565C0', '#6A1B9A', '#AD1457', '#C62828', '#00695C',
+                 '#4E342E', '#283593', '#B34700', '#37474F']
+
+
+def jmeno_uzivatele(u):
+    """Jak uživatele ukazovat ostatním: přezdívka, a když není, e-mail."""
+    if u is None:
+        return ''
+    return (getattr(u, 'prezdivka', None) or '').strip() or getattr(u, 'email', '') or ''
+
+
+def inicialy(u):
+    prez = (getattr(u, 'prezdivka', None) or '').strip()
+    if prez:
+        slova = [w for w in re.split(r'[\s·\-–_.]+', prez) if w]
+        return ''.join(w[0] for w in slova[:2]).upper() or prez[0].upper()
+    email = getattr(u, 'email', '') or '?'
+    return email[0].upper()
+
+
+def url_profilovky(u):
+    if not getattr(u, 'fotka', None):
+        return None
+    return url_for('profilovka', uid=u.id, soubor=u.fotka)
+
+
+def uzivatel_info(u):
+    """Uživatel pro JavaScript (okno sdílení, přátelé): jméno, e-mail a podoba kolečka."""
+    return {'id': u.id, 'email': u.email, 'jmeno': jmeno_uzivatele(u),
+            'prezdivka': (u.prezdivka or '').strip() or None,
+            'fotka': url_profilovky(u), 'inicialy': inicialy(u),
+            'barva': BARVY_INICIAL[u.id % len(BARVY_INICIAL)]}
+
+
+def avatar(u, velikost=32):
+    """Kulatý obrázek uživatele do šablony: fotka, nebo kolečko s iniciálami."""
+    if u is None:
+        return Markup('')
+    info = uzivatel_info(u)
+    titulek = escape(info['jmeno'])
+    if info['fotka']:
+        return Markup(f'<img class="avatar" src="{escape(info["fotka"])}" alt="" '
+                      f'width="{velikost}" height="{velikost}" title="{titulek}" '
+                      f'style="--avatar: {velikost}px">')
+    return Markup(f'<span class="avatar avatar-inicialy" aria-hidden="true" title="{titulek}" '
+                  f'style="--avatar: {velikost}px; background: {info["barva"]}">'
+                  f'{escape(info["inicialy"])}</span>')
+
+
+app.jinja_env.globals.update(jmeno=jmeno_uzivatele, avatar=avatar)
 
 
 def _nahledy():
@@ -1471,6 +1535,85 @@ def profil():
     return render_template('profil.html')
 
 
+@app.route('/vitejte')
+@login_required
+def vitejte():
+    """Hned po registraci: nabídka doplnit přezdívku a fotku. Dá se přeskočit."""
+    if is_guest(current_user):
+        return redirect(url_for('dashboard'))
+    return render_template('vitejte.html')
+
+
+@app.route('/profil/udaje', methods=['POST'])
+@login_required
+def uloz_profil():
+    """Přezdívka. Prázdná = žádná, ukazuje se pak e-mail."""
+    if is_guest(current_user):
+        return jsonify({'ok': False, 'error': 'Host profil nemá.'}), 403
+    data = request.get_json(silent=True) or request.form
+    prez = ' '.join((data.get('prezdivka') or '').split())
+    if len(prez) > MAX_PREZDIVKA:
+        return jsonify({'ok': False, 'error': f'Přezdívka může mít nejvýš {MAX_PREZDIVKA} znaků.'}), 400
+    current_user.prezdivka = prez or None
+    db.session.commit()
+    return jsonify({'ok': True, 'uzivatel': uzivatel_info(current_user)})
+
+
+@app.route('/profil/fotka', methods=['POST', 'DELETE'])
+@login_required
+def uloz_profilovku():
+    """Nahraje (POST, pole `fotka`) nebo smaže (DELETE) profilovou fotku. Ukládá se
+    čtverec vyříznutý ze středu, 256 px, WebP - na kolečko v rozhraní stačí a má pár
+    desítek kB. Původní soubor se neukládá."""
+    if is_guest(current_user):
+        return jsonify({'ok': False, 'error': 'Host profil nemá.'}), 403
+    stara = current_user.fotka
+    if request.method == 'DELETE':
+        current_user.fotka = None
+    else:
+        soubor = request.files.get('fotka')
+        if not soubor:
+            return jsonify({'ok': False, 'error': 'Chybí obrázek.'}), 400
+        data = soubor.read(MAX_IMAGE_UPLOAD_BYTES + 1)
+        if len(data) > MAX_IMAGE_UPLOAD_BYTES:
+            return jsonify({'ok': False, 'error': f'Obrázek je větší než {MAX_IMAGE_UPLOAD_MB:g} MB.'}), 413
+        try:
+            with Image.open(BytesIO(data)) as im:
+                im = ImageOps.exif_transpose(im)
+                im = im.convert('RGBA' if 'A' in im.getbands() else 'RGB')
+                strana = min(im.size)
+                levo, nahore = (im.width - strana) // 2, (im.height - strana) // 2
+                im = im.crop((levo, nahore, levo + strana, nahore + strana))
+                im = im.resize((PROFILOVKA_PX, PROFILOVKA_PX), Image.LANCZOS)
+                if im.mode == 'RGBA':
+                    podklad = Image.new('RGB', im.size, (255, 255, 255))
+                    podklad.paste(im, mask=im.getchannel('A'))
+                    im = podklad
+                PROFILY_DIR.mkdir(parents=True, exist_ok=True)
+                jmeno = f"{current_user.id}-{uuid4().hex[:10]}.webp"
+                im.save(PROFILY_DIR / jmeno, 'WEBP', quality=85, method=4)
+        except Exception:  # noqa: BLE001 - cokoliv nečitelného je pro uživatele totéž
+            return jsonify({'ok': False, 'error': 'Soubor se nepodařilo přečíst jako obrázek.'}), 400
+        current_user.fotka = jmeno
+    db.session.commit()
+    if stara and stara != current_user.fotka:
+        (PROFILY_DIR / stara).unlink(missing_ok=True)
+    return jsonify({'ok': True, 'uzivatel': uzivatel_info(current_user)})
+
+
+@app.route('/profilovka/<int:uid>/<soubor>')
+@login_required
+def profilovka(uid, soubor):
+    """Fotku vidí každý přihlášený - ukazuje se u sdílení a v přátelích. Jméno souboru
+    se při změně mění, takže adresa smí být v cache natvrdo."""
+    u = db.session.get(User, uid)
+    if u is None or u.fotka != soubor:
+        return ("Not Found", 404)
+    odpoved = send_from_directory(str(PROFILY_DIR), soubor, mimetype='image/webp')
+    odpoved.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
+    return odpoved
+
+
 @app.route('/profil/zmena-hesla', methods=['POST'])
 @login_required
 def zmena_hesla():
@@ -1526,6 +1669,7 @@ def smazat_ucet():
         db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
         db.session.query(Oznameni).filter_by(user_id=uid).delete()
         db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
+        fotka = current_user.fotka
         logout_user()
         db.session.query(User).filter_by(id=uid).delete()
         db.session.commit()
@@ -1533,6 +1677,8 @@ def smazat_ucet():
         # Až po commitu a jen to, na co už nikdo neukazuje - písničku můžou sdílet i cizí
         # zpěvníky a smazat jim obrázky by je rozbilo.
         smaz_osirele_obrazky(soubory)
+        if fotka:
+            (PROFILY_DIR / fotka).unlink(missing_ok=True)
         app.logger.info("Účet %s smazán i s %d zpěvníky", email, len(moje))
         flash('Váš účet byl odstraněn.', 'success')
         return redirect(url_for('index'))
@@ -2055,27 +2201,29 @@ def my_songbooks():
     user_map_by_book = {bid: {} for bid in book_ids}
     if book_ids:
         shared_rows = db.session.execute(
-            db.select(UserSongbookAccess.songbook_id, User.email)
+            db.select(UserSongbookAccess.songbook_id, User)
             .join(User, UserSongbookAccess.user_id == User.id)
             .where(UserSongbookAccess.songbook_id.in_(book_ids))
             .where(User.role != 'admin')
         ).all()
-        for songbook_id, email in shared_rows:
-            if email:
+        for songbook_id, u in shared_rows:
+            if u.email:
                 per_book = user_map_by_book.setdefault(songbook_id, {})
-                per_book[email] = {"email": email, "is_owner": False}
+                per_book[u.email] = {"email": u.email, "jmeno": jmeno_uzivatele(u),
+                                     "user": u, "is_owner": False}
         owner_rows = db.session.execute(
-            db.select(Songbook.id, User.email)
+            db.select(Songbook.id, User)
             .join(User, Songbook.owner_id == User.id)
             .where(Songbook.id.in_(book_ids))
             .where(User.role != 'admin')
         ).all()
-        for songbook_id, owner_email in owner_rows:
-            if owner_email:
+        for songbook_id, u in owner_rows:
+            if u.email:
                 per_book = user_map_by_book.setdefault(songbook_id, {})
-                info = per_book.get(owner_email, {"email": owner_email, "is_owner": False})
+                info = per_book.get(u.email, {"email": u.email, "jmeno": jmeno_uzivatele(u),
+                                              "user": u, "is_owner": False})
                 info["is_owner"] = True
-                per_book[owner_email] = info
+                per_book[u.email] = info
 
     shared_users_map = {}
     current_email = getattr(current_user, "email", None)
@@ -2183,13 +2331,14 @@ def clenove_zpevniku(songbook_id):
     sb = db.session.get(Songbook, songbook_id)
     if sb is None or not can_edit_songbook(current_user, sb):
         return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
-    clenove = [{'id': u.id, 'email': u.email} for u in
+    clenove = [uzivatel_info(u) for u in
                User.query.join(UserSongbookAccess, UserSongbookAccess.user_id == User.id)
                .filter(UserSongbookAccess.songbook_id == sb.id).order_by(User.email)]
     vlastnik = db.session.get(User, sb.owner_id) if sb.owner_id else None
-    pozvani = [{'email': p.komu.email if p.komu else '', 'druh': p.druh}
+    pozvani = [{'email': p.komu.email if p.komu else '', 'jmeno': jmeno_uzivatele(p.komu),
+                'druh': p.druh}
                for p in Pozvanka.query.filter_by(songbook_id=sb.id)] if sb.owner_id == current_user.id else []
-    return jsonify({'ok': True, 'vlastnik': vlastnik.email if vlastnik else None,
+    return jsonify({'ok': True, 'vlastnik': uzivatel_info(vlastnik) if vlastnik else None,
                     'jsem_vlastnik': sb.owner_id == current_user.id,
                     'clenove': clenove, 'pozvani': pozvani})
 
@@ -2499,7 +2648,7 @@ def pozvanky_pro(user):
         cena = cena_zpevniku([p.songbook_id])
         vysledek.append({
             'id': p.id, 'druh': p.druh, 'nazev': p.songbook.title,
-            'od': p.od.email if p.od else '',
+            'od': jmeno_uzivatele(p.od),
             'procent': ('méně než 1 %' if cena < MAX_USER_STORAGE_BYTES / 100
                         else f"{cena * 100 / MAX_USER_STORAGE_BYTES:.0f} %"),
         })

@@ -1,0 +1,24 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Vítejte{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_bust('css/profil.css') }}">
+<script src="{{ static_bust('js/profil.js') }}" defer></script>
+{# Hned po registraci. Doplnit profil je nabídka, ne povinnost - Přeskočit vede tam,
+   kam by registrace vedla i bez téhle stránky. #}
+<div class="profil">
+  <h1>Účet je založený</h1>
+  {% include '_profil_udaje.html' %}
+  <div class="vitejte-dal">
+    <a class="vitejte-preskocit" href="{{ url_for('dashboard') }}">Přeskočit</a>
+    <a class="vitejte-pokracovat" href="{{ url_for('dashboard') }}">Pokračovat</a>
+  </div>
+</div>
+<style>
+  .vitejte-dal { display: flex; justify-content: flex-end; gap: 12px; }
+  .vitejte-dal a {
+    padding: 11px 18px; border-radius: 6px; font-size: 15px; text-decoration: none;
+  }
+  .vitejte-pokracovat { background: var(--brand-dark, #1b5e20); color: #fff; }
+  .vitejte-preskocit { background: rgba(255,255,255,0.85); color: #222; }
+</style>
+{% endblock %}

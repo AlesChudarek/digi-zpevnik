@@ -87,6 +87,11 @@ class User(db.Model, UserMixin):
     # Vybraný barevný motiv. Prázdno znamená "nic uloženého" - pak platí volba
     # z prohlížeče. Díky tomu si host i nepřihlášený barvu pořád mění jako dřív.
     theme = db.Column(db.String, nullable=True)
+    # Profil. Obojí nepovinné: bez přezdívky se ukazuje e-mail, bez fotky kolečko
+    # s iniciálami. `fotka` je jméno souboru v data/profily (čtverec 256 px, WebP);
+    # nové jméno při každé změně, takže adresa může být cachovaná natvrdo.
+    prezdivka = db.Column(db.String, nullable=True)
+    fotka = db.Column(db.String, nullable=True)
 
 class LoginAttempt(db.Model):
     """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.
