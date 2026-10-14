@@ -182,20 +182,9 @@
 </style>
 
 <style>
-  #search-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4100; }
 </style>
 
 <div class="search-container">
-  <div id="search-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-    <div class="panel okno">
-      <h3>Potvrzení</h3>
-      <p id="search-confirm-message">Opravdu chcete tuto písničku odstranit ze zpěvníku?</p>
-      <div class="actions">
-        <button class="btn" id="search-confirm-cancel">Zrušit</button>
-        <button class="btn nebezpecne" id="search-confirm-ok">Odstranit</button>
-      </div>
-    </div>
-  </div>
 
   <h1 style="text-align:center; margin: 10px 0 18px;">Hledat písničku</h1>
 
@@ -437,37 +426,9 @@
     });
   }
 
+  // Společné potvrzovací okno z dashboard_base.
   function confirmDelete(message) {
-    return new Promise((resolve) => {
-      const overlay = document.getElementById('search-confirm-overlay');
-      const msgEl = document.getElementById('search-confirm-message');
-      const btnOk = document.getElementById('search-confirm-ok');
-      const btnCancel = document.getElementById('search-confirm-cancel');
-      if (!overlay || !msgEl || !btnOk || !btnCancel) {
-        // eslint-disable-next-line no-alert
-        return resolve(window.confirm(message || 'Opravdu odstranit?'));
-      }
-      msgEl.textContent = message || 'Opravdu odstranit?';
-      overlay.style.display = 'flex';
-      overlay.setAttribute('aria-hidden', 'false');
-
-      const cleanup = () => {
-        overlay.style.display = 'none';
-        overlay.setAttribute('aria-hidden', 'true');
-        btnOk.removeEventListener('click', onOk);
-        btnCancel.removeEventListener('click', onCancel);
-        overlay.removeEventListener('click', onOverlay);
-        document.removeEventListener('keydown', onKey);
-      };
-      const onOk = () => { cleanup(); resolve(true); };
-      const onCancel = () => { cleanup(); resolve(false); };
-      const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
-      const onKey = (e) => { if (e.key === 'Escape') onCancel(); if (e.key === 'Enter') onOk(); };
-      btnOk.addEventListener('click', onOk);
-      btnCancel.addEventListener('click', onCancel);
-      overlay.addEventListener('click', onOverlay);
-      document.addEventListener('keydown', onKey);
-    });
+    return window.showConfirm(message || 'Opravdu odstranit?', 'Odstranit', { nebezpecne: true });
   }
 
   function bindRemoveButtons() {

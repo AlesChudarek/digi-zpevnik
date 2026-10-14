@@ -84,12 +84,6 @@
 .ucet-zmena summary { cursor: pointer; color: var(--brand-dark, #1b5e20); font-weight: 600; font-size: 14px; margin: 6px 0; }
 .ucet-zmena[open] summary { margin-bottom: 10px; }
 .ucet-zmena input[type="password"], .ucet-zmena input[type="text"] { margin-bottom: 8px; }
-.ucet-potvrzeni {
-  position: fixed; inset: 0; z-index: 5100; background: rgba(0, 0, 0, 0.35);
-  display: flex; align-items: center; justify-content: center; padding: 16px;
-}
-.ucet-potvrzeni[hidden] { display: none; }
-.ucet-potvrzeni .okno { max-width: 420px; }
 
 /* Ořez profilové fotky (ucet.js). Kruh je díra ve stínu přes celou plochu. */
 .orez-zaclona {

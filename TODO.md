@@ -730,8 +730,9 @@ kdo maže.
       místo (vidět vždy - odhadnout se dá i pozvánkou); kopie ne, po přijetí nemají
       vazbu. „Možná znáte“: kdo se mnou sdílí zpěvník nebo si poslal pozvánku.
       Hlídá `test_pratele.py`.
-- [ ] **potvrzovací dialog je ve třech kopiích** (Moje zpěvníky, čtečka, Přátelé), každá
-      s `#app-confirm-overlay`. Sjednotit do `dashboard_base` (zjednodušení).
+- [X] **potvrzovací okno je jedno** (14. 10.) — dřív čtyři kopie (Moje zpěvníky, čtečka,
+      hledání, okno Přátelé). Teď `showConfirm` / `showUnsavedConfirm` a `#app-confirm-overlay`
+      v `dashboard_base`, styl v `okna.css`.
 - [X] **účet s neexistující adresou jde opravit** (14. 10.) — v okně Účet změna e-mailu
       potvrzená heslem; nová adresa je neověřená a přijde na ni ověřovací e-mail.
       Původní zápis:

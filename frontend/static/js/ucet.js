@@ -49,21 +49,7 @@ window.UcetOkna = (function () {
     document.body.style.overflow = '';
   }
 
-  function potvrd(text) {
-    return new Promise((resolve) => {
-      const p = $('ucet-potvrzeni');
-      $('ucet-potvrzeni-text').textContent = text;
-      p.hidden = false;
-      const konec = (e) => {
-        const odpoved = e.target.dataset && e.target.dataset.odpoved;
-        if (!odpoved && e.target !== p) return;
-        p.hidden = true;
-        p.removeEventListener('click', konec);
-        resolve(odpoved === 'ano');
-      };
-      p.addEventListener('click', konec);
-    });
-  }
+  const potvrd = (text) => window.showConfirm(text, 'Odebrat', { nebezpecne: true });
 
   /* Pošle požadavek; chybu ukáže přes oznam(). Vrací odpověď, nebo null. */
   async function posli(url, moznosti, nadpisChyby) {
@@ -301,8 +287,8 @@ window.UcetOkna = (function () {
     if (soubor) orez(soubor);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && otevrene && $('ucet-potvrzeni')?.hidden !== false
-        && !document.querySelector('.orez-zaclona')) { zavri(); return; }
+    if (e.key === 'Escape' && otevrene && !document.querySelector('.orez-zaclona')
+        && document.getElementById('app-confirm-overlay')?.getAttribute('aria-hidden') !== 'false') { zavri(); return; }
     if (e.key !== 'Enter') return;
     const id = e.target.id;
     if (id === 'pritel-email') { e.preventDefault(); pridejPritele(); }

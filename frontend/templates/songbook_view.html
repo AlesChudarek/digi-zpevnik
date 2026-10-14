@@ -367,18 +367,6 @@
     }
 </style>
 
-<style>
-  #app-confirm-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    z-index: 4000;
-  }
-
-</style>
 
 <style>
   .zoom-buttons {
@@ -758,18 +746,6 @@
     </div>
   </div>
 
-<div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="panel okno">
-    <h3>Potvrzení</h3>
-    <p id="app-confirm-message">Opravdu provést akci?</p>
-    <div class="actions">
-      <button class="btn" id="app-confirm-cancel">Zrušit</button>
-      <button class="btn primary" id="app-confirm-ok">Pokračovat</button>
-      <button class="btn" id="app-confirm-save" style="display:none;">Uložit</button>
-    </div>
-  </div>
-</div>
-
 <div class="mode-buttons">
   <div class="button-container rezimy" role="group" aria-label="Režim čtení" data-rezim="double">
     <span class="rezimy-jezdec" aria-hidden="true"></span>
@@ -877,51 +853,6 @@
     // sessionStorage might be unavailable; ignore and rely on defaults
   }
 
-  if (typeof window.showConfirm !== 'function') {
-    window.showConfirm = function(message, okText) {
-      return new Promise((resolve) => {
-        const overlay = document.getElementById('app-confirm-overlay');
-        const msgEl = document.getElementById('app-confirm-message');
-        const btnOk = document.getElementById('app-confirm-ok');
-        const btnCancel = document.getElementById('app-confirm-cancel');
-        const btnSave = document.getElementById('app-confirm-save');
-        if (!overlay || !msgEl || !btnOk || !btnCancel) {
-          resolve(window.confirm(message || 'Potvrdit akci?'));
-          return;
-        }
-        msgEl.textContent = message || 'Potvrdit akci?';
-        btnOk.textContent = okText || 'Pokračovat';
-        if (btnSave) btnSave.style.display = 'none';
-        // Zvýrazněná je akce, o kterou jde, ne Zrušit
-        btnCancel.classList.remove('primary');
-        btnOk.classList.add('primary');
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-
-        const cleanup = () => {
-          overlay.style.display = 'none';
-          overlay.setAttribute('aria-hidden', 'true');
-          btnOk.removeEventListener('click', onOk);
-          btnCancel.removeEventListener('click', onCancel);
-          overlay.removeEventListener('click', onOverlay);
-          document.removeEventListener('keydown', onKey);
-        };
-
-        const onOk = () => { cleanup(); resolve(true); };
-        const onCancel = () => { cleanup(); resolve(false); };
-        const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
-        const onKey = (e) => {
-          if (e.key === 'Escape') onCancel();
-          if (e.key === 'Enter') onOk();
-        };
-
-        btnOk.addEventListener('click', onOk);
-        btnCancel.addEventListener('click', onCancel);
-        overlay.addEventListener('click', onOverlay);
-        document.addEventListener('keydown', onKey);
-      });
-    };
-  }
 
   /* Nová adresa do rámečku strany. Prohlížeč jinak ukazuje starý obrázek, dokud se
      nový nenačte - u pomalu se načítající obálky tak v jejím rámečku visela strana,

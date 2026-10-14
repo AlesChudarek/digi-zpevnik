@@ -123,3 +123,7 @@ html.theme-dark .okno.okno-varovani .okno-nadpis { color: #f0c46b; }
   color: #fff; font-weight: 700; font-size: calc(var(--avatar) * 0.42); line-height: 1;
   letter-spacing: 0.02em; user-select: none;
 }
+
+/* Potvrzovací okno (dashboard_base). Je vždycky ta poslední otázka, takže leží nad vším -
+   nad oknem sdílení (4050), importu (4500), zvětšeným náhledem (5000) i okny účtu (5000). */
+#app-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 6000; }

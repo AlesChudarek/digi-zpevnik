@@ -39,6 +39,7 @@ if subprocess.run(["cp", "-cR", str(A.IMAGES_DIR), str(OBRAZKY)],
     shutil.copytree(A.IMAGES_DIR, OBRAZKY)
 A.IMAGES_DIR = OBRAZKY
 A.schedule_export_warm = lambda *a, **k: None
+A.dopocitej_nahledy = lambda *a, **k: None   # podproces by běžel nad skutečnými daty
 A.app.config["TESTING"] = True
 
 selhani = []

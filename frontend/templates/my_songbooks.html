@@ -207,12 +207,6 @@
 </style>
 
 <!-- Reusable confirm modal -->
-<style>
-  /* Potvrzení je vždycky ta poslední otázka, takže leží nad vším - i nad oknem sdílení
-     (4050), dialogem importu (4500) a zvětšeným náhledem (5000). Se 4000 zůstávalo
-     pod oknem sdílení a nedalo se na něj kliknout. */
-  #app-confirm-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 6000; }
-</style>
 
 <style>
   #share-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 4050; }
@@ -256,18 +250,6 @@
   #image-resize-notice label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; user-select: none; }
 </style>
 
-<div id="app-confirm-overlay" role="dialog" aria-modal="true" aria-hidden="true">
-  <div class="panel okno">
-    <h3>Potvrzení</h3>
-    <p id="app-confirm-message">Opravdu provést akci?</p>
-    <div class="actions">
-      <button class="btn" id="app-confirm-cancel">Zrušit</button>
-      <button class="btn primary" id="app-confirm-ok">Pokračovat</button>
-      <button class="btn" id="app-confirm-save" style="display:none;">Uložit</button>
-    </div>
-  </div>
-  
-</div>
 
 <div id="share-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="share-nadpis">
   <div class="panel okno" role="document">
@@ -793,114 +775,6 @@
 </style>
 
   <script>
-    // Global confirm dialog helper (theme-aware)
-    // volby.nebezpecne: potvrzovací tlačítko červené (Smazat, Zahodit).
-    window.showConfirm = function(message, okText, volby) {
-      return new Promise((resolve) => {
-        const overlay = document.getElementById('app-confirm-overlay');
-        const msgEl = document.getElementById('app-confirm-message');
-        const btnOk = document.getElementById('app-confirm-ok');
-        const btnCancel = document.getElementById('app-confirm-cancel');
-        const btnSave = document.getElementById('app-confirm-save');
-        if (!overlay || !msgEl || !btnOk || !btnCancel) {
-          // Fallback to native confirm if custom markup is missing
-          // eslint-disable-next-line no-alert
-          return resolve(window.confirm(message || 'Potvrdit akci?'));
-        }
-        msgEl.textContent = message || 'Potvrdit akci?';
-        if (btnOk) btnOk.textContent = okText || 'Pokračovat';
-        // Zvýrazněná je akce, o kterou jde - ne Zrušit (dřív se to prohazovalo, aby
-        // tlačítko vyniklo na barevném pozadí okna).
-        if (btnSave) btnSave.style.display = 'none';
-        btnCancel.classList.remove('primary', 'nebezpecne');
-        btnOk.classList.toggle('nebezpecne', !!(volby && volby.nebezpecne));
-        btnOk.classList.toggle('primary', !(volby && volby.nebezpecne));
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-
-        const cleanup = () => {
-          overlay.style.display = 'none';
-          overlay.setAttribute('aria-hidden', 'true');
-          btnOk.removeEventListener('click', onOk);
-          btnCancel.removeEventListener('click', onCancel);
-          overlay.removeEventListener('click', onOverlay);
-          document.removeEventListener('keydown', onKey);
-        };
-        const onOk = () => { cleanup(); resolve(true); };
-        const onCancel = () => { cleanup(); resolve(false); };
-        const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
-        const onKey = (e) => { if (e.key === 'Escape') onCancel(); if (e.key === 'Enter') onOk(); };
-        btnOk.addEventListener('click', onOk);
-        btnCancel.addEventListener('click', onCancel);
-        overlay.addEventListener('click', onOverlay);
-        document.addEventListener('keydown', onKey);
-      });
-    };
-    // Three-option confirm for unsaved changes (Cancel/Discard/Save)
-    // Popisky a styly jdou předat, ať se dialog dá použít i mimo neuložené změny, např.
-    // { discard: 'Odebrat', save: 'Odebrat a ponechat kopii',
-    //   discardStyl: 'nebezpecne', saveStyl: 'mekke-nebezpecne' }.
-    // Tlačítka jsou pod sebou (třída svisle). Vrací 'discard', 'save' nebo 'cancel'.
-    window.showUnsavedConfirm = function(message, popisky) {
-      return new Promise((resolve) => {
-        const overlay = document.getElementById('app-confirm-overlay');
-        const msgEl = document.getElementById('app-confirm-message');
-        const btnOk = document.getElementById('app-confirm-ok');
-        const btnCancel = document.getElementById('app-confirm-cancel');
-        const btnSave = document.getElementById('app-confirm-save');
-        if (!overlay || !msgEl || !btnOk || !btnCancel || !btnSave) {
-          // Fallback: native confirm with Discard/Cancel semantics
-          // eslint-disable-next-line no-alert
-          const ok = window.confirm(message || 'Zahodit neuložené změny?');
-          return resolve(ok ? 'discard' : 'cancel');
-        }
-        msgEl.textContent = message || 'Zahodit neuložené změny?';
-        btnOk.textContent = (popisky && popisky.discard) || 'Zahodit';
-        btnSave.textContent = (popisky && popisky.save) || 'Uložit';
-        // Pořadí shora: Uložit, Zahodit, Zrušit. Výchozí styly pro neuložené změny,
-        // jinak podle popisky (u odebrání obě volby červené, jedna bez výplně).
-        const STYLY = ['primary', 'nebezpecne', 'mekke-nebezpecne'];
-        btnSave.style.display = '';
-        btnSave.classList.remove(...STYLY);
-        btnOk.classList.remove(...STYLY);
-        btnCancel.classList.remove(...STYLY);
-        btnSave.classList.add((popisky && popisky.saveStyl) || 'primary');
-        btnOk.classList.add((popisky && popisky.discardStyl) || 'mekke-nebezpecne');
-        const akce = btnOk.parentElement;
-        akce.classList.add('svisle');
-        akce.append(btnSave, btnOk, btnCancel);
-        overlay.style.display = 'flex';
-        overlay.setAttribute('aria-hidden', 'false');
-
-        const cleanup = () => {
-          overlay.style.display = 'none';
-          overlay.setAttribute('aria-hidden', 'true');
-          btnOk.removeEventListener('click', onDiscard);
-          btnCancel.removeEventListener('click', onCancel);
-          btnSave.removeEventListener('click', onSave);
-          overlay.removeEventListener('click', onOverlay);
-          document.removeEventListener('keydown', onKey);
-          // Zpátky do výchozího stavu: vedle sebe Zrušit a hlavní potvrzení
-          btnSave.style.display = 'none';
-          ['primary', 'nebezpecne', 'mekke-nebezpecne'].forEach(c => { btnSave.classList.remove(c); btnOk.classList.remove(c); });
-          btnOk.classList.add('primary');
-          btnCancel.classList.remove('primary');
-          const akce = btnOk.parentElement;
-          akce.classList.remove('svisle');
-          akce.append(btnCancel, btnOk, btnSave);
-        };
-        const onDiscard = () => { cleanup(); resolve('discard'); };
-        const onCancel = () => { cleanup(); resolve('cancel'); };
-        const onSave = () => { cleanup(); resolve('save'); };
-        const onOverlay = (e) => { if (e.target === overlay) onCancel(); };
-        const onKey = (e) => { if (e.key === 'Escape') onCancel(); if (e.key === 'Enter') onSave(); };
-        btnOk.addEventListener('click', onDiscard);
-        btnCancel.addEventListener('click', onCancel);
-        btnSave.addEventListener('click', onSave);
-        overlay.addEventListener('click', onOverlay);
-        document.addEventListener('keydown', onKey);
-      });
-    };
 
     const IMAGE_SIZE_LIMIT_BYTES = {{ upload_limit_bytes|int }};
     // Admin mode: this page manages the public "Naše zpěvníky" section
