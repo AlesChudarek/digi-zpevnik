@@ -27,7 +27,7 @@ import tempfile
 from uuid import uuid4
 from io import BytesIO
 
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 # Cesty k obrázkům zpěvníků
 # Jediný kořen obrázků, viz docs/ukladani-obrazku.md. Starý strom
@@ -104,7 +104,18 @@ RECEPT_VYCHOZI = {
     'cernobile': False,
     'strany': '',           # '' = celý zpěvník, jinak '12,24-31,50' čísly stran zpěvníku
     'brozura': False,       # dvě strany na list A4 na šířku, v pořadí na složení
+    'vodoznak': False,      # „Vyrobeno na digizpevnik.cz“ v rohu každé strany (viz PAYWALL)
 }
+
+# Placená úroveň (zatím vypnutá). Role `premium` (a admin) stahuje cokoli; ostatní by se
+# zapnutým PAYWALL směli stáhnout jen malé PDF s vodoznakem, skládané až při stažení -
+# nic se kvůli tomu nepředgeneruje. Čtečka ukazuje čisté stránky vždycky.
+PAYWALL = os.getenv('PAYWALL', '0') == '1'
+VODOZNAK_TEXT = 'Vyrobeno na digizpevnik.cz'
+
+
+def ma_premium(user):
+    return getattr(user, 'role', None) in ('premium', 'admin')
 PREDVOLBY = {
     'small': {'format': 'pdf', 'kvalita': 'small'},
     'high': {'format': 'pdf', 'kvalita': 'high'},
@@ -2808,7 +2819,7 @@ def navrhy_pratel(user):
     uz = set()
     for r in Pratelstvi.query.filter(db.or_(Pratelstvi.od_id == user.id, Pratelstvi.komu_id == user.id)):
         uz |= {r.od_id, r.komu_id}
-    lide = User.query.filter(User.id.in_(kandidati - uz), User.role == 'user').all()
+    lide = User.query.filter(User.id.in_(kandidati - uz), User.role.in_(('user', 'premium'))).all()
     return sorted(lide, key=lambda u: jmeno_uzivatele(u).lower())
 
 
@@ -3562,6 +3573,7 @@ def normalizuj_recept(**volby):
     recept['prazdne'] = bool(recept['prazdne'])
     recept['cernobile'] = bool(recept['cernobile'])
     recept['brozura'] = bool(recept['brozura'])
+    recept['vodoznak'] = bool(recept['vodoznak'])
     recept['strany'] = zapis_rozsahu(useky_rozsahu(recept['strany'])) if recept['strany'] else ''
 
     if recept['format'] == 'zip':
@@ -3570,6 +3582,7 @@ def normalizuj_recept(**volby):
         recept['kvalita'] = 'originaly'
         recept['cernobile'] = False
         recept['brozura'] = False
+        recept['vodoznak'] = False
     elif recept['kvalita'] not in ('small', 'high'):
         raise ReceptChyba("kvalita musí být small nebo high")
 
@@ -3617,7 +3630,7 @@ def recept_z_parametru(args, kind=None):
         raise ReceptChyba("formát musí být pdf nebo zip")
     vlastni = {k: args.get(k) for k in ('kvalita', 'obsah', 'strany')
                if args.get(k) is not None}
-    for k in ('prazdne', 'cernobile', 'brozura'):
+    for k in ('prazdne', 'cernobile', 'brozura', 'vodoznak'):
         if args.get(k) is not None:
             vlastni[k] = args.get(k) not in ('0', 'false', 'ne', '')
 
@@ -3900,6 +3913,8 @@ def _render_brozura(sequence, out_path, recept, on_page=None):
         pocet = 0
         for poradi, item in enumerate(sequence, start=1):
             page = _fit_to_a4(_open_export_page(item, recept), _pozadi_strany(item, recept))
+            if recept.get('vodoznak'):
+                page = _vodoznak(page)
             if page.size != velikost:
                 zmenseny = page.resize(velikost, Image.LANCZOS)
                 page.close()
@@ -3946,6 +3961,38 @@ def _render_brozura(sequence, out_path, recept, on_page=None):
             Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
 
 
+_PISMA_VODOZNAKU = ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+                    '/System/Library/Fonts/Supplemental/Arial.ttf')
+
+
+def _vodoznak(page):
+    """Vypálí do strany VODOZNAK_TEXT vpravo dole: šedý text na poloprůhledném bílém
+    podkladu, výška písma 1,3 % strany. Malý, aby nezakryl akordy u okraje."""
+    w, h = page.size
+    velikost = max(10, round(h * 0.013))
+    pismo = None
+    for cesta in _PISMA_VODOZNAKU:
+        try:
+            pismo = ImageFont.truetype(cesta, velikost)
+            break
+        except OSError:
+            continue
+    if pismo is None:
+        pismo = ImageFont.load_default(size=velikost)
+    vrstva = Image.new('RGBA', page.size, (0, 0, 0, 0))
+    kresli = ImageDraw.Draw(vrstva)
+    l, t, r, b = kresli.textbbox((0, 0), VODOZNAK_TEXT, font=pismo)
+    okraj, odsazeni = round(velikost * 0.4), round(h * 0.012)
+    x = w - (r - l) - okraj - odsazeni
+    y = h - (b - t) - okraj - odsazeni
+    kresli.rounded_rectangle((x - okraj, y - okraj, x + (r - l) + okraj, y + (b - t) + okraj),
+                             radius=okraj, fill=(255, 255, 255, 170))
+    kresli.text((x - l, y - t), VODOZNAK_TEXT, font=pismo, fill=(90, 90, 90, 230))
+    vysledek = Image.alpha_composite(page.convert('RGBA'), vrstva).convert(page.mode if page.mode != 'P' else 'RGB')
+    page.close()
+    return vysledek
+
+
 def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     """Write the songbook to a PDF, one page at a time.
 
@@ -3973,6 +4020,8 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
         # Doplnit dřív než zmenšit, ať doplněná strana skončí na téže výšce jako
         # ostatní. Obráceně by se přes max_edge přetáhla o výšku doplněných okrajů.
         page = _fit_to_a4(page, _pozadi_strany(item, recept))
+        if recept.get('vodoznak'):
+            page = _vodoznak(page)
         if max_edge and max(page.size) > max_edge:
             page.thumbnail((max_edge, max_edge), Image.LANCZOS)
         if recept['cernobile']:
@@ -4314,6 +4363,10 @@ def _resolve_export_request(book_id, kind, recept=None):
             return None, (jsonify({'error': str(chyba)}), 400)
     if recept['format'] != kind:
         return None, (jsonify({'error': 'formát v adrese nesedí na recept'}), 400)
+    if PAYWALL and not ma_premium(current_user):
+        if kind != 'pdf':
+            return None, (jsonify({'error': 'Obrázky v ZIP jsou pro prémiové účty.'}), 403)
+        recept = normalizuj_recept(**PREDVOLBY['small'], vodoznak=True)
 
     token = token_receptu(recept)
     sequence = build_songbook_export_sequence(songbook, recept)

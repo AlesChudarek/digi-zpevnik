@@ -588,7 +588,15 @@ kdo maže.
 - [X] ~~**kontrolovat formát nahraných obrázků**~~ (Aleš 14. 10.). Dnes se přijme třeba SVG
       a pak ho aplikace neumí zobrazit (nejspíš při převodu na náhled). Rozpoznat formát
       z obsahu souboru a nepodporované odmítnout hned s jasnou hláškou.
-- [ ] (debata o rolích) **propagační řádek nebo vodoznak ve stažených souborech**
+- [X] **vodoznak a placená úroveň připravené, vypnuté** (14. 10.). Aleš: role user
+      a premium; čtečka ukazuje vždy čisté stránky (screenshotování nevadí), vodoznak jen
+      ve staženém souboru. Recept má volbu `vodoznak` („Vyrobeno na digizpevnik.cz“ vpravo
+      dole, `_vodoznak`), role `premium` a `ma_premium`. S `PAYWALL=1` (proměnná prostředí)
+      by běžný uživatel dostal jen malé PDF s vodoznakem, skládané až při stažení, a ZIP
+      ne. Zatím vypnuté - placení není vyřešené. Až se zapne: upravit okno stahování
+      (ukázat jen dostupnou volbu a proč) a vymyslet, jak se premium získá.
+      Hlídá `test_pratele.py`. Původní zápis:
+- [X] ~~(debata o rolích) **propagační řádek nebo vodoznak ve stažených souborech**~~
       (Aleš 14. 10.). Odkaz na web v rohu každé stažené strany; běžný uživatel vždy,
       admin nikdy, případně prémiový účet bez něj. Není priorita.
 

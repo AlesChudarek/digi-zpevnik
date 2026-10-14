@@ -216,6 +216,45 @@ def main():
                and u3.get("/pratele").headers["Location"].endswith("okno=pratele"),
                "staré adresy /profil a /pratele otevřou okno")
 
+    print("\n── vodoznak a placená úroveň ──")
+    strana = Image.new("RGB", (1748, 2480), "white")
+    s_vodoznakem = A._vodoznak(strana.copy())
+    roh = s_vodoznakem.crop((1748 - 500, 2480 - 120, 1748, 2480))
+    tmave = sum(1 for p in roh.convert("L").getdata() if p < 160)
+    zbytek = s_vodoznakem.crop((0, 0, 1748, 2300))
+    zkontroluj(tmave > 300 and zbytek.getextrema() == ((255, 255), (255, 255), (255, 255)),
+               "vodoznak je jen v pravém dolním rohu", tmave)
+    zkontroluj(A.token_receptu(A.normalizuj_recept(**A.PREDVOLBY["small"], vodoznak=True)) != "small",
+               "PDF s vodoznakem má v cache vlastní soubor, předgenerované small zůstane čisté")
+    from flask_login import login_user
+    with A.app.app_context():
+        sb_any = A.Songbook.query.filter_by(is_public=1).first().id
+    puvodni = A.PAYWALL
+    try:
+        for paywall in (False, True):
+            A.PAYWALL = paywall
+            with A.app.test_request_context(f"/songbook/{sb_any}/export.pdf?q=high"):
+                login_user(A.db.session.get(A.User, 3))
+                vysledek, chyba = A._resolve_export_request(sb_any, "pdf")
+                recept_bezny = vysledek["recept"]
+                login_user(A.db.session.get(A.User, 1))
+                recept_admin = A._resolve_export_request(sb_any, "pdf")[0]["recept"]
+            with A.app.test_request_context(f"/songbook/{sb_any}/export.zip"):
+                login_user(A.db.session.get(A.User, 3))
+                zip_chyba = A._resolve_export_request(sb_any, "zip")[1]
+            if not paywall:
+                zkontroluj(recept_bezny["kvalita"] == "high" and not recept_bezny["vodoznak"] and zip_chyba is None,
+                           "bez zapnutého PAYWALL stahuje každý cokoli, bez vodoznaku")
+            else:
+                zkontroluj(recept_bezny["kvalita"] == "small" and recept_bezny["vodoznak"]
+                           and zip_chyba is not None and zip_chyba[1] == 403,
+                           "se zapnutým PAYWALL běžný uživatel jen malé PDF s vodoznakem, ZIP ne",
+                           (recept_bezny, zip_chyba and zip_chyba[1]))
+                zkontroluj(recept_admin["kvalita"] == "high" and not recept_admin["vodoznak"],
+                           "admin (a premium) dál bez omezení")
+    finally:
+        A.PAYWALL = puvodni
+
     print("\n── v prohlížeči ──")
     from playwright.sync_api import sync_playwright
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
