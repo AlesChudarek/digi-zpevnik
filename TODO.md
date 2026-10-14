@@ -212,11 +212,14 @@ kdo maže.
       je plné kolečko v barvě tématu, obě ikony černé s bílým obrysem (Alešův návrh);
       kolečko mezi nimi sjíždí. Hlídá `test_napovedy.py`.
 
-- [ ] **zpěvník bez obálky se ve čtečce tváří, jako by ji měl jen napůl** (Aleš 14. 10.).
+- [X] **zpěvník bez obálky se ve čtečce tváří, jako by ji měl jen napůl** (Aleš 14. 10.)
+      — opraveno: místo bílé strany na začátku a konci je „žádná“ (jako u zavřené knihy).
       Bez obálky by čtečka neměla ukazovat obálku vůbec. Dnes navíc přidá jednu prázdnou
       stranu na místo vnitřní přední obálky - bílou, ne v barvě zpěvníku - ale vnější
       přední obálku ne, takže vyjde jedna strana obálky bez druhé. Nekonzistentní.
-- [ ] **zapnuté automatické sjíždění nedovolí skok nahoru** (Aleš 14. 10.). Tlačítko
+- [X] **zapnuté automatické sjíždění nedovolí skok nahoru** (Aleš 14. 10.) — opraveno:
+      plynulý skok přerušoval krok sjíždění; za běhu se skočí rovnou a jede se dál.
+      Hlídá `test_auto_scroll.py`. Tlačítko
       „nahoru“ má skočit na začátek a sjíždění pokračovat odtamtud dolů.
 
 ## Sdílení a uživatelé

@@ -2094,6 +2094,16 @@ function zoomOut() {
 
 function scrollToTop() {
   const wrapper = document.querySelector('.zoom-scroll-wrapper');
+  // Při sjíždění plynulý skok nejde: krok sjíždění v každém snímku nastaví scrollTop
+  // a tím animaci hned přeruší - stránka zůstala stát (Aleš 14. 10.). Skočí se tedy
+  // rovnou a sjíždění pokračuje od začátku.
+  if (autoScrollRunning) {
+    autoScrollPosition = 0;
+    wrapper.scrollTop = 0;
+    const obsah = document.getElementById('scroll-mode');
+    if (obsah) obsah.style.transform = '';
+    return;
+  }
   wrapper.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

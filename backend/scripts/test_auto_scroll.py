@@ -475,6 +475,23 @@ def main():
             zkontroluj(not page.evaluate("() => autoScrollRunning"),
                        "krátké ťuknutí dál zastavuje")
 
+            print("\n── skok nahoru za běhu ──")
+            page.evaluate("() => { if (!autoScrollRunning) toggleAutoScroll(); }")
+            page.evaluate("() => { document.querySelector('.zoom-scroll-wrapper').scrollTop = 1500; }")
+            page.wait_for_timeout(400)
+            skok = page.evaluate("""async () => {
+              const w = document.querySelector('.zoom-scroll-wrapper');
+              const pred = w.scrollTop;
+              scrollToTop();
+              await new Promise(r => setTimeout(r, 150));
+              const hned = w.scrollTop;
+              await new Promise(r => setTimeout(r, 1200));
+              return {pred: Math.round(pred), hned: Math.round(hned), potom: Math.round(w.scrollTop),
+                      bezi: autoScrollRunning};
+            }""")
+            zkontroluj(skok["pred"] > 1000 and skok["hned"] < 60 and skok["potom"] > skok["hned"] and skok["bezi"],
+                       "skok nahoru při sjíždění skočí na začátek a sjíždění jede dál", str(skok))
+
             print("\n── zastavení ──")
             # Nezávisle na tom, v jakém stavu předchozí sekce skončila
             page.evaluate("() => { if (!autoScrollRunning) toggleAutoScroll(); }")

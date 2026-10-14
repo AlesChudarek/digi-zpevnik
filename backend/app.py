@@ -4532,16 +4532,17 @@ def songbook_detail(book_id):
             list_of_pages.append({"file": "none", "page_number": None, "kind": "cover"})
 
         else:
-            # No cover: only offset start if needed and place content
+            # Bez obálky se nedoplňuje bílá strana, ale „žádná“ (none) - stejně jako
+            # u zavřené knihy s obálkou. Bílá strana vlevo od první stránky vypadala jako
+            # vnitřní obálka, a to jen jedna, bez vnější (Aleš 14. 10.).
             if first_side == "right":
-                # Add blank so first content appears on right
-                list_of_pages.append({"file": "blank", "page_number": None, "kind": "content"})
+                list_of_pages.append({"file": "none", "page_number": None, "kind": "content"})
 
             list_of_pages.extend([{**p, "kind": p.get("kind", "content")} for p in pages])
 
-            # If we end on a single left page (odd count), add a trailing blank
+            # Končí-li kniha na levé straně, vpravo od ní nic není.
             if len(list_of_pages) % 2 != 0:
-                list_of_pages.append({"file": "blank", "page_number": None, "kind": "content"})
+                list_of_pages.append({"file": "none", "page_number": None, "kind": "content"})
 
         return list(zip(list_of_pages[::2], list_of_pages[1::2]))
 
