@@ -127,30 +127,35 @@
         z-index: 0;
     }
 
-    /* Přepínač režimu čtení: svislá pilulka s oběma režimy, aktivní je podložený
-       barvou tématu a podklad mezi nimi plynule sjíždí. Dřív to bylo jedno kulaté
-       tlačítko, které se po najetí myší otáčelo jako mince a ukazovalo druhý režim -
-       na dotyku ale najetí není a ikona měnila význam pod rukou (14. 10.). */
+    /* Přepínač režimu čtení: vodorovná pilulka s oběma režimy vedle sebe, pravým
+       krajem zarovnaná s ostatními tlačítky. Vybraný režim je podložený světlým odstínem
+       tématu s rámečkem v jeho barvě a ikona má tmavou barvu tématu - tatáž dvojice
+       (--muted-bg / --brand-dark) jako text v oknech, kontrast 7-16 : 1 ve všech
+       motivech. Bílá ikona na plné barvě vypadala jako vypnutá.
+       Dřív jedno kulaté tlačítko, které se po najetí otáčelo jako mince - na dotyku
+       najetí není a ikona měnila význam pod rukou (14. 10.). */
     .mode-buttons > .rezimy {
         --velikost: 60px;
         position: relative;
         display: flex;
-        flex-direction: column;
-        width: var(--velikost);
+        flex-direction: row;
+        width: calc(2 * var(--velikost));
+        height: var(--velikost);
         border-radius: calc(var(--velikost) / 2);
         background: white;
         box-shadow: 0 2px 5px rgba(0,0,0,0.3);
     }
     .rezimy-jezdec {
         position: absolute;
-        left: 4px; right: 4px; top: 4px;
-        height: calc(var(--velikost) - 8px);
+        top: 4px; bottom: 4px; left: 4px;
+        width: calc(var(--velikost) - 8px);
         border-radius: 50%;
-        background: var(--brand, #2E7D32);
+        background: var(--muted-bg, #e8f5e9);
+        box-shadow: inset 0 0 0 2px var(--brand, #2E7D32);
         pointer-events: none;
     }
     .rezimy.pripraveno .rezimy-jezdec { transition: transform 0.25s ease; }
-    .rezimy[data-rezim="scroll"] .rezimy-jezdec { transform: translateY(var(--velikost)); }
+    .rezimy[data-rezim="scroll"] .rezimy-jezdec { transform: translateX(var(--velikost)); }
     .mode-buttons > .rezimy > .rezim {
         position: relative;
         z-index: 1;
@@ -165,12 +170,19 @@
         background: transparent;
         box-shadow: none;
         cursor: pointer;
+        color: #6b6b6b;
     }
-    .rezim[aria-pressed="true"] { cursor: default; }
-    .rezim[aria-pressed="false"]:hover img { transform: scale(1.12); }
-    .rezim img { transition: transform 0.2s, filter 0.25s; }
-    /* Ikona na barvě tématu bílá, stejně jako text v liště. */
-    .rezim[aria-pressed="true"] img { filter: brightness(0) invert(1); }
+    .mode-buttons > .rezimy > .rezim[aria-pressed="true"] { cursor: default; color: var(--brand-dark, #1b5e20); }
+    /* Ikona maskou, ne <img>: obarví se přesně barvou z tématu (currentColor). */
+    .rezim-ikona {
+        width: 30px;
+        height: 30px;
+        background: currentColor;
+        -webkit-mask: var(--ikona) center / contain no-repeat;
+        mask: var(--ikona) center / contain no-repeat;
+        transition: transform 0.2s;
+    }
+    .rezim[aria-pressed="false"]:hover .rezim-ikona { transform: scale(1.12); }
 
     .nav-buttons button:hover,
     .mode-buttons > .button-container > button:not(.rezim):hover {
@@ -195,6 +207,9 @@
         right: 40px;
         display: flex;
         flex-direction: column;
+        /* Doprava: pilulka režimů je dvakrát širší než ostatní tlačítka a vyčnívá
+           doleva, ostatní zůstávají v jedné svislé řadě u pravého kraje. */
+        align-items: flex-end;
         gap: 15px;
         /* Was 1000, the same as the navbar, so these floated over the toolbar and
            over the open menu. Both button groups now sit in one band below it. */
@@ -552,6 +567,7 @@
       .zoom-buttons img,
       .mode-buttons img { width: 20px; height: 20px; }
       .mode-buttons > .rezimy { --velikost: 40px; opacity: 0.82; }
+      .rezim-ikona { width: 20px; height: 20px; }
 
       /* Pevných 230px by na telefonu vyjelo za pravý kraj. Panel si vezme, co zbývá
          od tlačítka k druhé straně obrazovky, a nechá tam rezervu na tlačítka módů. */
@@ -758,12 +774,14 @@
   <div class="button-container rezimy" role="group" aria-label="Režim čtení" data-rezim="double">
     <span class="rezimy-jezdec" aria-hidden="true"></span>
     <button type="button" class="rezim" data-rezim="double" aria-pressed="true"
-            onclick="prepniRezim('double')" data-napoveda="Dvojstrana jako v knize">
-      <img src="{{ static_bust('img/icons/open_book.svg') }}" alt="Dvojstrana">
+            onclick="prepniRezim('double')" data-napoveda="Dvojstrana jako v knize"
+            aria-label="Dvojstrana jako v knize">
+      <span class="rezim-ikona" style="--ikona: url('{{ static_bust('img/icons/open_book.svg') }}')"></span>
     </button>
     <button type="button" class="rezim" data-rezim="scroll" aria-pressed="false"
-            onclick="prepniRezim('scroll')" data-napoveda="Strany pod sebou">
-      <img src="{{ static_bust('img/icons/scroll.svg') }}" alt="Strany pod sebou">
+            onclick="prepniRezim('scroll')" data-napoveda="Strany pod sebou"
+            aria-label="Strany pod sebou">
+      <span class="rezim-ikona" style="--ikona: url('{{ static_bust('img/icons/scroll.svg') }}')"></span>
     </button>
   </div>
   <div class="button-container">

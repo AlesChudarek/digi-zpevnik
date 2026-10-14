@@ -159,10 +159,10 @@ def main():
             print("\n── přepínač režimu (pilulka) ──")
             REZIM = """() => { const j = document.querySelector('.rezimy-jezdec').getBoundingClientRect();
               const t = [...document.querySelectorAll('.rezim')].map(b => [b.dataset.rezim, b.getAttribute('aria-pressed'),
-                         Math.round(b.getBoundingClientRect().top + b.getBoundingClientRect().height / 2)]);
+                         Math.round(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2)]);
               return {rezim: currentMode, stisknute: t.filter(x => x[1] === 'true').map(x => x[0]),
-                      stred_jezdce: Math.round(j.top + j.height / 2), tlacitka: t,
-                      barva: getComputedStyle(document.querySelector('.rezimy-jezdec')).backgroundColor}; }"""
+                      stred_jezdce: Math.round(j.left + j.width / 2), tlacitka: t,
+                      barva: getComputedStyle(document.querySelector('.rezimy-jezdec')).backgroundColor, ikona: getComputedStyle(document.querySelector('.rezim[aria-pressed=true]')).color}; }"""
             pred = page.evaluate(REZIM)
             page.click('.rezim[data-rezim="scroll"]')
             page.wait_for_timeout(500)
@@ -171,8 +171,9 @@ def main():
             zkontroluj(pred["stisknute"] == ["double"] and po["rezim"] == "scroll"
                        and po["stisknute"] == ["scroll"] and abs(po["stred_jezdce"] - stred["scroll"]) <= 1,
                        "klik na druhou polovinu přepne režim a podklad sjede pod ni", str((pred, po)))
-            zkontroluj(po["barva"] not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"),
-                       "podklad má barvu tématu", po["barva"])
+            zkontroluj(po["barva"] not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
+                       and po["ikona"] != "rgb(255, 255, 255)",
+                       "podklad má odstín tématu a ikona tmavou barvu tématu", str((po["barva"], po["ikona"])))
             page.click('.rezim[data-rezim="double"]')
             page.wait_for_timeout(500)
             zpet = page.evaluate(REZIM)

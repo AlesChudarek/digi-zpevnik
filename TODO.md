@@ -208,8 +208,9 @@ kdo maže.
       běhu, nebo podržení tlačítka (jediná cesta na dotykové obrazovce)
 - [X] **přepínač režimů čtečky je pilulka** (14. 10.). Místo jednoho tlačítka, které se
       po najetí otáčelo jako mince (na dotyku nefungovalo, ikona měnila význam pod rukou,
-      ~150 řádků animační logiky), je svislá pilulka s oběma režimy; aktivní je podložený
-      barvou tématu a podklad mezi nimi sjíždí. Hlídá `test_napovedy.py`.
+      ~150 řádků animační logiky), je vodorovná pilulka s oběma režimy vedle sebe; vybraný
+      má světlý odstín tématu s rámečkem a ikonu v tmavé barvě tématu (dvojice
+      --muted-bg / --brand-dark), podklad mezi nimi sjíždí. Hlídá `test_napovedy.py`.
 
 ## Sdílení a uživatelé
 
@@ -810,3 +811,7 @@ kdo maže.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
 pridat watermark na vsechny obrazky, pripadne aspon propagacni text s odkazem na nas web v rohu kazde stazene strany. Potencial pro role - obycejny uzivatel ma vzdy propagacni radek (admin nikdy) a pak mozna nejaky premium ucet bez. Ale neni to priorita, jen navrh na debatu o rolich
+
+pridat detekci formatu vstupnich dat. dnes to v klidu prijme svg a pak ho to neumi zobrazit (predpokladam ze to je tim prevodem do webp??)
+
+Pokud je zpevnik bez coveru uplne, kdyz se zobrazuje v knizni ctecce, mozna by se mel ukazovat jakoze uplne obal nema. Takze ne ze tam je ale prazdny, ale ze tam neni vubec. Navic ted to jeste udela divnou nekonzistenci tak, ze se prida jedna prazdana strana pro vnitrni predni cover (a to jeste bila a ne v barve coveru), ale vnejsi predni cover neni. takze jsme dodali jen jednu stranu coveru? - nekonzistentni
