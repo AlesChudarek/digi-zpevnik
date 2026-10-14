@@ -208,9 +208,9 @@ kdo maže.
       běhu, nebo podržení tlačítka (jediná cesta na dotykové obrazovce)
 - [X] **přepínač režimů čtečky je pilulka** (14. 10.). Místo jednoho tlačítka, které se
       po najetí otáčelo jako mince (na dotyku nefungovalo, ikona měnila význam pod rukou,
-      ~150 řádků animační logiky), je vodorovná pilulka s oběma režimy vedle sebe; vybraný
-      má světlý odstín tématu s rámečkem a ikonu v tmavé barvě tématu (dvojice
-      --muted-bg / --brand-dark), podklad mezi nimi sjíždí. Hlídá `test_napovedy.py`.
+      ~150 řádků animační logiky), je vodorovná pilulka s oběma režimy vedle sebe; pod vybraným
+      je plné kolečko v barvě tématu, obě ikony černé s bílým obrysem (Alešův návrh);
+      kolečko mezi nimi sjíždí. Hlídá `test_napovedy.py`.
 
 ## Sdílení a uživatelé
 

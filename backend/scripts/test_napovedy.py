@@ -172,8 +172,8 @@ def main():
                        and po["stisknute"] == ["scroll"] and abs(po["stred_jezdce"] - stred["scroll"]) <= 1,
                        "klik na druhou polovinu přepne režim a podklad sjede pod ni", str((pred, po)))
             zkontroluj(po["barva"] not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
-                       and po["ikona"] != "rgb(255, 255, 255)",
-                       "podklad má odstín tématu a ikona tmavou barvu tématu", str((po["barva"], po["ikona"])))
+                       and po["ikona"] == "rgb(0, 0, 0)",
+                       "podklad má barvu tématu a ikona je černá", str((po["barva"], po["ikona"])))
             page.click('.rezim[data-rezim="double"]')
             page.wait_for_timeout(500)
             zpet = page.evaluate(REZIM)
