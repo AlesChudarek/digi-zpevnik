@@ -1198,8 +1198,7 @@ def register():
             else:
                 flash('Registrace proběhla, ale ověřovací e-mail se nepodařilo odeslat. '
                       'Adresa může obsahovat překlep nebo neexistovat - zkontrolujte ji '
-                      'v nabídce účtu (Účet → E-mail), případně ji opravte, a ověřovací '
-                      'e-mail pošlete znovu.', 'error')
+                      'v nabídce účtu (Účet → E-mail).', 'error')
             return redirect(url_for('vitejte'))
 
     return render_template('auth.html')
