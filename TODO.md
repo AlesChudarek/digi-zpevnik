@@ -694,6 +694,14 @@ kdo maže.
 
 ## Provoz a bezpečnost
 
+- [X] **logy, ze kterých je poznat, co server dělá** (14. 10.). `backend/gunicorn_conf.py`
+      (na serveru přes drop-in `gunicorn-zpevnik.service.d/logy.conf`): řádek za každý
+      požadavek s dobou v ms, a když gunicorn zabíjí worker po 60 s, zapíše se předtím
+      požadavek, na kterém visel, a výpis zásobníku všech vláken. Flask k tomu píše
+      `POMALÝ POŽADAVEK` od 3 s. Číst: `sudo journalctl -u gunicorn-zpevnik -f`.
+- [X] **náhledy se dopočítávají na pozadí, uživatel nečeká** (14. 10.). Chybí-li náhled,
+      čtečka i dlaždice ukážou rovnou originál a `dopocitej_nahledy` spustí
+      `nice flask nahledy-warm --zpevnik <id>`; totéž hned po uložení a kopii.
 - [X] **duplikování na serveru se točilo přes minutu** (13. 10.). Předpřipravení PDF
       po uložení/kopii běželo jako vlákno v gunicorn workeru a drželo jediné jádro:
       worker nestihl hlásit, že žije, a gunicorn ho po 60 s zabil (i s PDF a s

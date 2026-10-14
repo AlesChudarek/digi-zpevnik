@@ -1031,6 +1031,29 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ---------- ROUTY ----------
+POMALY_POZADAVEK_S = 3   # od kolika sekund se požadavek zapíše do logu jako pomalý
+
+
+@app.before_request
+def _zacatek_pozadavku():
+    g.zacatek_pozadavku = time.time()
+
+
+@app.after_request
+def _zapis_pomaly_pozadavek(odpoved):
+    """Pomalý požadavek do logu s cestou a účtem - ať je vidět, co server brzdí, dřív
+    než to gunicorn zabije na timeoutu (to zapisuje gunicorn_conf.worker_abort)."""
+    zacatek = g.get('zacatek_pozadavku')
+    if zacatek is not None:
+        trvani = time.time() - zacatek
+        if trvani >= POMALY_POZADAVEK_S:
+            ucet = getattr(current_user, 'id', None) if current_user else None
+            app.logger.warning("POMALÝ POŽADAVEK %.1f s: %s %s (účet %s, stav %s)",
+                               trvani, request.method, request.full_path.rstrip('?'),
+                               ucet, odpoved.status_code)
+    return odpoved
+
+
 @app.route('/favicon.ico')
 def favicon():
     """Prohlížeče si o ikonu říkají i samy na kořeni domény (záložky, historie), bez
@@ -1199,6 +1222,10 @@ def url_nahledu(songbook):
     k = n.klic(zdroj, n.OBALKA)
     if not k:
         return None
+    if not n.soubor_nahledu(NAHLEDY_DIR, songbook.id, k).exists():
+        # Stejně jako u stran: originál hned, náhled se dopočítá na pozadí.
+        dopocitej_nahledy(songbook.id)
+        return url_for('serve_songbook_image', filename=rel)
     return url_for('nahled_obalky', book_id=songbook.id, klic=k)
 
 
@@ -1244,6 +1271,11 @@ def url_strany(rel):
     n = _nahledy()
     k = n.klic(zdroj, n.STRANA) if zdroj else None
     if not k:
+        return url_for('serve_songbook_image', filename=rel)
+    # Náhled ještě není: rovnou originál, ať čtečka nečeká na výrobu. Dopočítá ho
+    # dopocitej_nahledy na pozadí a příští otevření už dostane náhled.
+    if not n.soubor_strany(NAHLEDY_DIR, n.otisk_cesty(rel), k).exists():
+        g.chybi_nahled = True
         return url_for('serve_songbook_image', filename=rel)
     # `.webp` na konci schválně: adresa nese cestu k originálu, aby se z ní dal náhled
     # vyrobit, ale obsah je WebP. Bez té přípony vypadá v inspektoru jako plné PNG
@@ -2337,32 +2369,38 @@ def vytvor_kopii(songbook_id):
     nova = kopiruj_zpevnik(sb, current_user.id, f"{sb.title} (kopie)")
     zkontroluj_limity(pred)
     db.session.commit()
-    predvyrob_nahled(nova.id)
+    dopocitej_nahledy(nova.id)
     schedule_export_warm(nova.id)
     return jsonify({'ok': True, 'id': nova.id})
 
 
-def predvyrob_nahled(book_id):
-    """Vyrobí zmenšený náhled obálky na pozadí, ať ho dlaždice nemusí čekat.
+_bezici_nahledy = {}   # id zpěvníku -> proces, ať se týž zpěvník nepočítá dvakrát
 
-    Bez toho vzniká až při prvním zobrazení Mých zpěvníků - u nové kopie nebo nové
-    obálky tak chvíli chyběl. Selhání nevadí, náhled se pak vyrobí jako dřív.
+
+def dopocitej_nahledy(book_id):
+    """Dopočítá náhledy obálky i stran zpěvníku na pozadí: samostatný proces
+    `flask nahledy-warm --zpevnik <id>` s nejnižší prioritou.
+
+    Volá se po uložení a kopii a ve chvíli, kdy stránka narazí na chybějící náhled
+    (místo něj pak ukazuje originál). Proces, ne vlákno - vlákno ve workeru drželo
+    jediné jádro serveru a gunicorn worker zabil (viz schedule_export_warm). Chyby
+    procesu jdou do stejného logu jako server.
     """
-    def prace():
-        try:
-            with app.app_context():
-                sb = db.session.get(Songbook, book_id)
-                rel = sb.img_path_cover_preview if sb else None
-                zdroj = _abs_image_path(rel) if rel else None
-                n = _nahledy()
-                k = n.klic(zdroj, n.OBALKA) if zdroj else None
-                if k:
-                    cil = n.soubor_nahledu(NAHLEDY_DIR, book_id, k)
-                    if not cil.exists():
-                        n.vyrob(zdroj, cil, n.OBALKA)
-        except Exception:  # noqa: BLE001 - jen urychlení, nic na tom nezávisí
-            pass
-    threading.Thread(target=prace, daemon=True).start()
+    bezi = _bezici_nahledy.get(book_id)
+    if bezi is not None and bezi.poll() is None:
+        return
+    try:
+        _bezici_nahledy[book_id] = subprocess.Popen(
+            ['nice', '-n', '19', sys.executable, '-m', 'flask', '--app', 'backend.app',
+             'nahledy-warm', '--zpevnik', book_id],
+            cwd=str(Path(__file__).resolve().parent.parent),
+            stdout=subprocess.DEVNULL, start_new_session=True)
+    except Exception:  # noqa: BLE001 - jen urychlení, bez náhledu se ukáže originál
+        app.logger.exception("Náhledy zpěvníku %s se nepodařilo spustit", book_id)
+    # Doběhlé procesy uklidit, ať po nich nezůstanou zombie.
+    for klic, proces in list(_bezici_nahledy.items()):
+        if proces.poll() is not None:
+            del _bezici_nahledy[klic]
 
 
 def _moje_pozvanka(pozvanka_id):
@@ -2393,7 +2431,7 @@ def prijmi_pozvanku(pozvanka_id):
     zkontroluj_limity(pred)
     db.session.commit()
     if cil is not sb:
-        predvyrob_nahled(cil.id)
+        dopocitej_nahledy(cil.id)
         schedule_export_warm(cil.id)
     return jsonify({'ok': True, 'id': cil.id})
 
@@ -2899,7 +2937,7 @@ def uloz_zpevnik(songbook_id=None):
         return jsonify({'ok': False, 'error': str(chyba)}), 400
 
     smaz_osirele_obrazky(ke_smazani)
-    predvyrob_nahled(sb.id)
+    dopocitej_nahledy(sb.id)
     schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'id': sb.id})
 
@@ -2956,7 +2994,7 @@ def schedule_export_warm(book_id):
                  'export-warm', '--variant', PREDGENEROVANA_VARIANTA, '--all',
                  '--songbook', book_id],
                 cwd=str(Path(__file__).resolve().parent.parent),
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+                stdout=subprocess.DEVNULL, start_new_session=True)
             proces.wait()   # jen ať nezůstane zombie; vlákno přitom nic nepočítá
         except Exception:  # noqa: BLE001 - uložení zpěvníku tím nesmí být dotčené
             pass
@@ -4092,7 +4130,7 @@ def songbook_detail(book_id):
     book_type = 'public' if is_public else ('private' if is_owner else 'shared')
     can_manage = can_edit_songbook(current_user, songbook)
 
-    return render_template(
+    html = render_template(
         'songbook_view.html',
         book_id=book_id,
         songbook_title=songbook.title or '',
@@ -4104,6 +4142,10 @@ def songbook_detail(book_id):
         can_manage_songbook=can_manage,
         smi_stahovat=smi_tvorit(current_user)
     )
+    # Některá strana neměla náhled a šel místo ní originál - dopočítat na pozadí.
+    if g.get('chybi_nahled'):
+        dopocitej_nahledy(book_id)
+    return html
 
 @app.context_processor
 def inject_user_status():
@@ -4157,14 +4199,18 @@ def migrace_overeni(overit_stavajici):
 @app.cli.command("nahledy-warm")
 @click.option("--jen", type=click.Choice(['obalky', 'strany']), default=None,
               help="udělat jen jednu skupinu (výchozí obě)")
+@click.option("--zpevnik", "zpevnik_id", default=None,
+              help="jen tenhle zpěvník (tak ho spouští dopocitej_nahledy po změně)")
 @with_appcontext
-def nahledy_warm(jen):
+def nahledy_warm(jen, zpevnik_id):
     """Předpřipraví náhledy obálek a stran, ať na ně první návštěvník nečeká."""
     n = _nahledy()
+    zpevniky = (Songbook.query.filter_by(id=zpevnik_id).all() if zpevnik_id
+                else Songbook.query.all())
 
     if jen != 'strany':
         hotovo = preskoceno = chyb = 0
-        for sb in Songbook.query.all():
+        for sb in zpevniky:
             rel = sb.img_path_cover_preview
             zdroj = _abs_image_path(rel) if rel else None
             k = n.klic(zdroj, n.OBALKA) if zdroj else None
@@ -4184,11 +4230,13 @@ def nahledy_warm(jen):
     if jen != 'obalky':
         # Tatáž písnička může být ve dvou zpěvnících, takže se cesty opakují; množina
         # zařídí, že se obrázek zmenšuje jednou.
-        cesty = {r.image_path for r in Strana.query.all() if r.image_path}
+        strany = (Strana.query.filter_by(songbook_id=zpevnik_id) if zpevnik_id
+                  else Strana.query)
+        cesty = {r.image_path for r in strany.all() if r.image_path}
         # Obálky patří do obou skupin. Nahoře dostaly malý náhled do přehledů, ale čtečka
         # je ukazuje jako běžné strany, takže potřebují i variantu v šířce strany. Bez
         # tohohle se čtyři obálky každého zpěvníku dogenerovávaly až za provozu.
-        for sb in Songbook.query.all():
+        for sb in zpevniky:
             cesty |= {c for c in (sb.img_path_cover_front_outer, sb.img_path_cover_front_inner,
                                   sb.img_path_cover_back_inner, sb.img_path_cover_back_outer) if c}
         hotovo = preskoceno = chyb = 0
