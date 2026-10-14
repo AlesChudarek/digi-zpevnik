@@ -578,7 +578,11 @@ kdo maže.
       za okrajem telefonu) a na dotykové obrazovce se neukázala vůbec. Teď umí najetí,
       dotyk i klávesnici a sama uhne okraji obrazovky.
       Hlídá to `backend/scripts/test_napovedy.py`, 40 kontrol v prohlížeči.
-- [ ] **kontrolovat formát nahraných obrázků** (Aleš 14. 10.). Dnes se přijme třeba SVG
+- [X] **formát nahraných obrázků se kontroluje** (14. 10.) — `zkontroluj_format` v
+      `_save_image_with_limit` pozná formát z obsahu; projde JPG, PNG, WEBP a GIF, ostatní
+      (SVG, PDF přejmenované na .png…) se odmítne hned s hláškou. Hlídá `test_editor.py`.
+      Původní zápis:
+- [X] ~~**kontrolovat formát nahraných obrázků**~~ (Aleš 14. 10.). Dnes se přijme třeba SVG
       a pak ho aplikace neumí zobrazit (nejspíš při převodu na náhled). Rozpoznat formát
       z obsahu souboru a nepodporované odmítnout hned s jasnou hláškou.
 - [ ] (debata o rolích) **propagační řádek nebo vodoznak ve stažených souborech**
@@ -733,7 +737,10 @@ kdo maže.
       e-mail se nepodařilo odeslat“ - účet ale vznikne a e-mail změnit nejde. Buď
       registraci při neodeslaném e-mailu nedokončit, nebo dát možnost adresu změnit
       (patří do okna Účet níž).
-- [ ] **velká profilová fotka se odmítne** (Aleš 14. 10.). Místo odmítnutí jen upozornit,
+- [X] **ořez profilové fotky** (14. 10.) — po výběru okno s fotkou a kruhovým výřezem,
+      posun tažením, přiblížení posuvníkem a kolečkem. Odchází jen výřez 512 px (JPEG),
+      takže velikost původní fotky nevadí. Hlídá `test_pratele.py`. Původní zápis:
+- [X] ~~**velká profilová fotka se odmítne**~~ (Aleš 14. 10.). Místo odmítnutí jen upozornit,
       že se zmenší. K tomu okno s ořezem jako na Facebooku: celá fotka, přes ni kruhový
       výřez, posun a přiblížení.
 - [X] **účet v liště a okna Účet a Přátelé** (14. 10.) — jméno a vpravo v rohu fotka 38 px,

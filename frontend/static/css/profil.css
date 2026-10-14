@@ -90,3 +90,21 @@
 }
 .ucet-potvrzeni[hidden] { display: none; }
 .ucet-potvrzeni .okno { max-width: 420px; }
+
+/* Ořez profilové fotky (ucet.js). Kruh je díra ve stínu přes celou plochu. */
+.orez-zaclona {
+  position: fixed; inset: 0; z-index: 5200; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.orez-okno { width: min(340px, 100%); box-sizing: border-box; color: #222; }
+.orez-plocha {
+  position: relative; width: min(280px, calc(100vw - 92px)); aspect-ratio: 1; margin: 0 auto 12px;
+  overflow: hidden; border-radius: 8px; background: #222; touch-action: none; cursor: grab;
+}
+.orez-plocha:active { cursor: grabbing; }
+.orez-obrazek { position: absolute; left: 0; top: 0; max-width: none; user-select: none; pointer-events: none; }
+.orez-kruh {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 1;
+  box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.55); outline: 2px solid rgba(255, 255, 255, 0.85);
+}
+.orez-zoom { width: 100%; margin-bottom: 12px; }

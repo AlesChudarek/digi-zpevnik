@@ -246,6 +246,29 @@ def main():
         zkontroluj(page.input_value("#profil-prezdivka") == "Petr z testu"
                    and page.is_hidden("#ucet-panel"),
                    "okno Účet s profilem, nabídka se zavře")
+        # Ořez: fotka větší než limit nahrávání se už neodmítne, odejde jen výřez.
+        velka = TMP / "velka.png"
+        Image.new("RGB", (3000, 1800), "orange").save(velka)
+        page.set_input_files("#profil-soubor", str(velka))
+        page.wait_for_selector(".orez-zaclona .orez-plocha img")
+        orez = page.evaluate("""() => { const p = document.querySelector('.orez-plocha').getBoundingClientRect(),
+            i = document.querySelector('.orez-obrazek').getBoundingClientRect();
+          return {plocha: Math.round(p.width), pokryva: i.left <= p.left + 0.5 && i.right >= p.right - 0.5
+                  && i.top <= p.top + 0.5 && i.bottom >= p.bottom - 0.5}; }""")
+        zkontroluj(orez["pokryva"], "okno s ořezem: fotka pokrývá celou plochu výřezu", orez)
+        page.fill(".orez-zoom", "2")
+        page.dispatch_event(".orez-zoom", "input")
+        with page.expect_navigation():
+            page.click("[data-orez=ulozit]")
+        page.wait_for_load_state("networkidle")
+        with A.app.app_context():
+            soubor = A.db.session.get(A.User, 3).fotka
+        with Image.open(A.PROFILY_DIR / soubor) as im:
+            vysledek = (im.size, im.getpixel((128, 128)))
+        zkontroluj(vysledek[0] == (256, 256) and vysledek[1][0] > 200 and vysledek[1][2] < 80,
+                   "uložený výřez je oranžový čtverec 256 px", vysledek)
+        page.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
+        zkontroluj("okno=" not in page.url, "po uložení fotky zůstane otevřené okno Účet", page.url)
         page.keyboard.press("Escape")
         zkontroluj(page.is_hidden("#ucet-okno"), "Escape okno zavře")
         page.goto(base + "/my-songbooks")

@@ -352,8 +352,31 @@ def _zapocti(user_id: int, bajtu: int, cesta: Path) -> None:
             pass
 
 
+# Formáty, které umí celá cesta: náhledy, export do PDF i prohlížeč, když ukazuje originál.
+PODPOROVANE_FORMATY = {'JPEG', 'PNG', 'WEBP', 'GIF'}
+
+
+class NeplatnyObrazek(ValueError):
+    """Nahraný soubor není obrázek, se kterým aplikace umí pracovat. Hláška jde ven."""
+
+
+def zkontroluj_format(data: bytes) -> str:
+    """Rozpozná formát z obsahu, ne z přípony. Dřív prošlo třeba SVG (nebo cokoli
+    s příponou .png) a rozbilo se až při zobrazení a v náhledech."""
+    try:
+        with Image.open(BytesIO(data)) as im:
+            fmt = (im.format or '').upper()
+            im.verify()
+    except Exception:
+        raise NeplatnyObrazek('Soubor není obrázek, který jde nahrát. Podporované jsou JPG, PNG, WEBP a GIF.')
+    if fmt not in PODPOROVANE_FORMATY:
+        raise NeplatnyObrazek(f'Formát {fmt or "souboru"} nejde nahrát. Podporované jsou JPG, PNG, WEBP a GIF.')
+    return fmt
+
+
 def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
     data = _prepare_image_bytes(file_storage, ext_hint=ext_hint)
+    zkontroluj_format(data)
     # Jediné místo, kudy obrázek na disk teče, takže i jediné, kde se kvóta musí hlídat.
     uid = _uzivatel_z_cilove_cesty(dest_path)
     if uid is not None:
@@ -586,6 +609,13 @@ def _uklid_po_chybe(chyba):
             _uklid_zapsane()
         except RuntimeError:
             pass
+
+
+@app.errorhandler(NeplatnyObrazek)
+def _neplatny_obrazek(chyba):
+    db.session.rollback()
+    _uklid_zapsane()
+    return jsonify({'ok': False, 'error': str(chyba)}), 400
 
 
 @app.errorhandler(KvotaPrekrocena)
@@ -3118,7 +3148,7 @@ def _uloz_obalky(sb, ke_smazani):
         if soubor:
             # Jméno se z uploadu nebere: obálky jsou čtyři a každá má pevné jméno podle role.
             ext = (Path(soubor.filename or '').suffix or '.png').lower()
-            if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.svg'):
+            if ext not in ('.png', '.jpg', '.jpeg', '.webp', '.gif'):
                 ext = '.png'
             rel = _cesta_obalky(sb, jmeno, ext)
             abs_path = IMAGES_DIR / rel

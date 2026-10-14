@@ -238,6 +238,11 @@ def main():
                    "i s řádkem v images")
 
     print("\n── nahrávání ──")
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>'
+    r = u3.post("/api/strany/nahrat", data={"soubor": (io.BytesIO(svg), "obrazek.png")},
+                content_type="multipart/form-data")
+    zkontroluj(r.status_code == 400 and "Podporované" in (r.get_json() or {}).get("error", ""),
+               "SVG (i s příponou .png) se odmítne hned při nahrání", r.get_json())
     _, a = nahraj(u3, "red")
     _, b = nahraj(u3, "red")
     with A.app.app_context():

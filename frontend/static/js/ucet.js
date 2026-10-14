@@ -157,17 +157,123 @@ window.UcetOkna = (function () {
   }
 
   document.addEventListener('click', prectiKlik);
-  document.addEventListener('change', async (e) => {
+  /* ---------- ořez profilové fotky ----------
+     Celá fotka v ploše, přes ni kruh. Tažením se posouvá, posuvníkem a kolečkem myši
+     přibližuje. Odešle se jen výřez 512 × 512 (JPEG), takže na velikosti původní
+     fotky nezáleží - dřív se fotka nad limit nahrávání odmítla. */
+  const VYSTUP_PX = 512;
+
+  function orez(soubor) {
+    const url = URL.createObjectURL(soubor);
+    const img = new Image();
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      oznam('Soubor se nepodařilo otevřít jako obrázek. Podporované jsou JPG, PNG, WEBP a GIF.',
+            { nadpis: 'Fotku nejde použít' });
+    };
+    img.onload = () => ukazOrez(img, url);
+    img.src = url;
+  }
+
+  function ukazOrez(img, url) {
+    const zaclona = document.createElement('div');
+    zaclona.className = 'orez-zaclona';
+    zaclona.innerHTML = `
+      <div class="okno orez-okno" role="dialog" aria-modal="true" aria-label="Výřez fotky">
+        <h3>Výřez fotky</h3>
+        <p>Posuňte fotku tažením, přibližte posuvníkem nebo kolečkem myši.</p>
+        <div class="orez-plocha"><div class="orez-kruh"></div></div>
+        <input type="range" class="orez-zoom" min="1" max="4" step="0.01" value="1" aria-label="Přiblížení">
+        <div class="actions">
+          <button type="button" class="btn" data-orez="zrusit">Zrušit</button>
+          <button type="button" class="btn primary" data-orez="ulozit">Uložit</button>
+        </div>
+      </div>`;
+    document.body.appendChild(zaclona);
+    const plocha = zaclona.querySelector('.orez-plocha');
+    const zoom = zaclona.querySelector('.orez-zoom');
+    plocha.prepend(img);
+    img.className = 'orez-obrazek';
+    img.draggable = false;
+
+    const S = plocha.clientWidth;
+    const zaklad = S / Math.min(img.naturalWidth, img.naturalHeight);
+    let meritko = zaklad, x = 0, y = 0;
+
+    function omez() {
+      const w = img.naturalWidth * meritko, h = img.naturalHeight * meritko;
+      x = Math.min(0, Math.max(S - w, x));
+      y = Math.min(0, Math.max(S - h, y));
+    }
+    function vykresli() {
+      img.style.width = `${img.naturalWidth * meritko}px`;
+      img.style.height = `${img.naturalHeight * meritko}px`;
+      img.style.transform = `translate(${x}px, ${y}px)`;
+    }
+    // Přiblížení kolem bodu (střed plochy nebo kurzor), ať výřez neuskakuje.
+    function priblizNa(nove, bx, by) {
+      const nove_m = zaklad * Math.min(4, Math.max(1, nove));
+      x = bx - (bx - x) * nove_m / meritko;
+      y = by - (by - y) * nove_m / meritko;
+      meritko = nove_m;
+      zoom.value = String(meritko / zaklad);
+      omez(); vykresli();
+    }
+    x = (S - img.naturalWidth * meritko) / 2;
+    y = (S - img.naturalHeight * meritko) / 2;
+    vykresli();
+
+    zoom.addEventListener('input', () => priblizNa(Number(zoom.value), S / 2, S / 2));
+    plocha.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const r = plocha.getBoundingClientRect();
+      priblizNa(meritko / zaklad * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - r.left, e.clientY - r.top);
+    }, { passive: false });
+    let tah = null;
+    plocha.addEventListener('pointerdown', (e) => {
+      tah = { px: e.clientX, py: e.clientY, x, y };
+      plocha.setPointerCapture(e.pointerId);
+    });
+    plocha.addEventListener('pointermove', (e) => {
+      if (!tah) return;
+      x = tah.x + e.clientX - tah.px;
+      y = tah.y + e.clientY - tah.py;
+      omez(); vykresli();
+    });
+    plocha.addEventListener('pointerup', () => { tah = null; });
+
+    const zavriOrez = () => { zaclona.remove(); URL.revokeObjectURL(url); };
+    zaclona.addEventListener('click', async (e) => {
+      const akce = e.target.dataset && e.target.dataset.orez;
+      if (akce === 'zrusit' || e.target === zaclona) { zavriOrez(); return; }
+      if (akce !== 'ulozit') return;
+      const platno = document.createElement('canvas');
+      platno.width = platno.height = VYSTUP_PX;
+      const ctx = platno.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, VYSTUP_PX, VYSTUP_PX);
+      ctx.drawImage(img, -x / meritko, -y / meritko, S / meritko, S / meritko, 0, 0, VYSTUP_PX, VYSTUP_PX);
+      const blob = await new Promise((r) => platno.toBlob(r, 'image/jpeg', 0.9));
+      const fd = new FormData();
+      fd.append('fotka', blob, 'profil.jpg');
+      e.target.disabled = true;
+      const j = await posli('/profil/fotka', { method: 'POST', body: fd }, 'Fotku se nepodařilo nahrát');
+      e.target.disabled = false;
+      if (j) { zavriOrez(); hotovo(j, true); }
+    });
+    zaclona.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); zavriOrez(); } });
+    zaclona.querySelector('[data-orez="ulozit"]').focus();
+  }
+
+  document.addEventListener('change', (e) => {
     if (e.target.id !== 'profil-soubor') return;
     const soubor = e.target.files && e.target.files[0];
-    if (!soubor) return;
-    const fd = new FormData();
-    fd.append('fotka', soubor);
-    const j = await posli('/profil/fotka', { method: 'POST', body: fd }, 'Fotku se nepodařilo nahrát');
-    if (j) hotovo(j, true);
+    e.target.value = '';      // ať jde vybrat znovu tentýž soubor
+    if (soubor) orez(soubor);
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && otevrene && $('ucet-potvrzeni')?.hidden !== false) { zavri(); return; }
+    if (e.key === 'Escape' && otevrene && $('ucet-potvrzeni')?.hidden !== false
+        && !document.querySelector('.orez-zaclona')) { zavri(); return; }
     if (e.key !== 'Enter') return;
     const id = e.target.id;
     if (id === 'pritel-email') { e.preventDefault(); pridejPritele(); }
