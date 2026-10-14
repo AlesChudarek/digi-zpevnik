@@ -725,7 +725,10 @@ kdo maže.
       Hlídá `test_pratele.py`.
 - [ ] **potvrzovací dialog je ve třech kopiích** (Moje zpěvníky, čtečka, Přátelé), každá
       s `#app-confirm-overlay`. Sjednotit do `dashboard_base` (zjednodušení).
-- [ ] **účet s neexistující adresou nejde opravit** (Aleš 14. 10.). Registrace na adresu,
+- [X] **účet s neexistující adresou jde opravit** (14. 10.) — v okně Účet změna e-mailu
+      potvrzená heslem; nová adresa je neověřená a přijde na ni ověřovací e-mail.
+      Původní zápis:
+- [X] ~~**účet s neexistující adresou nejde opravit**~~ (Aleš 14. 10.). Registrace na adresu,
       kam se ověřovací e-mail nedoručí, skončí hláškou „Registrace proběhla, ale ověřovací
       e-mail se nepodařilo odeslat“ - účet ale vznikne a e-mail změnit nejde. Buď
       registraci při neodeslaném e-mailu nedokončit, nebo dát možnost adresu změnit
@@ -733,7 +736,12 @@ kdo maže.
 - [ ] **velká profilová fotka se odmítne** (Aleš 14. 10.). Místo odmítnutí jen upozornit,
       že se zmenší. K tomu okno s ořezem jako na Facebooku: celá fotka, přes ni kruhový
       výřez, posun a přiblížení.
-- [ ] **účet v liště a okna Účet a Přátelé** (Aleš 14. 10.):
+- [X] **účet v liště a okna Účet a Přátelé** (14. 10.) — jméno a vpravo v rohu fotka 38 px,
+      bez šipky; tečka na fotce u neověřené adresy nebo čekající žádosti. Nabídka účtu:
+      Účet, Přátelé (s počtem žádostí), Odhlásit. Obě okna stahují obsah ze `/okno/<co>`
+      a obsluhuje je `static/js/ucet.js`; /profil a /pratele okno jen otevřou. Okno Účet:
+      profil, e-mail (změna, ověření), heslo, zrušení účtu. Původní zápis
+      (Aleš 14. 10.):
       - fotka v liště je zbytečně malá; fotka úplně vpravo v rohu, jméno vedle ní;
       - šipka ▾ není potřeba, nabídku otevře klik na fotku i jméno;
       - v nabídce účtu položka **Přátelé** (patří k účtu, ne ke zpěvníkům - z hlavní lišty

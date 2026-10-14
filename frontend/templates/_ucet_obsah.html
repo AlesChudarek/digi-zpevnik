@@ -1,0 +1,47 @@
+{# Obsah okna Účet (otevírá se z nabídky účtu, /okno/ucet). Obsluha: static/js/ucet.js.
+   Všechno, co patří k účtu, na jednom místě: profil, e-mail, heslo, zrušení. #}
+{% include '_profil_udaje.html' %}
+
+<div class="karta">
+  <h2>E-mail</h2>
+  <div class="radek">
+    <span class="hodnota">{{ current_user.email }}</span>
+    {% if current_user.email_verified %}
+      <span class="odznak odznak-ok">ověřená</span>
+    {% else %}
+      <span class="odznak odznak-cekam">neověřená</span>
+    {% endif %}
+  </div>
+  {% if not current_user.email_verified %}
+    <p>Dokud adresu nepotvrdíte, nejde zakládat vlastní zpěvníky ani je stahovat.</p>
+    <button type="button" class="vedlejsi" id="ucet-overeni">Poslat ověřovací e-mail znovu</button>
+  {% endif %}
+  <details class="ucet-zmena">
+    <summary>Změnit e-mail</summary>
+    <p>Na novou adresu přijde ověřovací e-mail. Do jejího potvrzení platí stejná omezení
+       jako u nového účtu.</p>
+    <input type="text" id="ucet-novy-email" inputmode="email" autocomplete="email"
+           placeholder="nová adresa">
+    <input type="password" id="ucet-email-heslo" autocomplete="current-password"
+           placeholder="Současné heslo">
+    <button type="button" id="ucet-email-ulozit">Změnit e-mail</button>
+  </details>
+</div>
+
+<div class="karta">
+  <h2>Heslo</h2>
+  <details class="ucet-zmena">
+    <summary>Změnit heslo</summary>
+    <input type="password" id="ucet-heslo-stare" placeholder="Současné heslo" autocomplete="current-password">
+    <input type="password" id="ucet-heslo-nove" placeholder="Nové heslo" minlength="8" autocomplete="new-password">
+    <input type="password" id="ucet-heslo-nove2" placeholder="Nové heslo znovu" minlength="8" autocomplete="new-password">
+    <div class="napoveda">Aspoň 8 znaků, velké písmeno a speciální znak (například . , ! ? - _ # @).</div>
+    <button type="button" id="ucet-heslo-ulozit">Změnit heslo</button>
+  </details>
+</div>
+
+<div class="karta">
+  <h2>Zrušení účtu</h2>
+  <p>Smaže účet i všechny vlastní zpěvníky. Nejde vrátit.</p>
+  <a class="odhlasit" href="{{ url_for('smazat_ucet') }}">Zrušit účet…</a>
+</div>

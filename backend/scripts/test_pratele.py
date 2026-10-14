@@ -161,7 +161,7 @@ def main():
                    "odmítnutá žádost zmizí")
 
     print("\n── stránka Přátelé ──")
-    html = u3.get("/pratele").get_data(as_text=True)
+    html = u3.get("/okno/pratele").get_data(as_text=True)
     zkontroluj("Moji přátelé" in html and f'data-uzivatel="4"' in html and "Volné místo" in html,
                "přátelé s volným místem")
 
@@ -172,10 +172,10 @@ def main():
     u3.post(f"/api/my-songbooks/{sb_id}/share", json={"email": EMAIL[4], "druh": "spolecny"})
     with A.app.app_context():
         poz = A.Pozvanka.query.filter_by(songbook_id=sb_id, komu_id=4).first()
-    html = u3.get("/pratele").get_data(as_text=True)
+    html = u3.get("/okno/pratele").get_data(as_text=True)
     zkontroluj("Čeká na odpověď" in html, "čekající pozvánka u přítele")
     u4.post(f"/api/pozvanky/{poz.id}/prijmout")
-    html = u3.get("/pratele").get_data(as_text=True)
+    html = u3.get("/okno/pratele").get_data(as_text=True)
     zkontroluj("Společné zpěvníky" in html and sb_nazev in html,
                "společný zpěvník u přítele", sb_nazev)
 
@@ -183,7 +183,7 @@ def main():
     u3.delete("/api/pratele/4")
     zkontroluj([p["id"] for p in u3.get("/api/pratele").get_json()["pratele"]] == [5],
                "odebrání přítele")
-    html = u3.get("/pratele").get_data(as_text=True)
+    html = u3.get("/okno/pratele").get_data(as_text=True)
     zkontroluj("Možná znáte" in html and 'data-uzivatel="4"' in html,
                "kdo se mnou sdílí zpěvník, je v návrzích")
     r = u3.post("/api/pratele", json={"id": 4})
@@ -192,6 +192,29 @@ def main():
     with A.app.app_context():
         zkontroluj(A.Pratelstvi.query.filter_by(od_id=3, komu_id=4).first() is None,
                    "vlastní žádost jde zrušit")
+
+    print("\n── účet: e-mail a heslo ──")
+    r = u6.post("/profil/email", json={"email": "novy-user5@test.com", "heslo": "spatne"})
+    zkontroluj(r.status_code == 400, "změna e-mailu bez správného hesla neprojde", r.status_code)
+    r = u6.post("/profil/email", json={"email": EMAIL[5], "heslo": HESLO})
+    zkontroluj(r.status_code == 400 and "jiný účet" in r.get_json()["error"],
+               "adresu jiného účtu vzít nejde", r.get_json())
+    A.posli_overovaci_email = lambda u: True
+    r = u6.post("/profil/email", json={"email": "novy-user5@test.com", "heslo": HESLO})
+    with A.app.app_context():
+        u = A.db.session.get(A.User, 6)
+        stav = (u.email, u.email_verified)
+    zkontroluj(r.status_code == 200 and stav == ("novy-user5@test.com", False),
+               "změna e-mailu zruší ověření a pošle nové", stav)
+    r = u6.post("/profil/zmena-hesla", json={"stare": HESLO, "nove": "kratke", "nove2": "kratke"})
+    zkontroluj(r.status_code == 400, "krátké nové heslo se odmítne", r.get_json())
+    r = u6.post("/profil/zmena-hesla", json={"stare": HESLO, "nove": "Nove-heslo-1", "nove2": "Nove-heslo-1"})
+    zkontroluj(r.status_code == 200, "změna hesla", r.get_json())
+    zkontroluj(u3.get("/okno/ucet").status_code == 200 and u3.get("/okno/nic").status_code == 404,
+               "obsah okna Účet, neznámé okno 404")
+    zkontroluj(u3.get("/profil").headers["Location"].endswith("okno=ucet")
+               and u3.get("/pratele").headers["Location"].endswith("okno=pratele"),
+               "staré adresy /profil a /pratele otevřou okno")
 
     print("\n── v prohlížeči ──")
     from playwright.sync_api import sync_playwright
@@ -210,10 +233,21 @@ def main():
         page.click('button[type="submit"]')
         page.wait_for_load_state("networkidle")
         lista = page.evaluate("""() => { const b = document.getElementById('ucet-btn');
-          return {jmeno: b.querySelector('.ucet-email').textContent.trim(),
-                  fotka: !!b.querySelector('img.avatar')}; }""")
-        zkontroluj(lista == {"jmeno": "Petr z testu", "fotka": True},
-                   "v liště je přezdívka a fotka", lista)
+          const f = b.querySelector('img.avatar').getBoundingClientRect(), j = b.querySelector('.ucet-email').getBoundingClientRect();
+          return {jmeno: b.querySelector('.ucet-email').textContent.trim(), fotka_vpravo: f.left > j.right,
+                  velikost: Math.round(f.width), sipka: !!b.querySelector('.ucet-sipka')}; }""")
+        zkontroluj(lista == {"jmeno": "Petr z testu", "fotka_vpravo": True, "velikost": 38, "sipka": False},
+                   "v liště jméno a vpravo od něj fotka 38 px, bez šipky", lista)
+        page.click("#ucet-btn")
+        polozky = page.evaluate("() => [...document.querySelectorAll('#ucet-panel .ucet-polozka')].map(e => e.textContent.trim())")
+        zkontroluj(polozky[:2] == ["Účet", "Přátelé"], "v nabídce účtu Účet a Přátelé", polozky)
+        page.click("#ucet-panel .ucet-polozka >> text=Účet")
+        page.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
+        zkontroluj(page.input_value("#profil-prezdivka") == "Petr z testu"
+                   and page.is_hidden("#ucet-panel"),
+                   "okno Účet s profilem, nabídka se zavře")
+        page.keyboard.press("Escape")
+        zkontroluj(page.is_hidden("#ucet-okno"), "Escape okno zavře")
         page.goto(base + "/my-songbooks")
         page.wait_for_load_state("networkidle")
         page.locator(f'.songbook-card[data-book-id="{sb_id}"] .akce-spoustec').click()
@@ -225,16 +259,19 @@ def main():
         clen = page.inner_text("#share-clenove")
         zkontroluj(EMAIL[4] in clen, "členové okna sdílení se jmenují", clen)
         page.goto(base + "/pratele")
-        page.wait_for_load_state("networkidle")
+        page.wait_for_selector("#ucet-okno:not([hidden]) .pritel")
+        zkontroluj("okno=" not in page.url, "adresa /pratele otevře okno Přátelé a parametr zmizí", page.url)
         page.click(".pritel-odebrat")
-        page.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")
-        page.click("#app-confirm-cancel")
+        page.wait_for_selector("#ucet-potvrzeni:not([hidden])")
+        page.click("#ucet-potvrzeni [data-odpoved=ne]")
         zkontroluj(page.locator(".pritel").count() == 1, "odebrání se ptá a Zrušit nic neudělá")
+        okno = page.evaluate("() => { const r = document.querySelector('.ucet-okno').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; }")
         sirka = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
         page.set_viewport_size({"width": 360, "height": 780})
         sirka_uzka = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
-        zkontroluj(sirka <= 0 and sirka_uzka <= 0, "stránka přátel se nedá táhnout do strany",
-                   (sirka, sirka_uzka))
+        okno_uzke = page.evaluate("() => { const r = document.querySelector('.ucet-okno').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), innerWidth]; }")
+        zkontroluj(sirka <= 0 and sirka_uzka <= 0 and okno_uzke[0] >= 0 and okno_uzke[1] <= okno_uzke[2],
+                   "okno přátel se vejde a stránka se nedá táhnout do strany", (sirka, sirka_uzka, okno, okno_uzke))
         page.goto(base + "/vitejte")
         zkontroluj(page.locator("#profil-prezdivka").count() == 1
                    and page.locator(".vitejte-preskocit").count() == 1,

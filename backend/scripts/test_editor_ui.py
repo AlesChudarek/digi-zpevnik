@@ -49,6 +49,9 @@ with A.app.app_context():
     A.db.session.commit()
     EMAIL = uzivatel.email
     EMAIL4 = druhy.email
+    # Ostatním se ukazuje přezdívka, bez ní e-mail.
+    JMENO = A.jmeno_uzivatele(uzivatel)
+    JMENO4 = A.jmeno_uzivatele(druhy)
 
 selhani = []
 
@@ -459,7 +462,7 @@ def main():
         akce(druhy, "btn-share", vlastni)
         zkontroluj(druhy.is_visible("#share-druh-spolecny")
                    and druhy.is_disabled('#share-druh-spolecny input')
-                   and EMAIL in druhy.inner_text("#share-proc-spolecny")
+                   and JMENO in druhy.inner_text("#share-proc-spolecny")
                    and druhy.is_checked('input[name="share-druh"][value="kopie"]'),
                    "člen vidí společné úpravy zašedlé i s důvodem, kopie je vybraná",
                    druhy.inner_text("#share-proc-spolecny"))
@@ -525,7 +528,7 @@ def main():
         page.wait_for_load_state("networkidle")
         akce(page, "btn-share", vlastni)
         page.wait_for_selector("#share-clenove:not([hidden])")
-        zkontroluj(EMAIL4 in page.inner_text("#share-clenove"), "okno sdílení ukáže členy",
+        zkontroluj(JMENO4 in page.inner_text("#share-clenove"), "okno sdílení ukáže členy",
                    page.inner_text("#share-clenove"))
         page.click("#share-clenove .share-clen button")
         page.wait_for_selector("#app-confirm-overlay[aria-hidden='false']")

@@ -1533,7 +1533,53 @@ def uloz_tema():
 @app.route('/profil')
 @login_required
 def profil():
-    return render_template('profil.html')
+    """Účet je okno v nabídce účtu; stará adresa ho jen otevře."""
+    return redirect(url_for('dashboard', okno='ucet'))
+
+
+@app.route('/okno/<co>')
+@login_required
+def okno_uctu(co):
+    """Obsah oken Účet a Přátelé. Okno si ho stáhne při otevření a po každé změně znovu,
+    takže je vždycky aktuální (místo přátel, žádosti)."""
+    if is_guest(current_user) or co not in ('ucet', 'pratele'):
+        return ("Not Found", 404)
+    if co == 'ucet':
+        return render_template('_ucet_obsah.html')
+    pratele = [(u, prehled_pritele(current_user, u)) for u in pratele_uzivatele(current_user.id)]
+    odeslane = (Pratelstvi.query.filter_by(od_id=current_user.id, prijato=False)
+                .order_by(Pratelstvi.vytvoreno).all())
+    return render_template('_pratele_obsah.html', pratele=pratele, odeslane=odeslane,
+                           prichozi=zadosti_pro(current_user),
+                           navrhy=navrhy_pratel(current_user))
+
+
+@app.route('/profil/email', methods=['POST'])
+@login_required
+def zmena_emailu():
+    """Nová adresa, potvrzená heslem. Do ověření nové adresy platí omezení jako u nového
+    účtu - jinak by šlo ověřený účet přepsat na adresu, která nikomu nepatří.
+    Řeší i překlep při registraci: účet s nedoručitelnou adresou jde opravit."""
+    if is_guest(current_user):
+        return jsonify({'ok': False, 'error': 'Host e-mail nemá.'}), 403
+    data = request.get_json(silent=True) or {}
+    novy = (data.get('email') or '').strip()
+    if not check_password_hash(current_user.password, data.get('heslo') or ''):
+        zaznamenej_neuspesny_pokus(current_user.email)
+        return jsonify({'ok': False, 'error': 'Současné heslo nesouhlasí.'}), 400
+    if not is_valid_email(novy):
+        return jsonify({'ok': False, 'error': 'Neplatná e-mailová adresa.'}), 400
+    if novy.lower() == current_user.email.lower():
+        return jsonify({'ok': False, 'error': 'To je současná adresa.'}), 400
+    if User.query.filter(db.func.lower(User.email) == novy.lower()).first():
+        return jsonify({'ok': False, 'error': 'Tuto adresu už používá jiný účet.'}), 400
+    current_user.email = novy
+    current_user.email_verified = False
+    db.session.commit()
+    odeslano = posli_overovaci_email(current_user)
+    return jsonify({'ok': True, 'zprava': 'E-mail je změněný. ' + (
+        'Na novou adresu jsme poslali ověřovací e-mail.' if odeslano else
+        'Ověřovací e-mail se ale nepodařilo odeslat - zkuste ho poslat znovu později.')})
 
 
 @app.route('/vitejte')
@@ -1618,28 +1664,30 @@ def profilovka(uid, soubor):
 @app.route('/profil/zmena-hesla', methods=['POST'])
 @login_required
 def zmena_hesla():
+    """Z okna Účet (JSON). Vrací chybu jako text pro oznam()."""
     if is_guest(current_user):
-        return redirect(url_for('profil'))
-    stare = request.form.get('stare') or ''
-    nove = request.form.get('nove') or ''
-    nove2 = request.form.get('nove2') or ''
+        return jsonify({'ok': False, 'error': 'Host heslo nemění.'}), 403
+    data = request.get_json(silent=True) or request.form
+    stare = data.get('stare') or ''
+    nove = data.get('nove') or ''
+    nove2 = data.get('nove2') or ''
 
     if not check_password_hash(current_user.password, stare):
         # Počítá se stejně jako neúspěšné přihlášení: kdo zná session, ale ne heslo,
         # by tudy jinak mohl heslo hádat bez omezení.
         zaznamenej_neuspesny_pokus(current_user.email)
-        flash('Současné heslo nesouhlasí.', 'error')
+        chyba = 'Současné heslo nesouhlasí.'
     elif chyba_hesla(nove):
-        flash(chyba_hesla(nove), 'error')
+        chyba = chyba_hesla(nove)
     elif nove != nove2:
-        flash('Nová hesla se neshodují.', 'error')
+        chyba = 'Nová hesla se neshodují.'
     else:
         current_user.password = generate_password_hash(nove, method='pbkdf2:sha256',
                                                        salt_length=16)
         db.session.commit()
         zapomen_pokusy(current_user.email)
-        flash('Heslo bylo změněno.', 'success')
-    return redirect(url_for('profil'))
+        return jsonify({'ok': True, 'zprava': 'Heslo bylo změněno.'})
+    return jsonify({'ok': False, 'error': chyba}), 400
 
 
 @app.route('/smazat-ucet', methods=['GET', 'POST'])
@@ -1793,18 +1841,24 @@ def overit_email(token):
 @app.route('/poslat-overeni-znovu', methods=['POST'])
 @login_required
 def poslat_overeni_znovu():
+    """Z pruhu nahoře (formulář) i z okna Účet (JSON)."""
+    jako_json = request.is_json
+
+    def odpoved(ok, text):
+        if jako_json:
+            return jsonify({'ok': ok, 'zprava' if ok else 'error': text}), (200 if ok else 400)
+        flash(text, 'success' if ok else 'error')
+        return redirect(request.referrer or url_for('dashboard'))
+
     if current_user.email_verified or is_guest(current_user):
-        return redirect(url_for('dashboard'))
+        return odpoved(False, 'Adresa už je ověřená.')
     # Stejné počítadlo jako u přihlašování, ať z toho není nástroj na zahlcení cizí schránky.
     if prihlaseni_zablokovano(current_user.email) is not None:
-        flash('Ověřovací e-mail jsme právě posílali. Zkuste to prosím za chvíli.', 'error')
-        return redirect(request.referrer or url_for('dashboard'))
+        return odpoved(False, 'Ověřovací e-mail jsme právě posílali. Zkuste to prosím za chvíli.')
     zaznamenej_neuspesny_pokus(current_user.email)
     if posli_overovaci_email(current_user):
-        flash('Ověřovací e-mail jsme poslali znovu.', 'success')
-    else:
-        flash('E-mail se nepodařilo odeslat, zkuste to prosím později.', 'error')
-    return redirect(request.referrer or url_for('dashboard'))
+        return odpoved(True, 'Ověřovací e-mail jsme poslali znovu.')
+    return odpoved(False, 'E-mail se nepodařilo odeslat, zkuste to prosím později.')
 
 
 @app.route('/api/songbook/<songbook_id>/toc')
@@ -2747,14 +2801,8 @@ def prehled_pritele(ja, pritel):
 @app.route('/pratele')
 @login_required
 def stranka_pratel():
-    if is_guest(current_user):
-        return redirect(url_for('dashboard'))
-    pratele = [(u, prehled_pritele(current_user, u)) for u in pratele_uzivatele(current_user.id)]
-    odeslane = (Pratelstvi.query.filter_by(od_id=current_user.id, prijato=False)
-                .order_by(Pratelstvi.vytvoreno).all())
-    return render_template('pratele.html', pratele=pratele, odeslane=odeslane,
-                           prichozi=zadosti_pro(current_user),
-                           navrhy=navrhy_pratel(current_user))
+    """Přátelé jsou okno v nabídce účtu; stará adresa ho jen otevře."""
+    return redirect(url_for('dashboard', okno='pratele'))
 
 
 @app.route('/api/pratele', methods=['GET'])

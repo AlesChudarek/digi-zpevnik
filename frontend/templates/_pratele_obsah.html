@@ -1,0 +1,91 @@
+{# Obsah okna Přátelé (otevírá se z nabídky účtu, /okno/pratele). Obsluha tlačítek:
+   static/js/ucet.js. Přátelé: vzájemně potvrzené účty - nabízí se v okně sdílení a tady
+   je vidět, co spolu kdo sdílí a kolik má místa. #}
+  <div class="karta">
+  <h2>Přidat přítele</h2>
+  <p>Druhý uživatel dostane žádost a přátelé budete, až ji potvrdí.</p>
+  <div class="profil-radek">
+    <input type="text" id="pritel-email" inputmode="email" autocomplete="email"
+           placeholder="e-mail, např. petr@example.com">
+    <button type="button" id="pritel-pridat">Poslat žádost</button>
+  </div>
+</div>
+
+{% if prichozi %}
+<div class="karta">
+  <h2>Žádosti o přátelství</h2>
+  {% for z in prichozi %}
+    <div class="clovek" data-zadost="{{ z.id }}">
+      {{ avatar(z.od, 40) }}
+      <div class="clovek-text"><strong>{{ jmeno(z.od) }}</strong>
+        {% if z.od.prezdivka %}<span class="clovek-email">{{ z.od.email }}</span>{% endif %}</div>
+      <div class="clovek-akce">
+        <button type="button" class="zadost-prijmout">Potvrdit</button>
+        <button type="button" class="vedlejsi zadost-odmitnout">Odmítnout</button>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="karta">
+  <h2>Moji přátelé</h2>
+  {% if not pratele %}
+    <p>Zatím žádní. Přátelé se nabízejí v okně sdílení, takže se nemusí vypisovat e-mail.</p>
+  {% endif %}
+  {% for u, prehled in pratele %}
+    <div class="pritel" data-uzivatel="{{ u.id }}">
+      <div class="clovek">
+        {{ avatar(u, 48) }}
+        <div class="clovek-text"><strong>{{ jmeno(u) }}</strong>
+          {% if u.prezdivka %}<span class="clovek-email">{{ u.email }}</span>{% endif %}</div>
+        <div class="clovek-akce">
+          <button type="button" class="vedlejsi pritel-odebrat" data-jmeno="{{ jmeno(u) }}">Odebrat</button>
+        </div>
+      </div>
+      <div class="pritel-misto" data-napoveda="Zabráno {{ mb(prehled.misto.zabrano) }}, volných {{ mb(prehled.misto.volne) }}">
+        <span class="pritel-misto-popis">Volné místo: {{ mb(prehled.misto.volne) }}</span>
+        <span class="pritel-misto-pruh"><span style="width: {{ prehled.misto.procent }}%"></span></span>
+      </div>
+      {% if prehled.spolecne %}
+        <div class="pritel-radek"><span class="pritel-popisek">Společné zpěvníky:</span>
+          {% for sb in prehled.spolecne %}<a href="{{ url_for('songbook_detail', book_id=sb.id) }}">{{ sb.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
+        </div>
+      {% endif %}
+      {% for p in prehled.pozvanky %}
+        <div class="pritel-radek pritel-pozvanka">
+          {% if p.odeslana %}Čeká na odpověď: {{ 'kopie' if p.druh == 'kopie' else 'společné úpravy' }} „{{ p.nazev }}“
+          {% else %}Pozvánka pro vás: {{ 'kopie' if p.druh == 'kopie' else 'společné úpravy' }} „{{ p.nazev }}“ – <a href="{{ url_for('my_songbooks') }}">v Mých zpěvnících</a>{% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% endfor %}
+</div>
+
+{% if odeslane %}
+<div class="karta">
+  <h2>Odeslané žádosti</h2>
+  {% for z in odeslane %}
+    <div class="clovek" data-uzivatel="{{ z.komu_id }}">
+      {{ avatar(z.komu, 40) }}
+      <div class="clovek-text"><strong>{{ jmeno(z.komu) }}</strong><span class="clovek-email">čeká na potvrzení</span></div>
+      <div class="clovek-akce"><button type="button" class="vedlejsi zadost-zrusit">Zrušit</button></div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if navrhy %}
+<div class="karta">
+  <h2>Možná znáte</h2>
+  <p>S těmito uživateli už sdílíte zpěvník nebo jste si poslali pozvánku.</p>
+  {% for u in navrhy %}
+    <div class="clovek" data-uzivatel="{{ u.id }}">
+      {{ avatar(u, 40) }}
+      <div class="clovek-text"><strong>{{ jmeno(u) }}</strong>
+        {% if u.prezdivka %}<span class="clovek-email">{{ u.email }}</span>{% endif %}</div>
+      <div class="clovek-akce"><button type="button" class="navrh-pridat">Přidat</button></div>
+    </div>
+  {% endfor %}
+</div>
+{% endif %}

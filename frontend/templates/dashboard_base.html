@@ -10,6 +10,9 @@
   {# Nápovědy jsou sdílené pro celý projekt, viz static/js/napoveda.js. #}
   <link rel="stylesheet" href="{{ static_bust('css/napoveda.css') }}">
   <link rel="stylesheet" href="{{ static_bust('css/okna.css') }}">
+  <link rel="stylesheet" href="{{ static_bust('css/profil.css') }}">
+  <link rel="stylesheet" href="{{ static_bust('css/pratele.css') }}">
+  <script src="{{ static_bust('js/ucet.js') }}" defer></script>
   <script src="{{ static_bust('js/napoveda.js') }}" defer></script>
   <style>
     html, body {
@@ -226,7 +229,13 @@
     .ucet-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .ucet-tecka { width: 8px; height: 8px; border-radius: 50%; background: #ffd970; flex: 0 0 auto; }
     .ucet-sipka { font-size: 11px; opacity: .8; }
-    .ucet .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
+    /* Fotka úplně vpravo, jméno vedle ní; nabídku otevře klik na kterékoli. Tečka na
+       fotce: neověřená adresa nebo čekající žádost o přátelství. */
+    .ucet { padding: 4px 6px 4px 12px; gap: 10px; }
+    .ucet-fotka { position: relative; display: inline-flex; flex: 0 0 auto; }
+    .ucet .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,0.75); }
+    .ucet-fotka .ucet-tecka { position: absolute; right: -1px; top: -1px; width: 11px; height: 11px;
+                              box-shadow: 0 0 0 2px var(--brand, #38843B); }
     .ucet-jmeno { font-weight: 700; margin-bottom: 2px; }
     .nav-pocet { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px;
                  background: #ffd970; color: #3d2e00; font-size: 12px; font-weight: 700;
@@ -431,7 +440,6 @@
           </span>
         {% else %}
           <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
-          <a href="{{ url_for('stranka_pratel') }}">Přátelé{% set _z = zadosti_pro(current_user)|length %}{% if _z %} <span class="nav-pocet" data-napoveda="Žádosti o přátelství">{{ _z }}</span>{% endif %}</a>
         {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>
@@ -455,10 +463,13 @@
         <span class="ucet-obal">
           <button class="ucet" id="ucet-btn" onclick="prepniUcet(event)"
                   aria-expanded="false" aria-haspopup="true" data-napoveda="Můj účet">
-            {{ avatar(current_user, 26) }}
+            {% set pocet_zadosti = zadosti_pro(current_user)|length %}
             <span class="ucet-email">{{ jmeno(current_user) }}</span>
-            {% if not current_user.email_verified %}<span class="ucet-tecka" data-napoveda="Neověřená adresa"></span>{% endif %}
-            <span class="ucet-sipka" aria-hidden="true">▾</span>
+            <span class="ucet-fotka">
+              {{ avatar(current_user, 38) }}
+              {% if not current_user.email_verified %}<span class="ucet-tecka" data-napoveda="Neověřená adresa"></span>
+              {% elif pocet_zadosti %}<span class="ucet-tecka" data-napoveda="Žádosti o přátelství"></span>{% endif %}
+            </span>
           </button>
 
           <div class="ucet-panel" id="ucet-panel" role="menu" aria-hidden="true">
@@ -475,9 +486,7 @@
             </div>
 
             {% if not current_user.email_verified %}
-            <form method="POST" action="{{ url_for('poslat_overeni_znovu') }}">
-              <button type="submit" class="ucet-polozka">Poslat ověřovací e-mail znovu</button>
-            </form>
+            <button type="button" class="ucet-polozka" onclick="UcetOkna.otevri('ucet')">Ověřit adresu…</button>
             {% endif %}
 
             {% set misto = misto_uzivatele(current_user) %}
@@ -499,8 +508,8 @@
             </div>
             {% endif %}
 
-            <a class="ucet-polozka" href="{{ url_for('profil') }}">Změnit heslo</a>
-            <a class="ucet-polozka ucet-nebezpeci" href="{{ url_for('smazat_ucet') }}">Odstranit účet</a>
+            <button type="button" class="ucet-polozka" onclick="UcetOkna.otevri('ucet')">Účet</button>
+            <button type="button" class="ucet-polozka" onclick="UcetOkna.otevri('pratele')">Přátelé{% if pocet_zadosti %} <span class="nav-pocet">{{ pocet_zadosti }}</span>{% endif %}</button>
             <form id="logout-form" action="{{ url_for('logout') }}" method="post">
               <button type="submit" class="ucet-polozka ucet-odhlasit">Odhlásit se</button>
             </form>
@@ -823,5 +832,26 @@
     }
   });
   </script>
+{% if current_user.is_authenticated and not (guest is defined and guest) %}
+{# Okna Účet a Přátelé z nabídky účtu. Obsah dodá /okno/<co>, obsluha static/js/ucet.js. #}
+<div class="ucet-okno-zaclona" id="ucet-okno" hidden role="dialog" aria-modal="true" aria-labelledby="ucet-okno-nadpis">
+  <div class="okno ucet-okno">
+    <div class="ucet-okno-hlava">
+      <h2 id="ucet-okno-nadpis"></h2>
+      <button type="button" class="ucet-okno-zavrit" aria-label="Zavřít">×</button>
+    </div>
+    <div class="ucet-okno-obsah" id="ucet-okno-obsah"></div>
+  </div>
+  <div class="ucet-potvrzeni" id="ucet-potvrzeni" hidden>
+    <div class="okno">
+      <p id="ucet-potvrzeni-text"></p>
+      <div class="actions">
+        <button type="button" class="btn" data-odpoved="ne">Zrušit</button>
+        <button type="button" class="btn nebezpecne" data-odpoved="ano">Odebrat</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
 </body>
 </html>

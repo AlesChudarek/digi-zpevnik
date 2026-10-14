@@ -59,3 +59,34 @@
 .profil-radek { display: flex; gap: 10px; }
 .profil-radek input { flex: 1; margin-bottom: 0 !important; }
 
+
+/* Okna Účet a Přátelé (dashboard_base, static/js/ucet.js). Vzhled okna z okna.css,
+   uvnitř karty bez stínu oddělené čárou - karta v okně by vypadala jako okno v okně. */
+.ucet-okno-zaclona {
+  position: fixed; inset: 0; z-index: 5000; background: rgba(0, 0, 0, 0.5);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 70px 16px 16px; overflow-y: auto; box-sizing: border-box;
+}
+.ucet-okno-zaclona[hidden] { display: none; }
+.ucet-okno { width: min(560px, 100%); max-width: 100%; box-sizing: border-box; color: #222; }
+.ucet-okno-hlava { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ucet-okno-hlava h2 { margin: 0; }
+.ucet-okno-zavrit {
+  border: 0; background: none; font-size: 28px; line-height: 1; cursor: pointer;
+  color: inherit; padding: 0 4px;
+}
+.ucet-okno .karta {
+  box-shadow: none; border-radius: 0; padding: 14px 0; margin: 0;
+  border-bottom: 1px solid #eee; background: none;
+}
+.ucet-okno .karta:last-child { border-bottom: 0; }
+.ucet-okno-obsah.nacita { min-height: 120px; opacity: 0.5; }
+.ucet-zmena summary { cursor: pointer; color: var(--brand-dark, #1b5e20); font-weight: 600; font-size: 14px; margin: 6px 0; }
+.ucet-zmena[open] summary { margin-bottom: 10px; }
+.ucet-zmena input[type="password"], .ucet-zmena input[type="text"] { margin-bottom: 8px; }
+.ucet-potvrzeni {
+  position: fixed; inset: 0; z-index: 5100; background: rgba(0, 0, 0, 0.35);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.ucet-potvrzeni[hidden] { display: none; }
+.ucet-potvrzeni .okno { max-width: 420px; }
