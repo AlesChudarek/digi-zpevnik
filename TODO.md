@@ -212,6 +212,13 @@ kdo maže.
       je plné kolečko v barvě tématu, obě ikony černé s bílým obrysem (Alešův návrh);
       kolečko mezi nimi sjíždí. Hlídá `test_napovedy.py`.
 
+- [ ] **zpěvník bez obálky se ve čtečce tváří, jako by ji měl jen napůl** (Aleš 14. 10.).
+      Bez obálky by čtečka neměla ukazovat obálku vůbec. Dnes navíc přidá jednu prázdnou
+      stranu na místo vnitřní přední obálky - bílou, ne v barvě zpěvníku - ale vnější
+      přední obálku ne, takže vyjde jedna strana obálky bez druhé. Nekonzistentní.
+- [ ] **zapnuté automatické sjíždění nedovolí skok nahoru** (Aleš 14. 10.). Tlačítko
+      „nahoru“ má skočit na začátek a sjíždění pokračovat odtamtud dolů.
+
 ## Sdílení a uživatelé
 
 - [X] přidat ikonu sdíleného zpěvníku ukazující seznam lidí s přístupem
@@ -571,6 +578,12 @@ kdo maže.
       za okrajem telefonu) a na dotykové obrazovce se neukázala vůbec. Teď umí najetí,
       dotyk i klávesnici a sama uhne okraji obrazovky.
       Hlídá to `backend/scripts/test_napovedy.py`, 40 kontrol v prohlížeči.
+- [ ] **kontrolovat formát nahraných obrázků** (Aleš 14. 10.). Dnes se přijme třeba SVG
+      a pak ho aplikace neumí zobrazit (nejspíš při převodu na náhled). Rozpoznat formát
+      z obsahu souboru a nepodporované odmítnout hned s jasnou hláškou.
+- [ ] (debata o rolích) **propagační řádek nebo vodoznak ve stažených souborech**
+      (Aleš 14. 10.). Odkaz na web v rohu každé stažené strany; běžný uživatel vždy,
+      admin nikdy, případně prémiový účet bez něj. Není priorita.
 
 ## Mobil a vzhled
 
@@ -712,6 +725,22 @@ kdo maže.
       Hlídá `test_pratele.py`.
 - [ ] **potvrzovací dialog je ve třech kopiích** (Moje zpěvníky, čtečka, Přátelé), každá
       s `#app-confirm-overlay`. Sjednotit do `dashboard_base` (zjednodušení).
+- [ ] **účet s neexistující adresou nejde opravit** (Aleš 14. 10.). Registrace na adresu,
+      kam se ověřovací e-mail nedoručí, skončí hláškou „Registrace proběhla, ale ověřovací
+      e-mail se nepodařilo odeslat“ - účet ale vznikne a e-mail změnit nejde. Buď
+      registraci při neodeslaném e-mailu nedokončit, nebo dát možnost adresu změnit
+      (patří do okna Účet níž).
+- [ ] **velká profilová fotka se odmítne** (Aleš 14. 10.). Místo odmítnutí jen upozornit,
+      že se zmenší. K tomu okno s ořezem jako na Facebooku: celá fotka, přes ni kruhový
+      výřez, posun a přiblížení.
+- [ ] **účet v liště a okna Účet a Přátelé** (Aleš 14. 10.):
+      - fotka v liště je zbytečně malá; fotka úplně vpravo v rohu, jméno vedle ní;
+      - šipka ▾ není potřeba, nabídku otevře klik na fotku i jméno;
+      - v nabídce účtu položka **Přátelé** (patří k účtu, ne ke zpěvníkům - z hlavní lišty
+        pryč) a otevírá **okno**, ne samostatnou stránku;
+      - v nabídce i položka **Účet** (okno): změna e-mailu, poslat ověřovací e-mail znovu,
+        změna hesla, fotky a přezdívky, zrušení účtu. Dnes je úprava fotky a přezdívky
+        na stránce /profil, ale vede na ni jen položka „Změnit heslo“ - tak ji nikdo nenajde.
 
 ## Obsah a prezentace
 
@@ -822,10 +851,3 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-pridat watermark na vsechny obrazky, pripadne aspon propagacni text s odkazem na nas web v rohu kazde stazene strany. Potencial pro role - obycejny uzivatel ma vzdy propagacni radek (admin nikdy) a pak mozna nejaky premium ucet bez. Ale neni to priorita, jen navrh na debatu o rolich
-
-pridat detekci formatu vstupnich dat. dnes to v klidu prijme svg a pak ho to neumi zobrazit (predpokladam ze to je tim prevodem do webp??)
-
-Pokud je zpevnik bez coveru uplne, kdyz se zobrazuje v knizni ctecce, mozna by se mel ukazovat jakoze uplne obal nema. Takze ne ze tam je ale prazdny, ale ze tam neni vubec. Navic ted to jeste udela divnou nekonzistenci tak, ze se prida jedna prazdana strana pro vnitrni predni cover (a to jeste bila a ne v barve coveru), ale vnejsi predni cover neni. takze jsme dodali jen jednu stranu coveru? - nekonzistentni
-
-Zapnuty autoscroll nedovoli skok nahoru - mel by skocit a pokracovat v animaci dolu.
