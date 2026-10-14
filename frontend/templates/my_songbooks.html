@@ -234,6 +234,15 @@
   #share-modal .share-volba-popis { font-size: 13px; color: var(--panel-muted, #666); }
   #share-modal .share-volba:has(input:checked) { border-color: var(--panel-text, #222); }
   #share-modal .share-poznamka { margin: 0; font-size: 13px; }
+  #share-modal .share-pratele { display: flex; flex-wrap: wrap; gap: 6px; }
+  #share-modal .share-pratele[hidden] { display: none; }
+  #share-modal .share-pritel {
+    display: inline-flex; align-items: center; gap: 6px; max-width: 100%;
+    padding: 3px 10px 3px 3px; border-radius: 999px; border: 1px solid var(--muted-border, #dbeadf);
+    background: #fff; color: var(--brand-dark, #1b5e20); font: inherit; font-size: 13px; cursor: pointer;
+  }
+  #share-modal .share-pritel span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 160px; }
+  #share-modal .share-pritel.vybrany { background: var(--muted-bg, #e8f5e9); border-color: var(--brand, #2E7D32); }
   #share-modal .share-clenove { font-size: 14px; display: flex; flex-direction: column; gap: 6px; }
   #share-modal .share-clenove[hidden] { display: none; }
   #share-modal .share-clen { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -264,6 +273,8 @@
   <div class="panel okno" role="document">
     <h3 id="share-nadpis">Sdílet „<span id="share-modal-book-title"></span>“</h3>
     <label for="share-email-input">Komu</label>
+    {# Přátelé jako rychlá volba - klik doplní e-mail do pole. #}
+    <div class="share-pratele" id="share-pratele" hidden></div>
     <input type="email" id="share-email-input" placeholder="e-mail, např. petr@example.com" autocomplete="email">
     <div class="share-volby" role="radiogroup" aria-label="Jak sdílet">
       <label class="share-volba">
@@ -322,6 +333,22 @@
           <span class="pozvanka-akce">
             <button type="button" class="btn primary oznameni-ponechat">Ponechat</button>
             <button type="button" class="btn oznameni-zahodit">Zahodit kopii</button>
+          </span>
+        </div>
+      {% endfor %}
+    </section>
+  {% endif %}
+  {% set zadosti = zadosti_pro(current_user) %}
+  {% if zadosti %}
+    {# Žádosti o přátelství tady, kde se vyřizují pozvánky - na stránku Přátelé by
+       člověk nemusel zavítat. #}
+    <section class="pozvanky" aria-label="Žádosti o přátelství">
+      {% for z in zadosti %}
+        <div class="pozvanka" data-zadost="{{ z.id }}">
+          <span class="pozvanka-text">{{ avatar(z.od, 24) }} {{ jmeno(z.od) }} žádá o přátelství.</span>
+          <span class="pozvanka-akce">
+            <button type="button" class="btn primary zadost-odpoved" data-akce="prijmout">Potvrdit</button>
+            <button type="button" class="btn zadost-odpoved" data-akce="odmitnout">Odmítnout</button>
           </span>
         </div>
       {% endfor %}
@@ -1512,6 +1539,7 @@ function openCreateModal() {
       proc.hidden = vlastnik;
       shareModal.querySelectorAll('input[name="share-druh"]').forEach(r => { r.checked = !vlastnik && r.value === 'kopie'; });
       nactiCleny(id);
+      nactiPratele();
       shareModal.style.display = 'flex';
       shareModal.setAttribute('aria-hidden', 'false');
       if (shareTitleEl) shareTitleEl.textContent = title || 'tento zpěvník';
@@ -1537,6 +1565,41 @@ function openCreateModal() {
 
     // Kdo zpěvník upravuje společně a komu čeká pozvánka. Vlastník může členovi
     // společné úpravy ukončit - ten dostane kopii a upozornění.
+    // Přátelé v okně sdílení: klik doplní e-mail, takže se na něj nemusí vzpomínat.
+    let pratele = null;
+    async function nactiPratele() {
+      const box = document.getElementById('share-pratele');
+      if (!box) return;
+      try {
+        if (pratele === null) pratele = (await (await fetch('/api/pratele')).json()).pratele || [];
+      } catch (_) { pratele = []; }
+      box.textContent = '';
+      const pole = document.getElementById('share-email-input');
+      const oznac = () => box.querySelectorAll('.share-pritel').forEach(b =>
+        b.classList.toggle('vybrany', b.dataset.email === pole.value.trim().toLowerCase()));
+      pratele.forEach(p => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'share-pritel';
+        b.dataset.email = p.email.toLowerCase();
+        const jm = document.createElement('span');
+        jm.textContent = p.jmeno;
+        b.append(avatarEl(p, 22), jm);
+        b.addEventListener('click', () => {
+          pole.value = p.email;
+          pole.dispatchEvent(new Event('input', { bubbles: true }));
+          oznac();
+        });
+        box.appendChild(b);
+      });
+      if (!box.dataset.navazano) {
+        pole.addEventListener('input', oznac);
+        box.dataset.navazano = '1';
+      }
+      oznac();
+      box.hidden = !pratele.length;
+    }
+
     async function nactiCleny(id) {
       const box = document.getElementById('share-clenove');
       box.hidden = true;
@@ -1611,6 +1674,19 @@ function openCreateModal() {
       el.querySelector('.oznameni-zahodit').addEventListener('click', async () => {
         if (await window.showConfirm('Zahodit kopii? Zpěvník se smaže a uvolní místo.', 'Zahodit', { nebezpecne: true })) {
           odpovezNaPozvanku(`/api/oznameni/${id}/zahodit`);
+        }
+      });
+    });
+    document.querySelectorAll('.pozvanka[data-zadost] .zadost-odpoved').forEach(b => {
+      b.addEventListener('click', async () => {
+        const id = b.closest('[data-zadost]').dataset.zadost;
+        try {
+          const r = await fetch(`/api/pratele/zadost/${id}/${b.dataset.akce}`, { method: 'POST' });
+          const j = await r.json().catch(() => ({}));
+          if (!r.ok || !j.ok) { oznam(j.error || 'Server odpověď nepřijal.', { nadpis: 'Žádost se nepodařilo vyřídit' }); return; }
+          window.location.reload();
+        } catch (_) {
+          oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
         }
       });
     });

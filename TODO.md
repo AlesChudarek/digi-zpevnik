@@ -696,10 +696,22 @@ kdo maže.
       místech. Aleš 14. 10.: zatím nechat, jen admin má extra práva. Později možná
       placená úroveň (pay wall) pro některé funkce - pak se role budou hodit.
 - [X] vybraný motiv se pamatuje u účtu, ne jen v prohlížeči
-- [ ] další uživatelská nastavení, až budou (motiv už hotový)
+- [X] **profil: přezdívka a kulatá fotka** (14. 10.). Obojí nepovinné; ostatním se
+      ukazuje přezdívka (lišta, sdílení, pozvánky), bez ní e-mail; bez fotky kolečko
+      s iniciálami v barvě podle id. Fotka: čtverec 256 px WebP v `data/profily` (mimo
+      limit místa). Po registraci stránka Vítejte s Přeskočit. Hlídá `test_pratele.py`.
+- [ ] další uživatelská nastavení, až budou (motiv a profil hotové). Výchozí rychlost
+      sjíždění Aleš nechce - záleží na písni, ne na uživateli.
 
-- [ ] (nápad, nízká priorita) **přátelé** — propojení účtů jako na Facebooku, ať se
-      při sdílení nemusí psát e-mail.
+- [X] **přátelé** (14. 10.) — vzájemně potvrzené jako na Facebooku (tabulka
+      `pratelstvi`). Žádost podle e-mailu, potvrzení v Mých zpěvnících nebo na stránce
+      Přátelé; když druhý už žádá nás, přijme se rovnou. V okně sdílení řada přátel,
+      klik doplní e-mail. Stránka Přátelé: společné zpěvníky, čekající pozvánky, volné
+      místo (vidět vždy - odhadnout se dá i pozvánkou); kopie ne, po přijetí nemají
+      vazbu. „Možná znáte“: kdo se mnou sdílí zpěvník nebo si poslal pozvánku.
+      Hlídá `test_pratele.py`.
+- [ ] **potvrzovací dialog je ve třech kopiích** (Moje zpěvníky, čtečka, Přátelé), každá
+      s `#app-confirm-overlay`. Sjednotit do `dashboard_base` (zjednodušení).
 
 ## Obsah a prezentace
 

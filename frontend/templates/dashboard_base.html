@@ -228,6 +228,9 @@
     .ucet-sipka { font-size: 11px; opacity: .8; }
     .ucet .avatar { box-shadow: 0 0 0 2px rgba(255,255,255,0.7); }
     .ucet-jmeno { font-weight: 700; margin-bottom: 2px; }
+    .nav-pocet { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px;
+                 background: #ffd970; color: #3d2e00; font-size: 12px; font-weight: 700;
+                 line-height: 18px; text-align: center; }
     @media (max-width: 820px) { .ucet-email { display: none; } }
 
     .ucet-panel {
@@ -428,6 +431,7 @@
           </span>
         {% else %}
           <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
+          <a href="{{ url_for('stranka_pratel') }}">Přátelé{% set _z = zadosti_pro(current_user)|length %}{% if _z %} <span class="nav-pocet" data-napoveda="Žádosti o přátelství">{{ _z }}</span>{% endif %}</a>
         {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>

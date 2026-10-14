@@ -1,0 +1,21 @@
+/* Stránka Přátelé (pratele.html). Karty a tlačítka bere z profil.css. */
+.clovek { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.clovek + .clovek { border-top: 1px solid #eee; }
+.clovek-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.clovek-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clovek-email { font-size: 13px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clovek-akce { display: flex; gap: 8px; flex: 0 0 auto; }
+.pritel { padding: 6px 0 12px; }
+.pritel + .pritel { border-top: 1px solid #eee; padding-top: 12px; }
+.pritel-misto { display: flex; align-items: center; gap: 10px; margin: 2px 0 6px 60px; font-size: 13px; color: #555; }
+.pritel-misto-pruh { flex: 1; max-width: 220px; height: 6px; border-radius: 3px; background: #e6e6e6; overflow: hidden; }
+.pritel-misto-pruh span { display: block; height: 100%; background: var(--brand-strong, #2E7D32); }
+.pritel-radek { margin: 4px 0 0 60px; font-size: 14px; color: #333; }
+.pritel-radek a { color: var(--brand-dark, #1b5e20); }
+.pritel-popisek { color: #666; }
+.pritel-pozvanka { color: #555; font-size: 13px; }
+@media (max-width: 480px) {
+  .clovek { flex-wrap: wrap; }
+  .clovek-akce { width: 100%; justify-content: flex-end; }
+  .pritel-misto, .pritel-radek { margin-left: 0; }
+}

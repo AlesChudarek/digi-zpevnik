@@ -386,12 +386,13 @@ try:
         Pozvanka,
         Oznameni,
         PoradiZpevniku,
+        Pratelstvi,
         LoginAttempt,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -1669,6 +1670,8 @@ def smazat_ucet():
         db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
         db.session.query(Oznameni).filter_by(user_id=uid).delete()
         db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
+        db.session.query(Pratelstvi).filter(db.or_(Pratelstvi.od_id == uid,
+                                                   Pratelstvi.komu_id == uid)).delete()
         fotka = current_user.fotka
         logout_user()
         db.session.query(User).filter_by(id=uid).delete()
@@ -2656,6 +2659,174 @@ def pozvanky_pro(user):
 
 
 app.jinja_env.globals['pozvanky_pro'] = pozvanky_pro
+
+
+# ---------- Přátelé ----------
+# Přítel je účet, se kterým si člověk vzájemně potvrdil přátelství (jako na Facebooku).
+# Dává to rychlou volbu v okně sdílení, aby se nemusel pamatovat e-mail, a stránku
+# Přátelé s tím, co spolu sdílí a kolik má kdo místa.
+
+MAX_ZADOSTI_O_PRATELSTVI = 20   # nevyřízených od jednoho člověka, proti zahlcení
+
+
+def _vztah(a_id, b_id):
+    return Pratelstvi.query.filter(db.or_(
+        db.and_(Pratelstvi.od_id == a_id, Pratelstvi.komu_id == b_id),
+        db.and_(Pratelstvi.od_id == b_id, Pratelstvi.komu_id == a_id))).first()
+
+
+def pratele_uzivatele(user_id):
+    """Potvrzení přátelé, seřazení podle jména."""
+    radky = Pratelstvi.query.filter(Pratelstvi.prijato.is_(True), db.or_(
+        Pratelstvi.od_id == user_id, Pratelstvi.komu_id == user_id)).all()
+    lide = [r.komu if r.od_id == user_id else r.od for r in radky]
+    return sorted((u for u in lide if u), key=lambda u: jmeno_uzivatele(u).lower())
+
+
+def zadosti_pro(user):
+    """Nevyřízené žádosti o přátelství, které čekají na odpověď tohoto uživatele."""
+    if not getattr(user, 'is_authenticated', False) or is_guest(user):
+        return []
+    return (Pratelstvi.query.filter_by(komu_id=user.id, prijato=False)
+            .order_by(Pratelstvi.vytvoreno).all())
+
+
+app.jinja_env.globals['zadosti_pro'] = zadosti_pro
+
+
+def _pristupne_soukrome(user_id):
+    """Id soukromých zpěvníků, které uživatel vlastní nebo spolu-upravuje."""
+    vlastni = {sid for (sid,) in db.session.query(Songbook.id).filter(
+        Songbook.owner_id == user_id, Songbook.is_public == 0)}
+    sdilene = {sid for (sid,) in db.session.query(UserSongbookAccess.songbook_id)
+               .filter_by(user_id=user_id)}
+    return vlastni | sdilene
+
+
+def navrhy_pratel(user):
+    """Lidé, se kterými uživatel už sdílí zpěvník nebo si poslali pozvánku, ale přáteli
+    ještě nejsou - ať se seznam přátel nemusí skládat od nuly."""
+    moje = _pristupne_soukrome(user.id)
+    kandidati = set()
+    if moje:
+        kandidati |= {uid for (uid,) in db.session.query(UserSongbookAccess.user_id)
+                      .filter(UserSongbookAccess.songbook_id.in_(moje))}
+        kandidati |= {uid for (uid,) in db.session.query(Songbook.owner_id)
+                      .filter(Songbook.id.in_(moje)) if uid}
+    for p in Pozvanka.query.filter(db.or_(Pozvanka.od_id == user.id, Pozvanka.komu_id == user.id)):
+        kandidati |= {p.od_id, p.komu_id}
+    kandidati.discard(user.id)
+    if not kandidati:
+        return []
+    uz = set()
+    for r in Pratelstvi.query.filter(db.or_(Pratelstvi.od_id == user.id, Pratelstvi.komu_id == user.id)):
+        uz |= {r.od_id, r.komu_id}
+    lide = User.query.filter(User.id.in_(kandidati - uz), User.role == 'user').all()
+    return sorted(lide, key=lambda u: jmeno_uzivatele(u).lower())
+
+
+def prehled_pritele(ja, pritel):
+    """Co spolu dva přátelé sdílí: společné zpěvníky, čekající pozvánky, místo přítele.
+    Kopie se neukazují - po přijetí je to samostatný zpěvník bez vazby na originál."""
+    spolecne_id = _pristupne_soukrome(ja.id) & _pristupne_soukrome(pritel.id)
+    spolecne = (Songbook.query.filter(Songbook.id.in_(spolecne_id)).order_by(Songbook.title).all()
+                if spolecne_id else [])
+    pozvanky = []
+    for p in Pozvanka.query.filter(db.or_(
+            db.and_(Pozvanka.od_id == ja.id, Pozvanka.komu_id == pritel.id),
+            db.and_(Pozvanka.od_id == pritel.id, Pozvanka.komu_id == ja.id))):
+        pozvanky.append({'nazev': p.songbook.title if p.songbook else '', 'druh': p.druh,
+                         'odeslana': p.od_id == ja.id})
+    zabrano = zabrane_misto(pritel.id)
+    return {'spolecne': spolecne, 'pozvanky': pozvanky,
+            'misto': {'zabrano': zabrano, 'volne': max(0, MAX_USER_STORAGE_BYTES - zabrano),
+                      'procent': min(100, round(zabrano * 100 / MAX_USER_STORAGE_BYTES))
+                      if MAX_USER_STORAGE_BYTES else 0}}
+
+
+@app.route('/pratele')
+@login_required
+def stranka_pratel():
+    if is_guest(current_user):
+        return redirect(url_for('dashboard'))
+    pratele = [(u, prehled_pritele(current_user, u)) for u in pratele_uzivatele(current_user.id)]
+    odeslane = (Pratelstvi.query.filter_by(od_id=current_user.id, prijato=False)
+                .order_by(Pratelstvi.vytvoreno).all())
+    return render_template('pratele.html', pratele=pratele, odeslane=odeslane,
+                           prichozi=zadosti_pro(current_user),
+                           navrhy=navrhy_pratel(current_user))
+
+
+@app.route('/api/pratele', methods=['GET'])
+@login_required
+def seznam_pratel():
+    """Přátelé pro okno sdílení."""
+    if is_guest(current_user):
+        return jsonify({'ok': True, 'pratele': []})
+    return jsonify({'ok': True, 'pratele': [uzivatel_info(u) for u in pratele_uzivatele(current_user.id)]})
+
+
+@app.route('/api/pratele', methods=['POST'])
+@login_required
+def pozadej_o_pratelstvi():
+    """Žádost o přátelství podle e-mailu (nebo id z návrhů). Když už druhý žádá nás,
+    žádost se rovnou přijme - obě strany chtějí totéž."""
+    if is_guest(current_user) or not smi_tvorit(current_user):
+        return jsonify({'ok': False, 'error': 'Přátele si může přidávat jen ověřený účet.'}), 403
+    data = request.get_json(silent=True) or {}
+    if data.get('id'):
+        cil = db.session.get(User, int(data['id']))
+    else:
+        cil = User.query.filter(db.func.lower(User.email) == (data.get('email') or '').strip().lower()).first()
+    if cil is None or cil.role == 'guest':
+        return jsonify({'ok': False, 'error': 'Uživatel s touto adresou nemá účet.'}), 404
+    if cil.id == current_user.id:
+        return jsonify({'ok': False, 'error': 'Sám sebe si do přátel přidat nejde.'}), 400
+    vztah = _vztah(current_user.id, cil.id)
+    if vztah and vztah.prijato:
+        return jsonify({'ok': False, 'error': f'{jmeno_uzivatele(cil)} už je mezi přáteli.'}), 400
+    if vztah and vztah.od_id == current_user.id:
+        return jsonify({'ok': False, 'error': 'Žádost už je odeslaná a čeká na odpověď.'}), 400
+    if vztah:
+        vztah.prijato = True
+        db.session.commit()
+        return jsonify({'ok': True, 'prijato': True,
+                        'zprava': f'{jmeno_uzivatele(cil)} je teď mezi přáteli.'})
+    if Pratelstvi.query.filter_by(od_id=current_user.id, prijato=False).count() >= MAX_ZADOSTI_O_PRATELSTVI:
+        return jsonify({'ok': False, 'error': f'Nevyřízených žádostí může být nejvýš '
+                                              f'{MAX_ZADOSTI_O_PRATELSTVI}.'}), 429
+    db.session.add(Pratelstvi(od_id=current_user.id, komu_id=cil.id, prijato=False,
+                              vytvoreno=datetime.now()))
+    db.session.commit()
+    return jsonify({'ok': True, 'prijato': False,
+                    'zprava': f'Žádost o přátelství odeslána ({jmeno_uzivatele(cil)}).'})
+
+
+@app.route('/api/pratele/zadost/<int:zadost_id>/<akce>', methods=['POST'])
+@login_required
+def odpovez_na_zadost(zadost_id, akce):
+    z = db.session.get(Pratelstvi, zadost_id)
+    if z is None or z.komu_id != current_user.id or z.prijato or akce not in ('prijmout', 'odmitnout'):
+        return jsonify({'ok': False, 'error': 'Žádost nenalezena.'}), 404
+    if akce == 'prijmout':
+        z.prijato = True
+    else:
+        db.session.delete(z)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/pratele/<int:user_id>', methods=['DELETE'])
+@login_required
+def odeber_pritele(user_id):
+    """Zruší přátelství, nebo vlastní nevyřízenou žádost. Na sdílených zpěvnících se nic
+    nemění - přátelství je jen adresář, ne přístup."""
+    vztah = _vztah(current_user.id, user_id)
+    if vztah is None or (not vztah.prijato and vztah.od_id != current_user.id):
+        return jsonify({'ok': False, 'error': 'Mezi přáteli není.'}), 404
+    db.session.delete(vztah)
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 # ---------- Editor zpěvníku ----------

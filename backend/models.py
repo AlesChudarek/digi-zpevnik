@@ -281,6 +281,24 @@ class Oznameni(db.Model):
     songbook = db.relationship("Songbook")
 
 
+class Pratelstvi(db.Model):
+    """Přátelství dvou účtů. Vzniká žádostí (`prijato` False) a platí až po potvrzení
+    druhou stranou - přítel vidí, s kým co sdílíš a kolik má kdo místa, takže
+    k tomu musí dát souhlas. Jeden řádek na dvojici; směr říká jen, kdo žádal."""
+
+    __tablename__ = "pratelstvi"
+    __table_args__ = (db.UniqueConstraint("od_id", "komu_id", name="uq_pratelstvi"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    od_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    komu_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False, index=True)
+    prijato = db.Column(db.Boolean, nullable=False, default=False)
+    vytvoreno = db.Column(db.DateTime, nullable=False)
+
+    od = db.relationship("User", foreign_keys=[od_id])
+    komu = db.relationship("User", foreign_keys=[komu_id])
+
+
 class PoradiZpevniku(db.Model):
     """Pořadí dlaždic v Mých zpěvnících, jak si je uživatel přetáhl. Každý má své,
     i u společného zpěvníku. Zpěvník bez řádku (nový, nebo uživatel nikdy neřadil)
