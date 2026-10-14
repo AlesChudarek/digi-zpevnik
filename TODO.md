@@ -740,6 +740,14 @@ kdo maže.
       e-mail se nepodařilo odeslat“ - účet ale vznikne a e-mail změnit nejde. Buď
       registraci při neodeslaném e-mailu nedokončit, nebo dát možnost adresu změnit
       (patří do okna Účet níž).
+- [X] **okna se zavírala tahem ven** (14. 10.) — označení textu nebo posun fotky, který
+      skončil na pozadí, okno zavřel. Jedna pojistka v `dashboard_base` pro všechna okna:
+      klik na celoobrazovkové pozadí se zahodí, když stisk nezačal na něm.
+- [X] **SVG jako profilovka se ořízlo jinak, než bylo vybrané** (14. 10.) — prohlížeč
+      kreslí výřez ze SVG bez vlastní velikosti v jiných souřadnicích; SVG se teď nejdřív
+      vykreslí do obrázku 1024 px. Vítejte: Uložit u přezdívky pryč, ukládá Pokračovat.
+      „Zrušit účet“ → „Odstranit účet“; hlášky o neodeslaném ověření radí zkontrolovat
+      adresu (překlep, neexistuje) a opravit ji v okně Účet.
 - [X] **ořez profilové fotky** (14. 10.) — po výběru okno s fotkou a kruhovým výřezem,
       posun tažením, přiblížení posuvníkem a kolečkem. Odchází jen výřez 512 px (JPEG),
       takže velikost původní fotky nevadí. Hlídá `test_pratele.py`. Původní zápis:

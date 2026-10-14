@@ -101,6 +101,16 @@ window.UcetOkna = (function () {
     if (!(t instanceof Element)) return;
     if (t.closest('.ucet-okno-zavrit') || t.id === 'ucet-okno') { zavri(); return; }
 
+    // Stránka Vítejte: Pokračovat uloží přezdívku (je-li nová) a jde dál.
+    if (t.closest('.vitejte-pokracovat')) {
+      const pole = $('profil-prezdivka');
+      if (pole && pole.value.trim() !== pole.defaultValue.trim()) {
+        e.preventDefault();
+        const j = await posli('/profil/udaje', json({ prezdivka: pole.value }), 'Přezdívku se nepodařilo uložit');
+        if (j) location.href = t.closest('.vitejte-pokracovat').href;
+      }
+      return;
+    }
     // Profil
     if (t.id === 'profil-odebrat') {
       const j = await posli('/profil/fotka', { method: 'DELETE' }, 'Fotku se nepodařilo odebrat');
@@ -171,7 +181,26 @@ window.UcetOkna = (function () {
       oznam('Soubor se nepodařilo otevřít jako obrázek. Podporované jsou JPG, PNG, WEBP a GIF.',
             { nadpis: 'Fotku nejde použít' });
     };
-    img.onload = () => ukazOrez(img, url);
+    img.onload = () => {
+      const svg = /svg/i.test(soubor.type) || /\.svg$/i.test(soubor.name || '');
+      if (!svg) { ukazOrez(img, url); return; }
+      // SVG bez vlastní velikosti (prohlížeč hlásí 150 × 150) kreslí drawImage s výřezem
+      // v jiných souřadnicích než celý obrázek - výsledek neodpovídal výběru (Aleš
+      // 14. 10.). Proto se nejdřív vykreslí celé do obyčejného obrázku a ořez jde z něj.
+      const delsi = 1024;
+      const w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+      const platno = document.createElement('canvas');
+      platno.width = Math.round(w >= h ? delsi : delsi * w / h);
+      platno.height = Math.round(h >= w ? delsi : delsi * h / w);
+      platno.getContext('2d').drawImage(img, 0, 0, platno.width, platno.height);
+      URL.revokeObjectURL(url);
+      platno.toBlob((blob) => {
+        const url2 = URL.createObjectURL(blob);
+        const img2 = new Image();
+        img2.onload = () => ukazOrez(img2, url2);
+        img2.src = url2;
+      }, 'image/png');
+    };
     img.src = url;
   }
 
@@ -277,7 +306,11 @@ window.UcetOkna = (function () {
     if (e.key !== 'Enter') return;
     const id = e.target.id;
     if (id === 'pritel-email') { e.preventDefault(); pridejPritele(); }
-    else if (id === 'profil-prezdivka') { e.preventDefault(); $('profil-ulozit').click(); }
+    else if (id === 'profil-prezdivka') {
+      e.preventDefault();
+      const dal = document.querySelector('.vitejte-pokracovat');
+      (dal || $('profil-ulozit')).click();
+    }
   });
   document.addEventListener('DOMContentLoaded', () => {
     const co = new URL(location.href).searchParams.get('okno');

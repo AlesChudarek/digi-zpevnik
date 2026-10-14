@@ -13,6 +13,27 @@
   <link rel="stylesheet" href="{{ static_bust('css/profil.css') }}">
   <link rel="stylesheet" href="{{ static_bust('css/pratele.css') }}">
   <script src="{{ static_bust('js/ucet.js') }}" defer></script>
+  <script>
+    /* Okna se zavírají klikem na pozadí. Prohlížeč ale za klik na pozadí počítá i tah,
+       který začal uvnitř okna a skončil venku - třeba zbrklé označení textu v poli nebo
+       posun fotky při ořezu - a okno se pak zavřelo pod rukou (Aleš 14. 10.). Platí pro
+       všechna okna najednou: klik na celoobrazovkové pozadí se zahodí, když stisk
+       nezačal na něm. */
+    (function () {
+      let stisk = null;
+      document.addEventListener('pointerdown', (e) => { stisk = e.target; }, true);
+      document.addEventListener('click', (e) => {
+        const cil = e.target;
+        if (!stisk || stisk === cil || !(cil instanceof Element) || !cil.contains(stisk)) return;
+        const st = getComputedStyle(cil);
+        if (st.position !== 'fixed') return;
+        const r = cil.getBoundingClientRect();
+        if (r.width < innerWidth - 2 || r.height < innerHeight - 2) return;
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }, true);
+    })();
+  </script>
   <script src="{{ static_bust('js/napoveda.js') }}" defer></script>
   <style>
     html, body {

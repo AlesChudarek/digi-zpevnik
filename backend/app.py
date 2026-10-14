@@ -1197,7 +1197,9 @@ def register():
                 flash('Registrace proběhla. Poslali jsme vám ověřovací e-mail.', 'success')
             else:
                 flash('Registrace proběhla, ale ověřovací e-mail se nepodařilo odeslat. '
-                      'Zkuste ho poslat znovu později.', 'error')
+                      'Adresa může obsahovat překlep nebo neexistovat - zkontrolujte ji '
+                      'v nabídce účtu (Účet → E-mail), případně ji opravte, a ověřovací '
+                      'e-mail pošlete znovu.', 'error')
             return redirect(url_for('vitejte'))
 
     return render_template('auth.html')
@@ -1609,7 +1611,8 @@ def zmena_emailu():
     odeslano = posli_overovaci_email(current_user)
     return jsonify({'ok': True, 'zprava': 'E-mail je změněný. ' + (
         'Na novou adresu jsme poslali ověřovací e-mail.' if odeslano else
-        'Ověřovací e-mail se ale nepodařilo odeslat - zkuste ho poslat znovu později.')})
+        'Ověřovací e-mail se ale nepodařilo odeslat. Adresa může obsahovat překlep nebo '
+        'neexistovat - zkontrolujte ji a pošlete ověření znovu.')})
 
 
 @app.route('/vitejte')
@@ -1888,7 +1891,8 @@ def poslat_overeni_znovu():
     zaznamenej_neuspesny_pokus(current_user.email)
     if posli_overovaci_email(current_user):
         return odpoved(True, 'Ověřovací e-mail jsme poslali znovu.')
-    return odpoved(False, 'E-mail se nepodařilo odeslat, zkuste to prosím později.')
+    return odpoved(False, 'E-mail se nepodařilo odeslat. Adresa může obsahovat překlep nebo '
+                          'neexistovat - zkontrolujte ji v okně Účet, případně ji opravte.')
 
 
 @app.route('/api/songbook/<songbook_id>/toc')

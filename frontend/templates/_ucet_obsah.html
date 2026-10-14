@@ -1,5 +1,5 @@
 {# Obsah okna Účet (otevírá se z nabídky účtu, /okno/ucet). Obsluha: static/js/ucet.js.
-   Všechno, co patří k účtu, na jednom místě: profil, e-mail, heslo, zrušení. #}
+   Všechno, co patří k účtu, na jednom místě: profil, e-mail, heslo, odstranění. #}
 {% include '_profil_udaje.html' %}
 
 <div class="karta">
@@ -41,7 +41,7 @@
 </div>
 
 <div class="karta">
-  <h2>Zrušení účtu</h2>
+  <h2>Odstranění účtu</h2>
   <p>Smaže účet i všechny vlastní zpěvníky. Nejde vrátit.</p>
-  <a class="odhlasit" href="{{ url_for('smazat_ucet') }}">Zrušit účet…</a>
+  <a class="odhlasit" href="{{ url_for('smazat_ucet') }}">Odstranit účet…</a>
 </div>

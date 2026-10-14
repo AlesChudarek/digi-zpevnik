@@ -269,6 +269,40 @@ def main():
                    "uložený výřez je oranžový čtverec 256 px", vysledek)
         page.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
         zkontroluj("okno=" not in page.url, "po uložení fotky zůstane otevřené okno Účet", page.url)
+        # Zbrklé označení textu: stisk v poli, puštění až na pozadí okna.
+        pole = page.locator("#profil-prezdivka").bounding_box()
+        page.mouse.move(pole["x"] + pole["width"] - 5, pole["y"] + pole["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(5, pole["y"] + pole["height"] / 2, steps=8)
+        page.mouse.up()
+        page.wait_for_timeout(200)
+        zkontroluj(page.is_visible("#ucet-okno"), "tah z pole ven na pozadí okno nezavře")
+        page.mouse.click(5, 300)
+        page.wait_for_timeout(200)
+        zkontroluj(page.is_hidden("#ucet-okno"), "obyčejný klik na pozadí okno zavře")
+        page.click("#ucet-btn")
+        page.click("#ucet-panel .ucet-polozka >> text=Účet")
+        page.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
+        # SVG: drawImage s výřezem kreslil u SVG něco jiného, než bylo vybrané.
+        svg = PROJECT_ROOT / "frontend" / "static" / "img" / "icons" / "scroll_outline.svg"
+        page.set_input_files("#profil-soubor", str(svg))
+        page.wait_for_selector(".orez-zaclona .orez-plocha img")
+        with page.expect_navigation():
+            page.click("[data-orez=ulozit]")
+        page.wait_for_load_state("networkidle")
+        ocekavano = page.evaluate("""async (url) => { const i = new Image(); i.src = url; await i.decode();
+          const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d');
+          x.fillStyle = '#fff'; x.fillRect(0, 0, 256, 256); x.drawImage(i, 0, 0, 256, 256);
+          const d = x.getImageData(0, 0, 256, 256).data; let n = 0;
+          for (let k = 0; k < d.length; k += 4) if (d[k] < 80) n++; return n; }""",
+                                  "/static/img/icons/scroll_outline.svg")
+        with A.app.app_context():
+            soubor = A.db.session.get(A.User, 3).fotka
+        with Image.open(A.PROFILY_DIR / soubor) as im:
+            tmave = sum(1 for p in im.convert("L").getdata() if p < 80)
+        zkontroluj(abs(tmave - ocekavano) / max(1, ocekavano) < 0.1,
+                   "SVG se ořízne tak, jak bylo vybrané (celé při výchozím přiblížení)", (tmave, ocekavano))
+        page.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
         page.keyboard.press("Escape")
         zkontroluj(page.is_hidden("#ucet-okno"), "Escape okno zavře")
         page.goto(base + "/my-songbooks")
@@ -297,8 +331,16 @@ def main():
                    "okno přátel se vejde a stránka se nedá táhnout do strany", (sirka, sirka_uzka, okno, okno_uzke))
         page.goto(base + "/vitejte")
         zkontroluj(page.locator("#profil-prezdivka").count() == 1
-                   and page.locator(".vitejte-preskocit").count() == 1,
-                   "stránka Vítejte s profilem a Přeskočit")
+                   and page.locator(".vitejte-preskocit").count() == 1
+                   and page.is_hidden("#profil-ulozit"),
+                   "stránka Vítejte s profilem a Přeskočit, bez zvláštního Uložit")
+        page.fill("#profil-prezdivka", "Petr z Vítejte")
+        with page.expect_navigation():
+            page.click(".vitejte-pokracovat")
+        with A.app.app_context():
+            prez = A.db.session.get(A.User, 3).prezdivka
+        zkontroluj(prez == "Petr z Vítejte" and "/vitejte" not in page.url,
+                   "Pokračovat přezdívku uloží a jde dál", (prez, page.url))
         zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
         prohlizec.close()
     server.shutdown()
