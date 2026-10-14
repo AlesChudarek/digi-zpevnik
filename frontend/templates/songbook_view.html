@@ -127,51 +127,53 @@
         z-index: 0;
     }
 
-    .mode-toggle-button {
+    /* Přepínač režimu čtení: svislá pilulka s oběma režimy, aktivní je podložený
+       barvou tématu a podklad mezi nimi plynule sjíždí. Dřív to bylo jedno kulaté
+       tlačítko, které se po najetí myší otáčelo jako mince a ukazovalo druhý režim -
+       na dotyku ale najetí není a ikona měnila význam pod rukou (14. 10.). */
+    .mode-buttons > .rezimy {
+        --velikost: 60px;
         position: relative;
+        display: flex;
+        flex-direction: column;
+        width: var(--velikost);
+        border-radius: calc(var(--velikost) / 2);
+        background: white;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .rezimy-jezdec {
+        position: absolute;
+        left: 4px; right: 4px; top: 4px;
+        height: calc(var(--velikost) - 8px);
+        border-radius: 50%;
+        background: var(--brand, #2E7D32);
+        pointer-events: none;
+    }
+    .rezimy.pripraveno .rezimy-jezdec { transition: transform 0.25s ease; }
+    .rezimy[data-rezim="scroll"] .rezimy-jezdec { transform: translateY(var(--velikost)); }
+    .mode-buttons > .rezimy > .rezim {
+        position: relative;
+        z-index: 1;
+        width: var(--velikost);
+        height: var(--velikost);
         display: flex;
         align-items: center;
         justify-content: center;
-        background: transparent !important;
-        box-shadow: none !important;
+        padding: 0;
         border: none;
-    }
-
-    .mode-toggle-button::before {
-        content: '';
-        position: absolute;
-        inset: 0;
         border-radius: 50%;
-        background: white;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-        transition: transform 0.5s ease;
-        transform-origin: center;
-        pointer-events: none;
+        background: transparent;
+        box-shadow: none;
+        cursor: pointer;
     }
-
-    .mode-toggle-button.is-collapsing::before {
-        transform: scaleX(0);
-    }
-
-    .mode-toggle-visual {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        height: 100%;
-        transition: transform 0.5s ease;
-        transform-origin: center;
-        position: relative;
-        z-index: 1;
-        pointer-events: none;
-    }
-
-    .mode-toggle-button.is-collapsing .mode-toggle-visual {
-        transform: scaleX(0);
-    }
+    .rezim[aria-pressed="true"] { cursor: default; }
+    .rezim[aria-pressed="false"]:hover img { transform: scale(1.12); }
+    .rezim img { transition: transform 0.2s, filter 0.25s; }
+    /* Ikona na barvě tématu bílá, stejně jako text v liště. */
+    .rezim[aria-pressed="true"] img { filter: brightness(0) invert(1); }
 
     .nav-buttons button:hover,
-    .mode-buttons > .button-container > button:not(.mode-toggle-button):hover {
+    .mode-buttons > .button-container > button:not(.rezim):hover {
         transform: scale(1.1);
     }
 
@@ -549,6 +551,7 @@
       }
       .zoom-buttons img,
       .mode-buttons img { width: 20px; height: 20px; }
+      .mode-buttons > .rezimy { --velikost: 40px; opacity: 0.82; }
 
       /* Pevných 230px by na telefonu vyjelo za pravý kraj. Panel si vezme, co zbývá
          od tlačítka k druhé straně obrazovky, a nechá tam rezervu na tlačítka módů. */
@@ -752,12 +755,15 @@
 </div>
 
 <div class="mode-buttons">
-  <div class="button-container">
-    <button id="mode-toggle-button" class="mode-toggle-button" onclick="toggleReadingMode()"
-            data-napoveda="Zobrazit jako seznam">
-      <span class="mode-toggle-visual" aria-hidden="true">
-        <img id="mode-toggle-icon" src="{{ static_bust('img/icons/open_book.svg') }}" alt="">
-      </span>
+  <div class="button-container rezimy" role="group" aria-label="Režim čtení" data-rezim="double">
+    <span class="rezimy-jezdec" aria-hidden="true"></span>
+    <button type="button" class="rezim" data-rezim="double" aria-pressed="true"
+            onclick="prepniRezim('double')" data-napoveda="Dvojstrana jako v knize">
+      <img src="{{ static_bust('img/icons/open_book.svg') }}" alt="Dvojstrana">
+    </button>
+    <button type="button" class="rezim" data-rezim="scroll" aria-pressed="false"
+            onclick="prepniRezim('scroll')" data-napoveda="Strany pod sebou">
+      <img src="{{ static_bust('img/icons/scroll.svg') }}" alt="Strany pod sebou">
     </button>
   </div>
   <div class="button-container">
@@ -814,14 +820,6 @@
   const TOC_REMOVE_TOOLTIP = "Odstranit ze zpěvníku";
   const TOC_REMOVE_CONFIRM_MESSAGE = "Opravdu chcete odstranit písničku ze zpěvníku?";
   const TOC_REMOVE_CONFIRM_OK = "Odstranit";
-  const MODE_ICON_BY_MODE = {
-    double: {{ static_bust('img/icons/open_book.svg') | tojson }},
-    scroll: {{ static_bust('img/icons/scroll.svg') | tojson }}
-  };
-  const MODE_ACTION_TOOLTIP = {
-    double: "Zobrazit jako dvojstranu",
-    scroll: "Zobrazit jako seznam"
-  };
   let currentMode = 'double';
 
   // A two-page spread is unreadable on a narrow screen, so that is where reading
@@ -834,13 +832,6 @@
     return width > 0 && width < NARROW_SCREEN_PX;
   }
   let currentPage = 1;
-  // Unified mode-toggle preview state (no legacy state machine)
-  let modeToggleHoverActive = false; // true while the button is hovered/focused/touched
-  let modeToggleAnimating = false;   // true while the collapse/expand transition runs
-  let modeToggleShowingTarget = false; // if true, the icon shows target mode (preview), else current mode
-  let modeTogglePendingTarget = false; // queued target for next animation step
-  let suppressNextToggleUI = false; // when true, enable*Mode() must not touch the toggle button UI
-  let modeToggleClickEpoch = 0; // increments on each click to invalidate old listeners
   // Page memory for smooth transitions
   let lastDoublePage;
   let lastScrollPage;
@@ -1086,7 +1077,7 @@
   function enableScrollMode() {
     const scrollModeElement = document.getElementById('scroll-mode');
     if (currentMode === 'scroll' && scrollModeElement && getComputedStyle(scrollModeElement).display !== 'none') {
-      scheduleModeToggleState();
+      oznacRezim();
       return;
     }
     // Store last double page before switching
@@ -1123,15 +1114,7 @@
       document.body.style.overflow = '';
     }
     currentMode = 'scroll';
-    if (!suppressNextToggleUI) {
-      modeToggleAnimating = false;
-      const toggleButton = document.getElementById('mode-toggle-button');
-      if (toggleButton) {
-        toggleButton.classList.remove('is-collapsing');
-      }
-      updateModeToggleButton(modeToggleShowingTarget);
-      scheduleModeToggleState(true);
-    }
+    oznacRezim();
   }
 
   function enableDoublePageMode() {
@@ -1142,7 +1125,7 @@
 
     if (isDoubleVisible && !isScrollVisible) {
       currentMode = 'double';
-      scheduleModeToggleState();
+      oznacRezim();
       return;
     }
 
@@ -1209,155 +1192,28 @@
       document.body.style.overflow = '';
     }
     currentMode = 'double';
-    if (!suppressNextToggleUI) {
-      modeToggleAnimating = false;
-      const toggleButton = document.getElementById('mode-toggle-button');
-      if (toggleButton) {
-        toggleButton.classList.remove('is-collapsing');
-      }
-      updateModeToggleButton(modeToggleShowingTarget);
-      scheduleModeToggleState(true);
-    }
+    oznacRezim();
   }
 
-  function updateModeToggleButton(showingTarget, targetModeOverride = null) {
-    const button = document.getElementById('mode-toggle-button');
-    const icon = document.getElementById('mode-toggle-icon');
-    if (!button || !icon) return;
-    const targetMode = targetModeOverride || (currentMode === 'double' ? 'scroll' : 'double');
-    const visibleMode = showingTarget ? targetMode : currentMode;
-
-    icon.src = MODE_ICON_BY_MODE[visibleMode];
-    icon.alt = '';
-    Napoveda.nastav(button, MODE_ACTION_TOOLTIP[targetMode]);
-    button.setAttribute('aria-label', MODE_ACTION_TOOLTIP[targetMode]);
-  }
-
-
-function desiredModeToggleTarget() {
-  return !!modeToggleHoverActive;
-}
-
-function scheduleModeToggleState(force = false) {
-  const desired = desiredModeToggleTarget();
-  modeTogglePendingTarget = desired;
-  if (modeToggleAnimating) return;
-  if (!force && modeToggleShowingTarget === desired) {
-    return;
-  }
-  animateModeTogglePreview(desired, force);
-}
-
-function animateModeTogglePreview(showTarget, force = false) {
-  const button = document.getElementById('mode-toggle-button');
-  if (!button) return;
-  if (!force && modeToggleShowingTarget === showTarget && !modeToggleAnimating) {
-    modeTogglePendingTarget = modeToggleShowingTarget;
-    return;
-  }
-  modeTogglePendingTarget = showTarget;
-  if (modeToggleAnimating) return;
-
-  modeToggleAnimating = true;
-  button.classList.add('is-collapsing');
-
-  const handleCollapseEnd = (event) => {
-    if (event.propertyName !== 'transform') return;
-    button.removeEventListener('transitionend', handleCollapseEnd);
-    const desiredState = modeTogglePendingTarget;
-    modeToggleShowingTarget = desiredState;
-    modeTogglePendingTarget = desiredState;
-    updateModeToggleButton(desiredState, currentMode === 'double' ? 'scroll' : 'double');
-    void button.offsetWidth;
-    requestAnimationFrame(() => {
-      button.classList.remove('is-collapsing');
-
-      const handleExpandEnd = (event2) => {
-        // Rewritten to check if the target changed during expand
-        if (event2.propertyName !== 'transform') return;
-        button.removeEventListener('transitionend', handleExpandEnd);
-        modeToggleAnimating = false;
-        const desiredNow = modeTogglePendingTarget;
-        if (desiredNow !== modeToggleShowingTarget) {
-          // If the user moved on/off during expansion, animate the new target immediately
-          requestAnimationFrame(() => animateModeTogglePreview(desiredNow, true));
-        } else {
-          // No change needed; remain in this visual state
-          // (No schedule call to avoid spurious immediate icon flips)
-        }
-      };
-
-      button.addEventListener('transitionend', handleExpandEnd);
+  /* Přepínač režimu (pilulka v .mode-buttons). Stav nese jen currentMode; tahle
+     funkce ho promítne do tlačítek a do polohy podkladu. */
+  function oznacRezim() {
+    const skupina = document.querySelector('.rezimy');
+    if (!skupina) return;
+    skupina.dataset.rezim = currentMode;
+    skupina.querySelectorAll('.rezim').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.rezim === currentMode));
     });
-  };
+  }
 
-  button.addEventListener('transitionend', handleCollapseEnd);
-}
+  function prepniRezim(rezim) {
+    if (rezim === currentMode) return;
+    if (rezim === 'scroll') enableScrollMode(); else enableDoublePageMode();
+  }
 
+  // Zkratka pro „ten druhý režim“ - používají ji měřicí skripty a testy.
   function toggleReadingMode() {
-    const targetMode = currentMode === 'double' ? 'scroll' : 'double';
-    const button = document.getElementById('mode-toggle-button');
-
-    // 1) Switch MODE immediately (layout change must not wait for animation)
-    suppressNextToggleUI = true; // prevent enable*Mode from touching the toggle UI mid-cycle
-    if (targetMode === 'scroll') {
-      enableScrollMode();
-    } else {
-      enableDoublePageMode();
-    }
-    suppressNextToggleUI = false;
-
-    // 2) Start a fresh animation cycle for the button visual, cancelling any prior one
-    const epoch = ++modeToggleClickEpoch;
-    modeToggleAnimating = true;
-    if (!button) {
-      // If no button, just ensure tooltip/icon reflect new state
-      updateModeToggleButton(!!modeToggleHoverActive);
-      modeToggleAnimating = false;
-      return;
-    }
-
-    // Reset to a known state and trigger contracting
-    button.classList.remove('is-collapsing');
-    void button.offsetWidth; // force reflow so the next class toggle restarts transition
-    button.classList.add('is-collapsing');
-
-    const onContractEnd = (ev) => {
-      if (ev.propertyName !== 'transform') return;
-      // Ignore stale listeners from older clicks/animations
-      if (epoch !== modeToggleClickEpoch) { button.removeEventListener('transitionend', onContractEnd); return; }
-      button.removeEventListener('transitionend', onContractEnd);
-
-      // While collapsed, set the icon for the expand phase: preview if hovered, else current
-      modeToggleShowingTarget = !!modeToggleHoverActive;
-      updateModeToggleButton(modeToggleShowingTarget);
-
-      // Expand
-      void button.offsetWidth; // ensure transition applies
-      requestAnimationFrame(() => {
-        if (epoch !== modeToggleClickEpoch) return; // another click happened
-        button.classList.remove('is-collapsing');
-        // --- PATCHED onExpandEnd ---
-        const onExpandEnd = (ev2) => {
-          // Rewritten to check if the target changed during expand
-          if (ev2.propertyName !== 'transform') return;
-          if (epoch !== modeToggleClickEpoch) { button.removeEventListener('transitionend', onExpandEnd); return; }
-          button.removeEventListener('transitionend', onExpandEnd);
-          modeToggleAnimating = false;
-          // If hover state changed during expand, run a secondary collapse→expand now
-          const desiredNow = desiredModeToggleTarget();
-          if (desiredNow !== modeToggleShowingTarget) {
-            requestAnimationFrame(() => animateModeTogglePreview(desiredNow, true));
-          } else {
-            // Otherwise align with current state (no forced reschedule)
-            // Keep as-is to avoid instantaneous icon flips without animation
-          }
-        };
-        button.addEventListener('transitionend', onExpandEnd);
-      });
-    };
-
-    button.addEventListener('transitionend', onContractEnd);
+    prepniRezim(currentMode === 'double' ? 'scroll' : 'double');
   }
 
   // Helper function to format page label by stripping known image extensions and "page" prefix
@@ -2224,26 +2080,11 @@ function scrollToTop() {
 }
 
   document.addEventListener('DOMContentLoaded', () => {
-    modeToggleShowingTarget = desiredModeToggleTarget();
-    modeTogglePendingTarget = modeToggleShowingTarget;
-    updateModeToggleButton(modeToggleShowingTarget);
-    const modeToggleButton = document.getElementById('mode-toggle-button');
-    if (modeToggleButton) {
-      const setHoverState = (state) => {
-        modeToggleHoverActive = state;
-        if (modeToggleAnimating) {
-          modeTogglePendingTarget = state;
-          return;
-        }
-        scheduleModeToggleState();
-      };
-      modeToggleButton.addEventListener('mouseenter', () => setHoverState(true));
-      modeToggleButton.addEventListener('mouseleave', () => setHoverState(false));
-      // modeToggleButton.addEventListener('focusin', () => setHoverState(true));
-      // modeToggleButton.addEventListener('focusout', () => setHoverState(false));
-      modeToggleButton.addEventListener('touchstart', () => setHoverState(true), { passive: true });
-      modeToggleButton.addEventListener('touchend', () => setHoverState(false), { passive: true });
-    }
+    oznacRezim();
+    // Podklad přepínače sjíždí až po načtení - jinak by na úzké obrazovce, kde se
+    // začíná v režimu stran pod sebou, sjel hned při otevření.
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      document.querySelector('.rezimy')?.classList.add('pripraveno')));
     trackScrollPage();
     // Start in scroll mode on narrow screens; the book layout stays one tap away
     if (prefersScrollByDefault() && currentMode === 'double') {

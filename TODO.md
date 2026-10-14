@@ -206,7 +206,10 @@ kdo maže.
       ho zároveň zabalí, takže se vrací vždy bez slideru
 - [X] na zastavených hodinkách se najetím nic nerozbalí; rozbalí až spuštění, najetí za
       běhu, nebo podržení tlačítka (jediná cesta na dotykové obrazovce)
-- [ ] opravit samootáčecí tlačítko pro přepínání módů prohlížení zpěvníku
+- [X] **přepínač režimů čtečky je pilulka** (14. 10.). Místo jednoho tlačítka, které se
+      po najetí otáčelo jako mince (na dotyku nefungovalo, ikona měnila význam pod rukou,
+      ~150 řádků animační logiky), je svislá pilulka s oběma režimy; aktivní je podložený
+      barvou tématu a podklad mezi nimi sjíždí. Hlídá `test_napovedy.py`.
 
 ## Sdílení a uživatelé
 
@@ -806,3 +809,4 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+pridat watermark na vsechny obrazky, pripadne aspon propagacni text s odkazem na nas web v rohu kazde stazene strany. Potencial pro role - obycejny uzivatel ma vzdy propagacni radek (admin nikdy) a pak mozna nejaky premium ucet bez. Ale neni to priorita, jen navrh na debatu o rolich

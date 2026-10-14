@@ -139,10 +139,10 @@ def main():
                 "() => !document.querySelector('.napoveda-bublina')"),
                 "bublina neexistuje, dokud není potřeba")
 
-            najed(page, "#mode-toggle-button")
+            najed(page, '.rezim[data-rezim="scroll"]')
             stav = page.evaluate(STAV)
             zkontroluj(stav["existuje"] and not stav["skryta"],
-                       "najetí na přepínač módu nápovědu ukáže", str(stav.get("text")))
+                       "najetí na přepínač režimu nápovědu ukáže", str(stav.get("text")))
             zkontroluj(stav.get("nahore") == "BODY",
                        "bublina visí na body, takže ji nic neořízne",
                        str(stav.get("nahore")))
@@ -156,15 +156,28 @@ def main():
             page.wait_for_timeout(300)
             zkontroluj(page.evaluate(STAV)["skryta"], "odjetí myši ji schová")
 
-            print("\n── text, který se mění za běhu ──")
-            pred = page.evaluate(
-                "() => document.getElementById('mode-toggle-button').dataset.napoveda")
-            page.evaluate("() => toggleReadingMode()")
-            page.wait_for_timeout(1200)
-            po = page.evaluate(
-                "() => document.getElementById('mode-toggle-button').dataset.napoveda")
-            zkontroluj(pred != po and bool(po),
-                       "přepnutí módu přepíše i nápovědu tlačítka", f"{pred} → {po}")
+            print("\n── přepínač režimu (pilulka) ──")
+            REZIM = """() => { const j = document.querySelector('.rezimy-jezdec').getBoundingClientRect();
+              const t = [...document.querySelectorAll('.rezim')].map(b => [b.dataset.rezim, b.getAttribute('aria-pressed'),
+                         Math.round(b.getBoundingClientRect().top + b.getBoundingClientRect().height / 2)]);
+              return {rezim: currentMode, stisknute: t.filter(x => x[1] === 'true').map(x => x[0]),
+                      stred_jezdce: Math.round(j.top + j.height / 2), tlacitka: t,
+                      barva: getComputedStyle(document.querySelector('.rezimy-jezdec')).backgroundColor}; }"""
+            pred = page.evaluate(REZIM)
+            page.click('.rezim[data-rezim="scroll"]')
+            page.wait_for_timeout(500)
+            po = page.evaluate(REZIM)
+            stred = dict((t[0], t[2]) for t in po["tlacitka"])
+            zkontroluj(pred["stisknute"] == ["double"] and po["rezim"] == "scroll"
+                       and po["stisknute"] == ["scroll"] and abs(po["stred_jezdce"] - stred["scroll"]) <= 1,
+                       "klik na druhou polovinu přepne režim a podklad sjede pod ni", str((pred, po)))
+            zkontroluj(po["barva"] not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)"),
+                       "podklad má barvu tématu", po["barva"])
+            page.click('.rezim[data-rezim="double"]')
+            page.wait_for_timeout(500)
+            zpet = page.evaluate(REZIM)
+            zkontroluj(zpet["rezim"] == "double" and abs(zpet["stred_jezdce"] - stred["double"]) <= 1,
+                       "a zpátky", str(zpet))
 
             print("\n── past s atributem hidden ──")
             page.evaluate("() => Napoveda.skryj()")
@@ -343,7 +356,7 @@ def main():
             page.wait_for_timeout(800)
             # Na dotyku není najetí, takže se ťuká. U obyčejného tlačítka má klik
             # udělat svou práci a nápovědu nechat být.
-            page.evaluate("() => Napoveda.ukaz(document.getElementById('mode-toggle-button'))")
+            page.evaluate("() => Napoveda.ukaz(document.querySelector('.rezim[data-rezim=double]'))")
             page.wait_for_timeout(200)
             stav = page.evaluate(STAV)
             zkontroluj(not stav["skryta"] and stav["vejde"],
