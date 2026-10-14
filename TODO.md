@@ -767,7 +767,11 @@ kdo maže.
       ale „než to použiješ, zeptej se": prohlížeč pošle podmíněný dotaz a při 304
       nepřenese data. Odpovědi, které si hlavičku nastavily samy (náhledy a strany
       s `immutable`), se nechávají být.
-- [ ] **statické soubory by se daly cachovat natvrdo.** Flask jim posílá `no-cache`,
+- [X] **statické soubory se cachují natvrdo** (14. 10.) — jen adresa s verzí (`?v=` ze
+      `static_bust`) dostane `max-age` na rok a `immutable`; bez verze zůstává `no-cache`,
+      takže ručně napsaná adresa nemůže uvíznout. `test_mobil.py` navíc hlídá, že nikde
+      není `/static/` napsané ručně. Původní zápis:
+- [X] ~~**statické soubory by se daly cachovat natvrdo.**~~ Flask jim posílá `no-cache`,
       takže se na každý skript a obrázek chodí ptát, i když se nezměnil. Přitom je
       všechny bez výjimky adresuje `static_bust` s `?v=<mtime>` (ověřeno, přímá cesta
       `/static/…` není v projektu ani jednou), takže by `SEND_FILE_MAX_AGE_DEFAULT`

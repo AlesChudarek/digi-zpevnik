@@ -147,14 +147,27 @@ def main():
         ikona = urllib.request.urlopen(base + "/favicon.ico", timeout=5)
         zkontroluj(ikona.status == 200 and len(ikona.read()) > 100,
                    "/favicon.ico na kořeni domény vrací ikonu")
-        # Statické soubory posílá Flask sám a `no-cache` na nich měl už předtím;
-        # tahle kontrola hlídá, že jim to `after_request` nepřepsal na něco jiného.
-        # (Že by se daly cachovat natvrdo, když je `static_bust` verzuje adresou,
-        # je samostatný úkol v TODO.)
-        staticky = urllib.request.urlopen(base + "/static/js/napoveda.js", timeout=5)
-        zkontroluj("max-age=31536000" not in (staticky.headers.get("Cache-Control") or ""),
-                   "statickému souboru se hlavička nepřepsala na roční cache",
+        # Statický soubor s verzí v adrese se cachuje natvrdo, bez verze se dál ptá.
+        staticky = urllib.request.urlopen(base + "/static/js/napoveda.js?v=123", timeout=5)
+        zkontroluj("immutable" in (staticky.headers.get("Cache-Control") or ""),
+                   "statický soubor s verzí v adrese má roční cache",
                    str(staticky.headers.get("Cache-Control")))
+        bez_verze = urllib.request.urlopen(base + "/static/js/napoveda.js", timeout=5)
+        zkontroluj("max-age=31536000" not in (bez_verze.headers.get("Cache-Control") or ""),
+                   "bez verze v adrese se cachovat natvrdo nesmí",
+                   str(bez_verze.headers.get("Cache-Control")))
+        # Odkaz na /static/ musí jít přes static_bust, jinak by neměl verzi.
+        import re as _re
+        rucne = []
+        for soubor in list((PROJECT_ROOT / "frontend" / "templates").glob("*.html")) + \
+                list((PROJECT_ROOT / "frontend" / "static").rglob("*.js")) + \
+                list((PROJECT_ROOT / "frontend" / "static").rglob("*.css")):
+            if "vendor" in soubor.parts:
+                continue
+            for i, radek in enumerate(soubor.read_text(encoding="utf-8").splitlines(), 1):
+                if _re.search(r"""["'(]/static/""", radek):
+                    rucne.append(f"{soubor.name}:{i}")
+        zkontroluj(not rucne, "nikde není ručně napsaná adresa /static/ bez verze", str(rucne[:5]))
 
         with sync_playwright() as pw:
             browser = pw.firefox.launch()

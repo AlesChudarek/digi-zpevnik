@@ -641,6 +641,14 @@ def bez_cache_html(odpoved):
     Odpovědi, které si hlavičku nastavily samy (náhledy a strany s `immutable`),
     se nechávají být.
     """
+    # Statický soubor s verzí v adrese (`static_bust`, ?v=<mtime>) se už nikdy
+    # nezmění - nová verze dostane jinou adresu. Prohlížeč se ho tedy nemusí ptát
+    # znovu. Adresa bez verze zůstává na `no-cache` od Flasku, takže ručně napsaná
+    # `/static/...` nemůže uvíznout v cache.
+    if (request.endpoint == 'static' and request.args.get('v')
+            and odpoved.status_code == 200):
+        odpoved.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+        return odpoved
     if 'Cache-Control' in odpoved.headers:
         return odpoved
     if odpoved.mimetype == 'text/html':
