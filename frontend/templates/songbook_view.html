@@ -129,8 +129,8 @@
 
     /* Přepínač režimu čtení: vodorovná pilulka s oběma režimy vedle sebe, pravým
        krajem zarovnaná s ostatními tlačítky. Pod vybraným režimem je plné kolečko
-       v barvě tématu; obě ikony jsou černé s bílým obrysem, takže jsou výrazné na
-       kolečku i na bílé (návrh Aleše 14. 10. - šedá vypadala jako neklikací, bílá ikona
+       v barvě tématu; obě ikony jsou černé s bílým obrysem (soubory *_outline.svg), takže
+       jsou výrazné na kolečku i na bílé (návrh Aleše 14. 10. - šedá vypadala jako neklikací, bílá ikona
        na plné barvě jako vypnutá, barevná ikona málo výrazně).
        Dřív jedno kulaté tlačítko, které se po najetí otáčelo jako mince - na dotyku
        najetí není a ikona měnila význam pod rukou (14. 10.). */
@@ -169,20 +169,17 @@
         background: transparent;
         box-shadow: none;
         cursor: pointer;
-        color: #000;
-        /* Bílý obrys ikony - černá je tak výrazná na kolečku v barvě tématu i na bílé.
-           Na tlačítku, ne na ikoně: ikona je maska a ta by stíny ořízla. */
-        filter: drop-shadow(1.5px 0 0 #fff) drop-shadow(-1.5px 0 0 #fff)
-                drop-shadow(0 1.5px 0 #fff) drop-shadow(0 -1.5px 0 #fff);
     }
     .mode-buttons > .rezimy > .rezim[aria-pressed="true"] { cursor: default; }
-    /* Ikona maskou, ne <img>: obarví se přesně barvou z tématu (currentColor). */
-    .rezim-ikona {
-        width: 30px;
-        height: 30px;
-        background: currentColor;
-        -webkit-mask: var(--ikona) center / contain no-repeat;
-        mask: var(--ikona) center / contain no-repeat;
+    /* Ikony s bílým obrysem (*_outline.svg, od Aleše). Obrys zabírá okraj souboru,
+       takže černá kresba je v něm menší: kniha o 13,6 %, svitek o 11,6 % (změřeno
+       z vykreslení). --meritko ikonu o tolik zvětší, aby kresba měla stejnou velikost
+       jako ikony ostatních tlačítek. */
+    .mode-buttons .rezim-ikona {
+        --zaklad: 30px;
+        width: calc(var(--zaklad) * var(--meritko, 1));
+        height: calc(var(--zaklad) * var(--meritko, 1));
+        margin: 0;
         transition: transform 0.2s;
     }
     .rezim[aria-pressed="false"]:hover .rezim-ikona { transform: scale(1.12); }
@@ -570,7 +567,7 @@
       .zoom-buttons img,
       .mode-buttons img { width: 20px; height: 20px; }
       .mode-buttons > .rezimy { --velikost: 40px; opacity: 0.82; }
-      .rezim-ikona { width: 20px; height: 20px; }
+      .mode-buttons .rezim-ikona { --zaklad: 20px; }
 
       /* Pevných 230px by na telefonu vyjelo za pravý kraj. Panel si vezme, co zbývá
          od tlačítka k druhé straně obrazovky, a nechá tam rezervu na tlačítka módů. */
@@ -779,12 +776,12 @@
     <button type="button" class="rezim" data-rezim="double" aria-pressed="true"
             onclick="prepniRezim('double')" data-napoveda="Dvojstrana jako v knize"
             aria-label="Dvojstrana jako v knize">
-      <span class="rezim-ikona" style="--ikona: url('{{ static_bust('img/icons/open_book.svg') }}')"></span>
+      <img class="rezim-ikona" src="{{ static_bust('img/icons/open_book_outline.svg') }}" alt="" style="--meritko: 1.136">
     </button>
     <button type="button" class="rezim" data-rezim="scroll" aria-pressed="false"
             onclick="prepniRezim('scroll')" data-napoveda="Strany pod sebou"
             aria-label="Strany pod sebou">
-      <span class="rezim-ikona" style="--ikona: url('{{ static_bust('img/icons/scroll.svg') }}')"></span>
+      <img class="rezim-ikona" src="{{ static_bust('img/icons/scroll_outline.svg') }}" alt="" style="--meritko: 1.116">
     </button>
   </div>
   <div class="button-container">

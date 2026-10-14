@@ -162,7 +162,7 @@ def main():
                          Math.round(b.getBoundingClientRect().left + b.getBoundingClientRect().width / 2)]);
               return {rezim: currentMode, stisknute: t.filter(x => x[1] === 'true').map(x => x[0]),
                       stred_jezdce: Math.round(j.left + j.width / 2), tlacitka: t,
-                      barva: getComputedStyle(document.querySelector('.rezimy-jezdec')).backgroundColor, ikona: getComputedStyle(document.querySelector('.rezim[aria-pressed=true]')).color}; }"""
+                      barva: getComputedStyle(document.querySelector('.rezimy-jezdec')).backgroundColor, ikona: document.querySelector('.rezim[aria-pressed=true] img').getAttribute('src')}; }"""
             pred = page.evaluate(REZIM)
             page.click('.rezim[data-rezim="scroll"]')
             page.wait_for_timeout(500)
@@ -172,8 +172,8 @@ def main():
                        and po["stisknute"] == ["scroll"] and abs(po["stred_jezdce"] - stred["scroll"]) <= 1,
                        "klik na druhou polovinu přepne režim a podklad sjede pod ni", str((pred, po)))
             zkontroluj(po["barva"] not in ("rgba(0, 0, 0, 0)", "rgb(255, 255, 255)")
-                       and po["ikona"] == "rgb(0, 0, 0)",
-                       "podklad má barvu tématu a ikona je černá", str((po["barva"], po["ikona"])))
+                       and "_outline.svg" in po["ikona"],
+                       "podklad má barvu tématu a ikona má bílý obrys", str((po["barva"], po["ikona"])))
             page.click('.rezim[data-rezim="double"]')
             page.wait_for_timeout(500)
             zpet = page.evaluate(REZIM)
