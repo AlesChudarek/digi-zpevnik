@@ -779,6 +779,16 @@ kdo maže.
 
 ## Obsah a prezentace
 
+- [ ] **placení a podpora Handicapu** (závěr 14. 10., na později). Aleš nemá IČO a projekt
+      dělá zdarma, takže peníze nesmí chodit přes něj - jen přímo Handicapu (žádné
+      podnikání ani daně). Handicap Zlín má (www.handicap.cz/chci-darovat): transparentní
+      sbírkový účet 2531036001/5500, běžný účet 1400055339/0800, DMS KLIKA (číslo ověřit,
+      87 777 vs 97 777) a projekt na Darujme.cz. Postup, až přijde čas:
+      1. odkaz „Podpořte Handicap“ v aplikaci s QR kódem na transparentní účet;
+      2. prémium jako poděkování: domluvit s Handicapem (chtějí to? dar s protiplněním může
+         zrušit dárci odpočet z daní), QR s variabilním symbolem podle uživatele, admin
+         jedním tlačítkem nastaví roli `premium`; párování časem automaticky.
+      Technicky připravené: role `premium`, vodoznak, vypínač `PAYWALL`.
 - [ ] odkaz a lepší propagace organizace Handicap, případně i fotky — **až úplně poslední
       krok**, po veškeré funkčnosti webu (Aleš 14. 10.). Nenavrhovat dřív.
 
