@@ -55,8 +55,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Stáhnout / Smazat (u cizího společného Odebrat). Dřív pět ikon 3 + 2 - s tiskem by
       jich bylo šest a dlaždice by se dál natahovala. Totéž v Našich zpěvnících (tam bez
       Sdílet a Duplikovat). `test_mobil.py` měří nabídku na 320-1280 px.
-- [ ] na dotyku se dlaždice přetáhnout nedají (HTML5 drag & drop telefon neumí) -
-      až budeme řešit mobil
+- [ ] na dotyku se dlaždice přetáhnout nedají (HTML5 drag & drop telefon neumí).
+      Aleš 20. 10.: chybí i ukazatel, že se dlaždicemi dá hýbat. Od dvou zpěvníků dostane
+      dlaždice vlevo nahoře ikonu přesunu jako písně v editoru (na počítači i telefonu)
+      a táhne se jen za ni.
+- [ ] **v úpravách zpěvníku chybí zavření okna** (Aleš 20. 10.). A obecně: všechna okna,
+      která jde zavřít, mají jít zavřít i klávesou Esc.
 
 ## Datový model
 
@@ -776,6 +780,9 @@ kdo maže.
       - v nabídce i položka **Účet** (okno): změna e-mailu, poslat ověřovací e-mail znovu,
         změna hesla, fotky a přezdívky, zrušení účtu. Dnes je úprava fotky a přezdívky
         na stránce /profil, ale vede na ni jen položka „Změnit heslo“ - tak ji nikdo nenajde.
+- [ ] **správa uživatelů pro admina** (Aleš 20. 10.): stránka se seznamem uživatelů, kde
+      admin může cokoli - odhlásit je z rodin, smazat účet, změnit obrázek atd. Hlavně
+      přehled, jaké mají zpěvníky, a možnost se v nich přehledně dívat a upravovat je.
 
 ## Obsah a prezentace
 
