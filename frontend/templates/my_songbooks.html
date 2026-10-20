@@ -49,11 +49,9 @@
     position: relative;
     z-index: 1;
   }
-  .songbook-card:hover { transform: scale(1.05); }
-  .songbook-card:hover,
-  .songbook-card:focus-within {
-    z-index: 20;
-  }
+  .songbook-card:focus-within { z-index: 20; }
+  /* Jen s myší: na dotyku by se zvětšení po ťuknutí přilepilo. */
+  @media (hover: hover) { .songbook-card:hover { transform: scale(1.05); z-index: 20; } }
 
   .cover-preview > img { width: 100%; height: auto; }
   /* Název na bílé kartě je text, ne akcent - proto `--brand-dark`. `--brand-strong`
@@ -121,13 +119,15 @@
   .napoveda-bublina .owner-tag { font-weight: 400; opacity: 0.7; margin-left: 4px; }
   
   /* Pruh s místem, které zpěvník zabírá z limitu účtu */
-  .misto-zpevniku { height: 4px; margin: 0 14px 12px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
+  /* Na ťuknutí reaguje celý spodní okraj dlaždice, ne jen 4 px pruhu - ten prst netrefí. */
+  .misto-zpevniku { padding: 8px 14px 12px; cursor: help; }
+  .misto-pruh { height: 4px; border-radius: 2px; background: var(--muted-bg, #e8f5e9); overflow: hidden; }
   /* Světlý pruh = obsazené místo celkem (u všech dlaždic stejný), tmavý = podíl tohoto
      zpěvníku, šedá = volné. Dřív byl jen podíl zpěvníku a dva zpěvníky po 50 % vypadaly,
      jako by se do každého vešlo ještě jednou tolik. */
-  .misto-zpevniku { position: relative; }
-  .misto-zpevniku span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; background: var(--brand-strong, #2E7D32); }
-  .misto-zpevniku span.celkem { opacity: 0.35; }
+  .misto-pruh { position: relative; }
+  .misto-pruh span { position: absolute; left: 0; top: 0; height: 100%; border-radius: 2px; background: var(--brand-strong, #2E7D32); }
+  .misto-pruh span.celkem { opacity: 0.35; }
 
   /* Pozvánky ke sdílení nad dlaždicemi */
   .pozvanky { max-width: 900px; margin: 0 auto 16px; display: flex; flex-direction: column; gap: 8px; padding: 0 12px; }
@@ -153,7 +153,9 @@
   /* Řádek s názvem: název (odkaz do čtečky) a vedle něj šipka s nabídkou akcí. */
   /* Název i šipka uprostřed jako jeden celek; dlouhý název se zkrátí výpustkou
      a šipka zůstane hned za ním. */
-  .songbook-radek { display: flex; align-items: center; justify-content: center; gap: 2px; margin: 8px 8px; }
+  /* Padding, ne margin: na dotyku otevírá nabídku celý řádek a šipku prst netrefí.
+     Spodních 8 px dává pruh místa pod ním - ten je jeho plochou pro ťuknutí. */
+  .songbook-radek { display: flex; align-items: center; justify-content: center; gap: 2px; padding: 8px 8px 0; }
   .songbook-nazev {
     flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     color: var(--brand-dark, #1b5e20); text-decoration: none; text-align: left;
@@ -164,7 +166,8 @@
     background: none; color: var(--brand-dark, #1b5e20); border: none; border-radius: 50%;
     padding: 0; font: inherit; font-size: 16px; line-height: 1; cursor: pointer;
   }
-  .akce-spoustec:hover, .akce-spoustec[aria-expanded="true"] { background: var(--muted-bg, #e8f5e9); }
+  .akce-spoustec[aria-expanded="true"] { background: var(--muted-bg, #e8f5e9); }
+  @media (hover: hover) { .akce-spoustec:hover { background: var(--muted-bg, #e8f5e9); } }
   .akce-sipka { transition: transform 0.15s; }
   .akce-spoustec[aria-expanded="true"] .akce-sipka { transform: rotate(180deg); }
   .akce-nabidka {
@@ -179,7 +182,8 @@
     font: inherit; font-size: 14px; font-weight: 600; text-align: left;
     color: var(--brand-dark, #1b5e20); cursor: pointer;
   }
-  .akce-polozka:hover, .akce-polozka:focus-visible { background: var(--muted-bg, #e8f5e9); outline: none; }
+  .akce-polozka:focus-visible { background: var(--muted-bg, #e8f5e9); outline: none; }
+  @media (hover: hover) { .akce-polozka:hover { background: var(--muted-bg, #e8f5e9); outline: none; } }
   .akce-polozka img { width: 18px; height: 18px; flex: none; }
   .akce-polozka.akce-nevratna { color: #b42318; }
   /* Otevřená nabídka musí ležet i přes dlaždice o řádek níž. */
@@ -202,7 +206,7 @@
   /* Themed plus icon via CSS mask colored by brand-strong */
   .add-card .plus-icon { width: 72px; height: 72px; background: var(--brand-strong, #2E7D32); }
   .add-card .plus-icon { -webkit-mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; mask: url('{{ static_bust('img/icons/plus_circle.svg') }}') no-repeat center / contain; }
-  .add-card:hover .cover { background: #eaeaea; }
+  @media (hover: hover) { .add-card:hover .cover { background: #eaeaea; } }
 
 </style>
 
@@ -378,7 +382,7 @@
           {% endif %}
           {% set share_users = shared_users_map.get(book.id, []) if shared_users_map is defined else [] %}
           {% if share_users %}
-            <span class="shared-indicator napoveda-kotva" tabindex="0">
+            <span class="shared-indicator napoveda-kotva napoveda-tuk" tabindex="0">
               <img src="{{ static_bust('img/icons/group.svg') }}" alt="Sdíleno s dalšími uživateli">
               <div class="napoveda-obsah" hidden>
                 <strong>Společné úpravy:</strong>
@@ -432,10 +436,12 @@
         {% set misto_z = misto_zpevniku(book) %}
         {% if misto_z %}
           {# Kolik místa zpěvník zabírá: pruh, ne megabajty - ty lidem nic neřeknou. #}
-          <div class="misto-zpevniku" role="img" aria-label="Zabírá {{ misto_z.text }} limitu místa"
+          <div class="misto-zpevniku napoveda-tuk" role="img" aria-label="Zabírá {{ misto_z.text }} limitu místa"
                data-napoveda="Tento zpěvník zabírá {{ misto_z.text }} limitu místa ({{ mb(misto_z.bajtu) }}), všechny zpěvníky dohromady {{ misto_z.celkem_text }} ({{ mb(misto_z.celkem_bajtu) }} z {{ mb(misto_z.limit) }}).{% if share_users %} Společný zpěvník se započítává každému, kdo ho má.{% endif %}">
-            <span class="celkem" style="width: {{ '%.1f'|format(misto_z.celkem_sirka) }}%"></span>
-            <span class="tento" style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
+            <div class="misto-pruh">
+              <span class="celkem" style="width: {{ '%.1f'|format(misto_z.celkem_sirka) }}%"></span>
+              <span class="tento" style="width: {{ '%.1f'|format(misto_z.sirka) }}%"></span>
+            </div>
           </div>
         {% endif %}
     </div>
@@ -484,13 +490,13 @@
     box-sizing: border-box;
     position: relative;
   }
-  .dropzone:hover { background: #f1f1f1; border-color: #a8a8a8; }
+  @media (hover: hover) { .dropzone:hover { background: #f1f1f1; border-color: #a8a8a8; } }
   .dropzone.filled { background: var(--muted-bg, #e8f5e9); border-color: var(--muted-border, #dbeadf); color: var(--brand-dark, #1b5e20); }
   .field-file input[type="file"] { display: none; }
   .dz-clear { position: absolute; right: -34px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; display: none; align-items: center; justify-content: center; background: transparent; border: none; padding: 0; cursor: pointer; z-index: 25000; }
   .dz-clear.outside { right: auto; left: 100%; margin-left: 8px; }
   .dz-clear img { width: 22px; height: 22px; opacity: 0.85; pointer-events: none; }
-  .dz-clear:hover img { opacity: 1; }
+  @media (hover: hover) { .dz-clear:hover img { opacity: 1; } }
   .dropzone.filled .dz-clear { display: inline-flex; }
   .dz-label {
     font-size: 13px;
@@ -561,7 +567,7 @@
   .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
   /* Hlavní tlačítko jako v oknech (css/okna.css): plné v barvě motivu, bílý text. */
   .btn.primary { background: var(--brand-dark, #1b5e20); border-color: var(--brand-dark, #1b5e20); color: #fff; }
-  .btn.primary:hover { filter: brightness(1.25); }
+  @media (hover: hover) { .btn.primary:hover { filter: brightness(1.25); } }
   .btn[disabled] { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
   .btn-spinner { width: 20px; height: 20px; border-radius: 50%; border: 3px solid rgba(27,94,32,0.25); border-top-color: var(--brand-strong, #2E7D32); animation: btn-spin 0.8s linear infinite; display: inline-block; visibility: hidden; opacity: 0; transition: opacity 0.2s ease; flex-shrink: 0; }
   .btn-spinner.active { visibility: visible; opacity: 1; }
@@ -574,7 +580,7 @@
   .section-title { margin: 18px 0 8px; font-size: 16px; color: var(--brand-dark, #1b5e20); }
   /* Hide bottom actions in create/edit modal; closing is via click outside */
   #new-book-modal .modal .modal-actions { display: none; }
-  .btn:hover { filter: brightness(0.98); }
+  @media (hover: hover) { .btn:hover { filter: brightness(0.98); } }
 </style>
 
 <div id="new-book-modal">
@@ -1640,6 +1646,18 @@ function openCreateModal() {
         }
       });
       nabidka.addEventListener('click', (e) => { if (e.target.closest('.akce-polozka')) zavriNabidky(); });
+    });
+    // Na dotyku otevře nabídku ťuknutí kamkoli do řádku s názvem, i na název samotný -
+    // šipka je na prst malá. Myší vede název dál do čtečky.
+    let prst = false;
+    document.addEventListener('pointerdown', (e) => { prst = e.pointerType !== 'mouse'; }, true);
+    document.querySelectorAll('.songbook-radek').forEach(radek => {
+      radek.addEventListener('click', (e) => {
+        if (!prst || e.target.closest('.songbook-akce')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        radek.querySelector('.akce-spoustec').click();
+      });
     });
     document.addEventListener('click', (e) => { if (!e.target.closest('.songbook-akce')) zavriNabidky(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') zavriNabidky(); });

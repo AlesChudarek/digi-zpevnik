@@ -130,7 +130,8 @@
    Uvnitř bloku se nevkládá - tam jsou strany spojené. */
 .es-mezera { display: flex; justify-content: center; height: 14px; align-items: center; }
 .es-vlozit { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--muted-border, #dbeadf); background: #fff; color: var(--brand-dark, #1b5e20); cursor: pointer; font-size: 14px; line-height: 1; padding: 0; opacity: 0; transition: opacity 0.12s; }
-.es-seznam:hover .es-vlozit, .es-vlozit:focus { opacity: 1; }
+.es-vlozit:focus { opacity: 1; }
+@media (hover: hover) { .es-seznam:hover .es-vlozit { opacity: 1; } }
 @media (hover: none) { .es-vlozit { opacity: 1; } }
 
 /* Přidávání: vždycky viditelné pod seznamem. */

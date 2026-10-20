@@ -6,6 +6,14 @@
 
    Text se čte až v okamžiku zobrazení, takže na změnu nápovědy stačí přepsat atribut.
 
+   Na dotykové obrazovce se nápověda na ťuknutí neukazuje — tlačítko dělá svou práci.
+   Výjimky se označí třídou:
+     napoveda-tuk     prvek nic jiného nedělá a nápověda je jediný zdroj informace
+                      (ikona sdílení, varování „!“) — ťuknutí ji přepíná;
+     napoveda-duvod   vysvětluje, proč něco nejde — ťuknutí ji na chvíli ukáže.
+   Zakázané tlačítko uvnitř `napoveda-duvod` klik nedostane vůbec, proto mu
+   napoveda.css bere pointer-events a ťuknutí dopadne na obal.
+
    Nápověda, která je celá HTML (seznam, tučný nadpis), se do atributu nevejde.
    Napíše se dovnitř kotvy a ta se označí:
      <span class="napoveda-kotva" tabindex="0">
@@ -24,6 +32,9 @@
   var bublina = null;
   var kotva = null;        // prvek, jehož nápověda je zrovna vidět
   var casovac = null;
+  // Poslední ukazatel byl prst nebo pero. Po ťuknutí prohlížeč pošle i napodobené
+  // mouseover a focusin; bez tohohle se nápověda otevřela a zůstala viset.
+  var dotyk = false;
 
   function priprav() {
     if (bublina) return bublina;
@@ -110,9 +121,18 @@
       ? cil.closest('[data-napoveda], .napoveda-kotva') : null;
   }
 
+  document.addEventListener('pointerdown', function (e) {
+    dotyk = e.pointerType !== 'mouse';
+  }, true);
+  document.addEventListener('pointermove', function (e) {
+    if (e.pointerType === 'mouse') dotyk = false;
+  }, true);
+  document.addEventListener('keydown', function () { dotyk = false; }, true);
+
   // Na najetí i na zaměření klávesnicí. Na dotykové obrazovce najetí neexistuje,
   // takže ⓘ musí jít i ťuknout — a druhé ťuknutí ji zase schová.
   document.addEventListener('mouseover', function (e) {
+    if (dotyk) return;
     var k = najdiKotvu(e.target);
     if (!k || k === kotva) return;
     ukaz(k);
@@ -121,12 +141,15 @@
   // (dynamický text předaný přes Napoveda.ukaz) žádný atribut nemá a jinak by se
   // neměla jak zavřít.
   document.addEventListener('mouseout', function (e) {
+    // Firefox po ťuknutí střídá mouseout a mouseover pořád dokola.
+    if (dotyk) return;
     if (!kotva || !kotva.contains(e.target)) return;
     if (e.relatedTarget && (kotva.contains(e.relatedTarget) ||
         (bublina && bublina.contains(e.relatedTarget)))) return;
     skryjSOdkladem();
   });
   document.addEventListener('focusin', function (e) {
+    if (dotyk) return;
     var k = najdiKotvu(e.target);
     if (k) ukaz(k); else skryj();
   });
@@ -139,9 +162,27 @@
       if (k === kotva) skryj(); else ukaz(k);
       return;
     }
+    // Myší je nápověda vidět už od najetí a klik ji nesmí shodit. Ikona sdílení sedí
+    // uvnitř odkazu na zpěvník - ťuknutí na ni nemá zpěvník otevřít.
+    if (k && k.classList.contains('napoveda-tuk')) {
+      e.preventDefault();
+      if (k !== kotva) ukaz(k); else if (dotyk) skryj();
+      return;
+    }
+    if (dotyk && k && k.classList.contains('napoveda-duvod')) return;
     // Klik uvnitř právě otevřené nápovědy si obsloužil ten, kdo ji otevřel.
     if (kotva && kotva.contains(e.target)) return;
     skryj();
+  });
+  // Důvod, proč něco nejde, až na zvednutí prstu: ťuknutí na zakázané tlačítko
+  // Firefox nepošle jako click ani obalu. Při rolování prstem přijde pointercancel.
+  document.addEventListener('pointerup', function (e) {
+    if (e.pointerType === 'mouse') return;
+    var k = najdiKotvu(e.target);
+    if (!k || !k.classList.contains('napoveda-duvod')) return;
+    if (k === kotva) { skryj(); return; }
+    ukaz(k);
+    casovac = setTimeout(skryj, 3000);
   });
   // Escape nad otevřenou nápovědou patří jí a nikomu dalšímu: pod nápovědou bývá
   // okno, které by se na tomtéž Escapu zavřelo zároveň s ní.

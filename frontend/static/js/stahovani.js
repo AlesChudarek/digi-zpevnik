@@ -359,6 +359,7 @@ window.Stahovani = (function () {
     const radek = okno.zaclona.querySelector(`[data-pole="${pole}"]`);
     if (!radek) return;
     radek.classList.toggle('zamcene', !!duvod);
+    radek.classList.toggle('napoveda-duvod', !!duvod);
     if (duvod) radek.dataset.napoveda = duvod; else delete radek.dataset.napoveda;
     radek.querySelectorAll('input, select').forEach(prvek => {
       prvek.disabled = !!duvod;

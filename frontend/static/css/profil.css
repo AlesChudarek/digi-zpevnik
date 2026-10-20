@@ -34,12 +34,12 @@
   background: var(--brand, #38843B); color: #fff; border: 0; border-radius: 6px;
   padding: 11px 18px; font-size: 15px; cursor: pointer;
 }
-.karta button:hover { filter: brightness(0.92); }
+@media (hover: hover) { .karta button:hover { filter: brightness(0.92); } }
 .odhlasit {
   display: inline-block; color: #b3261e; text-decoration: none; font-size: 15px;
   font-weight: 600;
 }
-.odhlasit:hover { text-decoration: underline; }
+@media (hover: hover) { .odhlasit:hover { text-decoration: underline; } }
 
 /* Profil: fotka a přezdívka (_profil_udaje.html) */
 .profil-fotka { display: flex; align-items: center; gap: 18px; margin: 4px 0 16px; }
@@ -49,7 +49,7 @@
   display: inline-block; background: #eef0f2; color: #222; border: 0; border-radius: 6px;
   padding: 9px 14px; font-size: 14px; cursor: pointer;
 }
-.karta .vedlejsi:hover { filter: brightness(0.95); }
+@media (hover: hover) { .karta .vedlejsi:hover { filter: brightness(0.95); } }
 .karta .vedlejsi[hidden] { display: none; }
 .karta label.pole { display: block; font-size: 14px; color: #666; margin-bottom: 6px; }
 .karta input[type="text"] {

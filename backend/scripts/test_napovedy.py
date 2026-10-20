@@ -48,8 +48,9 @@ def start_server(db_copy):
          'from backend.app import app, db, User\n'
          'from werkzeug.security import generate_password_hash\n'
          'with app.app_context():\n'
-         '    u = User.query.filter_by(email="admin@test.com").first()\n'
-         f'    u.password = generate_password_hash("{PASSWORD}", method="pbkdf2:sha256")\n'
+         '    for e in ("admin@test.com", "user@test.com"):\n'
+         '        u = User.query.filter_by(email=e).first()\n'
+         f'        u.password = generate_password_hash("{PASSWORD}", method="pbkdf2:sha256")\n'
          '    db.session.commit()\n'],
         env=env, check=True, capture_output=True)
     proc = subprocess.Popen(
@@ -364,6 +365,105 @@ def main():
                        "na úzké obrazovce se bublina vejde celá", str(stav["ram"]))
             zkontroluj(stav["ram"][2] <= 390 - 16,
                        "a drží se uvnitř okraje", f"{stav['ram'][2]} px")
+
+            print("\n── dotyk: nápověda jen tam, kde nic jiného není ──")
+            # Ťuknutí posílá i napodobené mouseover a focusin. Dokud na ně nápověda
+            # reagovala, otevřela se po každém ťuknutí a zůstala viset (třeba přes motivy).
+            dctx = browser.new_context(viewport={"width": 820, "height": 1180}, has_touch=True)
+            dp = dctx.new_page()
+            # Bublina vzniká až s první nápovědou - dokud žádná nebyla, je „schovaná“.
+            skryta = lambda: dp.evaluate(STAV).get("skryta", True)
+            dp.on("pageerror", lambda e: chyby.append(str(e)))
+            dp.goto(base + "/login")
+            # Běžný uživatel: adminovi se místo nepočítá, takže by neměl pruh místa.
+            dp.fill('input[name="email"]', "user@test.com")
+            dp.fill('input[name="password"]', PASSWORD)
+            dp.click('button[type="submit"], input[type="submit"]')
+            dp.wait_for_load_state("networkidle")
+            dp.goto(base + f"/songbook/{BOOK}")
+            dp.wait_for_load_state("networkidle")
+            dp.wait_for_timeout(800)
+            visi = []
+            for sel in ('#nav-controls button[data-napoveda="Další"]', '.rezim[data-rezim=double]',
+                        '#theme-picker-btn'):
+                if not dp.locator(sel).is_visible():
+                    continue  # na šířce tabletu je téma schované v nabídce ☰
+                dp.tap(sel)
+                dp.wait_for_timeout(500)
+                if not skryta():
+                    visi.append(sel)
+                dp.keyboard.press("Escape")
+                dp.tap("body", position={"x": 400, "y": 1100})
+            zkontroluj(not visi, "ťuknutí na tlačítko nápovědu neotevře", ", ".join(visi))
+
+            dp.goto(base + "/my-songbooks")
+            dp.wait_for_load_state("networkidle")
+            dp.wait_for_timeout(600)
+            adresa = dp.url
+            zkontroluj(dp.locator(".shared-indicator").count() > 0,
+                       "je co změřit - sdílený zpěvník na dotyku")
+            if dp.locator(".shared-indicator").count():
+                dp.tap(".shared-indicator")
+                dp.wait_for_timeout(300)
+                stav = dp.evaluate(STAV)
+                zkontroluj(not stav["skryta"] and "Společné úpravy" in stav["text"],
+                           "ťuknutí na ikonu sdílení vypíše, s kým", stav["text"][:40])
+                dp.tap(".shared-indicator")
+                dp.wait_for_timeout(300)
+                zkontroluj(skryta(), "druhé ťuknutí ji zase schová")
+            misto = dp.evaluate("""() => {
+              const m = document.querySelector('.misto-zpevniku');
+              if (!m) return null;
+              const r = m.getBoundingClientRect(), p = m.querySelector('.misto-pruh').getBoundingClientRect();
+              const n = m.closest('.songbook-card').querySelector('.songbook-nazev').getBoundingClientRect();
+              const stred = document.elementFromPoint(n.left + n.width / 2, n.top + n.height / 2);
+              return {x: r.left + 4, y: r.top + 3, vyska: Math.round(r.height), pruh: Math.round(p.height),
+                      nazevVolny: !!(stred && stred.closest('.songbook-nazev')),
+                      dole: Math.round(m.closest('.songbook-card').getBoundingClientRect().bottom - r.bottom)};
+            }""")
+            zkontroluj(misto is not None, "je co změřit - dlaždice s pruhem místa")
+            if misto:
+                zkontroluj(misto["pruh"] == 4 and misto["vyska"] >= 20,
+                           "pruh má dál 4 px, ale plocha na ťuknutí aspoň 20 px",
+                           f"pruh {misto['pruh']} px, plocha {misto['vyska']} px")
+                zkontroluj(misto["nazevVolny"] and misto["dole"] <= 1,
+                           "plocha sahá ke spodnímu okraji dlaždice a nepřekrývá název",
+                           f"zbývá dole {misto['dole']} px")
+                dp.touchscreen.tap(misto["x"], misto["y"])
+                dp.wait_for_timeout(300)
+                stav = dp.evaluate(STAV)
+                zkontroluj(not stav["skryta"] and "zabírá" in stav["text"],
+                           "ťuknutí na okraj s pruhem vypíše místo", stav["text"][:40])
+                # Jinam = na prázdnou plochu, ne na další dlaždici (ta by otevřela čtečku).
+                volno = dp.evaluate("""() => {
+                  for (let y = innerHeight - 10; y > 0; y -= 20) for (let x = 5; x < innerWidth; x += 40) {
+                    const e = document.elementFromPoint(x, y);
+                    if (e && (e === document.body || e.classList.contains('grid-container'))) return [x, y];
+                  }
+                  return null;
+                }""")
+                dp.touchscreen.tap(*volno)
+                dp.wait_for_timeout(300)
+                zkontroluj(skryta() and dp.url == adresa, "ťuknutí jinam ji schová", str(volno))
+            # Šipka ▾ je na prst malá: na dotyku otevře nabídku celý řádek s názvem.
+            dp.locator(".songbook-card .songbook-nazev").first.tap()
+            dp.wait_for_timeout(300)
+            zkontroluj(dp.url == adresa and dp.locator(".akce-nabidka:not([hidden])").count() == 1,
+                       "ťuknutí na název otevře nabídku ▾, ne čtečku", dp.url)
+            dp.goto(base + "/search?q=a")
+            dp.wait_for_load_state("networkidle")
+            duvod = '.napoveda-duvod[data-napoveda="Nelze odstranit z veřejného zpěvníku"]'
+            if dp.locator(duvod).count():
+                dp.locator(duvod).first.tap()
+                dp.wait_for_timeout(300)
+                stav = dp.evaluate(STAV)
+                zkontroluj(not stav["skryta"] and "Nelze odstranit" in stav["text"],
+                           "ťuknutí na zakázané tlačítko řekne proč", stav["text"][:40])
+                dp.wait_for_timeout(3200)
+                zkontroluj(skryta(), "a důvod po chvíli sám zmizí")
+            else:
+                zkontroluj(False, "je co změřit - řádek z veřejného zpěvníku v hledání")
+            dctx.close()
 
             print("\n── chyby v konzoli ──")
             zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))

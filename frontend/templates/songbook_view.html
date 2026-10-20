@@ -32,7 +32,7 @@
   .sb-picker-panel h3 { margin: 0 0 8px; color: var(--brand-dark, #1b5e20); font-size: 18px; }
   .sb-picker-list { max-height: 50vh; overflow: auto; margin: 6px 0 10px; }
   .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
-  .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
+  @media (hover: hover) { .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); } }
   .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
   .sb-picker-create .plus { width: 22px; height: 22px; filter: invert(28%) sepia(80%) saturate(1200%) hue-rotate(88deg) brightness(92%) contrast(95%); }
   .sb-picker-actions { display: flex; justify-content: flex-end; gap: 10px; }
@@ -182,12 +182,11 @@
         margin: 0;
         transition: transform 0.2s;
     }
-    .rezim[aria-pressed="false"]:hover .rezim-ikona { transform: scale(1.12); }
+    @media (hover: hover) { .rezim[aria-pressed="false"]:hover .rezim-ikona { transform: scale(1.12); } }
 
-    .nav-buttons button:hover,
-    .mode-buttons > .button-container > button:not(.rezim):hover {
+    @media (hover: hover) { .nav-buttons button:hover, .mode-buttons > .button-container > button:not(.rezim):hover {
         transform: scale(1.1);
-    }
+    } }
 
     .nav-buttons img,
     .mode-buttons img {
@@ -258,9 +257,9 @@
       pointer-events: none;
     }
 
-    .add-to-songbook-button:hover {
+    @media (hover: hover) { .add-to-songbook-button:hover {
       transform: scale(1.1);
-    }
+    } }
 
     .add-to-songbook-button.disabled {
       opacity: 0.4;
@@ -281,9 +280,9 @@
       pointer-events: none;
     }
 
-    .remove-from-songbook-button:hover {
+    @media (hover: hover) { .remove-from-songbook-button:hover {
       transform: scale(1.1);
-    }
+    } }
 
     #toc-modal-wrapper {
       position: absolute;
@@ -341,7 +340,7 @@
       cursor: pointer;
       z-index: 1;
     }
-    .toc-close:hover { filter: brightness(0.95); }
+    @media (hover: hover) { .toc-close:hover { filter: brightness(0.95); } }
 
     /* On a phone the contents box was sized for a desktop window: it started 90px
        down with 30px padding, so its heading ended up out of reach above the screen
@@ -362,9 +361,9 @@
         cursor: pointer;
     }
 
-    #toc-modal tr:hover {
+    @media (hover: hover) { #toc-modal tr:hover {
         background: #f5f5f5;
-    }
+    } }
 </style>
 
 
@@ -398,9 +397,9 @@
     z-index: 1000;
   }
 
-  .zoom-buttons button:hover {
+  @media (hover: hover) { .zoom-buttons button:hover {
     transform: scale(1.1);
-  }
+  } }
 
   /* --- Automatické sjíždění --------------------------------------------------
      Kolečko je v klidu černobílé jako ostatní. Značková barva se objeví, teprve když

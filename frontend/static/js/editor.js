@@ -551,6 +551,7 @@
       autor.setAttribute('list', 'es-autori');
       if (p.zamcena) {
         nazev.readOnly = autor.readOnly = true;
+        radek.classList.add('napoveda-duvod');
         radek.setAttribute('data-napoveda', 'Píseň je i v jiném zpěvníku, název a autor se tady měnit nedají.');
       }
       radek.appendChild(nazev);

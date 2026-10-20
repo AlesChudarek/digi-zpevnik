@@ -37,7 +37,7 @@
   line-height: 1.2;
   cursor: pointer;
 }
-.okno .btn:hover { background: var(--panel-btn-hover, #e2e2e2); }
+@media (hover: hover) { .okno .btn:hover { background: var(--panel-btn-hover, #e2e2e2); } }
 /* --brand-dark, ne --brand-strong: je tmavý ve všech motivech, bílý text na něm drží. */
 .okno .btn.primary {
   background: var(--brand-dark, #1b5e20);
@@ -46,9 +46,9 @@
   padding: 10px 20px;
   font-size: 15px;
 }
-.okno .btn.primary:hover { background: var(--brand-dark, #1b5e20); filter: brightness(1.25); }
+@media (hover: hover) { .okno .btn.primary:hover { background: var(--brand-dark, #1b5e20); filter: brightness(1.25); } }
 .okno .btn.nebezpecne { background: #b3261e; color: #fff; font-weight: 600; padding: 10px 20px; font-size: 15px; }
-.okno .btn.nebezpecne:hover { background: #b3261e; filter: brightness(1.15); }
+@media (hover: hover) { .okno .btn.nebezpecne:hover { background: #b3261e; filter: brightness(1.15); } }
 /* Napůl nevratná akce (Odebrat a ponechat kopii): stejná barva jako nevratná, ale bez
    výplně - je to něco mezi Zrušit a Odebrat. */
 .okno .btn.mekke-nebezpecne {
@@ -56,7 +56,7 @@
   box-shadow: inset 0 0 0 2px var(--panel-error, #b3261e);
   font-weight: 600; padding: 10px 20px; font-size: 15px;
 }
-.okno .btn.mekke-nebezpecne:hover { background: var(--panel-btn-bg, #f0f0f0); }
+@media (hover: hover) { .okno .btn.mekke-nebezpecne:hover { background: var(--panel-btn-bg, #f0f0f0); } }
 .okno .btn:disabled { opacity: 0.5; cursor: default; filter: none; }
 /* Tři a víc voleb pod sebou na celou šířku: vedle sebe se zalamovaly podle délky
    textu a zarovnání vypadalo náhodně. */
@@ -82,11 +82,14 @@
 /* V tmavém motivu je --brand-dark skoro stejně tmavý jako panel (15,23,42 na 22,28,43)
    a hlavní tlačítko s oknem splývalo - text čitelný, tlačítko neviditelné. Tam je proto
    světlé s tmavým textem. */
-html.theme-dark .okno .btn.primary,
-html.theme-dark .okno .btn.primary:hover {
+html.theme-dark .okno .btn.primary {
   background: var(--panel-text, #e6eaf2);
   color: var(--panel-bg, #161c2b);
 }
+@media (hover: hover) { html.theme-dark .okno .btn.primary:hover {
+  background: var(--panel-text, #e6eaf2);
+  color: var(--panel-bg, #161c2b);
+} }
 
 /* Zaclona pro oznam() z dashboard_base - nad vším, stejně jako potvrzení. */
 .oznameni-zaclona {

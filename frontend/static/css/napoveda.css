@@ -12,10 +12,23 @@
   font: 600 10px/15px Georgia, serif; cursor: help; vertical-align: text-top;
   flex: none;
 }
-.napoveda-znak:hover,
 .napoveda-znak[aria-expanded="true"] {
   background: var(--brand-dark, #2f7d4f); color: #fff;
 }
+
+@media (hover: hover) {
+  .napoveda-znak:hover { background: var(--brand-dark, #2f7d4f); color: #fff; }
+}
+/* Prst ⓘ o velikosti 15 px netrefí; plocha pro ťuknutí se zvětší, znak ne. */
+@media (pointer: coarse) {
+  .napoveda-znak { position: relative; }
+  .napoveda-znak::after { content: ""; position: absolute; inset: -10px; }
+}
+
+/* Zakázané tlačítko klik nedostane a dál ho nepustí, takže by ťuknutí na ně nic
+   nevysvětlilo - takhle dopadne na obal s nápovědou. */
+.napoveda-duvod [disabled] { pointer-events: none; }
+.napoveda-duvod:has([disabled]) { cursor: not-allowed; }
 
 /* Jediná bublina na stránku, plovoucí a přilepená na <body>.
    Plovoucí proto, že bublina v toku roztahovala okno pokaždé, když si ji někdo

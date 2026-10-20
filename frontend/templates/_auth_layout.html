@@ -33,13 +33,13 @@
       background: var(--brand); color: var(--brand-contrast); border: 0; border-radius: 4px;
       font-size: 15px; cursor: pointer; text-align: center; text-decoration: none;
     }
-    button:hover, .odkaz-tlacitko:hover { background: var(--brand-strong); }
+    @media (hover: hover) { button:hover, .odkaz-tlacitko:hover { background: var(--brand-strong); } }
     .flash { padding: 10px; border-radius: 4px; margin-bottom: 14px; font-size: 14px; }
     .flash.error { background: #f8d7da; color: #721c24; }
     .flash.success { background: #d4edda; color: #155724; }
     .pod { margin-top: 16px; text-align: center; font-size: 14px; }
     .pod a { color: var(--brand-strong); text-decoration: none; }
-    .pod a:hover { text-decoration: underline; }
+    @media (hover: hover) { .pod a:hover { text-decoration: underline; } }
   </style>
 </head>
 <body>

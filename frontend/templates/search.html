@@ -72,7 +72,7 @@
   }
   body.navbar-hidden thead th { top: -1px; }
   tbody td { padding: 12px 16px; border-top: 1px solid var(--muted-border, #e2e8f0); cursor: pointer; color: var(--muted-text, #1b5e20); }
-  tbody tr:hover { background-color: var(--muted-bg, #e8f5e9); }
+  @media (hover: hover) { tbody tr:hover { background-color: var(--muted-bg, #e8f5e9); } }
   th.th-sortable { cursor: pointer; user-select: none; }
   th.th-sortable .hdr { display: inline-flex; align-items: center; gap: 6px; }
   th.th-sortable .sort-indicator { font-size: 12px; opacity: 0.35; min-width: 12px; display: inline-block; }
@@ -172,7 +172,7 @@
   /* Přebije `inline-block` ze sdílené `.s-napovedou`: tady musí obal držet celou šířku. */
   .sb-picker-option.s-napovedou { display: block; }
   .sb-picker-item { width: 100%; text-align: left; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 6px 0; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); background: #ffffff; color: var(--brand-dark, #1b5e20); cursor: pointer; }
-  .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); }
+  @media (hover: hover) { .sb-picker-item:hover { background: var(--muted-bg, #e8f5e9); } }
   .sb-picker-create { border-color: var(--muted-border, #a7d7b0); background: var(--muted-bg, #e8f5e9); }
   .sb-picker-create .plus { width: 22px; height: 22px; filter: invert(28%) sepia(80%) saturate(1200%) hue-rotate(88deg) brightness(92%) contrast(95%); }
   .sb-picker-actions { display: flex; justify-content: flex-end; gap: 10px; }
@@ -212,7 +212,7 @@
       {% if guest %}
         {# Host k soukromým zpěvníkům přístup nemá, takže filtr nejen nezaškrtnutý,
            ale ani přepínatelný - jinak by klikal na něco, co nikdy nic neukáže. #}
-        <label class="s-napovedou" data-napoveda="Pouze pro přihlášené uživatele"
+        <label class="s-napovedou napoveda-duvod" data-napoveda="Pouze pro přihlášené uživatele"
                style="opacity:.55;cursor:not-allowed;">
           <input type="checkbox" id="t-private" disabled> Soukromé
         </label>
@@ -254,7 +254,7 @@
             </td>
             <td class="center">{{ r.page_number }}</td>
             <td class="icon-cell">
-              <span class="s-napovedou" data-napoveda="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
+              <span class="s-napovedou{% if guest %} napoveda-duvod{% endif %}" data-napoveda="{% if guest %}Pouze pro přihlášené uživatele{% else %}Přidat do vlastního zpěvníku{% endif %}">
                 <button class="action-btn add {% if guest %}disabled{% endif %}" onclick="event.stopPropagation();" {% if guest %}disabled{% endif %}>
                   <img src="{{ static_bust('img/icons/add_song.svg') }}" alt="Přidat" />
                 </button>
@@ -262,7 +262,7 @@
             </td>
             <td class="icon-cell">
               {% if r.book_type == '' %}
-                <span class="s-napovedou" data-napoveda="Nelze odstranit z veřejného zpěvníku">
+                <span class="s-napovedou napoveda-duvod" data-napoveda="Nelze odstranit z veřejného zpěvníku">
                   <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>
@@ -274,7 +274,7 @@
                   </button>
                 </span>
               {% else %}
-                <span class="s-napovedou" data-napoveda="Nedostatečná oprávnění">
+                <span class="s-napovedou napoveda-duvod" data-napoveda="Nedostatečná oprávnění">
                   <button class="action-btn remove disabled" onclick="event.stopPropagation();" disabled>
                     <img src="{{ static_bust('img/icons/remove-song.svg') }}" alt="Odebrat" />
                   </button>

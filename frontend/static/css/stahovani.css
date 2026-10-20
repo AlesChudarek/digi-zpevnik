@@ -88,7 +88,7 @@
   font-size: 14px; font-family: inherit; line-height: 1.2; cursor: pointer;
   color: var(--panel-btn-text, #333);
 }
-.stahovani-tlacitka button:hover { background: var(--panel-btn-hover, #e2e2e2); }
+@media (hover: hover) { .stahovani-tlacitka button:hover { background: var(--panel-btn-hover, #e2e2e2); } }
 /* Barva z --brand-dark, ne z --brand-strong: brand-dark je tmavý ve všech dvanácti
    motivech, takže na něm bílý text drží čitelnost všude. U --brand-contrast to
    neplatí - v motivu amber je stejný jako brand-strong a text by zmizel. */
@@ -96,9 +96,9 @@
   background: var(--brand-dark, #2f7d4f); color: #fff;
   padding: 10px 24px; font-size: 15px; font-weight: 600;
 }
-.stahovani-tlacitka button.hlavni:hover {
+@media (hover: hover) { .stahovani-tlacitka button.hlavni:hover {
   background: var(--brand-dark, #2f7d4f); color: #fff; filter: brightness(1.25);
-}
+} }
 
 /* --- Nastavení stažení ---------------------------------------------------------- */
 .stahovani-skryty {
@@ -111,7 +111,7 @@
   display: flex; align-items: flex-start; gap: 10px;
   padding: 8px 10px; border-radius: 10px; cursor: pointer;
 }
-.stahovani-predvolba:hover { background: var(--panel-btn-bg, #f0f0f0); }
+@media (hover: hover) { .stahovani-predvolba:hover { background: var(--panel-btn-bg, #f0f0f0); } }
 .stahovani-predvolba input { margin: 3px 0 0; flex: none; }
 .stahovani-predvolba-text { display: block; }
 .stahovani-predvolba-text strong {
@@ -164,9 +164,9 @@
   border-left: 1px solid var(--panel-border, #ddd);
 }
 .stahovani-prepinac .stahovani-volba:first-child > span { border-left: 0; }
-.stahovani-prepinac .stahovani-volba:hover > span {
+@media (hover: hover) { .stahovani-prepinac .stahovani-volba:hover > span {
   background: var(--panel-btn-bg, #f0f0f0);
-}
+} }
 .stahovani-prepinac input:checked + span {
   background: var(--brand-dark, #2f7d4f); color: #fff; font-weight: 600;
 }
@@ -230,11 +230,14 @@
 
 /* Tmavý motiv: --brand-dark je skoro stejně tmavý jako panel a hlavní tlačítko s ním
    splývalo. Stejně jako u ostatních oken (css/okna.css) je tam světlé. */
-html.theme-dark .stahovani-tlacitka button.hlavni,
-html.theme-dark .stahovani-tlacitka button.hlavni:hover {
+html.theme-dark .stahovani-tlacitka button.hlavni {
   background: var(--panel-text, #e6eaf2);
   color: var(--panel-bg, #161c2b);
 }
+@media (hover: hover) { html.theme-dark .stahovani-tlacitka button.hlavni:hover {
+  background: var(--panel-text, #e6eaf2);
+  color: var(--panel-bg, #161c2b);
+} }
 
 /* Režim tisku schovává předvolby a řádky, které nastaví tiskový dialog. Vlastní
    `display` výš by atribut hidden přebil. */
