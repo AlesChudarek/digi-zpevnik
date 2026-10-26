@@ -551,6 +551,29 @@ def main():
             page.wait_for_timeout(400)
             zkontroluj(max(odchylky) < 2, "tažená dlaždice jede s ukazatelem bez poskakování",
                        f"největší odchylka {max(odchylky)} px")
+            # Rozhoduje střed dlaždice, ne roh s držadlem: o 60 % šířky doprava už stačí
+            ted = page.evaluate(poradi)
+            d = page.locator(f'.songbook-card[data-book-id="{ted[0]}"] .dlazdice-drzadlo').bounding_box()
+            sirka = page.locator(f'.songbook-card[data-book-id="{ted[0]}"]').bounding_box()["width"]
+            x0, y0 = d["x"] + d["width"] / 2, d["y"] + d["height"] / 2
+            page.mouse.move(x0, y0)
+            page.mouse.down()
+            page.mouse.move(x0 + sirka * 0.6, y0, steps=10)
+            page.wait_for_timeout(100)
+            page.mouse.up()
+            page.wait_for_timeout(400)
+            po = page.evaluate(poradi)
+            zkontroluj(po[:2] == [ted[1], ted[0]],
+                       "dlaždice uhne, jakmile střed tažené vjede do sousední", f"{ted} → {po}")
+            # vrátit, ať další kontrola čeká původní stav po prvním tahu
+            d = page.locator(f'.songbook-card[data-book-id="{ted[0]}"] .dlazdice-drzadlo').bounding_box()
+            x0, y0 = d["x"] + d["width"] / 2, d["y"] + d["height"] / 2
+            page.mouse.move(x0, y0)
+            page.mouse.down()
+            page.mouse.move(x0 - sirka * 0.6, y0, steps=10)
+            page.wait_for_timeout(100)
+            page.mouse.up()
+            page.wait_for_timeout(400)
             page.reload()
             page.wait_for_load_state("networkidle")
             zkontroluj(page.evaluate(poradi) == [pred[-1]] + pred[:-1],

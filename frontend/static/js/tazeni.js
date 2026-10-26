@@ -11,8 +11,8 @@
      polozky(),            řazené položky v aktuálním pořadí DOM
      vloz(polozka, pred),  přesune položku v DOM před `pred` (null = na konec)
      animovat(polozka),    co má uhýbat (výchozí: ostatní položky)
-     mrizka,               true = 2D mřížka (cíl je položka pod prstem),
-                           jinak svislý seznam (cíl podle středů položek)
+     mrizka,               true = 2D mřížka stejně velkých položek, jinak svislý
+                           seznam (cíl podle středu tažené položky, viz najdiPred)
      rolovatko(),          co roluje u okraje (výchozí: okno)
      zacatek(polozka),
      konec(polozka, zmeneno) → prvek, který má doplout na své místo (výchozí položka)
@@ -71,23 +71,38 @@
       p.style.transform = 'translate(' + dx + 'px, ' + (tah.y - tah.chytY - r.top) + 'px)';
     }
 
-    // Před kterou položkou má tažená stát; undefined = nechat, kde je
+    /* Před kterou položkou má tažená stát; undefined = nechat, kde je.
+       Rozhoduje střed tažené položky, ne ukazatel: držadlo je v rohu, a dokud se
+       počítalo s ním, musela tažená dlaždice zajet skoro celá přes sousední, než
+       uhnula (Aleš 26. 10.). */
     function najdiPred() {
-      var ostatni = o.polozky().filter(function (x) { return x !== tah.polozka; });
-      var i;
+      var vse = o.polozky();
+      var ja = vse.indexOf(tah.polozka);
+      var sx = tah.x - tah.chytX + tah.sirka / 2;
+      var sy = tah.y - tah.chytY + tah.vyska / 2;
+      var i, r;
       if (o.mrizka) {
-        for (i = 0; i < ostatni.length; i++) {
-          var r = rozlozeni(ostatni[i]);
-          if (tah.x < r.left || tah.x > r.right || tah.y < r.top || tah.y > r.bottom) continue;
-          return tah.x > r.left + r.width / 2 ? (ostatni[i + 1] || null) : ostatni[i];
+        // Stejně velké dlaždice: přeřadit, jakmile střed vjede do sousední
+        for (i = 0; i < vse.length; i++) {
+          if (i === ja) continue;
+          r = rozlozeni(vse[i]);
+          if (sx < r.left || sx > r.right || sy < r.top || sy > r.bottom) continue;
+          return i > ja ? (vse[i + 1] || null) : vse[i];
         }
         return undefined;
       }
-      for (i = 0; i < ostatni.length; i++) {
-        var s = rozlozeni(ostatni[i]);
-        if (tah.y < s.top + s.height / 2) return ostatni[i];
+      // Seznam: střed musí do sousedního bloku vjet. Bloky ale bývají různě vysoké
+      // a pod vysokým se nízký přeřadí až tehdy, když po výměně jeho střed nebude
+      // zase uvnitř vysokého - jinak by se pod prstem přehazovaly tam a zpět.
+      for (i = vse.length - 1; i > ja; i--) {
+        r = rozlozeni(vse[i]);
+        if (sy > Math.max(r.top, r.bottom - tah.vyska)) return vse[i + 1] || null;
       }
-      return null;
+      for (i = 0; i < ja; i++) {
+        r = rozlozeni(vse[i]);
+        if (sy < Math.min(r.bottom, r.top + tah.vyska)) return vse[i];
+      }
+      return undefined;
     }
 
     function prerad() {
@@ -156,7 +171,7 @@
       // Pohyb a puštění na okně: položka se v DOM přesouvá a prohlížeč jí tím
       // zruší zachycení ukazatele - tah by skončil v půli.
       tah = { polozka: p, id: e.pointerId, x: e.clientX, y: e.clientY,
-              chytX: e.clientX - r.left, chytY: e.clientY - r.top,
+              chytX: e.clientX - r.left, chytY: e.clientY - r.top, sirka: r.width, vyska: r.height,
               rol: rolovatko(p), odKdy: 0, puvodni: vse };
       if (window.Napoveda) Napoveda.skryj();
       if (o.zacatek) o.zacatek(p);

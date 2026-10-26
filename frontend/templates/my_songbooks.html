@@ -198,11 +198,10 @@
     position: absolute; top: 6px; left: 6px; z-index: 3;
     width: 22px; height: 28px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.3); color: #fff;
+    background: rgba(0,0,0,0.3); color: #fff; font-size: 17px; line-height: 1;
     cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
     opacity: 0; transition: opacity 0.15s;
   }
-  .dlazdice-drzadlo svg { width: 8px; height: 13px; display: block; }
   /* Myší až na najetí - pořád vidět bilo do očí (Aleš 26. 10.). Na dotyku najetí
      není, tam tlumeně pořád a s větší plochou pro prst. */
   .songbook-card:hover .dlazdice-drzadlo, .dlazdice-drzadlo:focus-visible { opacity: 1; }
@@ -211,7 +210,8 @@
                         background: none; }
     .dlazdice-drzadlo::before { content: ""; position: absolute; inset: 6px 8px;
                                 border-radius: 7px; background: rgba(0,0,0,0.3); }
-    .dlazdice-drzadlo svg { position: relative; width: 9px; height: 15px; }
+    .dlazdice-drzadlo { font-size: 20px; }
+    .dlazdice-drzadlo::before { z-index: -1; }
   }
   /* Při tahu bez přechodu a zvětšení z hoveru: přechod zpožďoval taženou dlaždici
      za prstem a ta pak v mřížce poskakovala. */
@@ -396,7 +396,7 @@
   {% set lze_radit = not manage_public and current_user.role != 'guest' and songbooks|length >= 2 %}
   {% for book in songbooks %}
     <div class="songbook-card" data-book-id="{{ book.id }}"{% if lze_radit %} data-radit="1"{% endif %}>
-      {% if lze_radit %}<span class="dlazdice-drzadlo" data-napoveda="Přetáhnout jinam" aria-hidden="true"><svg viewBox="0 0 8 13" fill="currentColor"><circle cx="1.5" cy="1.5" r="1.5"/><circle cx="6.5" cy="1.5" r="1.5"/><circle cx="1.5" cy="6.5" r="1.5"/><circle cx="6.5" cy="6.5" r="1.5"/><circle cx="1.5" cy="11.5" r="1.5"/><circle cx="6.5" cy="11.5" r="1.5"/></svg></span>{% endif %}
+      {% if lze_radit %}<span class="dlazdice-drzadlo" data-napoveda="Přetáhnout jinam" aria-hidden="true">≡</span>{% endif %}
       <a href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" style="text-decoration:none; color:inherit;">
         <div class="cover-preview{% if book.img_path_cover_preview %} nacita{% endif %}" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
