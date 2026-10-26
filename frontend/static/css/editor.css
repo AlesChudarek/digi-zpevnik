@@ -40,7 +40,10 @@
 .es-blok.tazeny { opacity: 0.45; }
 .es-blok.cil-pred { box-shadow: 0 -3px 0 var(--brand-strong, #2E7D32); }
 .es-blok.cil-za { box-shadow: 0 3px 0 var(--brand-strong, #2E7D32); }
-.es-drzadlo { cursor: grab; user-select: none; font-size: 18px; line-height: 1; padding-top: 4px; opacity: 0.6; text-align: center; }
+.es-blok.taha { position: relative; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+/* touch-action: tah prstem za držadlo přesouvá blok, nerolovat stránkou. */
+.es-drzadlo { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; font-size: 18px; line-height: 1; padding-top: 4px; opacity: 0.6; text-align: center; }
+body.es-tahne, body.es-tahne * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 
 .es-blok-strany { display: flex; flex-direction: column; min-width: 0; }
 
@@ -169,11 +172,19 @@
 .es-import-akce { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 560px) {
-  .es-blok { grid-template-columns: minmax(0, 1fr) auto; padding: 8px; }
-  .es-drzadlo { display: none; }
+  .es-blok { grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; padding: 8px; }
   .es-strana { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
   .es-nahled { width: 48px; height: calc(48px * 2480 / 1748); }
   .es-pisen { grid-template-columns: minmax(0, 1fr) auto; }
   .es-pisen .es-autor { grid-column: 1; }
   .es-pisen .es-odebrat-pisen { grid-row: 1; grid-column: 2; }
+}
+
+/* Na dotyku: větší držadlo pro prst a bez šipek ↑↓ - tah s rolováním u okraje je
+   pohodlnější a šipky braly místo (Aleš 20. 10.). Až za úzkým @media výše, jinak
+   by ho přebilo pořadím. */
+@media (pointer: coarse) {
+  .es-blok { grid-template-columns: 34px minmax(0, 1fr) auto; }
+  .es-drzadlo { font-size: 26px; padding: 6px 0 14px; }
+  .es-nahoru, .es-dolu { display: none; }
 }

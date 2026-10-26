@@ -264,6 +264,12 @@ def main():
             page.locator("#es-seznam .es-blok").nth(0), target_position={"x": 40, "y": 5})
         zkontroluj(typy(page) == ["prazdna", "bez", "pisen", "pokracovani"],
                    "tažení přesune blok", typy(page))
+        # Puštěný na své místo: dřív editor nepřekreslil a blok zůstal zesvětlený
+        page.locator("#es-seznam .es-blok").nth(1).locator(".es-drzadlo").drag_to(
+            page.locator("#es-seznam .es-blok").nth(1), target_position={"x": 40, "y": 5})
+        zbytky = page.locator("#es-seznam .tazeny, #es-seznam .taha, #es-seznam .cil-pred, #es-seznam .cil-za").count()
+        zkontroluj(typy(page) == ["prazdna", "bez", "pisen", "pokracovani"] and zbytky == 0,
+                   "blok puštěný na své místo zůstane a nic nezůstane zesvětlené", f"{typy(page)}, zbytků {zbytky}")
         # Na straně s pokračováním může začínat další píseň
         strana(page, 3).locator(".es-dalsi-pisen").click()
         strana(page, 3).locator(".es-nazev").fill("Krátká B")
@@ -553,6 +559,60 @@ def main():
         zkontroluj(page.is_visible("#app-confirm-overlay"),
                    "zavření s neuloženou změnou se zeptá")
         page.click("#app-confirm-ok")
+
+        print("\n── dotyk: tah prstem za držadlo ──")
+        dctx = prohlizec.new_context(viewport={"width": 390, "height": 700}, has_touch=True, is_mobile=True)
+        dp = dctx.new_page()
+        dp.on("pageerror", lambda e: chyby.append(str(e)))
+        dp.goto(base + "/login")
+        dp.fill('input[name="email"]', EMAIL)
+        dp.fill('input[name="password"]', HESLO)
+        dp.click('button[type="submit"], input[type="submit"]')
+        dp.wait_for_load_state("networkidle")
+        dp.goto(base + "/my-songbooks")
+        dp.wait_for_load_state("networkidle")
+        dp.evaluate(f"window.openEditSongbookModal('{novy.id}')")
+        dp.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
+        for _ in range(26):
+            dp.evaluate("document.getElementById('es-pridat').click()")
+        bloky = dp.locator("#es-seznam .es-blok")
+        pocet = bloky.count()
+        bloky.nth(pocet - 1).locator(".es-popisek").fill("POSLEDNÍ")
+        vzhled = dp.evaluate("""() => {
+          const b = document.querySelectorAll('#es-seznam .es-blok');
+          const d = b[b.length - 1].querySelector('.es-drzadlo').getBoundingClientRect();
+          const s = b[b.length - 1].querySelector('.es-nahoru');
+          return {drzadlo: [Math.round(d.width), Math.round(d.height)], sipky: !!(s && s.offsetParent)};
+        }""")
+        zkontroluj(not vzhled["sipky"] and min(vzhled["drzadlo"]) >= 30,
+                   "na dotyku je držadlo pro prst (aspoň 30 px) a šipky ↑↓ schované", vzhled)
+        dp.locator("#es-seznam .es-blok").last.scroll_into_view_if_needed()
+        d = dp.locator("#es-seznam .es-blok").last.locator(".es-drzadlo").bounding_box()
+        rol = dp.evaluate_handle("""() => { let p = document.getElementById('es-seznam').parentElement;
+          while (p && !(['auto', 'scroll'].includes(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight)) p = p.parentElement;
+          return p || document.scrollingElement; }""")
+        horni = dp.evaluate("r => r === document.scrollingElement ? 0 : r.getBoundingClientRect().top", rol)
+        pred_rol = dp.evaluate("r => r.scrollTop", rol)
+        cdp = dctx.new_cdp_session(dp)
+        def prst(typ, x=0, y=0):
+            cdp.send("Input.dispatchTouchEvent",
+                     {"type": typ, "touchPoints": [] if typ == "touchEnd" else [{"x": x, "y": y}]})
+        x, y = d["x"] + d["width"] / 2, d["y"] + d["height"] / 2
+        prst("touchStart", x, y)
+        for krok in range(1, 11):
+            prst("touchMove", x, y + (horni + 12 - y) * krok / 10)
+            dp.wait_for_timeout(30)
+        dp.wait_for_timeout(300)
+        bezi = dp.evaluate("r => r.scrollTop", rol)
+        dp.wait_for_function("r => r.scrollTop === 0", arg=rol, timeout=8000)
+        prst("touchEnd")
+        dp.wait_for_timeout(300)
+        prvni = dp.locator("#es-seznam .es-blok").first.locator(".es-popisek").input_value()
+        zbytky = dp.locator("#es-seznam .tazeny, #es-seznam .taha").count()
+        zkontroluj(bezi < pred_rol, "u horního okraje se seznam sám roluje", f"{pred_rol} → {bezi}")
+        zkontroluj(prvni == "POSLEDNÍ" and dp.locator("#es-seznam .es-blok").count() == pocet and zbytky == 0,
+                   "prstem jde poslední strana jedním tahem přesunout na začátek", f"první: {prvni!r}")
+        dctx.close()
 
         print("\n── telefon ──")
         for sirka in (320, 390):
