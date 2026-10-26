@@ -35,7 +35,6 @@
   var fronta = [];          // klíče stran čekajících na nahrání
   var nahravaSe = false;
   var cekajici = [];        // resolve funkce těch, kdo čekají na dokončení nahrávání
-  var tah = null;           // rozjeté tažení bloku za držadlo, viz navaz()
   var autoriNacteni = false;
   var ukazovatChyby = false;
 
@@ -855,85 +854,43 @@
       return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') >= 0;
     }
 
-    // Tažení bloku za držadlo ≡, myší i prstem (HTML5 tažení telefon neumí). Blok jede
-    // s ukazatelem, čára ukazuje, kam dopadne. U okraje rolovacího okna se seznam sám
-    // posouvá - čím blíž okraji, tím rychleji, a s délkou držení ještě zrychluje, ať jde
-    // píseň z konce stovky stran dostat na začátek jedním tahem.
-    var ZONA = 70;
-    function rolovatko(prvek) {
-      for (var p = prvek.parentElement; p; p = p.parentElement) {
-        var oy = getComputedStyle(p).overflowY;
-        if ((oy === 'auto' || oy === 'scroll') && p.scrollHeight > p.clientHeight) return p;
-      }
-      return document.scrollingElement;
-    }
-    function okrajeRolovatka(r) {
-      if (r === document.scrollingElement) return { top: 0, bottom: window.innerHeight };
-      return r.getBoundingClientRect();
-    }
-    function prekresliTah() {
-      tah.li.style.transform = 'translateY(' + (tah.y - tah.y0 + tah.rol.scrollTop - tah.s0) + 'px)';
-      seznam.querySelectorAll('.cil-pred, .cil-za').forEach(function (x) { x.classList.remove('cil-pred', 'cil-za'); });
-      var bloky = Array.prototype.filter.call(seznam.querySelectorAll('.es-blok'), function (li) { return li !== tah.li; });
-      tah.cil = null;
-      for (var i = 0; i < bloky.length; i++) {
-        var r = bloky[i].getBoundingClientRect();
-        if (tah.y < r.top + r.height / 2) { tah.cil = bloky[i]; tah.za = false; break; }
-      }
-      if (!tah.cil && bloky.length) { tah.cil = bloky[bloky.length - 1]; tah.za = true; }
-      if (tah.cil) tah.cil.classList.add(tah.za ? 'cil-za' : 'cil-pred');
-    }
-    function rolujUOkraje(cas) {
-      if (!tah) return;
-      var o = okrajeRolovatka(tah.rol);
-      var hloubka = Math.max(o.top + ZONA - tah.y, tah.y - (o.bottom - ZONA), 0);
-      if (hloubka) {
-        if (!tah.odKdy) tah.odKdy = cas;
-        var zrychleni = Math.min(4, 1 + (cas - tah.odKdy) / 700);
-        var krok = Math.min(1, hloubka / ZONA) * 14 * zrychleni;
-        var pred = tah.rol.scrollTop;
-        tah.rol.scrollTop += tah.y < o.top + ZONA ? -krok : krok;
-        if (tah.rol.scrollTop !== pred) prekresliTah();
-      } else {
-        tah.odKdy = 0;
-      }
-      tah.snimek = requestAnimationFrame(rolujUOkraje);
-    }
-    function dokonciTah(pustit) {
-      if (!tah) return;
-      var t = tah;
-      tah = null;
-      cancelAnimationFrame(t.snimek);
-      document.body.classList.remove('es-tahne');
-      if (pustit && t.cil) {
-        var c = blok(Number(t.cil.dataset.od));
-        presun(t.b[0], t.b[1], t.za ? c[1] + 1 : c[0]);
-      } else {
-        vykresli();
-      }
-    }
-    seznam.addEventListener('pointerdown', function (e) {
-      var drz = e.target.closest('.es-drzadlo');
-      if (!drz || e.button !== 0 || tah) return;
-      e.preventDefault();
-      var li = drz.closest('.es-blok');
-      var rol = rolovatko(seznam);
-      tah = { li: li, b: blok(Number(li.dataset.od)), y0: e.clientY, y: e.clientY,
-              rol: rol, s0: rol.scrollTop, cil: null, za: false, odKdy: 0 };
-      try { drz.setPointerCapture(e.pointerId); } catch (_) {}
-      if (window.Napoveda) Napoveda.skryj();
-      li.classList.add('tazeny', 'taha');
-      document.body.classList.add('es-tahne');
-      tah.snimek = requestAnimationFrame(rolujUOkraje);
+    // Tažení bloku za držadlo ≡, myší i prstem (static/js/tazeni.js): ostatní bloky
+    // uhýbají a u okraje okna se roluje. Pořadí v `strany` se změní až po puštění.
+    var bloky = function () { return Array.prototype.slice.call(seznam.querySelectorAll('.es-blok')); };
+    Tazeni.navaz({
+      kontejner: seznam, drzadlo: '.es-drzadlo', polozka: '.es-blok', polozky: bloky,
+      rolovatko: function () { return Tazeni.rolujiciPredek(seznam); },
+      animovat: function (li) {
+        return Array.prototype.filter.call(seznam.children, function (x) { return x !== li; });
+      },
+      // Mezera s „+“ cestuje s blokem, ať mezi bloky zůstane vždy právě jedna -
+      // jinak by se po puštění a novém vykreslení všechno o kousek posunulo.
+      vloz: function (li, pred) {
+        var mez = li.previousElementSibling;
+        if (!mez || !mez.classList.contains('es-mezera')) mez = li.nextElementSibling;
+        if (!mez || !mez.classList.contains('es-mezera')) return;
+        mez.remove();
+        li.remove();
+        if (pred && pred === bloky()[0]) {
+          seznam.insertBefore(li, pred);
+          seznam.insertBefore(mez, pred);
+        } else if (pred) {
+          seznam.insertBefore(mez, pred.previousElementSibling);
+          seznam.insertBefore(li, pred.previousElementSibling);
+        } else {
+          seznam.appendChild(mez);
+          seznam.appendChild(li);
+        }
+      },
+      konec: function (li) {
+        var b = blok(Number(li.dataset.od));
+        var dalsi = bloky()[bloky().indexOf(li) + 1];
+        var prvni = strany[b[0]];
+        presun(b[0], b[1], dalsi ? Number(dalsi.dataset.od) : strany.length);
+        var div = prvekStrany(prvni);
+        return div && div.closest('.es-blok');
+      },
     });
-    seznam.addEventListener('pointermove', function (e) {
-      if (!tah) return;
-      tah.y = e.clientY;
-      prekresliTah();
-    });
-    seznam.addEventListener('pointerup', function () { dokonciTah(true); });
-    seznam.addEventListener('pointercancel', function () { dokonciTah(false); });
-    seznam.addEventListener('lostpointercapture', function () { dokonciTah(true); });
 
     // Soubor přetažený na náhled strany si ta strana vezme za svůj obrázek
     seznam.addEventListener('dragover', function (e) {

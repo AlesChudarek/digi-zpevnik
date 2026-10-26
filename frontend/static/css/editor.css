@@ -37,13 +37,10 @@
   border-radius: 10px;
   background: var(--muted-bg, #e8f5e9);
 }
-.es-blok.tazeny { opacity: 0.45; }
-.es-blok.cil-pred { box-shadow: 0 -3px 0 var(--brand-strong, #2E7D32); }
-.es-blok.cil-za { box-shadow: 0 3px 0 var(--brand-strong, #2E7D32); }
-.es-blok.taha { position: relative; z-index: 5; box-shadow: 0 6px 18px rgba(0,0,0,0.25); }
+.es-blok.tazena { position: relative; z-index: 5; opacity: 0.9; box-shadow: 0 8px 22px rgba(0,0,0,0.28); }
 /* touch-action: tah prstem za držadlo přesouvá blok, nerolovat stránkou. */
 .es-drzadlo { cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; font-size: 18px; line-height: 1; padding-top: 4px; opacity: 0.6; text-align: center; }
-body.es-tahne, body.es-tahne * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
+body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 
 .es-blok-strany { display: flex; flex-direction: column; min-width: 0; }
 

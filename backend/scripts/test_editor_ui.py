@@ -260,14 +260,32 @@ def main():
         page.locator("#es-seznam .es-blok").nth(0).locator(".es-dolu").click()
         zkontroluj(typy(page) == ["bez", "pisen", "pokracovani", "prazdna"],
                    "šipka přesune píseň i s pokračováním", typy(page))
-        page.locator("#es-seznam .es-blok").nth(2).locator(".es-drzadlo").drag_to(
-            page.locator("#es-seznam .es-blok").nth(0), target_position={"x": 40, "y": 5})
+        # Tah po kouscích, ať jde změřit, co se děje uprostřed: ostatní bloky mají
+        # uhýbat animací (dřív se nehýbaly, jen čára ukazovala cíl) a tažený blok
+        # má zůstat pod ukazatelem.
+        d = page.locator("#es-seznam .es-blok").nth(2).locator(".es-drzadlo").bounding_box()
+        cil = page.locator("#es-seznam .es-blok").nth(0).bounding_box()
+        page.mouse.move(d["x"] + d["width"] / 2, d["y"] + d["height"] / 2)
+        page.mouse.down()
+        page.mouse.move(d["x"] + d["width"] / 2, cil["y"] + 5, steps=8)
+        page.wait_for_timeout(60)
+        behem = page.evaluate("""(y) => {
+          const t = document.querySelector('#es-seznam .es-blok.tazena');
+          const d = t && t.querySelector('.es-drzadlo').getBoundingClientRect();
+          return {uhybaji: [...document.querySelectorAll('#es-seznam .es-blok:not(.tazena)')]
+                    .filter(b => b.getAnimations().length).length,
+                  podUkazatelem: !!d && Math.abs(d.top + d.height / 2 - y) < 3};
+        }""", cil["y"] + 5)
+        page.mouse.up()
+        page.wait_for_timeout(350)
+        zkontroluj(behem["uhybaji"] >= 1 and behem["podUkazatelem"],
+                   "během tahu ostatní bloky uhýbají a tažený jede s ukazatelem", behem)
         zkontroluj(typy(page) == ["prazdna", "bez", "pisen", "pokracovani"],
                    "tažení přesune blok", typy(page))
         # Puštěný na své místo: dřív editor nepřekreslil a blok zůstal zesvětlený
         page.locator("#es-seznam .es-blok").nth(1).locator(".es-drzadlo").drag_to(
             page.locator("#es-seznam .es-blok").nth(1), target_position={"x": 40, "y": 5})
-        zbytky = page.locator("#es-seznam .tazeny, #es-seznam .taha, #es-seznam .cil-pred, #es-seznam .cil-za").count()
+        zbytky = page.locator("#es-seznam .tazena").count()
         zkontroluj(typy(page) == ["prazdna", "bez", "pisen", "pokracovani"] and zbytky == 0,
                    "blok puštěný na své místo zůstane a nic nezůstane zesvětlené", f"{typy(page)}, zbytků {zbytky}")
         # Na straně s pokračováním může začínat další píseň
@@ -514,9 +532,25 @@ def main():
         zkontroluj(len(pred) >= 2 and drzadel == len(pred),
                    "od dvou zpěvníků má každá dlaždice držadlo přesunu", f"{drzadel} z {len(pred)}")
         if len(pred) >= 2:
-            page.drag_and_drop(f'.songbook-card[data-book-id="{pred[-1]}"] .dlazdice-drzadlo',
-                               f'.songbook-card[data-book-id="{pred[0]}"]', target_position={"x": 5, "y": 60})
+            # Po kouscích a s měřením: dlaždice má držet pod ukazatelem stále stejný
+            # odstup. Dřív ji CSS přechod zpožďoval a v mřížce poskakovala.
+            d = page.locator(f'.songbook-card[data-book-id="{pred[-1]}"] .dlazdice-drzadlo').bounding_box()
+            cil = page.locator(f'.songbook-card[data-book-id="{pred[0]}"]').bounding_box()
+            x0, y0 = d["x"] + d["width"] / 2, d["y"] + d["height"] / 2
+            x1, y1 = cil["x"] + 5, cil["y"] + 60
+            page.mouse.move(x0, y0)
+            page.mouse.down()
+            odchylky = []
+            for krok in range(1, 21):
+                x, y = x0 + (x1 - x0) * krok / 20, y0 + (y1 - y0) * krok / 20
+                page.mouse.move(x, y)
+                page.wait_for_timeout(16)
+                r = page.locator(f'.songbook-card[data-book-id="{pred[-1]}"] .dlazdice-drzadlo').bounding_box()
+                odchylky.append(round(max(abs(r["x"] + r["width"] / 2 - x), abs(r["y"] + r["height"] / 2 - y)), 1))
+            page.mouse.up()
             page.wait_for_timeout(400)
+            zkontroluj(max(odchylky) < 2, "tažená dlaždice jede s ukazatelem bez poskakování",
+                       f"největší odchylka {max(odchylky)} px")
             page.reload()
             page.wait_for_load_state("networkidle")
             zkontroluj(page.evaluate(poradi) == [pred[-1]] + pred[:-1],
@@ -611,7 +645,7 @@ def main():
         prst("touchEnd")
         dp.wait_for_timeout(300)
         prvni = dp.locator("#es-seznam .es-blok").first.locator(".es-popisek").input_value()
-        zbytky = dp.locator("#es-seznam .tazeny, #es-seznam .taha").count()
+        zbytky = dp.locator("#es-seznam .tazena").count()
         zkontroluj(bezi < pred_rol, "u horního okraje se seznam sám roluje", f"{pred_rol} → {bezi}")
         zkontroluj(prvni == "POSLEDNÍ" and dp.locator("#es-seznam .es-blok").count() == pocet and zbytky == 0,
                    "prstem jde poslední strana jedním tahem přesunout na začátek", f"první: {prvni!r}")
