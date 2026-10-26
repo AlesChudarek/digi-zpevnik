@@ -55,10 +55,10 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Stáhnout / Smazat (u cizího společného Odebrat). Dřív pět ikon 3 + 2 - s tiskem by
       jich bylo šest a dlaždice by se dál natahovala. Totéž v Našich zpěvnících (tam bez
       Sdílet a Duplikovat). `test_mobil.py` měří nabídku na 320-1280 px.
-- [ ] na dotyku se dlaždice přetáhnout nedají (HTML5 drag & drop telefon neumí).
+- [X] na dotyku se dlaždice přetáhnout nedají (HTML5 drag & drop telefon neumí).
       Aleš 20. 10.: chybí i ukazatel, že se dlaždicemi dá hýbat. Od dvou zpěvníků dostane
       dlaždice vlevo nahoře ikonu přesunu jako písně v editoru (na počítači i telefonu)
-      a táhne se jen za ni.
+      a táhne se jen za ni. Hotovo 20. 10., viz „Mobil a vzhled“.
 - [ ] **v úpravách zpěvníku chybí zavření okna** (Aleš 20. 10.). A obecně: všechna okna,
       která jde zavřít, mají jít zavřít i klávesou Esc.
 
@@ -638,10 +638,19 @@ kdo maže.
 
 ### Ostatní mobilní
 
-- [ ] **nápovědy na dotykové obrazovce překrývají to, k čemu patří.** Objeví se po
-      klepnutí a zůstanou viset — nápověda „Změna tématu“ zakryje dvě z možností
-      v nabídce motivů. Chce to promyslet, kdy se na dotyku nápověda vůbec má ukázat
-      a kdy zmizet (`static/js/napoveda.js`).
+- [X] **nápovědy na dotykové obrazovce překrývají to, k čemu patří** (20. 10.). Ťuknutí
+      posílalo i napodobené mouseover a focusin, nápověda se otevřela a visela. Na
+      dotyku teď u běžných tlačítek žádná; `napoveda-duvod` (proč něco nejde) se ukáže
+      na zvednutí prstu a za 3 s zmizí, `napoveda-tuk` (ikona sdílení, „!“ u místa,
+      spodní okraj dlaždice s pruhem místa) ťuknutí přepíná. Na dotyku otevírá nabídku
+      ▾ celý řádek s názvem dlaždice. Hover v CSS jen pod `@media (hover: hover)`.
+      Hlídá `test_napovedy.py`, sekce „dotyk“.
+- [X] **přesouvání prstem** (20. 10.): strany v editoru i dlaždice za držadlo ≡, na
+      Pointer Events místo HTML5 tažení; u okraje se seznam/stránka sama roluje
+      a zrychluje. Šipky ↑↓ v editoru na dotyku schované. Oprava: blok puštěný na své
+      místo zůstával zesvětlený. Hlídá `test_editor_ui.py`.
+- [ ] **hledání na telefonu jako kartičky** místo tabulky (620 px na 360px displeji,
+      tlačítka 22 px). Aleš 20. 10.: zkusit, kdyžtak vrátit.
 - [ ] **projít UI na mobilech celkově** (lišta, dlaždice a nápovědy hotové, čtečka
       a hledání neprověřené)
 - [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba

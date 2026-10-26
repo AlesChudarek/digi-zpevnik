@@ -190,8 +190,21 @@
   .songbook-card.akce-otevrene { z-index: 25; }
 
   /* Přetahování dlaždic (pořadí v Mých zpěvnících) */
-  .songbook-card[draggable="true"] { cursor: grab; }
-  .songbook-card.tazena { opacity: 0.4; transform: none; }
+  /* Držadlo přesunu vlevo nahoře, jen když je co řadit (od dvou zpěvníků). Bez něj
+     nebylo poznat, že se dlaždicemi dá hýbat, a na dotyku by tah celou dlaždicí
+     bojoval s rolováním a otevíráním. touch-action: tah prstem nerolovat stránkou. */
+  .dlazdice-drzadlo {
+    position: absolute; top: 6px; left: 6px; z-index: 3;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.85); color: var(--brand-dark, #1b5e20);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    font-size: 17px; line-height: 1; font-weight: 400;
+    cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none;
+  }
+  @media (pointer: coarse) { .dlazdice-drzadlo { width: 38px; height: 38px; font-size: 22px; top: 4px; left: 4px; } }
+  .songbook-card.tazena { transform: none; opacity: 0.6; z-index: 30; box-shadow: 0 10px 28px rgba(0,0,0,0.35); }
+  body.dlazdice-tahne, body.dlazdice-tahne * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 
   .add-card { cursor: pointer; }
   .add-card .cover {
@@ -365,9 +378,10 @@
 
 <div class="grid-container">
   {# Pořadí určuje server (serad_zpevniky); v Mých zpěvnících jde měnit přetažením. #}
-  {% set lze_radit = not manage_public and current_user.role != 'guest' %}
+  {% set lze_radit = not manage_public and current_user.role != 'guest' and songbooks|length >= 2 %}
   {% for book in songbooks %}
-    <div class="songbook-card" data-book-id="{{ book.id }}"{% if lze_radit %} draggable="true"{% endif %}>
+    <div class="songbook-card" data-book-id="{{ book.id }}"{% if lze_radit %} data-radit="1"{% endif %}>
+      {% if lze_radit %}<span class="dlazdice-drzadlo" data-napoveda="Přetáhnout jinam" aria-hidden="true">≡</span>{% endif %}
       <a href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" style="text-decoration:none; color:inherit;">
         <div class="cover-preview{% if book.img_path_cover_preview %} nacita{% endif %}" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
@@ -1662,29 +1676,23 @@ function openCreateModal() {
     document.addEventListener('click', (e) => { if (!e.target.closest('.songbook-akce')) zavriNabidky(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') zavriNabidky(); });
 
-    /* Pořadí dlaždic přetažením. Ukládá se celé pořadí pro přihlášeného uživatele
-       (/api/poradi-zpevniku); u společného zpěvníku má každý své. */
+    /* Pořadí dlaždic přetažením za držadlo ≡, myší i prstem (HTML5 tažení telefon
+       neumí). Ukládá se celé pořadí pro přihlášeného uživatele (/api/poradi-zpevniku);
+       u společného zpěvníku má každý své. */
     (function () {
       const mrizka = document.querySelector('.grid-container');
-      const karty = () => [...mrizka.querySelectorAll('.songbook-card[draggable="true"]')];
+      const karty = () => [...mrizka.querySelectorAll('.songbook-card[data-radit]')];
       if (!mrizka || !karty().length) return;
-      let tazena = null, puvodni = '';
-      mrizka.addEventListener('dragstart', (e) => {
-        tazena = e.target.closest?.('.songbook-card[draggable="true"]');
-        if (!tazena) return;
-        zavriNabidky();
-        puvodni = karty().map(k => k.dataset.bookId).join(',');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', tazena.dataset.bookId);
-        requestAnimationFrame(() => tazena && tazena.classList.add('tazena'));
-      });
+      const ZONA = 70;
+      let tah = null;
       /* Dlaždice uhýbají plynule (FLIP): zapamatovat polohy, přesunout v DOM a každou
          odsunout zpátky transformací, která pak doběhne do nuly. Dlaždice, která se
-         ještě hýbe, se za cíl nebere - jinak by se pod kurzorem přehazovala tam a zpět. */
+         ještě hýbe, se za cíl nebere - jinak by se pod prstem přehazovala tam a zpět.
+         Tažená mezi ně nepatří, tu drží na místě prstu vlastní transformace. */
       const vPohybu = new Set();
       function presun(pred) {
-        const polohy = new Map(karty().map(k => [k, k.getBoundingClientRect()]));
-        mrizka.insertBefore(tazena, pred);
+        const polohy = new Map(karty().filter(k => k !== tah.karta).map(k => [k, k.getBoundingClientRect()]));
+        mrizka.insertBefore(tah.karta, pred);
         polohy.forEach((r, k) => {
           const n = k.getBoundingClientRect(), dx = r.left - n.left, dy = r.top - n.top;
           if (!dx && !dy) return;
@@ -1694,21 +1702,53 @@ function openCreateModal() {
           anim.onfinish = anim.oncancel = () => vPohybu.delete(k);
         });
       }
-      mrizka.addEventListener('dragover', (e) => {
-        if (!tazena) return;
-        e.preventDefault();
-        const cil = e.target.closest('.songbook-card[draggable="true"]');
-        if (!cil || cil === tazena || vPohybu.has(cil)) return;
+      // Dlaždice drží pod prstem místo, za které ji chytil, ať se přesouvá v DOM jakkoli.
+      function drzPodPrstem() {
+        const k = tah.karta;
+        k.style.transform = '';
+        const r = k.getBoundingClientRect();
+        k.style.transform = `translate(${tah.x - tah.chytX - r.left}px, ${tah.y - tah.chytY - r.top}px)`;
+      }
+      function najdiCil() {
+        const cil = karty().find(k => {
+          if (k === tah.karta || vPohybu.has(k)) return false;
+          const r = k.getBoundingClientRect();
+          return tah.x >= r.left && tah.x <= r.right && tah.y >= r.top && tah.y <= r.bottom;
+        });
+        if (!cil) return;
         const r = cil.getBoundingClientRect();
-        const pred = e.clientX > r.left + r.width / 2 ? cil.nextElementSibling : cil;
-        if (pred === tazena || pred === tazena.nextElementSibling) return;
+        const pred = tah.x > r.left + r.width / 2 ? cil.nextElementSibling : cil;
+        if (pred === tah.karta || pred === tah.karta.nextElementSibling) return;
         presun(pred);
-      });
-      mrizka.addEventListener('drop', (e) => { if (tazena) e.preventDefault(); });
-      mrizka.addEventListener('dragend', async () => {
-        if (!tazena) return;
-        tazena.classList.remove('tazena');
-        tazena = null;
+      }
+      // U horního a dolního okraje okna se stránka sama roluje, čím blíž, tím rychleji.
+      function snimek(cas) {
+        if (!tah) return;
+        const hloubka = Math.max(ZONA - tah.y, tah.y - (window.innerHeight - ZONA), 0);
+        if (hloubka) {
+          if (!tah.odKdy) tah.odKdy = cas;
+          const krok = Math.min(1, hloubka / ZONA) * 14 * Math.min(4, 1 + (cas - tah.odKdy) / 700);
+          window.scrollBy(0, tah.y < ZONA ? -krok : krok);
+        } else {
+          tah.odKdy = 0;
+        }
+        // I bez pohybu prstu: cíl, který zrovna uhýbal, se vezme, až doběhne.
+        najdiCil();
+        drzPodPrstem();
+        tah.snimek = requestAnimationFrame(snimek);
+      }
+      async function dokonci() {
+        if (!tah) return;
+        const { karta, puvodni } = tah;
+        cancelAnimationFrame(tah.snimek);
+        tah = null;
+        document.body.classList.remove('dlazdice-tahne');
+        // Z místa, kde ji prst pustil, plynule na její nové místo v mřížce
+        const posun = karta.style.transform;
+        karta.style.transform = '';
+        karta.classList.remove('tazena');
+        if (posun) karta.animate([{ transform: posun }, { transform: 'none' }],
+                                 { duration: 180, easing: 'cubic-bezier(.2,.7,.3,1)' });
         const ids = karty().map(k => k.dataset.bookId);
         if (ids.join(',') === puvodni) return;
         try {
@@ -1719,7 +1759,32 @@ function openCreateModal() {
         } catch (_) {
           oznam('Nové pořadí zůstane jen do obnovení stránky.', { nadpis: 'Pořadí se neuložilo' });
         }
+      }
+      mrizka.addEventListener('pointerdown', (e) => {
+        const drz = e.target.closest('.dlazdice-drzadlo');
+        if (!drz || e.button !== 0 || tah) return;
+        e.preventDefault();
+        zavriNabidky();
+        if (window.Napoveda) Napoveda.skryj();
+        const karta = drz.closest('.songbook-card');
+        const r = karta.getBoundingClientRect();
+        tah = { karta, x: e.clientX, y: e.clientY, chytX: e.clientX - r.left, chytY: e.clientY - r.top,
+                puvodni: karty().map(k => k.dataset.bookId).join(','), odKdy: 0 };
+        karta.classList.add('tazena');
+        document.body.classList.add('dlazdice-tahne');
+        tah.snimek = requestAnimationFrame(snimek);
       });
+      // Na okně, ne na mřížce se zachycením: tažená dlaždice se v DOM přesouvá
+      // a prohlížeč jí tím zachycení ukazatele zruší - tah by skončil v půli.
+      window.addEventListener('pointermove', (e) => {
+        if (!tah) return;
+        tah.x = e.clientX;
+        tah.y = e.clientY;
+        najdiCil();
+        drzPodPrstem();
+      });
+      window.addEventListener('pointerup', dokonci);
+      window.addEventListener('pointercancel', dokonci);
     })();
 
     if (shareCancelBtn) {

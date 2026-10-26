@@ -508,10 +508,13 @@ def main():
         zkontroluj(len(pruhy) >= 2 and len({p["celkem"] for p in pruhy}) == 1
                    and all(p["tento"] <= p["celkem"] for p in pruhy),
                    "pruh místa: celkem u všech dlaždic stejně, podíl zpěvníku nikdy víc", pruhy)
-        poradi = "() => [...document.querySelectorAll('.songbook-card[draggable=true]')].map(k => k.dataset.bookId)"
+        poradi = "() => [...document.querySelectorAll('.songbook-card[data-radit]')].map(k => k.dataset.bookId)"
         pred = page.evaluate(poradi)
+        drzadel = page.locator(".songbook-card .dlazdice-drzadlo").count()
+        zkontroluj(len(pred) >= 2 and drzadel == len(pred),
+                   "od dvou zpěvníků má každá dlaždice držadlo přesunu", f"{drzadel} z {len(pred)}")
         if len(pred) >= 2:
-            page.drag_and_drop(f'.songbook-card[data-book-id="{pred[-1]}"]',
+            page.drag_and_drop(f'.songbook-card[data-book-id="{pred[-1]}"] .dlazdice-drzadlo',
                                f'.songbook-card[data-book-id="{pred[0]}"]', target_position={"x": 5, "y": 60})
             page.wait_for_timeout(400)
             page.reload()
@@ -612,6 +615,36 @@ def main():
         zkontroluj(bezi < pred_rol, "u horního okraje se seznam sám roluje", f"{pred_rol} → {bezi}")
         zkontroluj(prvni == "POSLEDNÍ" and dp.locator("#es-seznam .es-blok").count() == pocet and zbytky == 0,
                    "prstem jde poslední strana jedním tahem přesunout na začátek", f"první: {prvni!r}")
+        dp.click("#new-book-modal", position={"x": 5, "y": 300})
+        if dp.is_visible("#app-confirm-overlay"):
+            dp.click("#app-confirm-ok")
+        # Dlaždice: tah prstem za držadlo vlevo nahoře, poslední na první místo
+        dp.goto(base + "/my-songbooks")
+        dp.wait_for_load_state("networkidle")
+        pred = dp.evaluate(poradi)
+        drz = dp.locator(f'.songbook-card[data-book-id="{pred[-1]}"] .dlazdice-drzadlo')
+        drz.scroll_into_view_if_needed()
+        d = drz.bounding_box()
+        zkontroluj(min(d["width"], d["height"]) >= 36, "držadlo dlaždice je na prst dost velké",
+                   f"{d['width']:.0f}×{d['height']:.0f}")
+        x, y = d["x"] + d["width"] / 2, d["y"] + d["height"] / 2
+        prst("touchStart", x, y)
+        # Nahoru k okraji a podržet, až stránka dojede nahoru; pak na levou půlku první
+        for krok in range(1, 11):
+            prst("touchMove", x, y + (10 - y) * krok / 10)
+            dp.wait_for_timeout(30)
+        dp.wait_for_function("() => window.scrollY === 0", timeout=8000)
+        prvni = dp.locator(f'.songbook-card[data-book-id="{pred[0]}"]').bounding_box()
+        prst("touchMove", prvni["x"] + 10, prvni["y"] + prvni["height"] / 2)
+        dp.wait_for_timeout(400)
+        prst("touchEnd")
+        dp.wait_for_timeout(500)
+        dp.reload()
+        dp.wait_for_load_state("networkidle")
+        po = dp.evaluate(poradi)
+        zkontroluj(po == [pred[-1]] + pred[:-1],
+                   "prstem jde poslední dlaždice přetáhnout na začátek a pořadí se uloží",
+                   f"{pred} → {po}")
         dctx.close()
 
         print("\n── telefon ──")
