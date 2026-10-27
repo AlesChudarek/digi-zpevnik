@@ -194,24 +194,25 @@
   /* Držadlo přesunu vlevo nahoře, jen když je co řadit (od dvou zpěvníků). Bez něj
      nebylo poznat, že se dlaždicemi dá hýbat, a na dotyku by tah celou dlaždicí
      bojoval s rolováním a otevíráním. touch-action: tah prstem nerolovat stránkou. */
+  /* Plná tmavá pilulka, tlumí ji průhlednost celého prvku. Průsvitné pozadí
+     (rgba) dávalo na světlé obálce bílé ≡ jen asi 2,1 : 1; takhle je to i v
+     nejhorším případě (bílá obálka, 0,75) 3,9 : 1 a po najetí 7,5 : 1. */
   .dlazdice-drzadlo {
     position: absolute; top: 6px; left: 6px; z-index: 3;
     width: 22px; height: 28px; border-radius: 7px;
     display: flex; align-items: center; justify-content: center;
-    background: rgba(0,0,0,0.3); color: #fff; font-size: 17px; line-height: 1;
+    background: #4a4a4a; color: #fff; font-size: 17px; line-height: 1;
     cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
     opacity: 0; transition: opacity 0.15s;
   }
   /* Myší až na najetí - pořád vidět bilo do očí (Aleš 26. 10.). Na dotyku najetí
-     není, tam tlumeně pořád a s větší plochou pro prst. */
-  .songbook-card:hover .dlazdice-drzadlo, .dlazdice-drzadlo:focus-visible { opacity: 1; }
+     není, tam tlumeně pořád; plocha pro prst je větší než viditelná pilulka
+     (pozadí jen pod obsahem, okraj kolem je průhledný). */
+  .songbook-card:hover .dlazdice-drzadlo, .dlazdice-drzadlo:focus-visible { opacity: 0.9; }
   @media (hover: none) {
     .dlazdice-drzadlo { opacity: 0.75; width: 36px; height: 40px; top: 2px; left: 2px;
-                        background: none; }
-    .dlazdice-drzadlo::before { content: ""; position: absolute; inset: 6px 8px;
-                                border-radius: 7px; background: rgba(0,0,0,0.3); }
-    .dlazdice-drzadlo { font-size: 20px; }
-    .dlazdice-drzadlo::before { z-index: -1; }
+                        box-sizing: border-box; padding: 6px 8px; border-radius: 13px;
+                        background-clip: content-box; font-size: 20px; }
   }
   /* Při tahu bez přechodu a zvětšení z hoveru: přechod zpožďoval taženou dlaždici
      za prstem a ta pak v mřížce poskakovala. */

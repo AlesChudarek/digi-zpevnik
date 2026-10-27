@@ -649,8 +649,11 @@ kdo maže.
       Pointer Events místo HTML5 tažení; u okraje se seznam/stránka sama roluje
       a zrychluje. Šipky ↑↓ v editoru na dotyku schované. Oprava: blok puštěný na své
       místo zůstával zesvětlený. Hlídá `test_editor_ui.py`.
-- [ ] **hledání na telefonu jako kartičky** místo tabulky (620 px na 360px displeji,
-      tlačítka 22 px). Aleš 20. 10.: zkusit, kdyžtak vrátit.
+- [X] **hledání na telefonu jako kartičky** místo tabulky (27. 10.; Aleš 20. 10.: zkusit,
+      kdyžtak vrátit). Pod 640 px se řádek tabulky přeskládá do mřížky: název, autor,
+      „zpěvník · str. N“, vpravo tlačítka 40 px; řazení výběrem „Řadit podle“. Pořád
+      táž tabulka, takže filtr, řazení a tlačítka beze změny. Vrátit = smazat blok
+      `@media (max-width: 640px)` a `.razeni` v search.html. Hlídá `test_mobil.py`.
 - [ ] **projít UI na mobilech celkově** (lišta, dlaždice a nápovědy hotové, čtečka
       a hledání neprověřené)
 - [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba

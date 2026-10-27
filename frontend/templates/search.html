@@ -160,6 +160,45 @@
        it instead of the counter landing on the filters. */
     .results { margin-top: 38px; }
   }
+  /* Řazení výběrem: na telefonu nejsou záhlaví sloupců, za která se dá chytit. */
+  .razeni { display: none; margin: 0 0 10px; font-size: 14px; }
+  .razeni select { margin-left: 6px; padding: 8px 10px; border-radius: 10px; border: none;
+                   box-shadow: 0 2px 5px rgba(0,0,0,0.25); font-size: 14px; }
+  /* Telefon: místo šestisloupcové tabulky (620 px, posouvala se do strany a tlačítka
+     měla 22 px) kartička na řádek. Pořád je to táž tabulka - filtrování, řazení
+     i tlačítka běží beze změny, jen se řádek přeskládá do mřížky:
+       Název písně                 [+] [−]
+       Autor
+       Zpěvník · str. 42                       */
+  @media (max-width: 640px) {
+    .razeni { display: block; }
+    .table-scroll { overflow: visible; }
+    #results-table { min-width: 0; }
+    #results-table, #results-table tbody { display: block; }
+    #results-table thead { display: none; }
+    #results-table tr.result-row {
+      display: grid;
+      grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto;
+      grid-template-areas: "nazev nazev pridat odebrat"
+                           "autor autor pridat odebrat"
+                           "kniha strana pridat odebrat";
+      align-items: center; column-gap: 4px; row-gap: 2px;
+      padding: 10px 6px 10px 18px;
+      border-top: 1px solid var(--muted-border, #e2e8f0);
+    }
+    #results-table tbody tr.result-row:first-child { border-top: none; }
+    #results-table tbody td { display: block; padding: 0; border: none; text-align: left; }
+    #results-table td:nth-child(1) { grid-area: nazev; font-weight: 600; font-size: 15px; }
+    #results-table td:nth-child(2) { grid-area: autor; font-size: 14px; }
+    #results-table td:nth-child(3) { grid-area: kniha; font-size: 13px; opacity: 0.85; }
+    #results-table td:nth-child(4) { grid-area: strana; font-size: 13px; opacity: 0.85;
+                                     white-space: nowrap; padding-left: 0; }
+    #results-table td:nth-child(4)::before { content: "· str. "; }
+    #results-table td:nth-child(5) { grid-area: pridat; }
+    #results-table td:nth-child(6) { grid-area: odebrat; }
+    /* Na prst: 40 px místo 22 px */
+    .action-btn { padding: 9px; }
+  }
 </style>
 
 <style>
@@ -221,6 +260,16 @@
       {% endif %}
     </div>
   </div>
+
+  <label class="razeni">Řadit podle
+    <select id="razeni">
+      <option value="title-asc">názvu (A–Z)</option>
+      <option value="title-desc">názvu (Z–A)</option>
+      <option value="author-asc">autora</option>
+      <option value="book-asc">zpěvníku</option>
+      <option value="page-asc">strany</option>
+    </select>
+  </label>
 
   <div class="results">
     <div class="header-counter"><span class="bubble" id="count-books">Zobrazeno písní: 0</span></div>
@@ -398,18 +447,27 @@
     if (ind) ind.textContent = currentSort.dir === 'asc' ? '▲' : '▼';
   }
 
+  // Výběr řazení (telefon) a záhlaví sloupců (počítač) řídí totéž currentSort
+  function nastavRazeni(key, dir) {
+    currentSort = { key, dir };
+    updateSortIndicators(document.querySelector(`th.th-sortable[data-sort="${key}"]`));
+    const vyber = document.getElementById('razeni');
+    if (vyber) vyber.value = `${key}-${dir}`;
+    applySort();
+  }
+
   function setupSorting() {
+    const vyber = document.getElementById('razeni');
+    if (vyber) vyber.addEventListener('change', () => {
+      const [key, dir] = vyber.value.split('-');
+      nastavRazeni(key, dir);
+    });
     const ths = document.querySelectorAll('th.th-sortable');
     ths.forEach(th => {
       th.addEventListener('click', () => {
         const key = th.getAttribute('data-sort');
-        if (currentSort && currentSort.key === key) {
-          currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentSort = { key, dir: 'asc' };
-        }
-        updateSortIndicators(th);
-        applySort();
+        const dir = currentSort && currentSort.key === key && currentSort.dir === 'asc' ? 'desc' : 'asc';
+        nastavRazeni(key, dir);
       });
     });
   }
@@ -489,11 +547,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     setupFilters();
     setupSorting();
-    // Set default sort: title ASC
-    currentSort = { key: 'title', dir: 'asc' };
-    const thTitle = document.querySelector('th.th-sortable[data-sort="title"]');
-    updateSortIndicators(thTitle);
-    applySort();
+    nastavRazeni('title', 'asc');
     setupRowClicks();
     // Wire add buttons to show picker and call API
     document.querySelectorAll('.action-btn.add').forEach(btn => {

@@ -332,6 +332,45 @@ def main():
                            f"{prekroceni} px navíc")
                 ctx.close()
 
+            print("\n── hledání: na telefonu kartičky místo tabulky ──")
+            # Šestisloupcová tabulka měla 620 px a na telefonu se posouvala do strany,
+            # tlačítka měla 22 px. Pod 640 px je z řádku kartička.
+            KARTA = """() => {
+              const W = innerWidth, box = document.querySelector('.table-scroll');
+              const rows = [...document.querySelectorAll('#results-table tbody tr')].filter(r => r.style.display !== 'none');
+              const r0 = rows[0], c = i => r0.children[i].getBoundingClientRect();
+              const b = r0.querySelector('.action-btn').getBoundingClientRect();
+              return {posun: box.scrollWidth - box.clientWidth, stranka: document.documentElement.scrollWidth - W,
+                      tlacitko: Math.round(Math.min(b.width, b.height)),
+                      podSebou: c(1).top >= c(0).bottom - 1 && c(2).top >= c(1).bottom - 1,
+                      mimo: rows.slice(0, 60).filter(r => [...r.children].some(x => {
+                        const q = x.getBoundingClientRect(); return q.width && q.right > W + 0.5; })).length,
+                      zahlavi: getComputedStyle(document.querySelector('#results-table thead')).display,
+                      razeni: getComputedStyle(document.querySelector('.razeni')).display};
+            }"""
+            for sirka in SIRKY_TELEFONU + [1280]:
+                ctx = browser.new_context(viewport={"width": sirka, "height": 800})
+                page = ctx.new_page()
+                page.on("pageerror", lambda e: chyby.append(str(e)))
+                page.goto(base + "/guest-login")
+                page.goto(base + "/search")
+                page.wait_for_load_state("networkidle")
+                k = page.evaluate(KARTA)
+                if sirka < 640:
+                    zkontroluj(k["posun"] <= 0 and k["stranka"] <= 0 and k["mimo"] == 0
+                               and k["podSebou"] and k["tlacitko"] >= 40 and k["zahlavi"] == "none"
+                               and k["razeni"] == "block",
+                               f"{sirka} px: kartičky - nic do strany, název/autor/zpěvník pod sebou, "
+                               f"tlačítka na prst, řazení výběrem", str(k))
+                    page.select_option("#razeni", "page-asc")
+                    strany = page.evaluate("() => [...document.querySelectorAll('#results-table tbody tr')]"
+                                           ".map(r => parseInt(r.dataset.page, 10) || 0)")
+                    zkontroluj(strany == sorted(strany), f"{sirka} px: výběr řadí podle strany")
+                else:
+                    zkontroluj(k["zahlavi"] != "none" and k["razeni"] == "none",
+                               f"{sirka} px: na počítači tabulka se záhlavím beze změny", str(k))
+                ctx.close()
+
             print("\n── chyby v konzoli ──")
             zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
             browser.close()
