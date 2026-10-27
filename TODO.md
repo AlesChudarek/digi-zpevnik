@@ -671,8 +671,12 @@ kdo maže.
       „zpěvník · str. N“, vpravo tlačítka 40 px; řazení výběrem „Řadit podle“. Pořád
       táž tabulka, takže filtr, řazení a tlačítka beze změny. Vrátit = smazat blok
       `@media (max-width: 640px)` a `.razeni` v search.html. Hlídá `test_mobil.py`.
-- [ ] **projít UI na mobilech celkově** (lišta, dlaždice, nápovědy, hledání, editor, okna
-      Účet/Přátelé, ořez fotky a Vítejte hotové; zbývá čtečka a tablet)
+- [X] **projít UI na mobilech celkově** (27. 10.): lišta, dlaždice, nápovědy, hledání,
+      editor, okna Účet/Přátelé, ořez, Vítejte, čtečka (pod sebou i dvojstrana) a tablet
+      768-1024 px. Čtečka: obsah na 320 × 640 přečuhoval 12 px (padding mimo max-height),
+      křížek obsahu a šipka ↑ v liště (28 × 25) zvětšené, burger o kus dál. Tablet: nic
+      nepřetéká, tlačítka Přidat/Odebrat v tabulce hledání 40 px. Hlídá `test_mobil.py`.
+      Zbývá jen ručně: tisk ze Safari a z telefonu (Playwright ho neověří).
 - [X] **okna Účet a Přátelé, ořez fotky, Vítejte na telefonu** (27. 10.): nic nepřetéká,
       dlouhá okna jde dorolovat. Na dotyku větší křížek (24 → 40), „Změnit e-mail/heslo“,
       „Odstranit účet“ a odkazy na společné zpěvníky (16 px na výšku). Ořez: přiblížení

@@ -401,6 +401,46 @@ def main():
                                f"{sirka} px: na počítači tabulka se záhlavím beze změny", str(k))
                 ctx.close()
 
+            print("\n── čtečka na malém telefonu ──")
+            ctx = browser.new_context(viewport={"width": 320, "height": 640}, has_touch=True)
+            page = ctx.new_page()
+            page.on("pageerror", lambda e: chyby.append(str(e)))
+            prihlas(page, base)
+            page.goto(base + "/songbook/00006")
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(600)
+            l = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect();
+              const t = r('.navbar-toggle'), b = r('.nav-burger');
+              return {sipka: Math.round(Math.min(t.width, t.height)), mezera: Math.round(t.left - b.right)}; }""")
+            zkontroluj(l["sipka"] >= 36 and l["mezera"] >= 4,
+                       "šipka ↑ skrývající lištu je na prst a nezajíždí pod burger", str(l))
+            page.evaluate("() => toggleToc()")
+            page.wait_for_timeout(600)
+            o = page.evaluate("""() => { const c = document.querySelector('#toc-modal .content').getBoundingClientRect(),
+              x = document.querySelector('.toc-close').getBoundingClientRect();
+              return {dole: Math.round(c.bottom), okno: innerHeight, krizek: Math.round(x.width)}; }""")
+            zkontroluj(o["dole"] <= o["okno"] and o["krizek"] >= 40,
+                       "obsah se na 320 × 640 vejde celý (dřív 12 px pod okraj) a křížek je na prst", str(o))
+            ctx.close()
+
+            print("\n── tablet: dotyk na širší obrazovce ──")
+            # Na tabletu zůstává rozložení pro počítač, ale ovládá se prstem
+            for sirka, vyska in ((768, 1024), (1024, 768)):
+                ctx = browser.new_context(viewport={"width": sirka, "height": vyska}, has_touch=True)
+                page = ctx.new_page()
+                page.on("pageerror", lambda e: chyby.append(str(e)))
+                prihlas(page, base)
+                for url in ("/my-songbooks", "/search", "/songbook/00006"):
+                    page.goto(base + url)
+                    page.wait_for_load_state("networkidle")
+                    navic = page.evaluate("() => document.documentElement.scrollWidth - innerWidth")
+                    zkontroluj(navic <= 0, f"{sirka}×{vyska} {url}: nic do strany", f"{navic} px")
+                page.goto(base + "/search")
+                page.wait_for_load_state("networkidle")
+                b = page.evaluate("() => { const r = document.querySelector('.action-btn').getBoundingClientRect(); return Math.round(Math.min(r.width, r.height)); }")
+                zkontroluj(b >= 40, f"{sirka}×{vyska}: tlačítka Přidat/Odebrat v tabulce na prst", f"{b} px")
+                ctx.close()
+
             print("\n── chyby v konzoli ──")
             zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
             browser.close()

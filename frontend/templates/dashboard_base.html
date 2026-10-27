@@ -387,6 +387,12 @@
         padding: 4px 10px;
         font-size: 15px;
       }
+      /* Na prst měla šipka 28 × 25 px */
+      @media (pointer: coarse) {
+        .navbar-toggle { min-width: 40px; min-height: 36px; }
+        /* a burger o kus dál, ať se větší šipka nezasune pod něj (mezera 8 px) */
+        .nav-burger { margin-right: 44px; }
+      }
 
       .nav-links, .navbar .right {
         display: none;

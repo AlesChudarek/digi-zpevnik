@@ -582,6 +582,9 @@
       }
       #toc-modal .content {
         padding: 14px;
+        /* border-box: jinak se k výšce přičetlo odsazení a na 320 × 640 přečuhoval
+           obsah o 12 px pod okraj - konec seznamu nešel vidět */
+        box-sizing: border-box;
         max-height: calc(100vh - 24px);
         max-height: calc(100dvh - 24px);
         overflow-y: auto;
@@ -590,6 +593,8 @@
       #toc-modal .content h3 { font-size: 1.05em; }
       #toc-modal td { padding: 6px 8px; font-size: 0.9em; }
     }
+    /* Na prst: křížek obsahu měl 30 px */
+    @media (pointer: coarse) { .toc-close { width: 40px; height: 40px; } }
 
     /* A short window - a phone in landscape, or a desktop window dragged flat - is where
        vertical padding hurts. At 1256x500 the reader had 430px of height and spent 34 % of

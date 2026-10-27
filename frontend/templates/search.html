@@ -207,9 +207,10 @@
     #results-table td:nth-child(4)::before { content: "str. "; }
     #results-table td:nth-child(5) { grid-area: pridat; }
     #results-table td:nth-child(6) { grid-area: odebrat; }
-    /* Na prst: 40 px místo 22 px */
     .action-btn { padding: 9px; }
   }
+  /* Na prst 40 px místo 22 px - v kartičkách vždy, v tabulce na tabletu */
+  @media (pointer: coarse) { .action-btn { padding: 9px; } }
 </style>
 
 <style>
