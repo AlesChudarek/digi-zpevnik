@@ -484,16 +484,33 @@
     vykresli();
   }
 
+  /* Změna, po které se seznam kreslí znovu, a bloky doplují ze starých míst na nová.
+     Bez toho šipky ↑↓ bloky jen přeskládaly a nebylo vidět, co se s čím prohodilo
+     (Aleš 27. 10.). Blok se pozná podle své první strany. */
+  function sAnimaci(zmen) {
+    var seznam = $('es-seznam');
+    var klic = function (li) { var d = li.querySelector('.es-strana'); return d && d.dataset.klic; };
+    var pred = {};
+    seznam.querySelectorAll('.es-blok').forEach(function (li) { pred[klic(li)] = li.getBoundingClientRect().top; });
+    zmen();
+    seznam.querySelectorAll('.es-blok').forEach(function (li) {
+      var dy = pred[klic(li)] - li.getBoundingClientRect().top;
+      if (!dy || Math.abs(dy) < 0.5) return;
+      li.animate([{ transform: 'translateY(' + dy + 'px)' }, { transform: 'none' }],
+                 { duration: 300, easing: 'cubic-bezier(.25,.8,.25,1)' });
+    });
+  }
+
   function posunNahoru(i) {
     var b = blok(i);
     if (b[0] === 0) return;
-    presun(b[0], b[1], blok(b[0] - 1)[0]);
+    sAnimaci(function () { presun(b[0], b[1], blok(b[0] - 1)[0]); });
   }
 
   function posunDolu(i) {
     var b = blok(i);
     if (b[1] >= strany.length - 1) return;
-    presun(b[0], b[1], blok(b[1] + 1)[1] + 1);
+    sAnimaci(function () { presun(b[0], b[1], blok(b[1] + 1)[1] + 1); });
   }
 
   // ---------- vykreslení ----------

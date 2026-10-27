@@ -332,6 +332,27 @@ def main():
                            f"{prekroceni} px navíc")
                 ctx.close()
 
+            print("\n── nabídka ▾ u spodního okraje se otevře nahoru ──")
+            # Aleš 27. 10.: nabídka se otevírala vždy dolů, i když se pod dlaždici nevešla
+            ctx = browser.new_context(viewport={"width": 390, "height": 700})
+            page = ctx.new_page()
+            page.on("pageerror", lambda e: chyby.append(str(e)))
+            prihlas(page, base)
+            page.goto(base + "/my-songbooks")
+            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(500)
+            # Šipku první dlaždice dostat kousek nad spodní okraj okna
+            page.evaluate("""() => { const s = document.querySelector('.akce-spoustec');
+              scrollBy(0, s.getBoundingClientRect().bottom - innerHeight + 30); }""")
+            page.wait_for_timeout(400)
+            page.evaluate("() => document.querySelector('.akce-spoustec').click()")
+            page.wait_for_timeout(500)
+            n = page.evaluate("""() => { const r = document.querySelector('.akce-nabidka:not([hidden])').getBoundingClientRect();
+              return {horni: Math.round(r.top), dolni: Math.round(r.bottom), okno: innerHeight}; }""")
+            zkontroluj(n["horni"] >= 0 and n["dolni"] <= n["okno"],
+                       "nabídka u spodního okraje je vidět celá", str(n))
+            ctx.close()
+
             print("\n── hledání: na telefonu kartičky místo tabulky ──")
             # Šestisloupcová tabulka měla 620 px a na telefonu se posouvala do strany,
             # tlačítka měla 22 px. Pod 640 px je z řádku kartička.

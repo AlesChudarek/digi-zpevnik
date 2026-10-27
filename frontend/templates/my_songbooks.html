@@ -176,6 +176,8 @@
     display: flex; flex-direction: column; padding: 4px;
     background: #fff; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
   }
+  /* Pod dlaždicí u spodního okraje obrazovky nebylo místo (Aleš 27. 10.) */
+  .akce-nabidka.nahoru { top: auto; bottom: calc(100% + 2px); }
   .akce-nabidka[hidden] { display: none; }
   .akce-polozka {
     display: flex; align-items: center; gap: 10px; width: 100%;
@@ -578,26 +580,23 @@
     .book-tools { width: 100%; min-width: 0; }
   }
 
-  /* Range slider theming: light channel-tinted tracks, black thumbs */
-  input[type="range"] { accent-color: #000; }
-  /* WebKit */
-  #col-r::-webkit-slider-runnable-track { background: #fde8e8; height: 6px; border-radius: 999px; }
-  #col-g::-webkit-slider-runnable-track { background: #e8f8ea; height: 6px; border-radius: 999px; }
-  #col-b::-webkit-slider-runnable-track { background: #e8eefc; height: 6px; border-radius: 999px; }
-  input[type="range"]::-webkit-slider-thumb { background: #111; width: 14px; height: 14px; border-radius: 50%; margin-top: -4px; }
-  /* Firefox */
-  #col-r::-moz-range-track { background: #fde8e8; height: 6px; border-radius: 999px; }
-  #col-g::-moz-range-track { background: #e8f8ea; height: 6px; border-radius: 999px; }
-  #col-b::-moz-range-track { background: #e8eefc; height: 6px; border-radius: 999px; }
+  /* Posuvníky barvy: světle podbarvená stopa, černý jezdec. appearance: none je
+     nutné - v nativním vzhledu se vlastní stopa míchala se systémovou, na telefonu
+     měla tenký černý okraj, který nekopíroval zakulacené konce, a jezdec nebyl
+     uprostřed (Aleš 27. 10.). Jemný okraj stopy je stín, takže se zakulatí s ní. */
+  input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent;
+                        height: 20px; margin: 0; padding: 0; }
+  #col-r { --stopa: #fde8e8; } #col-g { --stopa: #e8f8ea; } #col-b { --stopa: #e8eefc; }
+  input[type="range"]::-webkit-slider-runnable-track {
+    background: var(--stopa, #eee); height: 6px; border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  input[type="range"]::-moz-range-track {
+    background: var(--stopa, #eee); height: 6px; border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12); }
+  /* margin-top = (stopa - jezdec) / 2, jinak jezdec sedí mimo střed stopy */
+  input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; border: 0;
+    background: #111; width: 14px; height: 14px; border-radius: 50%; margin-top: -4px; }
   input[type="range"]::-moz-range-thumb { background: #111; width: 14px; height: 14px; border: none; border-radius: 50%; }
-  /* MS Edge legacy */
-  #col-r::-ms-track { background: transparent; border-color: transparent; color: transparent; }
-  #col-g::-ms-track { background: transparent; border-color: transparent; color: transparent; }
-  #col-b::-ms-track { background: transparent; border-color: transparent; color: transparent; }
-  #col-r::-ms-fill-lower, #col-r::-ms-fill-upper { background: #fde8e8; }
-  #col-g::-ms-fill-lower, #col-g::-ms-fill-upper { background: #e8f8ea; }
-  #col-b::-ms-fill-lower, #col-b::-ms-fill-upper { background: #e8eefc; }
-  input[type="range"]::-ms-thumb { background: #111; border: none; }
 
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .btn { background: white; color: var(--brand-dark, #1b5e20); border: 1px solid var(--muted-border, #cfe6d3); padding: 10px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
@@ -1700,6 +1699,20 @@ function openCreateModal() {
           if (r.right + posun > window.innerWidth - okraj) posun = window.innerWidth - okraj - r.right;
           if (r.left + posun < okraj) posun = okraj - r.left;
           if (posun) nabidka.style.right = `${-posun}px`;
+          // Svisle: dolů, když se tam vejde; jinak nahoru, když je nad šipkou místo
+          // (pod lištou); jinak dorolovat, ať je vidět celá.
+          nabidka.classList.remove('nahoru');
+          const dole = nabidka.getBoundingClientRect();
+          if (dole.bottom > window.innerHeight - okraj) {
+            const lista = document.querySelector('.navbar');
+            const strop = lista && !document.body.classList.contains('navbar-hidden')
+              ? lista.getBoundingClientRect().bottom : 0;
+            if (spoustec.getBoundingClientRect().top - dole.height - 4 >= strop + okraj) {
+              nabidka.classList.add('nahoru');
+            } else {
+              window.scrollBy({ top: dole.bottom - window.innerHeight + okraj, behavior: 'smooth' });
+            }
+          }
           nabidka.querySelector('.akce-polozka')?.focus();
         }
       });

@@ -642,6 +642,19 @@ kdo maže.
 
 ### Ostatní mobilní
 
+- [X] **editor na telefonu: autor pod názvem písně vypadá jako další píseň** (Aleš 27. 10.).
+      Hotovo: píseň je skupinka s proužkem vlevo, název tučně, autor odsazený kurzívou.
+      Na počítači stojí vedle sebe a je to jasné; na úzké obrazovce je potřeba vidět, že
+      autor patří k písni nad ním.
+- [X] **přesun šipkami ↑↓ v editoru bez animace** (Aleš 27. 10.) - mělo by být vidět, kam
+      se písně posunuly / prohodily, jako při tažení. Hotovo: `sAnimaci()` v editor.js.
+- [X] **nabídka ▾ u dlaždice se otevírá vždy dolů**, i když se pod dlaždici nevejde
+      (Aleš 27. 10.). Hotovo: nahoru, když je nad šipkou místo, jinak se stránka doroluje.
+- [X] **posuvníky barvy obálky na telefonu** (Aleš 27. 10.): barevné řádky mají tenký
+      černý okraj, který nekopíruje zakulacené konce, a kolečko není ve správné výšce.
+      Hotovo: `appearance: none` (nativní vzhled se míchal s vlastní stopou); střed
+      kolečka na středu stopy ověřen pixely v Chromiu i Firefoxu.
+
 - [X] **nápovědy na dotykové obrazovce překrývají to, k čemu patří** (20. 10.). Ťuknutí
       posílalo i napodobené mouseover a focusin, nápověda se otevřela a visela. Na
       dotyku teď u běžných tlačítek žádná; `napoveda-duvod` (proč něco nejde) se ukáže
@@ -919,8 +932,3 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-V mobilnim rezimu kdyz je v seznamu pisncek pri uprave zpevniku autor pod nazvem pisnicky, nejde nijak rozlisit jestli jde o autora nebo dalsi pisen. melo by to byt zretelnejsi, co. je co, nebo ze ten autor patri pisni. Kdyz je to na pocitacove obrazovce vedle sebe, je to jasne, ale takhle ne.
-
-Kdyz pouzivam sipky pro presun pisnicek ve zpevniku, mela by se taky prehrat animace, aby bylo jasne, kam se posnicky posunuly/prehodily
-
-Kdyz pouziju sipecku pro edit zpevniku, otevre se okno vzdy dolu, i kdyz se nevejde na stranku. Bud sescrollovat trochu dolu at se vejde nebo otevrit okno nahoru.

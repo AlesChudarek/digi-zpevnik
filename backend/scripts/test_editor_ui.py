@@ -258,6 +258,9 @@ def main():
         aktivni = page.evaluate("document.activeElement.className")
         zkontroluj(aktivni == "es-popisek", "Enter přeskočí pokračování na další pole", aktivni)
         page.locator("#es-seznam .es-blok").nth(0).locator(".es-dolu").click()
+        uhyba = page.evaluate("() => [...document.querySelectorAll('#es-seznam .es-blok')].filter(b => b.getAnimations().length).length")
+        zkontroluj(uhyba >= 2, "šipka bloky prohodí s animací (doplují na nová místa)", f"{uhyba} bloků v pohybu")
+        page.wait_for_timeout(400)  # dojet animaci, než se změří polohy pro tažení
         zkontroluj(typy(page) == ["bez", "pisen", "pokracovani", "prazdna"],
                    "šipka přesune píseň i s pokračováním", typy(page))
         # Tah po kouscích, ať jde změřit, co se děje uprostřed: ostatní bloky mají
@@ -763,6 +766,13 @@ def main():
                       ulozit: Math.round(u.height)}; }""")
             zkontroluj(not h["prekryv"] and h["krizek"] and h["ulozit"] >= 44,
                        f"{sirka} px: Uložit nezakrývá nadpis, křížek je v okně a na prst", h)
+            a = page.evaluate("""() => { const p = document.querySelector('#es-seznam .es-pisen');
+              if (!p) return null;
+              const n = p.querySelector('.es-nazev').getBoundingClientRect(), a = p.querySelector('.es-autor').getBoundingClientRect();
+              return {pod: a.top >= n.bottom - 1, odsazeni: Math.round(a.left - n.left),
+                      prouzek: getComputedStyle(p).borderLeftWidth, kurziva: getComputedStyle(p.querySelector('.es-autor')).fontStyle}; }""")
+            zkontroluj(a is not None and a["pod"] and a["odsazeni"] >= 12 and a["prouzek"] == "3px" and a["kurziva"] == "italic",
+                       f"{sirka} px: autor je poznat jako součást písně (odsazený, kurzívou, píseň s proužkem)", a)
             page.set_input_files("#es-soubory", str(soubory / "zpevnik.pdf"))
             page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
             r = page.evaluate("""() => { const r = document.querySelector('.es-import-okno').getBoundingClientRect();

@@ -172,8 +172,16 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
   .es-blok { grid-template-columns: 22px minmax(0, 1fr) auto; gap: 6px; padding: 8px; }
   .es-strana { grid-template-columns: 48px minmax(0, 1fr); gap: 8px; }
   .es-nahled { width: 48px; height: calc(48px * 2480 / 1748); }
-  .es-pisen { grid-template-columns: minmax(0, 1fr) auto; }
-  .es-pisen .es-autor { grid-column: 1; }
+  /* Autor je tu pod názvem a vypadal jako další píseň (Aleš 27. 10.). Každá píseň
+     je proto skupinka s proužkem vlevo: název tučně, autor pod ním odsazený,
+     menší a kurzívou. */
+  .es-pisen { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px;
+              padding: 6px 6px 6px 8px; border-left: 3px solid var(--brand-strong, #2E7D32);
+              border-radius: 6px; background: rgba(255,255,255,0.5); }
+  .es-pisen + .es-pisen { margin-top: 6px; }
+  .es-pisen .es-nazev { font-weight: 600; }
+  .es-pisen .es-autor { grid-column: 1; width: calc(100% - 16px); margin-left: 16px;
+                        font-size: 13px; font-style: italic; padding-top: 5px; padding-bottom: 5px; }
   .es-pisen .es-odebrat-pisen { grid-row: 1; grid-column: 2; }
 }
 
