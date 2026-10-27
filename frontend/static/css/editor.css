@@ -184,4 +184,12 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
   .es-blok { grid-template-columns: 34px minmax(0, 1fr) auto; }
   .es-drzadlo { font-size: 26px; padding: 6px 0 14px; }
   .es-nahoru, .es-dolu { display: none; }
+  /* Na prst aspoň ~36 px: křížky měly 28, „+“ mezi stranami 22 a textová
+     tlačítka 15 px na výšku. Vzhled stejný, roste jen plocha. */
+  .es-odebrat, .es-odebrat-pisen { width: 36px; height: 36px; }
+  .es-mezera { height: 36px; }
+  .es-vlozit { width: 32px; height: 32px; }
+  .es-dalsi-pisen, .es-nahrat, .es-nahrat-obrazek { padding: 10px 0; }
+  .es-pridat-stranu { padding: 10px 8px; }
+  .es-prvni input { padding: 9px 8px; }
 }

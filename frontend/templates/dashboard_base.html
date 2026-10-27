@@ -750,6 +750,21 @@
       return el;
     };
 
+    /* Je otevřené okno, které má Esc dostat dřív než to pod ním? Oznámení,
+       potvrzení, výběr zpěvníku, ořez fotky nebo nápověda. Okna, která Esc obsluhují
+       sama (editor, sdílení), se tímhle ptají, jestli jsou navrchu. */
+    window.jeOknoNahore = function () {
+      return !!document.querySelector('.oznameni-zaclona, #app-confirm-overlay[aria-hidden="false"], ' +
+                                      '.sb-picker-overlay, .orez-zaclona') ||
+             !!(window.Napoveda && Napoveda.jeVidet());
+    };
+    // Výběr zpěvníku (hledání a čtečka: „Přidat do zpěvníku“) zavírá jen klik mimo
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      const vybery = document.querySelectorAll('.sb-picker-overlay');
+      if (vybery.length) vybery[vybery.length - 1].remove();
+    });
+
     window.oznam = function (text, volby) {
       if (typeof volby === 'string') volby = { nadpis: volby };
       const druh = (volby && volby.druh) || 'chyba';

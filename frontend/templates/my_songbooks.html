@@ -492,7 +492,13 @@
   #new-book-modal .modal-wrap { margin-top: 70px; }
   body.navbar-hidden #new-book-modal .modal-wrap { margin-top: 20px; }
   #new-book-modal .modal { background: white; color: var(--brand-dark, #1b5e20); width: min(880px, 92vw); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.35); padding: 24px 24px 22px; position: relative; }
-  #new-book-modal h2 { margin: 0 0 12px; }
+  /* Hlavička: nadpis, Uložit a křížek v jednom řádku. Uložit dřív viselo napevno
+     vpravo nahoře a na telefonu zakrylo nadpis; zavřít šlo jen klikem mimo okno. */
+  .nb-hlava { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+  #new-book-modal .nb-hlava h2 { margin: 0; flex: 1 1 auto; min-width: 0; }
+  .nb-zavrit { flex: none; width: 40px; height: 40px; margin-right: -8px; border: 0; border-radius: 50%;
+               background: none; color: inherit; font-size: 30px; line-height: 1; cursor: pointer; }
+  @media (hover: hover) { .nb-zavrit:hover { background: var(--muted-bg, #e8f5e9); } }
   .form-row { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 10px 0 16px; }
   .form-row label { font-weight: 600; font-size: 16px; color: var(--brand-dark, #1b5e20); }
   .form-row input[type="text"] { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--muted-border, #dbeadf); box-shadow: inset 0 1px 2px rgba(0,0,0,0.06); font-size: 14px; background: #fff; color: var(--brand-dark, #1b5e20); }
@@ -603,12 +609,13 @@
   .btn-spinner.active { visibility: visible; opacity: 1; }
   .btn-with-inline-spinner { display: flex; align-items: center; gap: 8px; }
   @keyframes btn-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-  .btn-top-save-wrap { position: absolute; right: 24px; top: 12px; display: flex; align-items: center; gap: 10px; z-index: 10; }
+  .btn-top-save-wrap { display: flex; align-items: center; gap: 10px; flex: none; }
   .btn-top-save { padding: 20px 34px; font-size: 18px; border-radius: 12px; box-shadow: 0 3px 10px rgba(0,0,0,0.2); min-height: 56px; min-width: 160px; }
   /* Dokud není co uložit, je Uložit tlumené; rozsvítí se s první změnou. */
   .btn-top-save.bez-zmen { opacity: 0.45; box-shadow: none; cursor: default; }
   .section-title { margin: 18px 0 8px; font-size: 16px; color: var(--brand-dark, #1b5e20); }
-  /* Hide bottom actions in create/edit modal; closing is via click outside */
+  /* Spodní Zrušit/Uložit jsou schované: Uložit je v hlavičce, zavírá se křížkem, Esc
+     nebo klikem mimo okno. */
   #new-book-modal .modal .modal-actions { display: none; }
   @media (hover: hover) { .btn:hover { filter: brightness(0.98); } }
 </style>
@@ -616,10 +623,13 @@
 <div id="new-book-modal">
   <div class="modal-wrap">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="nb-title">
-      <h2 id="nb-title">Nový zpěvník</h2>
-      <div class="btn-top-save-wrap">
-        <span class="btn-spinner" id="nb-save-top-spinner" aria-hidden="true"></span>
-        <button class="btn primary btn-top-save" id="nb-save-top">Uložit</button>
+      <div class="nb-hlava">
+        <h2 id="nb-title">Nový zpěvník</h2>
+        <div class="btn-top-save-wrap">
+          <span class="btn-spinner" id="nb-save-top-spinner" aria-hidden="true"></span>
+          <button class="btn primary btn-top-save" id="nb-save-top">Uložit</button>
+        </div>
+        <button type="button" class="nb-zavrit" id="nb-zavrit" aria-label="Zavřít">×</button>
       </div>
       <!-- Hidden removal flags for re-use edit mode in this modal -->
       <input type="hidden" id="erem-front_outer" value="0">
@@ -792,6 +802,9 @@
       padding: 14px;
     }
     #new-book-modal .modal-wrap { margin-top: 8px; }
+    #new-book-modal .nb-hlava h2 { font-size: 20px; }
+    .btn-top-save { padding: 10px 18px; font-size: 16px; min-height: 44px; min-width: 0; }
+    .nb-hlava { gap: 6px; }
 
     /* Four cover dropzones two-up do not fit a phone */
     .cover-grid { grid-template-columns: 1fr; gap: 12px; }
@@ -807,6 +820,15 @@
 
     /* The 3D book preview is sized for a desktop dialog */
     .book-preview { max-width: 100%; }
+  }
+  /* Na prst: křížek u obálky 28 px a číselná pole barvy 29 px byla málo */
+  @media (pointer: coarse) {
+    .dz-clear { width: 40px; height: 40px; }
+    #cover-color-tools input[type="number"], #hex-col { padding-top: 9px !important; padding-bottom: 9px !important; }
+    /* Jezdec posuvníku barvy 14 px je na prst moc malý */
+    #cover-color-tools input[type="range"] { height: 32px; }
+    #cover-color-tools input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -9px; }
+    #cover-color-tools input[type="range"]::-moz-range-thumb { width: 24px; height: 24px; }
   }
 </style>
 
@@ -1064,16 +1086,33 @@ function openCreateModal() {
           EditorStran.nacti(data.strany, 1, { neulozeno: true });
         }).catch(chyba => console.error('Píseň pro nový zpěvník se nenačetla', chyba));
       }, 0);
-      document.getElementById('nb-cancel').addEventListener('click', async (e) => {
+      // Zavření okna - křížek, Zrušit, klik mimo i Esc. S neuloženou změnou se zeptá.
+      async function zkusZavritEditor() {
         if (zmenyOkna()) {
           const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
-          if (choice === 'cancel') { e.preventDefault(); return; }
+          if (choice === 'cancel') return;
           if (choice === 'save') { nbCreateBtn?.click(); return; }
         }
         modal.style.display = 'none'; stopAnim(); resetColorToRandom(); resetUploads();
         // Leaving create/edit modal: ensure next open via "+" is fresh create
         window.__editMode = false; window.__editBookId = null;
-      });
+      }
+      document.getElementById('nb-cancel').addEventListener('click', zkusZavritEditor);
+      document.getElementById('nb-zavrit').addEventListener('click', zkusZavritEditor);
+      // Esc zavře editor, jen když nad ním nic není (potvrzení, náhled strany, import,
+      // oznámení, nápověda). Zachytávací fáze na okně běží dřív než obsluhy těch oken,
+      // takže vidí stav ještě před tímhle stiskem - jinak by Esc, který zavřel
+      // potvrzení, zavřel hned i editor.
+      window.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || modal.style.display !== 'flex') return;
+        if (window.jeOknoNahore() || resizeNoticeOpen ||
+            document.querySelector('#es-lupa:not([hidden]), #es-import:not([hidden])')) return;
+        // Dál nepustit: potvrzení neuložených změn, které se tu otevře, by tentýž
+        // stisk Esc dostalo taky a hned se zase zavřelo.
+        e.preventDefault();
+        e.stopPropagation();
+        zkusZavritEditor();
+      }, true);
       // Close only if the click started on overlay and ended on overlay (no drag from content)
       let pointerDownOnOverlay = false;
       let startedInsideContent = false;
@@ -1085,18 +1124,7 @@ function openCreateModal() {
       }
       modal.addEventListener('click', async (e) => {
         const shouldClose = (e.target === modal) && pointerDownOnOverlay && !dragging && !justDragged && !startedInsideContent;
-        if (shouldClose) {
-          if (zmenyOkna()) {
-            const choice = await window.showUnsavedConfirm('Zahodit neuložené změny?');
-            if (choice === 'cancel') { pointerDownOnOverlay = false; startedInsideContent = false; return; }
-            if (choice === 'save') { nbCreateBtn?.click(); return; }
-          }
-          modal.style.display = 'none';
-          stopAnim();
-          resetColorToRandom();
-          resetUploads();
-          window.__editMode = false; window.__editBookId = null;
-        }
+        if (shouldClose) zkusZavritEditor();
         // reset flags after any click
         pointerDownOnOverlay = false;
         startedInsideContent = false;
@@ -1732,8 +1760,9 @@ function openCreateModal() {
           closeShareModal();
         }
       });
-      shareModal.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape') {
+      // Na dokumentu, ne na okně: dřív Esc fungoval, jen když v okně stál kurzor
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && shareModal.style.display === 'flex' && !window.jeOknoNahore()) {
           closeShareModal();
         }
       });

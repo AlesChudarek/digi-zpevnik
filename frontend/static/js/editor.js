@@ -394,6 +394,7 @@
         okno.hidden = true;
         potvrd.removeEventListener('click', ok);
         zrus.removeEventListener('click', ne);
+        document.removeEventListener('keydown', esc);
         resolve(vysledek);
       }
       function ok() {
@@ -409,8 +410,10 @@
         }
       }
       function ne() { konec(null); }
+      function esc(e) { if (e.key === 'Escape' && !(window.jeOknoNahore && jeOknoNahore())) ne(); }
       potvrd.addEventListener('click', ok);
       zrus.addEventListener('click', ne);
+      document.addEventListener('keydown', esc);
       $('es-import-strany').onfocus = function () { okno.querySelector('input[value="vyber"]').checked = true; };
     });
   }

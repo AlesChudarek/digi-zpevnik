@@ -620,6 +620,51 @@ def main():
                    "zavření s neuloženou změnou se zeptá")
         page.click("#app-confirm-ok")
 
+        print("\n── zavírání oken: křížek a Esc ──")
+        # Aleš 20. 10.: v úpravách zpěvníku chyběl křížek a okna nešla zavřít Esc
+        otevreny = "() => document.getElementById('new-book-modal').style.display === 'flex'"
+        potvrzeni = "() => document.getElementById('app-confirm-overlay').getAttribute('aria-hidden') === 'false'"
+        def otevri_editor():
+            page.evaluate(f"window.openEditSongbookModal('{novy.id}')")
+            page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length === 4")
+            page.mouse.move(5, 5)  # pryč z tlačítek, ať nevisí nápověda (Esc patří jí)
+        otevri_editor()
+        page.click("#nb-zavrit")
+        zkontroluj(not page.evaluate(otevreny) and not page.evaluate(potvrzeni),
+                   "křížek zavře editor bez změn rovnou")
+        otevri_editor()
+        page.keyboard.press("Escape")
+        zkontroluj(not page.evaluate(otevreny), "Esc zavře editor bez změn")
+        otevri_editor()
+        page.locator("#es-seznam .es-strana").nth(0).locator(".es-odebrat").click()
+        page.mouse.move(5, 5)
+        page.wait_for_timeout(200)
+        page.keyboard.press("Escape")
+        zkontroluj(page.evaluate(potvrzeni) and page.evaluate(otevreny),
+                   "Esc s neuloženou změnou se nejdřív zeptá")
+        page.keyboard.press("Escape")
+        zkontroluj(not page.evaluate(potvrzeni) and page.evaluate(otevreny),
+                   "další Esc zavře jen potvrzení, editor zůstane otevřený")
+        page.click("#nb-zavrit")
+        page.click("#app-confirm-ok")
+        zkontroluj(not page.evaluate(otevreny), "křížek se změnou zavře až po potvrzení")
+        otevri_editor()
+        page.set_input_files("#es-soubory", str(soubory / "zpevnik.pdf"))
+        page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
+        page.keyboard.press("Escape")
+        zkontroluj(page.is_hidden("#es-import") and page.evaluate(otevreny),
+                   "Esc zavře okno importu a editor pod ním nechá")
+        page.keyboard.press("Escape")
+        zkontroluj(not page.evaluate(otevreny), "a další Esc zavře editor")
+        if page.locator(".btn-share").count():
+            page.evaluate("() => document.querySelector('.btn-share').click()")
+            page.wait_for_timeout(300)
+            page.mouse.click(5, 5)  # kurzor mimo okno - dřív pak Esc nefungoval
+            page.evaluate("() => document.activeElement && document.activeElement.blur()")
+            page.keyboard.press("Escape")
+            zkontroluj(page.evaluate("() => document.getElementById('share-modal').style.display") != "flex",
+                       "Esc zavře okno sdílení, i když v něm nestojí kurzor")
+
         print("\n── dotyk: tah prstem za držadlo ──")
         dctx = prohlizec.new_context(viewport={"width": 390, "height": 700}, has_touch=True, is_mobile=True)
         dp = dctx.new_page()
@@ -712,6 +757,12 @@ def main():
             m = page.evaluate(PRETEKA)
             zkontroluj(m["stranka"] <= m["sirka"] and not m["venku"],
                        f"{sirka} px: editor se vejde do okna", m)
+            h = page.evaluate("""() => { const r = s => document.querySelector(s).getBoundingClientRect();
+              const n = r('#nb-title'), u = r('#nb-save-top'), z = r('#nb-zavrit'), m = r('#new-book-modal .modal');
+              return {prekryv: !(u.left >= n.right || u.top >= n.bottom), krizek: z.right <= m.right && z.width >= 40,
+                      ulozit: Math.round(u.height)}; }""")
+            zkontroluj(not h["prekryv"] and h["krizek"] and h["ulozit"] >= 44,
+                       f"{sirka} px: Uložit nezakrývá nadpis, křížek je v okně a na prst", h)
             page.set_input_files("#es-soubory", str(soubory / "zpevnik.pdf"))
             page.wait_for_selector("#es-import:not([hidden])", timeout=20000)
             r = page.evaluate("""() => { const r = document.querySelector('.es-import-okno').getBoundingClientRect();

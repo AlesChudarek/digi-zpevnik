@@ -2097,6 +2097,12 @@ function scrollToTop() {
   // Rely on updatePages() to schedule a single robust initial fit; avoid duplicate fits here
   applyZoom();
   document.addEventListener('keydown', (event) => {
+    // Esc zavře obsah, pokud nad ním není jiné okno (nápověda, oznámení)
+    if (event.key === 'Escape' && document.getElementById('toc-modal').style.display === 'flex'
+        && !window.jeOknoNahore()) {
+      toggleToc();
+      return;
+    }
     if (event.key === 'ArrowLeft') {
       prevPage();
     } else if (event.key === 'ArrowRight') {

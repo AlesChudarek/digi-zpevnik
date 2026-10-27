@@ -59,8 +59,12 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       Aleš 20. 10.: chybí i ukazatel, že se dlaždicemi dá hýbat. Od dvou zpěvníků dostane
       dlaždice vlevo nahoře ikonu přesunu jako písně v editoru (na počítači i telefonu)
       a táhne se jen za ni. Hotovo 20. 10., viz „Mobil a vzhled“.
-- [ ] **v úpravách zpěvníku chybí zavření okna** (Aleš 20. 10.). A obecně: všechna okna,
-      která jde zavřít, mají jít zavřít i klávesou Esc.
+- [X] **v úpravách zpěvníku chybí zavření okna** (Aleš 20. 10., hotovo 27. 10.). Křížek
+      v hlavičce (nadpis · Uložit · ×; Uložit dřív viselo napevno vpravo a na telefonu
+      zakrylo nadpis). Esc nově zavře editor, import PDF/ZIP, sdílení (dřív jen
+      s kurzorem v okně), výběr zpěvníku v hledání i čtečce a obsah ve čtečce. Editor
+      se na Esc ptá `jeOknoNahore()` (dashboard_base), ať nezavře sebe místo potvrzení
+      nebo nápovědy nad sebou. Hlídá `test_editor_ui.py` a `test_napovedy.py`.
 
 ## Datový model
 
@@ -632,9 +636,9 @@ kdo maže.
       Pozn.: body 1 a 2 jsou provizorium do doby, než se přidávání stran předělá na
       jedno univerzální „Přidat" — pak tabulka i ta tři tlačítka stejně zmizí.
 - [X] **kontrast v motivu Půlnoc** — opraveno, viz „Barvy motivů" níž.
-- [ ] projít zakládání nového zpěvníku a přidávání písničky stejným způsobem —
-      měřeno zatím nebylo, ale editor a „nový zpěvník" jsou totéž okno, takže
-      většina oprav padne na obojí
+- [X] projít zakládání nového zpěvníku a přidávání písničky stejným způsobem
+      (27. 10.): na 320/390 px nic nepřetéká; na dotyku zvětšené křížky (28 → 36-40),
+      „+“ mezi stranami, textová tlačítka, číselná pole a jezdce barvy.
 
 ### Ostatní mobilní
 
@@ -915,3 +919,8 @@ kdo maže.
         (menší data, souvisí s offline režimem), tisk v libovolném formátu.
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+V mobilnim rezimu kdyz je v seznamu pisncek pri uprave zpevniku autor pod nazvem pisnicky, nejde nijak rozlisit jestli jde o autora nebo dalsi pisen. melo by to byt zretelnejsi, co. je co, nebo ze ten autor patri pisni. Kdyz je to na pocitacove obrazovce vedle sebe, je to jasne, ale takhle ne.
+
+Kdyz pouzivam sipky pro presun pisnicek ve zpevniku, mela by se taky prehrat animace, aby bylo jasne, kam se posnicky posunuly/prehodily
+
+Kdyz pouziju sipecku pro edit zpevniku, otevre se okno vzdy dolu, i kdyz se nevejde na stranku. Bud sescrollovat trochu dolu at se vejde nebo otevrit okno nahoru.

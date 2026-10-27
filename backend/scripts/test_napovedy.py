@@ -465,6 +465,25 @@ def main():
                 zkontroluj(False, "je co změřit - řádek z veřejného zpěvníku v hledání")
             dctx.close()
 
+            print("\n── Esc zavírá okna ──")
+            page.set_viewport_size({"width": 1280, "height": 800})
+            page.goto(base + f"/songbook/{BOOK}")
+            page.wait_for_load_state("networkidle")
+            page.evaluate("() => toggleToc()")
+            page.wait_for_timeout(300)
+            page.mouse.move(5, 400)
+            page.keyboard.press("Escape")
+            zkontroluj(page.evaluate("() => document.getElementById('toc-modal').style.display") != "flex",
+                       "Esc zavře obsah ve čtečce")
+            page.goto(base + "/search")
+            page.wait_for_load_state("networkidle")
+            page.locator(".action-btn.add:not(.disabled)").first.click()
+            page.wait_for_selector(".sb-picker-overlay")
+            page.mouse.move(5, 5)
+            page.keyboard.press("Escape")
+            zkontroluj(page.locator(".sb-picker-overlay").count() == 0,
+                       "Esc zavře výběr zpěvníku v hledání")
+
             print("\n── chyby v konzoli ──")
             zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
 
