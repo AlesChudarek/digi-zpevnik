@@ -346,6 +346,13 @@ def main():
                       mimo: rows.slice(0, 60).filter(r => [...r.children].some(x => {
                         const q = x.getBoundingClientRect(); return q.width && q.right > W + 0.5; })).length,
                       zahlavi: getComputedStyle(document.querySelector('#results-table thead')).display,
+                      // Číslo strany na stejném místě v každé kartičce, ať je zpěvník jakkoli dlouhý
+                      stranyZarovnane: new Set(rows.slice(0, 60).map(r => Math.round(r.children[3].getBoundingClientRect().right))).size === 1,
+                      // Rohy: levý horní a oba spodní zakulacené, přes roh nečouhá řádek
+                      rohy: (() => { const q = document.querySelector('.table-scroll').getBoundingClientRect();
+                        const tr = (x, y) => !!(document.elementFromPoint(x, y) || {closest: () => null}).closest('tr');
+                        scrollTo(0, 0); const h = tr(q.left + 1, q.top + 1);
+                        return {levyHorni: !h, levySpodni: getComputedStyle(document.querySelector('.table-scroll')).borderBottomLeftRadius}; })(),
                       razeni: getComputedStyle(document.querySelector('.razeni')).display};
             }"""
             for sirka in SIRKY_TELEFONU + [1280]:
@@ -359,15 +366,17 @@ def main():
                 if sirka < 640:
                     zkontroluj(k["posun"] <= 0 and k["stranka"] <= 0 and k["mimo"] == 0
                                and k["podSebou"] and k["tlacitko"] >= 40 and k["zahlavi"] == "none"
-                               and k["razeni"] == "block",
+                               and k["razeni"] == "flex" and k["stranyZarovnane"]
+                               and k["rohy"]["levyHorni"] and k["rohy"]["levySpodni"] == "10px",
                                f"{sirka} px: kartičky - nic do strany, název/autor/zpěvník pod sebou, "
-                               f"tlačítka na prst, řazení výběrem", str(k))
-                    page.select_option("#razeni", "page-asc")
+                               f"strany zarovnané, tlačítka na prst, řazení tlačítky, zakulacené rohy", str(k))
+                    page.click('.razeni button[data-sort="page"]')
                     strany = page.evaluate("() => [...document.querySelectorAll('#results-table tbody tr')]"
                                            ".map(r => parseInt(r.dataset.page, 10) || 0)")
                     zkontroluj(strany == sorted(strany), f"{sirka} px: výběr řadí podle strany")
                 else:
-                    zkontroluj(k["zahlavi"] != "none" and k["razeni"] == "none",
+                    zkontroluj(k["zahlavi"] != "none" and k["razeni"] == "none"
+                               and k["rohy"]["levySpodni"] == "10px",
                                f"{sirka} px: na počítači tabulka se záhlavím beze změny", str(k))
                 ctx.close()
 

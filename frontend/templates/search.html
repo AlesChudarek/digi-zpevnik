@@ -56,7 +56,10 @@
   /* No background here: this box has no rounded corners, so its tint was the last
      square layer filling in the corner that everything else rounds away. The card
      underneath now carries the same colour, so overscroll still never shows white. */
-  .table-scroll { width: 100%; overscroll-behavior-x: none; }
+  /* Zakulacené rohy kromě pravého horního (tam navazuje bublina s počtem). Barevné
+     řádky by přes zakulacení karty jinak přečuhovaly. clip, ne hidden: hidden dělá
+     z obalu rolovací plochu a ta by na počítači rozbila lepivé záhlaví. */
+  .table-scroll { width: 100%; overscroll-behavior-x: none; overflow: clip; border-radius: 10px 0 10px 10px; }
   thead th {
     text-align: left;
     padding: 12px 16px;
@@ -94,7 +97,7 @@
   /* Only the top-left corner is rounded. The rows carry square backgrounds and the
      counter bubble joins at the top right, so rounding anything else would show as
      one layer curving while another stays straight. */
-  .results { position: relative; border-radius: 10px 0 0 0; }
+  .results { position: relative; border-radius: 10px 0 10px 10px; }
   /* "There is something you cannot see this way": a fade on whichever side still has
      content. It appears only while that direction can actually be scrolled, so on a
      desktop where the whole table fits, neither ever shows. */
@@ -110,15 +113,16 @@
   }
   .scroll-hint.right {
     right: 0;
-    /* Square, like every corner of the card except the top-left one */
-    border-radius: 0;
+    /* Nahoře rovně jako roh karty, dole zakulaceně jako ona */
+    border-radius: 0 0 10px 0;
     background: linear-gradient(to left, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
   }
   .scroll-hint.left {
     left: 0;
     /* Square on purpose: this only shows once the table is scrolled, and by then the
-       rounded first cell is out of view and the visible left edge is a square one. */
-    border-radius: 0;
+       rounded first cell is out of view and the visible left edge is a square one.
+       Dole ale karta zakulacená je. */
+    border-radius: 0 0 0 10px;
     background: linear-gradient(to right, rgba(0, 0, 0, 0.38), rgba(0, 0, 0, 0));
   }
   .results.can-scroll-right .scroll-hint.right { opacity: 1; }
@@ -161,24 +165,29 @@
     .results { margin-top: 38px; }
   }
   /* Řazení výběrem: na telefonu nejsou záhlaví sloupců, za která se dá chytit. */
-  .razeni { display: none; margin: 0 0 10px; font-size: 14px; }
-  .razeni select { margin-left: 6px; padding: 8px 10px; border-radius: 10px; border: none;
-                   box-shadow: 0 2px 5px rgba(0,0,0,0.25); font-size: 14px; }
+  /* Tlačítka, ne <select>: rozbalení selectu kreslí prohlížeč a v náhledu telefonu
+     ujelo jinam a mělo miniaturní písmo. Ťuknutí řadí, druhé otočí směr - jako
+     záhlaví sloupců na počítači. */
+  .razeni { display: none; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; font-size: 13px; }
+  .razeni button { padding: 7px 11px; border-radius: 16px; border: none; font: inherit; cursor: pointer;
+                   background: #fff; color: var(--brand-dark, #1b5e20); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  /* --brand-dark, ne --brand-strong: bílý text na „strong“ měl v motivech Blue a
+     Půlnoc jen 3,8 a 3 : 1 */
+  .razeni button[aria-pressed="true"] { background: var(--brand-dark, #1b5e20); color: #fff; font-weight: 600; }
   /* Telefon: místo šestisloupcové tabulky (620 px, posouvala se do strany a tlačítka
      měla 22 px) kartička na řádek. Pořád je to táž tabulka - filtrování, řazení
      i tlačítka běží beze změny, jen se řádek přeskládá do mřížky:
        Název písně                 [+] [−]
        Autor
-       Zpěvník · str. 42                       */
+       Zpěvník…           str. 42              */
   @media (max-width: 640px) {
-    .razeni { display: block; }
-    .table-scroll { overflow: visible; }
+    .razeni { display: flex; }
     #results-table { min-width: 0; }
     #results-table, #results-table tbody { display: block; }
     #results-table thead { display: none; }
     #results-table tr.result-row {
       display: grid;
-      grid-template-columns: minmax(0, max-content) minmax(0, 1fr) auto auto;
+      grid-template-columns: minmax(0, 1fr) auto auto auto;
       grid-template-areas: "nazev nazev pridat odebrat"
                            "autor autor pridat odebrat"
                            "kniha strana pridat odebrat";
@@ -190,10 +199,12 @@
     #results-table tbody td { display: block; padding: 0; border: none; text-align: left; }
     #results-table td:nth-child(1) { grid-area: nazev; font-weight: 600; font-size: 15px; }
     #results-table td:nth-child(2) { grid-area: autor; font-size: 14px; }
-    #results-table td:nth-child(3) { grid-area: kniha; font-size: 13px; opacity: 0.85; }
+    /* Dlouhý název zpěvníku se zkrátí, číslo strany stojí vždy na stejném místě */
+    #results-table td:nth-child(3) { grid-area: kniha; font-size: 13px; opacity: 0.85;
+                                     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #results-table td:nth-child(4) { grid-area: strana; font-size: 13px; opacity: 0.85;
-                                     white-space: nowrap; padding-left: 0; }
-    #results-table td:nth-child(4)::before { content: "· str. "; }
+                                     white-space: nowrap; text-align: right; padding-left: 6px; }
+    #results-table td:nth-child(4)::before { content: "str. "; }
     #results-table td:nth-child(5) { grid-area: pridat; }
     #results-table td:nth-child(6) { grid-area: odebrat; }
     /* Na prst: 40 px místo 22 px */
@@ -261,15 +272,13 @@
     </div>
   </div>
 
-  <label class="razeni">Řadit podle
-    <select id="razeni">
-      <option value="title-asc">názvu (A–Z)</option>
-      <option value="title-desc">názvu (Z–A)</option>
-      <option value="author-asc">autora</option>
-      <option value="book-asc">zpěvníku</option>
-      <option value="page-asc">strany</option>
-    </select>
-  </label>
+  <div class="razeni" role="group" aria-label="Řadit podle">
+    Řadit:
+    <button type="button" data-sort="title">Název</button>
+    <button type="button" data-sort="author">Autor</button>
+    <button type="button" data-sort="book">Zpěvník</button>
+    <button type="button" data-sort="page">Strana</button>
+  </div>
 
   <div class="results">
     <div class="header-counter"><span class="bubble" id="count-books">Zobrazeno písní: 0</span></div>
@@ -451,23 +460,23 @@
   function nastavRazeni(key, dir) {
     currentSort = { key, dir };
     updateSortIndicators(document.querySelector(`th.th-sortable[data-sort="${key}"]`));
-    const vyber = document.getElementById('razeni');
-    if (vyber) vyber.value = `${key}-${dir}`;
+    document.querySelectorAll('.razeni button').forEach(b => {
+      const ano = b.dataset.sort === key;
+      b.setAttribute('aria-pressed', String(ano));
+      b.textContent = b.textContent.replace(/ [▲▼]$/, '') + (ano ? (dir === 'asc' ? ' ▲' : ' ▼') : '');
+    });
     applySort();
   }
 
   function setupSorting() {
-    const vyber = document.getElementById('razeni');
-    if (vyber) vyber.addEventListener('change', () => {
-      const [key, dir] = vyber.value.split('-');
-      nastavRazeni(key, dir);
-    });
+    const prepni = (key) => nastavRazeni(key,
+      currentSort && currentSort.key === key && currentSort.dir === 'asc' ? 'desc' : 'asc');
+    document.querySelectorAll('.razeni button').forEach(b =>
+      b.addEventListener('click', () => prepni(b.dataset.sort)));
     const ths = document.querySelectorAll('th.th-sortable');
     ths.forEach(th => {
       th.addEventListener('click', () => {
-        const key = th.getAttribute('data-sort');
-        const dir = currentSort && currentSort.key === key && currentSort.dir === 'asc' ? 'desc' : 'asc';
-        nastavRazeni(key, dir);
+        prepni(th.getAttribute('data-sort'));
       });
     });
   }
