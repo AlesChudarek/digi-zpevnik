@@ -196,7 +196,9 @@ window.UcetOkna = (function () {
     zaclona.innerHTML = `
       <div class="okno orez-okno" role="dialog" aria-modal="true" aria-label="Výřez fotky">
         <h3>Výřez fotky</h3>
-        <p>Posuňte fotku tažením, přibližte posuvníkem nebo kolečkem myši.</p>
+        <p>${matchMedia('(pointer: coarse)').matches
+          ? 'Posuňte fotku prstem, přibližte posuvníkem nebo roztažením dvou prstů.'
+          : 'Posuňte fotku tažením, přibližte posuvníkem nebo kolečkem myši.'}</p>
         <div class="orez-plocha"><div class="orez-kruh"></div></div>
         <input type="range" class="orez-zoom" min="1" max="4" step="0.01" value="1" aria-label="Přiblížení">
         <div class="actions">
@@ -244,18 +246,41 @@ window.UcetOkna = (function () {
       const r = plocha.getBoundingClientRect();
       priblizNa(meritko / zaklad * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
+    // Jeden prst (nebo myš) posouvá, dva prsty přibližují kolem bodu mezi nimi.
+    // Při změně počtu prstů se tah začne znovu odtud, jinak by fotka poskočila.
+    const prsty = new Map();
     let tah = null;
+    function zacniTah() {
+      const b = [...prsty.values()];
+      if (b.length === 1) tah = { px: b[0].x, py: b[0].y, x, y };
+      else if (b.length >= 2) {
+        tah = { vzdalenost: Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y) || 1,
+                zoom: meritko / zaklad };
+      } else tah = null;
+    }
     plocha.addEventListener('pointerdown', (e) => {
-      tah = { px: e.clientX, py: e.clientY, x, y };
+      prsty.set(e.pointerId, { x: e.clientX, y: e.clientY });
       plocha.setPointerCapture(e.pointerId);
+      zacniTah();
     });
     plocha.addEventListener('pointermove', (e) => {
-      if (!tah) return;
+      if (!tah || !prsty.has(e.pointerId)) return;
+      prsty.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const b = [...prsty.values()];
+      if (b.length >= 2) {
+        const r = plocha.getBoundingClientRect();
+        const d = Math.hypot(b[0].x - b[1].x, b[0].y - b[1].y);
+        priblizNa(tah.zoom * d / tah.vzdalenost,
+                  (b[0].x + b[1].x) / 2 - r.left, (b[0].y + b[1].y) / 2 - r.top);
+        return;
+      }
       x = tah.x + e.clientX - tah.px;
       y = tah.y + e.clientY - tah.py;
       omez(); vykresli();
     });
-    plocha.addEventListener('pointerup', () => { tah = null; });
+    const pustit = (e) => { prsty.delete(e.pointerId); zacniTah(); };
+    plocha.addEventListener('pointerup', pustit);
+    plocha.addEventListener('pointercancel', pustit);
 
     const zavriOrez = () => { zaclona.remove(); URL.revokeObjectURL(url); };
     zaclona.addEventListener('click', async (e) => {

@@ -380,6 +380,50 @@ def main():
             prez = A.db.session.get(A.User, 3).prezdivka
         zkontroluj(prez == "Petr z Vítejte" and "/vitejte" not in page.url,
                    "Pokračovat přezdívku uloží a jde dál", (prez, page.url))
+        print("\n── telefon: okno Účet a ořez prstem ──")
+        dctx = prohlizec.new_context(viewport={"width": 390, "height": 700}, has_touch=True, is_mobile=True)
+        dp = dctx.new_page()
+        dp.on("pageerror", lambda e: chyby.append(str(e)))
+        dp.goto(base + "/login")
+        dp.fill('input[name="email"]', EMAIL[3])
+        dp.fill('input[name="password"]', HESLO)
+        dp.click('button[type="submit"]')
+        dp.wait_for_load_state("networkidle")
+        dp.evaluate("() => UcetOkna.otevri('ucet')")
+        dp.wait_for_selector("#ucet-okno:not([hidden]) #profil-prezdivka")
+        velikosti = dp.evaluate("""() => { const v = s => { const r = document.querySelector(s).getBoundingClientRect();
+            return Math.round(Math.min(r.width, r.height)); };
+          return {krizek: v('.ucet-okno-zavrit'), zmenit: Math.round(document.querySelector('.ucet-zmena summary').getBoundingClientRect().height)}; }""")
+        zkontroluj(velikosti["krizek"] >= 40 and velikosti["zmenit"] >= 36,
+                   "na dotyku křížek a „Změnit …“ dost velké na prst", velikosti)
+        dp.set_input_files("#profil-soubor", str(velka))
+        dp.wait_for_selector(".orez-zaclona .orez-plocha img")
+        zkontroluj("prstem" in dp.inner_text(".orez-okno p"), "ořez na telefonu radí prsty, ne kolečko myši",
+                   dp.inner_text(".orez-okno p"))
+        pl = dp.locator(".orez-plocha").bounding_box()
+        cx, cy = pl["x"] + pl["width"] / 2, pl["y"] + pl["height"] / 2
+        cdp = dctx.new_cdp_session(dp)
+        def prsty(typ, *body):
+            cdp.send("Input.dispatchTouchEvent", {"type": typ, "touchPoints": [{"x": x, "y": y, "id": i} for i, (x, y) in enumerate(body)]})
+        prsty("touchStart", (cx - 30, cy), (cx + 30, cy))
+        for k in range(1, 7):
+            prsty("touchMove", (cx - 30 - 5 * k, cy), (cx + 30 + 5 * k, cy))
+            dp.wait_for_timeout(20)
+        prsty("touchEnd")
+        dp.wait_for_timeout(100)
+        zoom = float(dp.input_value(".orez-zoom"))
+        zkontroluj(1.9 <= zoom <= 2.1, "roztažení dvou prstů na dvojnásobek fotku dvakrát přiblíží", zoom)
+        pred = dp.evaluate("() => document.querySelector('.orez-obrazek').style.transform")
+        prsty("touchStart", (cx, cy))
+        for k in range(1, 6):
+            prsty("touchMove", (cx + 8 * k, cy))
+            dp.wait_for_timeout(20)
+        prsty("touchEnd")
+        po = dp.evaluate("() => document.querySelector('.orez-obrazek').style.transform")
+        zkontroluj(po != pred and dp.locator(".orez-zaclona").count() == 1,
+                   "jedním prstem se fotka posouvá a okno zůstane", f"{pred} → {po}")
+        dctx.close()
+
         zkontroluj(not chyby, "žádná chyba JavaScriptu", "; ".join(chyby[:3]))
         prohlizec.close()
     server.shutdown()

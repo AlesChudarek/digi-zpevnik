@@ -101,4 +101,23 @@
   position: absolute; inset: 0; border-radius: 50%; pointer-events: none; z-index: 1;
   box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.55); outline: 2px solid rgba(255, 255, 255, 0.85);
 }
-.orez-zoom { width: 100%; margin-bottom: 12px; }
+.orez-zoom { width: 100%; margin: 0 0 12px; -webkit-appearance: none; appearance: none;
+             background: transparent; height: 20px; }
+.orez-zoom::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: #e3e3e3; }
+.orez-zoom::-moz-range-track { height: 6px; border-radius: 999px; background: #e3e3e3; }
+/* margin-top = (stopa - jezdec) / 2 */
+.orez-zoom::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; border: 0; width: 16px; height: 16px;
+                                   margin-top: -5px; border-radius: 50%; background: var(--brand-dark, #1b5e20); }
+.orez-zoom::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--brand-dark, #1b5e20); }
+
+/* Na prst: křížek oken měl 24 × 28 px, „Změnit e-mail/heslo“, „Odstranit účet“
+   a odkazy na společné zpěvníky 16 px na výšku. Vzhled stejný, roste plocha. */
+@media (pointer: coarse) {
+  .ucet-okno-zavrit { min-width: 40px; height: 40px; }
+  .ucet-zmena summary { padding: 10px 0; }
+  .odhlasit { display: inline-block; padding: 10px 0; }
+  .pritel-radek a { display: inline-block; padding: 8px 0; }
+  .orez-zoom { height: 32px; }
+  .orez-zoom::-webkit-slider-thumb { width: 24px; height: 24px; margin-top: -9px; }
+  .orez-zoom::-moz-range-thumb { width: 24px; height: 24px; }
+}

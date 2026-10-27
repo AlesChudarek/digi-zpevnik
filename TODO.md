@@ -671,8 +671,13 @@ kdo maže.
       „zpěvník · str. N“, vpravo tlačítka 40 px; řazení výběrem „Řadit podle“. Pořád
       táž tabulka, takže filtr, řazení a tlačítka beze změny. Vrátit = smazat blok
       `@media (max-width: 640px)` a `.razeni` v search.html. Hlídá `test_mobil.py`.
-- [ ] **projít UI na mobilech celkově** (lišta, dlaždice a nápovědy hotové, čtečka
-      a hledání neprověřené)
+- [ ] **projít UI na mobilech celkově** (lišta, dlaždice, nápovědy, hledání, editor, okna
+      Účet/Přátelé, ořez fotky a Vítejte hotové; zbývá čtečka a tablet)
+- [X] **okna Účet a Přátelé, ořez fotky, Vítejte na telefonu** (27. 10.): nic nepřetéká,
+      dlouhá okna jde dorolovat. Na dotyku větší křížek (24 → 40), „Změnit e-mail/heslo“,
+      „Odstranit účet“ a odkazy na společné zpěvníky (16 px na výšku). Ořez: přiblížení
+      roztažením dvou prstů, text radí prsty místo kolečka myši, vlastní posuvník.
+      Hlídá `test_pratele.py`, sekce „telefon“.
 - [X] **na úzké obrazovce se nedá odhlásit a nejde změnit motiv** — opraveno. Oba
       vysouvací panely se kotvily ke svému tlačítku, a v burger menu sedí tlačítka
       u protilehlých krajů: panel účtu odjel 207 px vlevo (i s „Odhlásit se", na které
