@@ -474,6 +474,88 @@ def prihlaseni_jako():
                "začátky a návraty v záznamu", akce)
 
 
+def smazani_uctu():
+    aid, _, _ = admin_a_cizi()
+    admin = klient(aid)
+
+    def stav(email):
+        with A.app.app_context():
+            u = A.User.query.filter_by(email=email).first()
+            if u is None:
+                return None
+            vlastni = [sb.id for sb in A.Songbook.query.filter_by(owner_id=u.id)]
+            clenove = {sid: [a.user_id for a in A.UserSongbookAccess.query.filter_by(songbook_id=sid)]
+                       for sid in vlastni}
+            return {"id": u.id, "vlastni": vlastni, "clenove": clenove}
+
+    def oznameni(uids):
+        with A.app.app_context():
+            return A.Oznameni.query.filter(A.Oznameni.user_id.in_(uids)).count()
+
+    print("\n── smazání účtu adminem: pojistky ──")
+    s1 = stav("user@test.com")
+    kod, _ = post(klient(s1["id"]), f"/api/sprava/uzivatel/{s1['id']}/smazat", {"potvrzeni": "user@test.com"})
+    zkontroluj(kod == 403, "běžný uživatel mazat nesmí", kod)
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{aid}/smazat", {"potvrzeni": "admin@test.com"})
+    zkontroluj(kod == 400, "účet správce ne", kod)
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{s1['id']}/smazat", {"potvrzeni": "user@test"})
+    zkontroluj(kod == 400 and stav("user@test.com"), "bez přesného e-mailu nic", kod)
+
+    print("\n── smazání účtu se zpěvníky (jako by ho zrušil sám) ──")
+    clenove = sorted({c for cl in s1["clenove"].values() for c in cl})
+    zkontroluj(s1["vlastni"] and clenove, "má zpěvníky i členy společných úprav",
+               (len(s1["vlastni"]), clenove))
+    pred = oznameni(clenove)
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{s1['id']}/smazat", {"potvrzeni": "User@Test.com "})
+    with A.app.app_context():
+        zbylo = A.Songbook.query.filter(A.Songbook.id.in_(s1["vlastni"])).count()
+    zkontroluj(kod == 200 and stav("user@test.com") is None, "účet je pryč", kod)
+    zkontroluj(zbylo == 0, "jeho zpěvníky taky", zbylo)
+    zkontroluj(oznameni(clenove) > pred, "členové dostali kopii s upozorněním", (pred, oznameni(clenove)))
+
+    print("\n── smazání účtu s převodem zpěvníků ke správci ──")
+    with A.app.test_request_context():
+        # Svůj zpěvník smazaly už předchozí testy - založit mu nový, i s členem.
+        u2 = A.User.query.filter_by(email="user2@test.com").first()
+        zdroj = A.Songbook.query.filter(A.Songbook.is_public == 0).first()
+        kopie = A.kopiruj_zpevnik(zdroj, u2.id, "Převáděný zpěvník")
+        clen = A.User.query.filter(A.User.role == "user", A.User.id != u2.id).first().id
+        A.db.session.add(A.UserSongbookAccess(user_id=clen, songbook_id=kopie.id, permission="edit"))
+        A.db.session.commit()
+    s2 = stav("user2@test.com")
+    zkontroluj(bool(s2["vlastni"]) and any(s2["clenove"].values()), "má vlastní zpěvník se členem", s2)
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{s2['id']}/smazat",
+                  {"potvrzeni": "user2@test.com", "prevest": True})
+    with A.app.app_context():
+        knihy = [A.db.session.get(A.Songbook, sid) for sid in s2["vlastni"]]
+        zkontroluj(kod == 200 and stav("user2@test.com") is None, "účet je pryč", kod)
+        zkontroluj(all(k is not None and k.owner_id == aid for k in knihy), "zpěvníky patří správci")
+        zkontroluj(all([a.user_id for a in A.UserSongbookAccess.query.filter_by(songbook_id=k.id)]
+                       == s2["clenove"][k.id] for k in knihy), "členové u nich zůstali")
+        zasah = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first()
+        zkontroluj(zasah.akce == "smazal účet" and "převedeny" in (zasah.podrobnosti or ""),
+                   "zásah je v záznamu", (zasah.akce, zasah.podrobnosti))
+
+    print("\n── uživatel si účet zruší sám (stejná cesta) ──")
+    s3 = stav("user3@test.com")
+    c = klient(s3["id"])
+    r = c.post("/smazat-ucet", data={"potvrzeni": "user3@test.com"})
+    zkontroluj(r.status_code == 302 and r.headers["Location"].endswith("/")
+               and stav("user3@test.com") is None, "zrušení vlastního účtu", r.status_code)
+
+    print("\n── admin přihlášený jako uživatel jeho účet zruší ──")
+    s4 = stav("user4@test.com")
+    post(admin, f"/api/sprava/uzivatel/{s4['id']}/prihlasit")
+    r = admin.post("/smazat-ucet", data={"potvrzeni": "user4@test.com"})
+    zkontroluj(r.status_code == 302 and r.headers["Location"].endswith("/sprava/uzivatele")
+               and stav("user4@test.com") is None, "účet zrušený, zpátky ve správě", r.headers.get("Location"))
+    zkontroluj(admin.get("/sprava/uzivatele").status_code == 200, "a je zase admin")
+    with A.app.app_context():
+        zasah = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first()
+    zkontroluj(zasah.akce == "smazal účet (přihlášený jako uživatel)" and "user4" in (zasah.komu or ""),
+               "zásah je v záznamu", (zasah.akce, zasah.komu))
+
+
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.
     Jen čte - server běží nad vlastní kopií databáze a na obrázky nesahá."""
@@ -624,6 +706,18 @@ def prohlizec():
             zkontroluj(page.locator("#app-confirm-overlay").is_visible(), "zablokování se ptá")
             page.keyboard.press("Escape")
             zkontroluj(radek.get_attribute("data-zablokovan") == "0", "Esc nic nezablokuje")
+            print("\n── prohlížeč: okno smazání účtu ──")
+            radek.locator('[data-akce="smazat"]').click()
+            okno = page.locator(".oznameni-zaclona .okno")
+            tlacitko = okno.locator('[data-volba="ok"]')
+            zkontroluj(okno.is_visible() and tlacitko.is_disabled(), "okno se otevře, Smazat čeká na e-mail")
+            okno.locator(".su-potvrzeni").fill("user2@test.co")
+            zkontroluj(tlacitko.is_disabled(), "s neúplným e-mailem pořád ne")
+            okno.locator(".su-potvrzeni").fill("USER2@test.com")
+            zkontroluj(tlacitko.is_enabled(), "s opsaným e-mailem ano (velikost písmen nevadí)")
+            page.keyboard.press("Escape")
+            zkontroluj(page.locator(".oznameni-zaclona").count() == 0, "Esc okno zavře, nic se nesmaže")
+
             print("\n── prohlížeč: přihlášení jako ──")
             radek.locator('[data-akce="prihlasit"]').click()
             page.wait_for_url("**/my-songbooks", timeout=10000)
@@ -665,6 +759,7 @@ def main():
     uzivatele()
     odhlaseni()
     prihlaseni_jako()
+    smazani_uctu()
     prohlizec()
     print()
     if selhani:

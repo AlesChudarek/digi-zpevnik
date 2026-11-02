@@ -819,7 +819,7 @@ kdo maže.
       - v nabídce i položka **Účet** (okno): změna e-mailu, poslat ověřovací e-mail znovu,
         změna hesla, fotky a přezdívky, zrušení účtu. Dnes je úprava fotky a přezdívky
         na stránce /profil, ale vede na ni jen položka „Změnit heslo“ - tak ji nikdo nenajde.
-- [ ] **správa uživatelů pro admina** (Aleš 20. 10.): stránka se seznamem uživatelů, kde
+- [X] **správa uživatelů pro admina** (Aleš 20. 10., hotovo 2. 11.): stránka se seznamem uživatelů, kde
       admin může cokoli - odhlásit je z rodin, smazat účet, změnit obrázek atd. Hlavně
       přehled, jaké mají zpěvníky, a možnost se v nich přehledně dívat a upravovat je.
       Zadání a odpovědi v paměti `zpevnik-admin-sprava`. Plán schválený 2. 11.:
@@ -852,7 +852,10 @@ kdo maže.
         zablokovaný), v relaci `spravce_zpet` = id admina i s verzí přihlášení; pruh
         `_pruh_spravce.html` se „Zpět do svého účtu“ (`/sprava/zpet`, vrátí na řádek
         uživatele). Zamčená změna hesla a e-mailu. Začátek i návrat v záznamu.
-  - [ ] **7. smazání účtu adminem** přes společné `zrus_ucet()`, volba převést zpěvníky k adminovi.
+  - [X] **7. smazání účtu adminem**: `zrus_ucet()` je jediná cesta (Odstranit účet
+        i správa). Ve správě okno s opsáním e-mailu a volbou převést jeho zpěvníky ke
+        správci (členové u nich zůstanou); bez ní jako vlastní zrušení (členové dostanou
+        kopii). Admin přihlášený jako uživatel smí účet zrušit taky - pak se vrátí do správy.
 
 ## Obsah a prezentace
 

@@ -1802,6 +1802,45 @@ def zmena_hesla():
     return jsonify({'ok': False, 'error': chyba}), 400
 
 
+def zrus_ucet(user, co_se_stalo, prevest_k=None):
+    """Zruší účet i s tím, co k němu patří, a commitne. Jediná cesta pro uživatele
+    (Odstranit účet) i pro správu.
+
+    Vlastní zpěvníky se smažou - členové společných úprav dostanou kopii (`co_se_stalo`
+    je první věta jejich upozornění, s {nazev}). S `prevest_k` (admin) se soukromé
+    zpěvníky místo smazání převedou na něj; členové u nich zůstanou.
+    """
+    uid, email, fotka = user.id, user.email, user.fotka
+    moje = Songbook.query.filter_by(owner_id=uid).all()
+    pred = zjisti_mista([prevest_k.id]) if prevest_k is not None else {}
+    soubory = []
+    for sb in moje:
+        if prevest_k is not None and not sb.is_public:
+            UserSongbookAccess.query.filter_by(songbook_id=sb.id, user_id=prevest_k.id).delete()
+            Pozvanka.query.filter_by(songbook_id=sb.id, komu_id=prevest_k.id).delete()
+            sb.owner_id = prevest_k.id
+        else:
+            soubory += smaz_zpevnik(sb, co_se_stalo)
+    db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
+    db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
+    db.session.query(Oznameni).filter_by(user_id=uid).delete()
+    db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
+    db.session.query(Pratelstvi).filter(db.or_(Pratelstvi.od_id == uid,
+                                               Pratelstvi.komu_id == uid)).delete()
+    db.session.query(User).filter_by(id=uid).delete()
+    if pred:
+        zkontroluj_limity(pred)
+    db.session.commit()
+
+    # Až po commitu a jen to, na co už nikdo neukazuje - písničku můžou sdílet i cizí
+    # zpěvníky a smazat jim obrázky by je rozbilo.
+    smaz_osirele_obrazky(soubory)
+    if fotka:
+        (PROFILY_DIR / fotka).unlink(missing_ok=True)
+    app.logger.info("Účet %s smazán, %d zpěvníků %s", email, len(moje),
+                    "převedeno" if prevest_k is not None else "smazáno")
+
+
 @app.route('/smazat-ucet', methods=['GET', 'POST'])
 @login_required
 def smazat_ucet():
@@ -1820,29 +1859,20 @@ def smazat_ucet():
             flash('Pro potvrzení opište přesně svou e-mailovou adresu.', 'error')
             return render_template('smazat_ucet.html', zpevniky=moje)
 
-        uid, email = current_user.id, current_user.email
-        soubory = []
-        for sb in moje:
-            # Členové společných úprav dostanou kopii, nepřijdou o ni se zrušeným účtem.
-            soubory += smaz_zpevnik(sb, f"Vlastník ({email}) zrušil účet i se společným "
-                                    "zpěvníkem „{nazev}“.")
-        db.session.query(UserSongbookAccess).filter_by(user_id=uid).delete()
-        db.session.query(Pozvanka).filter(db.or_(Pozvanka.od_id == uid, Pozvanka.komu_id == uid)).delete()
-        db.session.query(Oznameni).filter_by(user_id=uid).delete()
-        db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
-        db.session.query(Pratelstvi).filter(db.or_(Pratelstvi.od_id == uid,
-                                                   Pratelstvi.komu_id == uid)).delete()
-        fotka = current_user.fotka
+        email = current_user.email
+        spravce = spravce_v_cizim_uctu()
+        uzivatel = current_user._get_current_object()
         logout_user()
-        db.session.query(User).filter_by(id=uid).delete()
-        db.session.commit()
-
-        # Až po commitu a jen to, na co už nikdo neukazuje - písničku můžou sdílet i cizí
-        # zpěvníky a smazat jim obrázky by je rozbilo.
-        smaz_osirele_obrazky(soubory)
-        if fotka:
-            (PROFILY_DIR / fotka).unlink(missing_ok=True)
-        app.logger.info("Účet %s smazán i s %d zpěvníky", email, len(moje))
+        session.pop('spravce_zpet', None)
+        if spravce is not None:
+            # Admin přihlášený jako tenhle uživatel účet zrušil - zpátky do svého účtu.
+            login_user(spravce)
+            zapis_zasah('smazal účet (přihlášený jako uživatel)', komu=uzivatel,
+                        podrobnosti=f"zpěvníků: {len(moje)}")
+        zrus_ucet(uzivatel, f"Vlastník ({email}) zrušil účet i se společným zpěvníkem „{{nazev}}“.")
+        if spravce is not None:
+            flash(f'Účet {email} byl odstraněn.', 'success')
+            return redirect(url_for('sprava_uzivatelu'))
         flash('Váš účet byl odstraněn.', 'success')
         return redirect(url_for('index'))
 
@@ -2880,6 +2910,30 @@ def sprava_zpet():
     zapis_zasah('vrátil se z účtu uživatele', komu=uzivatel)
     db.session.commit()
     return redirect(url_for('sprava_uzivatelu') + f'#u-{uzivatel.id}')
+
+
+@app.route('/api/sprava/uzivatel/<int:user_id>/smazat', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_smaz_ucet(user_id):
+    """Smazání účtu adminem - stejně, jako by si ho uživatel zrušil sám, jen se dají
+    jeho soukromé zpěvníky převést k adminovi místo smazání. Potvrzuje se opsáním
+    e-mailu toho účtu."""
+    u = db.session.get(User, user_id)
+    if u is None or is_guest(u):
+        return jsonify({'ok': False, 'error': 'Uživatel nenalezen.'}), 404
+    if u.id == current_user.id or u.role == 'admin':
+        return jsonify({'ok': False, 'error': 'Účet správce se tady smazat nedá.'}), 400
+    data = request.get_json(silent=True) or {}
+    if (data.get('potvrzeni') or '').strip().lower() != u.email.lower():
+        return jsonify({'ok': False, 'error': 'Pro potvrzení opište přesně e-mail účtu.'}), 400
+    prevest = bool(data.get('prevest'))
+    pocet = Songbook.query.filter_by(owner_id=u.id).count()
+    zapis_zasah('smazal účet', komu=u,
+                podrobnosti=f"zpěvníků: {pocet}" + (", převedeny ke správci" if prevest and pocet else ""))
+    zrus_ucet(u, f"Účet vlastníka ({u.email}) byl zrušen i se společným zpěvníkem „{{nazev}}“.",
+              prevest_k=current_user._get_current_object() if prevest else None)
+    return jsonify({'ok': True})
 
 
 def zamceno_v_cizim_uctu():

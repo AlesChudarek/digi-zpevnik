@@ -98,6 +98,11 @@
 }
 .okno .zaskrtnuti { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
 .okno .zaskrtnuti[hidden] { display: none; }
+.okno .su-potvrzeni-popis { display: block; font-size: 13px; margin: 12px 0 6px; }
+.okno .su-potvrzeni {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+}
 
 /* Uživatelé: jiné sloupce, stejné řádky a detail jako u zpěvníků */
 .sz-mrizka.su {

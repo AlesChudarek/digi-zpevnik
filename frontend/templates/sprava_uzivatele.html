@@ -35,7 +35,7 @@
            data-hledat="{{ u.jmeno }} {{ u.email }}"
            data-zpevniky="{{ ((u.vlastni + u.sdilene)|map(attribute='nazev')|list)|join(' | ') }}"
            data-role="{{ u.role }}" data-zablokovan="{{ '1' if u.zablokovan else '0' }}"
-           data-zpevniku="{{ u.vlastni|length + u.sdilene|length }}" data-misto="{{ u.zabrano }}"
+           data-zpevniku="{{ u.vlastni|length + u.sdilene|length }}" data-vlastnich="{{ u.vlastni|length }}" data-misto="{{ u.zabrano }}"
            data-pratel="{{ u.pratel }}" data-vytvoreno="{{ u.vytvoreno_ts }}" data-prihlaseni="{{ u.prihlaseni_ts }}">
         <div class="sz-mrizka su sz-souhrn" role="button" tabindex="0" aria-expanded="false">
           <div class="sz-kdo">{{ kolecko(u, 32) }}<span><strong>{{ u.jmeno }}</strong>{% if u.jmeno != u.email %}<br><span class="sz-ztlumene">{{ u.email }}</span>{% endif %}
@@ -91,6 +91,7 @@
               {% else %}
                 <button type="button" class="btn nebezpecne" data-akce="zablokovat">Zablokovat</button>
               {% endif %}
+              <button type="button" class="btn nebezpecne" data-akce="smazat">Smazat účet</button>
             {% endif %}
           </div>
         </div>
@@ -192,6 +193,66 @@
     }
   }
 
+  // Smazání účtu: stejně jako zrušení vlastním uživatelem, navíc volba převést jeho
+  // zpěvníky ke správci. Potvrzuje se opsáním e-mailu účtu.
+  function smazUcet(radek) {
+    const email = radek.dataset.email;
+    const vlastnich = +radek.dataset.vlastnich;
+    const zaclona = document.createElement('div');
+    zaclona.className = 'oznameni-zaclona';
+    zaclona.setAttribute('role', 'dialog');
+    zaclona.setAttribute('aria-modal', 'true');
+    zaclona.innerHTML = `
+      <div class="okno">
+        <h3>Smazat účet</h3>
+        <p class="su-text"></p>
+        <label class="zaskrtnuti" ${vlastnich ? '' : 'hidden'}><input type="checkbox"><span></span></label>
+        <label class="su-potvrzeni-popis" for="su-potvrzeni">Pro potvrzení opište e-mail účtu:</label>
+        <input type="text" id="su-potvrzeni" class="su-potvrzeni" autocomplete="off">
+        <div class="actions">
+          <button type="button" class="btn" data-volba="zrusit">Zrušit</button>
+          <button type="button" class="btn nebezpecne" data-volba="ok" disabled>Smazat účet</button>
+        </div>
+      </div>`;
+    zaclona.querySelector('.su-text').textContent = vlastnich
+      ? `Účet ${email} se nevratně zruší. Jeho zpěvníky (${vlastnich}) se smažou a členové společných úprav dostanou kopii.`
+      : `Účet ${email} se nevratně zruší. Vlastní zpěvníky nemá.`;
+    zaclona.querySelector('.zaskrtnuti span').textContent = `Místo smazání převést jeho zpěvníky (${vlastnich}) ke mně`;
+    const pole = zaclona.querySelector('.su-potvrzeni');
+    pole.placeholder = email;
+    const ok = zaclona.querySelector('[data-volba="ok"]');
+    pole.addEventListener('input', () => { ok.disabled = pole.value.trim().toLowerCase() !== email.toLowerCase(); });
+    const zavri = () => { window.removeEventListener('keydown', naEsc, true); zaclona.remove(); };
+    const naEsc = e => {
+      const okna = document.querySelectorAll('.oznameni-zaclona');
+      if (e.key !== 'Escape' || okna[okna.length - 1] !== zaclona) return;
+      e.stopPropagation();
+      zavri();
+    };
+    window.addEventListener('keydown', naEsc, true);
+    zaclona.addEventListener('click', e => { if (e.target === zaclona) zavri(); });
+    zaclona.querySelector('[data-volba="zrusit"]').addEventListener('click', zavri);
+    ok.addEventListener('click', async () => {
+      ok.disabled = true;
+      try {
+        const res = await fetch(`/api/sprava/uzivatel/${radek.dataset.id}/smazat`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ potvrzeni: pole.value, prevest: zaclona.querySelector('.zaskrtnuti input').checked }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) { ok.disabled = false; oznam(data.error || `Chyba serveru ${res.status}.`, { nadpis: 'Smazání se nepovedlo' }); return; }
+        zavri();
+        history.replaceState(null, '', location.pathname);
+        location.reload();
+      } catch (_) {
+        ok.disabled = false;
+        oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+      }
+    });
+    document.body.appendChild(zaclona);
+    pole.focus();
+  }
+
   const POTVRZENI = {
     fotka: j => [`Smazat profilovou fotku uživatele ${j}?`, 'Smazat', true],
     overit: j => [`Označit e-mail uživatele ${j} jako ověřený, bez ověřovacího odkazu?`, 'Ověřit', false],
@@ -207,6 +268,7 @@
     const akce = tlacitko.dataset.akce;
     const pole = radek.querySelector(`[data-pole="${akce}"]`);
     if (akce === 'prihlasit') { prihlasJako(radek.dataset.id); return; }
+    if (akce === 'smazat') { smazUcet(radek); return; }
     if (POTVRZENI[akce]) {
       const [text, ok, nebezpecne] = POTVRZENI[akce](radek.dataset.jmeno);
       if (!(await showConfirm(text, ok, { nebezpecne }))) return;
