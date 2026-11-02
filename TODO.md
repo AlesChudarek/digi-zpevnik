@@ -848,8 +848,10 @@ kdo maže.
         (`<id>:<verze>`), `load_user` odmítne jinou verzi; `odhlas_vsude()`. Akce ve správě
         (sám sebe ne), změna hesla (tohle zařízení zůstane přihlášené) a obnova hesla
         e-mailem. Staré relace (jen id) platí, dokud se verze nezvýší.
-  - [ ] **6. přihlásit se jako uživatel** (pruh „Zpět do svého účtu“; zamčená změna hesla
-        a e-mailu, zrušení účtu smí).
+  - [X] **6. přihlásit se jako uživatel**: tlačítko v Uživatelích (ne správce, ne
+        zablokovaný), v relaci `spravce_zpet` = id admina i s verzí přihlášení; pruh
+        `_pruh_spravce.html` se „Zpět do svého účtu“ (`/sprava/zpet`, vrátí na řádek
+        uživatele). Zamčená změna hesla a e-mailu. Začátek i návrat v záznamu.
   - [ ] **7. smazání účtu adminem** přes společné `zrus_ucet()`, volba převést zpěvníky k adminovi.
 
 ## Obsah a prezentace

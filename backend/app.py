@@ -1162,6 +1162,7 @@ def _zablokovany_ucet():
         return None
     if not getattr(current_user, 'zablokovan', False):
         return None
+    session.pop('spravce_zpet', None)
     logout_user()
     if request.path.startswith('/api/') or request.is_json:
         return jsonify({'ok': False, 'error': ZABLOKOVANY_UCET}), 403
@@ -1218,6 +1219,7 @@ def login():
                 return render_template('auth.html')
             user.posledni_prihlaseni = datetime.now()
             db.session.commit()
+            session.pop('spravce_zpet', None)
             login_user(user)
             return redirect(url_for('dashboard'))
         else:
@@ -1271,6 +1273,7 @@ def register():
 
 @app.route('/logout', methods=['POST'])
 def logout():
+    session.pop('spravce_zpet', None)
     logout_user()
     return redirect(url_for('login'))
 
@@ -1660,6 +1663,9 @@ def zmena_emailu():
     Řeší i překlep při registraci: účet s nedoručitelnou adresou jde opravit."""
     if is_guest(current_user):
         return jsonify({'ok': False, 'error': 'Host e-mail nemá.'}), 403
+    zamek = zamceno_v_cizim_uctu()
+    if zamek:
+        return zamek
     data = request.get_json(silent=True) or {}
     novy = (data.get('email') or '').strip()
     if not check_password_hash(current_user.password, data.get('heslo') or ''):
@@ -1766,6 +1772,9 @@ def zmena_hesla():
     """Z okna Účet (JSON). Vrací chybu jako text pro oznam()."""
     if is_guest(current_user):
         return jsonify({'ok': False, 'error': 'Host heslo nemění.'}), 403
+    zamek = zamceno_v_cizim_uctu()
+    if zamek:
+        return zamek
     data = request.get_json(silent=True) or request.form
     stare = data.get('stare') or ''
     nove = data.get('nove') or ''
@@ -2817,6 +2826,68 @@ def sprava_uprav_uzivatele(user_id):
         return jsonify({'ok': False, 'error': 'Neznámá akce.'}), 400
     db.session.commit()
     return jsonify({'ok': True})
+
+
+def spravce_v_cizim_uctu():
+    """Admin, který je právě přihlášený jako jiný uživatel, nebo None. V relaci je
+    jeho id i s verzí přihlášení - když mezitím přišel o roli nebo byl odhlášen ze
+    všech zařízení, zpátky se nepustí."""
+    ulozeno = session.get('spravce_zpet')
+    if not ulozeno or not current_user.is_authenticated:
+        return None
+    admin = load_user(ulozeno)
+    return admin if admin is not None and admin.role == 'admin' else None
+
+
+app.jinja_env.globals['spravce_v_cizim_uctu'] = spravce_v_cizim_uctu
+
+
+@app.route('/api/sprava/uzivatel/<int:user_id>/prihlasit', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_prihlas_jako(user_id):
+    """Admin se přihlásí jako uživatel - vidí a smí totéž co on (kromě změny hesla
+    a e-mailu). Zpátky ho vrátí pruh nahoře, bez hesla."""
+    u = db.session.get(User, user_id)
+    if u is None or is_guest(u):
+        return jsonify({'ok': False, 'error': 'Uživatel nenalezen.'}), 404
+    if u.id == current_user.id or u.role == 'admin':
+        return jsonify({'ok': False, 'error': 'Jako správce se přihlásit nejde.'}), 400
+    if u.zablokovan:
+        return jsonify({'ok': False, 'error': 'Účet je zablokovaný - nejdřív ho odblokujte.'}), 400
+    zapis_zasah('přihlásil se jako uživatel', komu=u)
+    db.session.commit()
+    spravce = current_user.get_id()
+    login_user(u)
+    session['spravce_zpet'] = spravce
+    return jsonify({'ok': True, 'kam': url_for('my_songbooks')})
+
+
+@app.route('/sprava/zpet', methods=['POST'])
+@login_required
+def sprava_zpet():
+    """Konec přihlášení jako uživatel: zpátky do účtu admina, na řádek toho uživatele."""
+    if not session.get('spravce_zpet'):
+        # Žádné převzetí neběží (dvojklik, tlačítko Zpět v prohlížeči) - nic nedělat.
+        return redirect(url_for('dashboard'))
+    admin = spravce_v_cizim_uctu()
+    session.pop('spravce_zpet', None)
+    if admin is None:
+        logout_user()
+        return redirect(url_for('login'))
+    uzivatel = current_user._get_current_object()
+    login_user(admin)
+    zapis_zasah('vrátil se z účtu uživatele', komu=uzivatel)
+    db.session.commit()
+    return redirect(url_for('sprava_uzivatelu') + f'#u-{uzivatel.id}')
+
+
+def zamceno_v_cizim_uctu():
+    """Odpověď pro akce, které admin v cizím účtu dělat nesmí (heslo, e-mail)."""
+    if session.get('spravce_zpet'):
+        return jsonify({'ok': False, 'error': 'Při přihlášení jako jiný uživatel se heslo '
+                        'ani e-mail nemění.'}), 403
+    return None
 
 
 def _zpevnik_pro_spravu(songbook_id):

@@ -50,9 +50,13 @@ def zkontroluj(podminka, popis, detail=""):
 
 
 def klient(uid):
+    """Přihlášený klient. Id i s verzí přihlášení - jiné testy ji účtům zvyšují."""
+    with A.app.app_context():
+        u = A.db.session.get(A.User, uid)
+        id_relace = u.get_id() if u else str(uid)
     c = A.app.test_client()
     with c.session_transaction() as s:
-        s["_user_id"] = str(uid)
+        s["_user_id"] = id_relace
         s["_fresh"] = True
     return c
 
@@ -371,7 +375,10 @@ def odhlaseni():
     def uvnitr(c):
         return c.get("/my-songbooks").status_code == 200
 
-    stara_relace = klient(uid)          # relace z doby před verzí: jen id
+    stara_relace = A.app.test_client()   # relace z doby před verzí: jen id
+    with stara_relace.session_transaction() as sess:
+        sess["_user_id"] = str(uid)
+        sess["_fresh"] = True
     pocitac, telefon = prihlas(), prihlas()
     zkontroluj(pocitac and telefon and uvnitr(pocitac) and uvnitr(telefon) and uvnitr(stara_relace),
                "přihlášený na dvou zařízeních i ve staré relaci")
@@ -403,6 +410,68 @@ def odhlaseni():
     with A.app.app_context():
         akce = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first().akce
     zkontroluj(akce == "odhlásil ze všech zařízení", "zásah je v záznamu", akce)
+
+
+def prihlaseni_jako():
+    print("\n── přihlášení jako uživatel ──")
+    aid, _, _ = admin_a_cizi()
+    with A.app.app_context():
+        u = A.User.query.filter_by(email="user@test.com").first()
+        uid = u.id
+        u.zablokovan = False
+        jeho = {sb.id for sb in A.Songbook.query.filter_by(owner_id=uid, is_public=0)}
+        jiny = A.User.query.filter(A.User.role == "user", A.User.id != uid).first().id
+        A.db.session.commit()
+    kod, _ = post(klient(jiny), f"/api/sprava/uzivatel/{uid}/prihlasit")
+    zkontroluj(kod == 403, "běžný uživatel se za jiného nepřihlásí", kod)
+    admin = klient(aid)
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{aid}/prihlasit")
+    zkontroluj(kod == 400, "za správce ani sám za sebe ne", kod)
+
+    kod, telo = post(admin, f"/api/sprava/uzivatel/{uid}/prihlasit")
+    zkontroluj(kod == 200 and telo.get("kam") == "/my-songbooks", "admin se přihlásí jako uživatel", (kod, telo))
+    html = admin.get("/my-songbooks").get_data(as_text=True)
+    dlazdice = set(re.findall(r'class="songbook-card" data-book-id="([^"]+)"', html))
+    zkontroluj(jeho and jeho <= dlazdice, "vidí jeho Moje zpěvníky", (len(jeho), len(dlazdice)))
+    zkontroluj("pruh-spravce" in html and "Zpět do svého účtu" in html, "pruh s návratem")
+    zkontroluj(admin.get("/sprava/zpevniky").status_code == 404, "správa je teď nedostupná (je to on)")
+    r = admin.post("/profil/zmena-hesla", json={"stare": "x", "nove": "Nove-heslo-123", "nove2": "Nove-heslo-123"})
+    zkontroluj(r.status_code == 403, "změna hesla zamčená", r.status_code)
+    r = admin.post("/profil/email", json={"email": "jiny@test.cz", "heslo": "x"})
+    zkontroluj(r.status_code == 403, "změna e-mailu zamčená", r.status_code)
+
+    r = admin.post("/sprava/zpet")
+    zkontroluj(r.status_code == 302 and r.headers["Location"].endswith(f"/sprava/uzivatele#u-{uid}"),
+               "návrat do správy na řádek uživatele", r.headers.get("Location"))
+    zkontroluj(admin.get("/sprava/zpevniky").status_code == 200, "a je zase admin")
+    zkontroluj("pruh-spravce" not in admin.get("/my-songbooks").get_data(as_text=True), "pruh zmizel")
+    zkontroluj(admin.post("/sprava/zpet").status_code == 302
+               and admin.get("/sprava/zpevniky").status_code == 200, "druhý návrat adminovi neublíží")
+
+    print("\n── přihlášení jako: pojistky ──")
+    post(admin, f"/api/sprava/uzivatel/{uid}/prihlasit")
+    with A.app.app_context():
+        A.odhlas_vsude(A.db.session.get(A.User, aid))
+        A.db.session.commit()
+    r = admin.post("/sprava/zpet")
+    zkontroluj(r.status_code == 302 and "/login" in r.headers["Location"],
+               "admin odhlášený mezitím ze všech zařízení se zpátky nedostane", r.headers.get("Location"))
+    zkontroluj(admin.get("/my-songbooks").status_code == 302, "ani v účtu uživatele nezůstane")
+    with A.app.app_context():
+        aid_klient = A.db.session.get(A.User, aid).get_id()
+    admin = A.app.test_client()
+    with admin.session_transaction() as sess:
+        sess["_user_id"] = aid_klient
+        sess["_fresh"] = True
+    post(admin, f"/api/sprava/uzivatel/{uid}/prihlasit")
+    admin.post("/logout")
+    with admin.session_transaction() as sess:
+        zkontroluj("spravce_zpet" not in sess, "odhlášení zapomene i návrat do správy")
+    with A.app.app_context():
+        akce = [z.akce for z in A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).limit(4)][::-1]
+    zkontroluj(akce == ["přihlásil se jako uživatel", "vrátil se z účtu uživatele",
+                        "přihlásil se jako uživatel", "přihlásil se jako uživatel"],
+               "začátky a návraty v záznamu", akce)
 
 
 def prohlizec():
@@ -555,6 +624,18 @@ def prohlizec():
             zkontroluj(page.locator("#app-confirm-overlay").is_visible(), "zablokování se ptá")
             page.keyboard.press("Escape")
             zkontroluj(radek.get_attribute("data-zablokovan") == "0", "Esc nic nezablokuje")
+            print("\n── prohlížeč: přihlášení jako ──")
+            radek.locator('[data-akce="prihlasit"]').click()
+            page.wait_for_url("**/my-songbooks", timeout=10000)
+            zkontroluj(page.locator(".pruh-spravce").is_visible(), "pruh nahoře je vidět")
+            sirka_pruhu = page.evaluate("() => document.querySelector('.pruh-spravce').getBoundingClientRect().top")
+            zkontroluj(sirka_pruhu >= page.evaluate("() => document.querySelector('.navbar').getBoundingClientRect().bottom") - 1,
+                       "pruh je pod lištou, ne schovaný pod ní", sirka_pruhu)
+            page.click(".pruh-spravce button")
+            page.wait_for_url("**/sprava/uzivatele*", timeout=10000)
+            page.wait_for_selector(".sz-radek.otevreny", timeout=10000)
+            zkontroluj(page.locator(".sz-radek.otevreny").get_attribute("data-email") == "user2@test.com",
+                       "zpět ve správě na jeho řádku")
             for sirka in (320, 390):
                 page.set_viewport_size({"width": sirka, "height": 740})
                 page.goto(base + "/sprava/uzivatele#u-" + radek.get_attribute("data-id"))
@@ -583,6 +664,7 @@ def main():
     akce_se_zpevniky()
     uzivatele()
     odhlaseni()
+    prihlaseni_jako()
     prohlizec()
     print()
     if selhani:

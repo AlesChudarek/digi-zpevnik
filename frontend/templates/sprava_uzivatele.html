@@ -81,6 +81,7 @@
 
           <div class="sz-akce">
             <a class="btn" href="{{ url_for('sprava_zpevniku', hledat=u.email) }}">Zpěvníky ve správě</a>
+            {% if u.role != 'admin' and not u.zablokovan %}<button type="button" class="btn" data-akce="prihlasit">Přihlásit se jako {{ u.jmeno }}</button>{% endif %}
             {% if not u.overen %}<button type="button" class="btn" data-akce="overit">Ověřit e-mail</button>{% endif %}
             {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
             {% if not u.ja %}<button type="button" class="btn" data-akce="odhlasit">Odhlásit ze všech zařízení</button>{% endif %}
@@ -180,6 +181,17 @@
     }
   }
 
+  async function prihlasJako(id) {
+    try {
+      const res = await fetch(`/api/sprava/uzivatel/${id}/prihlasit`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) { oznam(data.error || `Chyba serveru ${res.status}.`, { nadpis: 'Přihlášení se nepovedlo' }); return; }
+      location.href = data.kam;
+    } catch (_) {
+      oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+    }
+  }
+
   const POTVRZENI = {
     fotka: j => [`Smazat profilovou fotku uživatele ${j}?`, 'Smazat', true],
     overit: j => [`Označit e-mail uživatele ${j} jako ověřený, bez ověřovacího odkazu?`, 'Ověřit', false],
@@ -194,6 +206,7 @@
     const radek = tlacitko.closest('.sz-radek');
     const akce = tlacitko.dataset.akce;
     const pole = radek.querySelector(`[data-pole="${akce}"]`);
+    if (akce === 'prihlasit') { prihlasJako(radek.dataset.id); return; }
     if (POTVRZENI[akce]) {
       const [text, ok, nebezpecne] = POTVRZENI[akce](radek.dataset.jmeno);
       if (!(await showConfirm(text, ok, { nebezpecne }))) return;

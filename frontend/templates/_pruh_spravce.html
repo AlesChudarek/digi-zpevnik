@@ -1,0 +1,25 @@
+{# Pruh, když je admin přihlášený jako jiný uživatel (správa → Uživatelé). Vkládá se
+   do obou rámů jako pruh ověření, ať je vždycky vidět, v čím účtu admin je. #}
+{% set spravce = spravce_v_cizim_uctu() %}
+{% if spravce %}
+<div class="pruh-spravce">
+  <span>Přihlášení jako <strong>{{ jmeno(current_user) }}</strong>{% if jmeno(current_user) != current_user.email %} ({{ current_user.email }}){% endif %} ze správy.</span>
+  <form method="POST" action="{{ url_for('sprava_zpet') }}">
+    <button type="submit">Zpět do svého účtu</button>
+  </form>
+</div>
+<style>
+  .pruh-spravce {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: 12px; padding: 10px 16px; background: #1f3a5f; color: #fff;
+    font-size: 14px; line-height: 1.4;
+  }
+  .pruh-spravce form { margin: 0; }
+  .pruh-spravce button {
+    padding: 6px 12px; border: 0; border-radius: 6px; background: #fff; color: #1f3a5f;
+    font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
+  @media (hover: hover) { .pruh-spravce button:hover { background: #e3ecf7; } }
+  @media (pointer: coarse) { .pruh-spravce button { padding: 10px 16px; } }
+</style>
+{% endif %}

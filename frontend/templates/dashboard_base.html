@@ -555,6 +555,7 @@
 
   {# Pruh i hlášky patří AŽ sem. Lišta je position: fixed, takže cokoliv nad ní v toku
      zmizí pod ní - přesně to se stalo poprvé a uživatel se o ověření nedozvěděl. #}
+  {% include '_pruh_spravce.html' %}
   {% include '_pruh_overeni.html' %}
 
   {% with messages = get_flashed_messages(with_categories=true) %}
