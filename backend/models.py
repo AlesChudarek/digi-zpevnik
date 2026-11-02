@@ -93,6 +93,8 @@ class User(db.Model, UserMixin):
     prezdivka = db.Column(db.String, nullable=True)
     fotka = db.Column(db.String, nullable=True)
     # Pro správu. U účtů z doby před těmi sloupci prázdné - nikdo to tehdy nezapisoval.
+    # `posledni_prihlaseni` je ve skutečnosti poslední aktivita: zapisuje ho přihlášení
+    # i první požadavek dne (_zapis_aktivitu) - kdo zůstává přihlášený, se nepřihlašuje.
     vytvoreno = db.Column(db.DateTime, nullable=True)
     posledni_prihlaseni = db.Column(db.DateTime, nullable=True)
     # Vlastní limit místa v bajtech, který nastavil admin. Prázdno = výchozí limit.
@@ -107,6 +109,10 @@ class User(db.Model, UserMixin):
     # je účet souvisle zamčený a kdy dostal poslední e-mail.
     zamceno_od = db.Column(db.DateTime, nullable=True)
     zamky_email = db.Column(db.DateTime, nullable=True)
+    # Neaktivní účty (flask neaktivni-ucty): `nemazat` je výjimka nastavená ve správě
+    # (testovací účty), `neaktivita_email` kdy odešlo upozornění, že se účet smaže.
+    nemazat = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    neaktivita_email = db.Column(db.DateTime, nullable=True)
 
     def get_id(self):
         return f"{self.id}:{self.verze_prihlaseni or 0}"

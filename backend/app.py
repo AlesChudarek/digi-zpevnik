@@ -642,7 +642,9 @@ def _dopln_chybejici_sloupce():
                                  ('limit_mista', 'INTEGER'),
                                  ('zablokovan', 'BOOLEAN NOT NULL DEFAULT 0'),
                                  ('verze_prihlaseni', 'INTEGER NOT NULL DEFAULT 0'),
-                                 ('zamceno_od', 'DATETIME'), ('zamky_email', 'DATETIME')):
+                                 ('zamceno_od', 'DATETIME'), ('zamky_email', 'DATETIME'),
+                                 ('nemazat', 'BOOLEAN NOT NULL DEFAULT 0'),
+                                 ('neaktivita_email', 'DATETIME')):
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
@@ -1214,6 +1216,21 @@ POMALY_POZADAVEK_S = 3   # od kolika sekund se požadavek zapíše do logu jako 
 @app.before_request
 def _zacatek_pozadavku():
     g.zacatek_pozadavku = time.time()
+
+
+@app.before_request
+def _zapis_aktivitu():
+    """Poslední aktivita účtu, nejvýš jeden zápis denně. Podle ní se pozná neaktivní
+    účet (flask neaktivni-ucty) - samotné přihlášení by nestačilo, kdo zůstává
+    přihlášený, se znovu nepřihlašuje. Admin přihlášený jako uživatel se nepočítá."""
+    if (request.endpoint == 'static' or not current_user.is_authenticated
+            or is_guest(current_user) or session.get('spravce_zpet') or current_user.zablokovan):
+        return None
+    posledni = current_user.posledni_prihlaseni
+    if posledni is None or posledni.date() < datetime.now().date():
+        current_user.posledni_prihlaseni = datetime.now()
+        db.session.commit()
+    return None
 
 
 ZABLOKOVANY_UCET = 'Účet je zablokovaný. Pro odblokování kontaktujte správce.'
@@ -2832,7 +2849,7 @@ def prehled_uzivatelu_pro_spravu():
         limit = limit_uzivatele(u)
         radky.append(dict(
             uzivatel_info(u), role=u.role, role_text=ROLE_UZIVATELU.get(u.role, u.role),
-            overen=bool(u.email_verified), zablokovan=bool(u.zablokovan),
+            overen=bool(u.email_verified), zablokovan=bool(u.zablokovan), nemazat=bool(u.nemazat),
             vlastni=sorted(vlastni.get(u.id, []), key=lambda z: z['nazev'].lower()),
             sdilene=sorted(sdilene.get(u.id, []), key=lambda z: z['nazev'].lower()),
             pratel=pratel.get(u.id, 0),
@@ -2932,6 +2949,12 @@ def sprava_uprav_uzivatele(user_id):
             return jsonify({'ok': False, 'error': 'Vlastní přihlášení se ruší odhlášením.'}), 400
         zapis_zasah('odhlásil ze všech zařízení', komu=u)
         odhlas_vsude(u)
+    elif akce in ('nemazat', 'mazat'):
+        if u.nemazat == (akce == 'nemazat'):
+            return jsonify({'ok': True})
+        zapis_zasah('nastavil výjimku z mazání neaktivních' if akce == 'nemazat'
+                    else 'zrušil výjimku z mazání neaktivních', komu=u)
+        u.nemazat = akce == 'nemazat'
     elif akce in ('zablokovat', 'odblokovat'):
         if u.role == 'admin':
             return jsonify({'ok': False, 'error': 'Správce zablokovat nejde.'}), 400
@@ -5435,6 +5458,98 @@ def zamky_upozorni_command(jen_vypsat):
             from mail import posli_email
         komu = upozorni_na_zamky(posli=posli_email)
     print(f"{'Poslalo by se' if jen_vypsat else 'Posláno'}: {len(komu)}", *komu, sep="\n  ")
+
+
+NEAKTIVNI_PO = timedelta(days=365)       # bez aktivity tak dlouho -> upozornění
+NEAKTIVNI_LHUTA = timedelta(days=30)     # od upozornění do smazání
+
+
+def neaktivni_ucty(ted=None, posli=None) -> dict:
+    """Upozorní a po lhůtě smaže účty, které rok nikdo nepoužil (Aleš 2. 11. 2026).
+
+    - Ověřený účet: po roce bez aktivity e-mail, že se za 30 dní smaže; stačí se
+      přihlásit (nebo jen otevřít web přihlášený). Bez reakce se pak smaže stejně,
+      jako by si ho zrušil sám (zrus_ucet) - členové společných zpěvníků dostanou kopii.
+    - Neověřený účet se smaže po roce a 30 dnech bez upozornění: adresa není prokázaná,
+      není koho upozornit.
+    - Nikdy: správce, host, zablokovaný účet (o tom rozhoduje admin) a účet s výjimkou
+      `nemazat` (testovací účty, nastavuje se ve správě).
+    - Účet bez záznamu o aktivitě (z doby před sledováním) se počítá od prvního běhu.
+    S `posli` None jen vypíše, co by udělal, a nic neuloží ani nesmaže.
+    """
+    ted = ted or datetime.now()
+    vysledek = {'upozornit': [], 'smazat': []}
+    kandidati = User.query.filter(User.role.notin_(['admin', 'guest']),
+                                  User.nemazat.is_(False), User.zablokovan.is_(False)).all()
+    ke_smazani = []
+    for u in kandidati:
+        if u.posledni_prihlaseni is None:
+            u.posledni_prihlaseni = ted
+            continue
+        if u.neaktivita_email and u.posledni_prihlaseni > u.neaktivita_email:
+            u.neaktivita_email = None       # po upozornění se ozval
+        neaktivni = ted - u.posledni_prihlaseni
+        if neaktivni < NEAKTIVNI_PO:
+            continue
+        if not u.email_verified:
+            if neaktivni >= NEAKTIVNI_PO + NEAKTIVNI_LHUTA:
+                ke_smazani.append(u)
+        elif u.neaktivita_email is None:
+            vysledek['upozornit'].append(u.email)
+            if posli is not None:
+                do = (ted + NEAKTIVNI_LHUTA).strftime('%-d. %-m. %Y')
+                posli(
+                    u.email,
+                    "Účet bude smazán - Digi zpěvník",
+                    "Dobrý den,\n\n"
+                    f"účet {u.email} na webu Digi zpěvník nikdo nepoužil déle než rok. "
+                    f"Pokud ho chcete zachovat, stačí se do {do} přihlásit:\n"
+                    "https://digizpevnik.cz/login\n\n"
+                    "Jinak bude účet smazán i s vlastními zpěvníky. Kdo s vámi upravoval "
+                    "společný zpěvník, dostane jeho kopii.\n\n"
+                    "Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.\n",
+                    "<p>Dobrý den,</p>"
+                    f"<p>účet {escape(u.email)} na webu <strong>Digi zpěvník</strong> nikdo "
+                    f"nepoužil déle než rok. Pokud ho chcete zachovat, stačí se do {do} "
+                    'přihlásit: <a href="https://digizpevnik.cz/login">digizpevnik.cz</a></p>'
+                    "<p>Jinak bude účet smazán i s vlastními zpěvníky. Kdo s vámi upravoval "
+                    "společný zpěvník, dostane jeho kopii.</p>"
+                    "<p>Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.</p>")
+                u.neaktivita_email = ted
+        elif ted - u.neaktivita_email >= NEAKTIVNI_LHUTA:
+            ke_smazani.append(u)
+    vysledek['smazat'] = [u.email for u in ke_smazani]
+    if posli is None:
+        db.session.rollback()
+        return vysledek
+    db.session.commit()
+    for u in ke_smazani:
+        db.session.add(ZasahAdmina(
+            cas=ted, admin_id=None, admin='automaticky', akce='smazal neaktivní účet',
+            komu_id=u.id, komu=u.email,
+            podrobnosti=(f"naposledy aktivní {u.posledni_prihlaseni.strftime('%-d. %-m. %Y')}, "
+                         + ("ověřený, upozorněn " + u.neaktivita_email.strftime('%-d. %-m. %Y')
+                            if u.neaktivita_email else "neověřený, bez upozornění")
+                         + f"; zpěvníků: {Songbook.query.filter_by(owner_id=u.id).count()}")))
+        zrus_ucet(u, f"Účet vlastníka ({u.email}) byl pro neaktivitu zrušen i se společným "
+                     "zpěvníkem „{nazev}“.")
+    return vysledek
+
+
+@app.cli.command("neaktivni-ucty")
+@click.option("--jen-vypsat", is_flag=True, help="nic neposílat ani nemazat, jen ukázat")
+def neaktivni_ucty_command(jen_vypsat):
+    """Upozornění a mazání neaktivních účtů. Spouští cron (scripts/zamky-upozorni.sh)."""
+    if jen_vypsat:
+        v = neaktivni_ucty()
+    else:
+        try:
+            from .mail import posli_email
+        except ImportError:
+            from mail import posli_email
+        v = neaktivni_ucty(posli=posli_email)
+    print(f"Upozornit: {len(v['upozornit'])}", *v['upozornit'], sep="\n  ")
+    print(f"Smazat: {len(v['smazat'])}", *v['smazat'], sep="\n  ")
 
 
 @app.cli.command("mesicni-hlaseni")

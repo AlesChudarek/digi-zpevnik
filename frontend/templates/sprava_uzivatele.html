@@ -26,7 +26,7 @@
       <button type="button" data-razeni="misto">Místo</button>
       <button type="button" data-razeni="pratel" class="cislo">Přátelé</button>
       <button type="button" data-razeni="vytvoreno" class="cislo">Registrace</button>
-      <button type="button" data-razeni="prihlaseni" class="cislo">Přihlášení</button>
+      <button type="button" data-razeni="prihlaseni" class="cislo">Aktivní</button>
     </div>
 
     <div id="su-seznam">
@@ -41,6 +41,7 @@
           <div class="sz-kdo">{{ kolecko(u, 32) }}<span><strong>{{ u.jmeno }}</strong>{% if u.jmeno != u.email %}<br><span class="sz-ztlumene">{{ u.email }}</span>{% endif %}
             {% if u.zablokovan %}<span class="sz-stitek su-zablokovan">zablokovaný</span>{% endif %}
             {% if not u.overen %}<span class="sz-stitek">neověřený</span>{% endif %}
+            {% if u.nemazat %}<span class="sz-stitek" title="Výjimka z mazání neaktivních účtů">nemazat</span>{% endif %}
             {% if u.zamceno %}<span class="sz-stitek su-zablokovan" title="Účet je přes limit místa">zamčené zpěvníky: {{ u.zamceno }}</span>{% endif %}</span></div>
           <div class="sz-udaj"><span class="sz-popisek">Role:</span>{{ u.role_text }}</div>
           <div class="sz-udaj cislo"><span class="sz-popisek">Zpěvníky (vlastní / sdílené):</span>{{ u.vlastni|length }} / {{ u.sdilene|length }}</div>
@@ -49,7 +50,7 @@
             <span>{{ u.zabrano_text }} / {{ u.limit_text }}</span></div>
           <div class="sz-udaj cislo"><span class="sz-popisek">Přátelé:</span>{{ u.pratel }}</div>
           <div class="sz-udaj cislo"><span class="sz-popisek">Registrace:</span>{{ u.vytvoreno or '–' }}</div>
-          <div class="sz-udaj cislo"><span class="sz-popisek">Přihlášení:</span>{{ u.prihlaseni or '–' }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Naposledy aktivní:</span>{{ u.prihlaseni or '–' }}</div>
         </div>
         <div class="sz-detail" hidden>
           <h3>Vlastní zpěvníky</h3>
@@ -87,6 +88,11 @@
             {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
             {% if not u.ja %}<button type="button" class="btn" data-akce="odhlasit">Odhlásit ze všech zařízení</button>{% endif %}
             {% if u.role != 'admin' %}
+              {% if u.nemazat %}
+                <button type="button" class="btn" data-akce="mazat">Zrušit výjimku z mazání</button>
+              {% else %}
+                <button type="button" class="btn" data-akce="nemazat" title="Účet se nesmaže ani po roce bez aktivity - pro testovací účty">Nemazat při neaktivitě</button>
+              {% endif %}
               {% if u.zablokovan %}
                 <button type="button" class="btn" data-akce="odblokovat">Odblokovat</button>
               {% else %}

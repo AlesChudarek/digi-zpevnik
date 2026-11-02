@@ -734,6 +734,117 @@ def zamky():
     zkontroluj(kolo(timedelta(days=20, hours=3)) == [], "neověřená adresa nic nedostane")
 
 
+def neaktivni():
+    print("\n── neaktivní účty ──")
+    from datetime import timedelta
+    aid, _, _ = admin_a_cizi()
+    t0 = A.datetime(2027, 6, 1, 3, 0)
+    stary = t0 - timedelta(days=400)
+    with A.app.test_request_context():
+        # Posunutý čas by smazal i všechny ostatní účty kopie - na dobu zkoušky výjimka.
+        ostatni = [u.id for u in A.User.query.filter(A.User.role != "admin", A.User.nemazat.is_(False))]
+        A.User.query.filter(A.User.id.in_(ostatni)).update({A.User.nemazat: True}, synchronize_session=False)
+        ucty = {}
+        for jmeno, overen in (("a", True), ("b", False), ("c", True), ("d", True), ("e", True), ("f", True)):
+            u = A.User(email=f"neakt-{jmeno}@test.cz", password="x", role="user", email_verified=overen)
+            A.db.session.add(u)
+            A.db.session.flush()
+            ucty[jmeno] = u.id
+        for jmeno in "abcd":
+            A.db.session.get(A.User, ucty[jmeno]).posledni_prihlaseni = stary
+        A.db.session.get(A.User, ucty["c"]).nemazat = True
+        A.db.session.get(A.User, ucty["d"]).zablokovan = True
+        A.db.session.get(A.User, ucty["e"]).posledni_prihlaseni = t0 - timedelta(days=10)
+        A.db.session.get(A.User, aid).posledni_prihlaseni = stary
+        # „a“ má společný zpěvník s „e“ - po smazání má „e“ dostat kopii
+        zdroj = A.Songbook.query.filter(A.Songbook.is_public == 0).first()
+        spolecny = A.kopiruj_zpevnik(zdroj, ucty["a"], "Neaktivní rodina")
+        A.db.session.add(A.UserSongbookAccess(user_id=ucty["e"], songbook_id=spolecny.id, permission="edit"))
+        A.db.session.commit()
+        spolecny_id = spolecny.id
+    poslano = []
+
+    def kolo(posun, nanecisto=False):
+        with A.app.app_context():
+            return A.neaktivni_ucty(ted=t0 + posun, posli=None if nanecisto else
+                                    (lambda komu, predmet, text, html: poslano.append((komu, text))))
+
+    def u(jmeno):
+        with A.app.app_context():
+            return A.db.session.get(A.User, ucty[jmeno])
+
+    v = kolo(timedelta(0), nanecisto=True)
+    zkontroluj(v["upozornit"] == ["neakt-a@test.cz"] and v["smazat"] == ["neakt-b@test.cz"],
+               "výpis: upozornit ověřený, smazat neověřený", v)
+    zkontroluj(u("b") is not None and u("a").neaktivita_email is None and u("f").posledni_prihlaseni is None,
+               "výpis nic neuloží ani nesmaže")
+    v = kolo(timedelta(0))
+    zkontroluj([k for k, _ in poslano] == ["neakt-a@test.cz"], "ověřený dostal upozornění", poslano[-1:])
+    zkontroluj("1. 7. 2027" in poslano[-1][1] and "Neaktivní rodina" not in poslano[-1][1],
+               "s datem smazání, bez názvů zpěvníků")
+    zkontroluj(u("b") is None, "neověřený po roce a 30 dnech smazaný bez upozornění")
+    zkontroluj(u("c") is not None and u("d") is not None and u("e") is not None,
+               "výjimka, zablokovaný a aktivní zůstali")
+    with A.app.app_context():
+        zkontroluj(A.db.session.get(A.User, aid) is not None, "správce se nemaže nikdy")
+    zkontroluj(u("f").posledni_prihlaseni == t0, "účet bez záznamu se počítá od prvního běhu")
+    kolo(timedelta(days=10))
+    zkontroluj(len(poslano) == 1 and u("a") is not None, "do lhůty nic dalšího")
+
+    with A.app.app_context():
+        A.db.session.get(A.User, ucty["a"]).posledni_prihlaseni = t0 + timedelta(days=15)
+        A.db.session.commit()
+    kolo(timedelta(days=31))
+    zkontroluj(u("a") is not None and u("a").neaktivita_email is None,
+               "kdo se po upozornění přihlásil, zůstane a upozornění se zapomene")
+
+    with A.app.app_context():
+        # „e“ zůstává aktivní, ať může po smazání „a“ dostat kopii
+        A.db.session.get(A.User, ucty["e"]).posledni_prihlaseni = t0 + timedelta(days=380)
+        A.db.session.commit()
+    pred = len(poslano)
+    kolo(timedelta(days=15 + 366))
+    # za další rok jsou neaktivní i pomocné účty „e“ a „f“ - stačí, že „a“ je mezi nimi
+    zkontroluj("neakt-a@test.cz" in [k for k, _ in poslano[pred:]], "po dalším roce znovu upozornění",
+               [k for k, _ in poslano[pred:]])
+    with A.app.app_context():
+        oznameni_e = A.Oznameni.query.filter_by(user_id=ucty["e"]).count()
+    kolo(timedelta(days=15 + 366 + 30))
+    with A.app.app_context():
+        zkontroluj(u("a") is None and A.db.session.get(A.Songbook, spolecny_id) is None,
+                   "po lhůtě smazaný i se zpěvníkem")
+        zkontroluj(A.Oznameni.query.filter_by(user_id=ucty["e"]).count() == oznameni_e + 1,
+                   "člen společného zpěvníku dostal kopii")
+        zaznam = A.ZasahAdmina.query.filter_by(akce="smazal neaktivní účet").order_by(A.ZasahAdmina.id).all()
+        zkontroluj([z.komu for z in zaznam] == ["neakt-b@test.cz", "neakt-a@test.cz", "neakt-f@test.cz"]
+                   and all(z.admin == "automaticky" for z in zaznam), "smazání jsou v záznamu zásahů",
+                   [(z.komu, z.podrobnosti) for z in zaznam])
+
+    print("\n── neaktivní účty: aktivita a výjimka ve správě ──")
+    with A.app.app_context():
+        A.db.session.get(A.User, ucty["e"]).posledni_prihlaseni = A.datetime(2020, 1, 1)
+        A.db.session.commit()
+    klient(ucty["e"]).get("/my-songbooks")
+    zkontroluj(u("e").posledni_prihlaseni.date() == A.datetime.now().date(),
+               "návštěva přihlášeného účtu zapíše aktivitu", u("e").posledni_prihlaseni)
+    with A.app.app_context():
+        A.db.session.get(A.User, ucty["e"]).posledni_prihlaseni = A.datetime(2020, 1, 1)
+        A.db.session.commit()
+    admin = klient(aid)
+    post(admin, f"/api/sprava/uzivatel/{ucty['e']}/prihlasit")
+    admin.get("/my-songbooks")
+    zkontroluj(u("e").posledni_prihlaseni.year == 2020, "admin přihlášený jako uživatel aktivitu nezapíše")
+    admin.post("/sprava/zpet")
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{ucty['e']}", {"akce": "nemazat"})
+    zkontroluj(kod == 200 and u("e").nemazat, "ve správě jde nastavit výjimku", kod)
+    zkontroluj("nemazat</span>" in admin.get("/sprava/uzivatele").get_data(as_text=True), "a je vidět")
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{ucty['e']}", {"akce": "mazat"})
+    zkontroluj(kod == 200 and not u("e").nemazat, "i zrušit")
+    with A.app.app_context():
+        A.User.query.filter(A.User.id.in_(ostatni)).update({A.User.nemazat: False}, synchronize_session=False)
+        A.db.session.commit()
+
+
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.
     Jen čte - server běží nad vlastní kopií databáze a na obrázky nesahá."""
@@ -942,6 +1053,7 @@ def main():
     odhlaseni()
     prihlaseni_jako()
     zamky()
+    neaktivni()
     smazani_uctu()
     prohlizec()
     print()

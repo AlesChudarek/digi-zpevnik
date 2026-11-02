@@ -870,9 +870,14 @@ kdo maže.
       hodinu (`scripts/zamky-upozorni.sh`): až po hodině souvislého zámku, jednou na každé
       zamčení, nejvýš jednou za 7 dní, jen na ověřenou adresu, bez názvů zpěvníků (název
       volí kdokoli - nesmí jít rozesílat cizí text).
-- [ ] **neaktivní účty** (na později): kdo se např. rok nepřihlásil, dostane e-mail
-      a když nereaguje, účet se po 30 dnech smaže. Uklidí i zamčené zpěvníky. Navrženo
-      2. 11. místo odpočtu u každého zpěvníku; lhůty na Alešovi.
+- [X] **neaktivní účty** (Aleš 2. 11.): `flask neaktivni-ucty` ze stejného hodinového cronu
+      (`scripts/zamky-upozorni.sh`). Ověřený účet po roce bez aktivity e-mail „do 30 dní se
+      přihlaste“, pak `zrus_ucet` (členové dostanou kopii); neověřený se smaže po roce
+      a 30 dnech bez upozornění. Nikdy: správce, host, zablokovaný a výjimka `nemazat`
+      (tlačítko ve správě - pro testovací účty, nastavit na serveru). Aktivita =
+      `posledni_prihlaseni`, zapisuje ho i první požadavek dne (`_zapis_aktivitu`), admin
+      přihlášený jako uživatel ne. Stávající účty se počítají od prvního běhu. Smazání
+      jde do záznamu zásahů jako „automaticky“.
 
 ## Obsah a prezentace
 

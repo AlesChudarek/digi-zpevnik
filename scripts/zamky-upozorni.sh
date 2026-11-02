@@ -1,7 +1,9 @@
 #!/bin/bash
 #
-# Upozorní e-mailem účty, kterým se zamkly zpěvníky (přes limit místa). Spouští se
-# z cronu na serveru každou hodinu; pravidla proti spamu jsou v upozorni_na_zamky().
+# Pravidelná údržba účtů, spouští se z cronu na serveru každou hodinu (jméno skriptu
+# zůstalo z doby, kdy dělal jen první část - cron na něj ukazuje):
+# - upozornění na zamčené zpěvníky (upozorni_na_zamky, pravidla proti spamu tam),
+# - upozornění a mazání neaktivních účtů (neaktivni_ucty).
 #
 # Cron nemá prostředí přihlášeného uživatele, takže se proměnné načítají výslovně.
 
@@ -15,4 +17,5 @@ set -a
 . /etc/digitalni-zpevnik.env
 set +a
 
-exec .venv/bin/flask --app backend.app zamky-upozorni
+.venv/bin/flask --app backend.app zamky-upozorni
+.venv/bin/flask --app backend.app neaktivni-ucty
