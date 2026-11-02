@@ -1827,6 +1827,7 @@ def zrus_ucet(user, co_se_stalo, prevest_k=None):
     db.session.query(PoradiZpevniku).filter_by(user_id=uid).delete()
     db.session.query(Pratelstvi).filter(db.or_(Pratelstvi.od_id == uid,
                                                Pratelstvi.komu_id == uid)).delete()
+    db.session.query(ExportPokus).filter_by(user_id=uid).delete()
     db.session.query(User).filter_by(id=uid).delete()
     if pred:
         zkontroluj_limity(pred)
@@ -2446,12 +2447,14 @@ def api_delete_songbook(songbook_id):
     access = UserSongbookAccess.query.filter_by(user_id=current_user.id, songbook_id=sb.id).first()
     has_edit_share = bool(access and access.permission in ('edit', 'admin'))
     is_owner = bool(sb.owner_id and sb.owner_id == current_user.id)
-    is_admin = current_user.role == 'admin'
+    # Admin tudy maže jen veřejné zpěvníky (Správa našich zpěvníků). Cizí soukromé
+    # spravuje ve Správě, kde se zásah zapíše.
+    verejny_adminem = current_user.role == 'admin' and bool(sb.is_public)
 
-    if not (is_admin or is_owner or has_edit_share):
+    if not (verejny_adminem or is_owner or has_edit_share):
         return jsonify({"ok": False, "error": "Forbidden"}), 403
 
-    if has_edit_share and not is_owner and not is_admin:
+    if has_edit_share and not is_owner and not verejny_adminem:
         # Člen odchází ze společného zpěvníku; kopii si nechá, jen když o ni řekne.
         if request.args.get('kopie') == '1':
             kopiruj_zpevnik(sb, current_user.id)
@@ -2459,8 +2462,7 @@ def api_delete_songbook(songbook_id):
         db.session.commit()
         return jsonify({"ok": True, "odesel": True})
 
-    co = (f"Vlastník ({current_user.email}) smazal společný zpěvník „{{nazev}}“."
-          if is_owner else "Správce smazal společný zpěvník „{nazev}“.")
+    co = f"Vlastník ({current_user.email}) smazal společný zpěvník „{{nazev}}“."
     kandidati = smaz_zpevnik(sb, co)
     db.session.commit()
     smaz_osirele_obrazky(kandidati)
@@ -2543,7 +2545,7 @@ def clenove_zpevniku(songbook_id):
 def odeber_clena(songbook_id, user_id):
     """Vlastník ukončí společné úpravy s jedním členem. Ten dostane kopii a upozornění."""
     sb = db.session.get(Songbook, songbook_id)
-    if sb is None or not (sb.owner_id == current_user.id or is_admin(current_user)):
+    if sb is None or sb.owner_id != current_user.id:
         return jsonify({'ok': False, 'error': 'Členy odebírá jen vlastník zpěvníku.'}), 403
     if not UserSongbookAccess.query.filter_by(songbook_id=sb.id, user_id=user_id).first():
         return jsonify({'ok': False, 'error': 'Tenhle uživatel zpěvník neupravuje.'}), 404
@@ -3880,6 +3882,12 @@ def uloz_zpevnik(songbook_id=None):
             except ValueError:
                 raise ChybaEditoru('Neplatný seznam stran.')
             _uloz_strany(sb, strany, koren, ke_smazani)
+        if (songbook_id is not None and is_admin(current_user) and not sb.is_public
+                and sb.owner_id != current_user.id
+                and not UserSongbookAccess.query.filter_by(user_id=current_user.id,
+                                                           songbook_id=sb.id).first()):
+            # Úprava cizího zpěvníku ze Správy (Upravit) je zásah jako každý jiný.
+            zapis_zasah('upravil zpěvník', komu=db.session.get(User, sb.owner_id), zpevnik=sb)
         zkontroluj_limity(pred)
         db.session.commit()
     except ChybaEditoru as chyba:

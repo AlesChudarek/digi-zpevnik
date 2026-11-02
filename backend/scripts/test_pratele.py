@@ -166,8 +166,14 @@ def main():
                "přátelé s volným místem")
 
     # Společný zpěvník: u3 pozve u4 ke společným úpravám, ten přijme.
-    with A.app.app_context():
+    with A.app.test_request_context():
         sb = A.Songbook.query.filter_by(owner_id=3, is_public=0).first()
+        if sb is None:
+            # Lokální data se ručním zkoušením mění (třeba převod ve správě) - když účet 3
+            # žádný vlastní zpěvník nemá, dostane v kopii DB kopii nějakého soukromého.
+            zdroj = A.Songbook.query.filter(A.Songbook.is_public == 0).first()
+            sb = A.kopiruj_zpevnik(zdroj, 3, "Zpěvník pro přátele")
+            A.db.session.commit()
         sb_id, sb_nazev = sb.id, sb.title
     u3.post(f"/api/my-songbooks/{sb_id}/share", json={"email": EMAIL[4], "druh": "spolecny"})
     with A.app.app_context():

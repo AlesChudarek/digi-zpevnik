@@ -172,6 +172,25 @@ def akce_se_zpevniky():
         dalsi = [u.id for u in A.User.query.filter(A.User.role == "user",
                                                    A.User.id.notin_([vlastnik, clen]))]
 
+    print("\n── staré cesty bez záznamu jsou adminovi u cizích zavřené ──")
+    r = admin.delete(f"/api/my-songbooks/{kniha}")
+    with A.app.app_context():
+        zkontroluj(r.status_code == 403 and A.db.session.get(A.Songbook, kniha) is not None,
+                   "cizí soukromý zpěvník přes Moje zpěvníky nesmaže", r.status_code)
+    kod, _ = post(admin, f"/api/zpevnik/{kniha}/clenove/{clen}/odebrat")
+    zkontroluj(kod == 403, "člena přes okno sdílení neodebere", kod)
+    zasahu = pocet_zasahu()
+    r = admin.post(f"/api/zpevnik/{kniha}", data={"nazev": "Upraveno správcem"},
+                   content_type="multipart/form-data")
+    with A.app.app_context():
+        posledni = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first()
+        zkontroluj(r.status_code == 200 and pocet_zasahu() == zasahu + 1
+                   and posledni.akce == "upravil zpěvník" and posledni.zpevnik == "Upraveno správcem",
+                   "úprava cizího zpěvníku v editoru je v záznamu", (r.status_code, posledni and posledni.akce))
+        vlastni_admina = A.Songbook.query.filter_by(owner_id=aid, is_public=0).first().id
+    admin.post(f"/api/zpevnik/{vlastni_admina}", data={"nazev": "Můj"}, content_type="multipart/form-data")
+    zkontroluj(pocet_zasahu() == zasahu + 1, "úprava vlastního zpěvníku ne")
+
     print("\n── odebrání ze společných úprav ──")
     zasahu = pocet_zasahu()
     kod, _ = post(admin, f"/api/sprava/zpevnik/{kniha}/clen/{clen}/odebrat")
@@ -236,7 +255,7 @@ def akce_se_zpevniky():
     print("\n── záznam zásahů ──")
     with A.app.app_context():
         akce = [z.akce for z in A.ZasahAdmina.query.order_by(A.ZasahAdmina.id)]
-    ocekavane = ["odebral ze společného zpěvníku", "zrušil pozvánku", "převedl zpěvník",
+    ocekavane = ["upravil zpěvník", "odebral ze společného zpěvníku", "zrušil pozvánku", "převedl zpěvník",
                  "převedl zpěvník", "zkopíroval si zpěvník", "smazal zpěvník"]
     zkontroluj(akce == ocekavane, "zapsané všechny zásahy, nepovedené ne", akce)
     html = admin.get("/sprava/zaznam").get_data(as_text=True)
@@ -538,10 +557,16 @@ def smazani_uctu():
 
     print("\n── uživatel si účet zruší sám (stejná cesta) ──")
     s3 = stav("user3@test.com")
+    with A.app.app_context():
+        A.db.session.add(A.ExportPokus(user_id=s3["id"], den="2026-11-02", pocet=3))
+        A.db.session.commit()
     c = klient(s3["id"])
     r = c.post("/smazat-ucet", data={"potvrzeni": "user3@test.com"})
     zkontroluj(r.status_code == 302 and r.headers["Location"].endswith("/")
                and stav("user3@test.com") is None, "zrušení vlastního účtu", r.status_code)
+    with A.app.app_context():
+        zkontroluj(A.ExportPokus.query.filter_by(user_id=s3["id"]).count() == 0,
+                   "s účtem zmizí i jeho počty skládání")
 
     print("\n── admin přihlášený jako uživatel jeho účet zruší ──")
     s4 = stav("user4@test.com")
