@@ -51,6 +51,16 @@
     z-index: 1;
   }
   .songbook-card:focus-within { z-index: 20; }
+  /* Zamčený zpěvník (účet přes limit): šedá obálka se zámkem, neotevírá se. */
+  .songbook-card.zamceny .cover-preview > img { filter: grayscale(1) opacity(0.45); }
+  .songbook-card.zamceny .songbook-nazev { color: #777; cursor: default; }
+  .songbook-card.zamceny a[aria-disabled] { cursor: default; }
+  .zamek-prekryv {
+    position: absolute; inset: 0; z-index: 2; border-radius: 10px 10px 0 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+    background: rgba(240, 240, 240, 0.72); color: #333; font-size: 15px; font-weight: 700;
+  }
+  .zamek-prekryv img { width: 44px; height: 44px; }
   /* Jen s myší: na dotyku by se zvětšení po ťuknutí přilepilo. */
   @media (hover: hover) { .songbook-card:hover { transform: scale(1.05); z-index: 20; } }
 
@@ -398,9 +408,12 @@
   {# Pořadí určuje server (serad_zpevniky); v Mých zpěvnících jde měnit přetažením. #}
   {% set lze_radit = not manage_public and current_user.role != 'guest' and songbooks|length >= 2 %}
   {% for book in songbooks %}
-    <div class="songbook-card" data-book-id="{{ book.id }}"{% if lze_radit %} data-radit="1"{% endif %}>
+    {# Zamčený zpěvník (účet přes limit, viz zamcene_zpevniky): šedá dlaždice se zámkem,
+       neotevře se, v nabídce jen Odebrat/Smazat. #}
+    {% set zamek = (zamcene or {}).get(book.id) if zamcene is defined else none %}
+    <div class="songbook-card{% if zamek is not none %} zamceny{% endif %}" data-book-id="{{ book.id }}"{% if lze_radit %} data-radit="1"{% endif %}>
       {% if lze_radit %}<span class="dlazdice-drzadlo" data-napoveda="Přetáhnout jinam" aria-hidden="true">≡</span>{% endif %}
-      <a href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" style="text-decoration:none; color:inherit;">
+      <a {% if zamek is none %}href="{{ url_for('songbook_detail', book_id=book.id) }}"{% else %}aria-disabled="true"{% endif %} draggable="false" style="text-decoration:none; color:inherit;">
         <div class="cover-preview{% if book.img_path_cover_preview %} nacita{% endif %}" style="background: {{ book.color or '#ffffff' }};">
           {% if book.img_path_cover_preview %}
             {# Náhled se při prvním zobrazení teprve vyrábí (nová kopie, nová obálka) -
@@ -426,6 +439,12 @@
               </div>
             </span>
           {% endif %}
+          {% if zamek is not none %}
+            <div class="zamek-prekryv napoveda-tuk" data-napoveda="Zpěvník je zamčený: účet je přes limit místa. Zpěvník zabírá {{ mb(zamek) }}, volných je {{ mb(volne) }}. Odemkne se sám, až se účet do limitu vejde - po smazání nebo opuštění jiného zpěvníku{% if book.owner_id == current_user.id %}, nebo když z tohoto ubere strany (Upravit){% endif %}.">
+              <img src="{{ static_bust('img/icons/lock.svg') }}" alt="">
+              <span>Zamčeno</span>
+            </div>
+          {% endif %}
         </div>
       </a>
       {# Akce v rozbalovací nabídce za šipkou u názvu, ne jako řada ikon: s tiskem jich
@@ -433,15 +452,19 @@
       {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
       {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
       <div class="songbook-radek">
-        <a class="songbook-nazev" href="{{ url_for('songbook_detail', book_id=book.id) }}" draggable="false" title="{{ book.title }}">{{ book.title }}</a>
+        <a class="songbook-nazev" {% if zamek is none %}href="{{ url_for('songbook_detail', book_id=book.id) }}"{% endif %} draggable="false" title="{{ book.title }}">{{ book.title }}</a>
         <div class="songbook-akce">
           <button type="button" class="akce-spoustec" aria-haspopup="menu" aria-expanded="false" aria-label="Možnosti zpěvníku">
             <span class="akce-sipka" aria-hidden="true">▾</span>
           </button>
           <div class="akce-nabidka" role="menu" hidden>
+            {# Vlastní zamčený jde upravit - jen ubrat, ať se účet vejde do limitu. #}
+            {% if zamek is none or book.owner_id == current_user.id %}
             <button type="button" role="menuitem" class="akce-polozka btn-edit" data-book-id="{{ book.id }}" onclick="window.openEditSongbookModal && window.openEditSongbookModal('{{ book.id }}');">
               <img src="{{ static_bust('img/icons/edit.svg') }}" alt=""><span>Upravit</span>
             </button>
+            {% endif %}
+            {% if zamek is none %}
             {% if not manage_public %}
               {# Veřejný zpěvník vidí všichni, sdílení ani kopie u něj nemají smysl. #}
               <button type="button" role="menuitem" class="akce-polozka btn-share" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}" data-vlastnik="{{ '1' if book.owner_id == current_user.id else '0' }}" data-vlastnik-email="{{ (share_users|selectattr('is_owner')|map(attribute='jmeno')|first) or '' }}">
@@ -457,9 +480,9 @@
             <button type="button" role="menuitem" class="akce-polozka btn-tisk" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}">
               <img src="{{ static_bust('img/icons/print.svg') }}" alt=""><span>Tisk</span>
             </button>
+            {% endif %}
             <button type="button" role="menuitem" class="akce-polozka akce-nevratna btn-delete" data-book-id="{{ book.id }}" data-book-title="{{ book.title|e }}"
-                    data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}"
-                    data-cizi-vlastnik="{{ (share_users|selectattr('is_owner')|map(attribute='jmeno')|first or 'jiný uživatel') if (current_user.role == 'admin' and book.owner_id and book.owner_id != current_user.id) else '' }}">
+                    data-clen="{{ '1' if jsem_clen else '0' }}" data-clenu="{{ clenu }}">
               <img src="{{ static_bust('img/icons/bin.svg') }}" alt=""><span>{{ 'Odebrat' if jsem_clen else 'Smazat' }}</span>
             </button>
           </div>
@@ -1429,12 +1452,6 @@ function openCreateModal() {
             discardStyl: 'nebezpecne', saveStyl: 'mekke-nebezpecne' });
         if (volba === 'cancel') return;
         if (volba === 'save') url += '?kopie=1';
-      } else if (data.ciziVlastnik) {
-        // Admin maže cizí zpěvník: vlastník o něj přijde, ať se to nestane omylem.
-        const zprava = `Zpěvník „${data.title}“ patří uživateli ${data.ciziVlastnik}. Smazáním o něj vlastník přijde`
-          + (data.clenu ? `; ostatní, kdo ho upravují společně (${data.clenu}), dostanou jeho kopii.` : '.')
-          + ' Smazání nejde vrátit.';
-        if (!(await window.showConfirm(zprava, 'Smazat cizí zpěvník', { nebezpecne: true }))) return;
       } else {
         const zprava = data.clenu
           ? `Smazat zpěvník „${data.title}“? Ostatní, kdo ho upravují společně (${data.clenu}), dostanou jeho kopii v aktuální podobě.`
@@ -1456,8 +1473,7 @@ function openCreateModal() {
     document.querySelectorAll('.btn-delete').forEach(btn => {
       btn.addEventListener('click', () => smazNeboOdejdi({
         id: btn.dataset.bookId, title: btn.dataset.bookTitle || 'zpěvník',
-        clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10),
-        ciziVlastnik: btn.dataset.ciziVlastnik || '' }));
+        clen: btn.dataset.clen === '1', clenu: parseInt(btn.dataset.clenu || '0', 10) }));
     });
 
     function setShareFeedback(message, type) {

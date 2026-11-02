@@ -84,6 +84,13 @@ def nacti(c, zpevnik_id):
     return c.get(f"/api/zpevnik/{zpevnik_id}").get_json()["zpevnik"]
 
 
+def nastav_limit(uid, bajtu):
+    """Vlastní limit jednoho účtu (správa). None = výchozí."""
+    with A.app.app_context():
+        A.db.session.get(A.User, uid).limit_mista = bajtu
+        A.db.session.commit()
+
+
 def strany_db(zpevnik_id):
     with A.app.app_context():
         sb = A.db.session.get(A.Songbook, zpevnik_id)
@@ -317,17 +324,35 @@ def main():
         r = u3.post(f"/api/pozvanky/{pid}/prijmout")
         zkontroluj(r.status_code == 200 and misto(3) > pred3,
                    "společný zpěvník se počítá i tomu, kdo ho přijal", (r.status_code, misto(3) - pred3))
-        A.MAX_USER_STORAGE_BYTES = misto(3) + 1
+        # Člen přes limit vlastníka neblokuje - zpěvník se mu jen zamkne (Aleš 2. 11.).
+        nastav_limit(3, misto(3) + 1)
         _, y = nahraj(u4, "navy", zpevnik_id=limitni)
         z = nacti(u4, limitni)
         kod, telo = uloz(u4, limitni, strany=[
             {k: st[k] for k in ("id", "typ", "image_id", "popisek", "pisne")} for st in z["strany"]]
             + [{"typ": "bez", "image_id": y["image_id"]}])
-        zkontroluj(kod == 413 and EMAIL3 in (telo.get("error") or ""),
-                   "nahrání do sdíleného se odmítne, když se nevejde druhému, a řekne komu",
+        with A.app.app_context():
+            # Co se zamkne, je věc pravidla (sdílené od největšího) - stačí, že něco.
+            zamceno = A.zamcene_zpevniky(A.db.session.get(A.User, 3))
+        zkontroluj(kod == 200 and zamceno,
+                   "nahrání do sdíleného projde, i když se nevejde členovi - tomu se něco zamkne",
+                   (kod, telo.get("error"), zamceno))
+        nastav_limit(3, None)
+        # Když se nevejde vlastníkovi, člen nepřidá a dozví se, komu místo chybí.
+        nastav_limit(4, misto(4) + 1)
+        # Strana do společného zpěvníku jde do kořene vlastníka, takže se zarazí už
+        # při nahrání.
+        kod, telo = nahraj(u3, "teal", zpevnik_id=limitni)
+        with A.app.app_context():
+            vlastnik = A.jmeno_uzivatele(A.db.session.get(A.User, 4))
+        zkontroluj(kod == 413 and vlastnik in (telo.get("error") or ""),
+                   "člen nepřidá, když se to nevejde vlastníkovi, a hláška řekne komu",
                    telo.get("error"))
+        nastav_limit(4, None)
     finally:
         A.MAX_USER_STORAGE_BYTES = puvodni_limit
+        nastav_limit(3, None)
+        nastav_limit(4, None)
     u4.delete(f"/api/my-songbooks/{limitni}/songs/x")
     with A.app.app_context():
         # sdílení z testu limitu by se pletlo do testů sdílení níž

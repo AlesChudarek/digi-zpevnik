@@ -315,6 +315,7 @@
     .ucet-panel .ucet-misto-varovani .ucet-misto-pruh span { background: #d9a406; }
     .ucet-panel .ucet-misto-kriticky .ucet-misto-znak { background: #b3261e; }
     .ucet-panel .ucet-misto-kriticky .ucet-misto-pruh span { background: #d3402f; }
+    .ucet-panel .ucet-misto-zamceno { margin-top: 6px; font-size: 12px; color: #b3261e; font-weight: 600; }
     .ucet-panel .ucet-misto-kriticky .ucet-misto-cislo { color: #b3261e; font-weight: 600; }
 
     /* Hlášky po přesměrování. Dashboard je dosud neuměl zobrazit vůbec, takže hláška
@@ -528,7 +529,7 @@
                 <span>Zabrané místo</span>
                 <span class="ucet-misto-cislo">
                   {% if misto.stav != 'ok' %}<span class="ucet-misto-znak napoveda-tuk"
-                       data-napoveda="{% if misto.stav == 'kriticky' %}Máte skoro plno. Až místo dojde, nepůjde nahrát další stránka — uvolněte ho smazáním zpěvníku, který už nepotřebujete.{% else %}Zabrali jste víc než polovinu. Až místo dojde, nepůjde nahrát další stránka.{% endif %}"
+                       data-napoveda="{% if misto.zamceno %}Účet je přes limit, zamčené zpěvníky: {{ misto.zamceno }}. Odemknou se, až se účet do limitu zase vejde - po smazání nebo opuštění zpěvníku.{% elif misto.stav == 'kriticky' %}Máte skoro plno. Až místo dojde, nepůjde nahrát další stránka — uvolněte ho smazáním zpěvníku, který už nepotřebujete.{% else %}Zabrali jste víc než polovinu. Až místo dojde, nepůjde nahrát další stránka.{% endif %}"
                        aria-label="Upozornění na místo">!</span>{% endif %}
                   {{ mb(misto.zabrano) }} z {{ mb(misto.kvota) }}
                 </span>
@@ -537,6 +538,7 @@
                    aria-label="Zabráno {{ misto.procent }} % místa">
                 <span style="width: {{ misto.procent }}%"></span>
               </div>
+              {% if misto.zamceno %}<div class="ucet-misto-zamceno">Přes limit · zamčené zpěvníky: {{ misto.zamceno }}</div>{% endif %}
             </div>
             {% endif %}
 

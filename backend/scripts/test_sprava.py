@@ -581,6 +581,111 @@ def smazani_uctu():
                "zásah je v záznamu", (zasah.akce, zasah.komu))
 
 
+def zamky():
+    print("\n── zámky: příprava ──")
+    aid, _, _ = admin_a_cizi()
+    with A.app.test_request_context():
+        ucty = {}
+        for jmeno in ("x", "y", "z"):
+            u = A.User(email=f"zamek-{jmeno}@test.cz", password="x", role="user", email_verified=True)
+            A.db.session.add(u)
+            A.db.session.flush()
+            ucty[jmeno] = u.id
+        zdroje = sorted(A.Songbook.query.filter(A.Songbook.is_public == 0).all(),
+                        key=lambda sb: -A.cena_zpevniku([sb.id]))
+        zdroje = [sb for sb in zdroje if A.cena_zpevniku([sb.id]) > 0]
+        velka = A.kopiruj_zpevnik(zdroje[0], ucty["y"], "Rodinný zpěvník")
+        vlastni1 = A.kopiruj_zpevnik(zdroje[0], ucty["x"], "Velký vlastní")
+        vlastni2 = A.kopiruj_zpevnik(zdroje[-1], ucty["x"], "Malý vlastní")
+        for kdo in ("x", "z"):
+            A.db.session.add(A.UserSongbookAccess(user_id=ucty[kdo], songbook_id=velka.id, permission="edit"))
+        A.db.session.commit()
+        ids = {"rodina": velka.id, "v1": vlastni1.id, "v2": vlastni2.id}
+        ceny = {k: A.cena_zpevniku([v]) for k, v in ids.items()}
+        verejna_pisen = A.db.session.execute(A.text(
+            "SELECT ps.song_id FROM pisne_na_strane ps JOIN strany s ON s.id = ps.strana_id "
+            "JOIN songbooks b ON b.id = s.songbook_id WHERE b.is_public = 1 LIMIT 1")).scalar()
+    zkontroluj(ceny["v1"] > ceny["v2"] > 0, "zpěvníky různé velikosti", ceny)
+
+    def nastav_limit(kdo, bajtu):
+        with A.app.app_context():
+            A.db.session.get(A.User, ucty[kdo]).limit_mista = bajtu
+            A.db.session.commit()
+
+    def zamcene(kdo):
+        with A.app.app_context():
+            return list(A.zamcene_zpevniky(A.db.session.get(A.User, ucty[kdo])))
+
+    celkem_x = ceny["rodina"] + ceny["v1"] + ceny["v2"]
+    print("\n── zámky: pořadí ──")
+    nastav_limit("x", celkem_x)
+    zkontroluj(zamcene("x") == [], "v limitu nic zamčené")
+    nastav_limit("x", celkem_x - 1)
+    zkontroluj(zamcene("x") == [ids["rodina"]], "o bajt přes: zamkne se sdílený", zamcene("x"))
+    nastav_limit("x", ceny["v2"])
+    zkontroluj(zamcene("x") == [ids["rodina"], ids["v1"]],
+               "hodně přes: sdílený, pak vlastní od největšího, malý zůstane", zamcene("x"))
+
+    print("\n── zámky: co zamčený zpěvník znamená ──")
+    nastav_limit("x", celkem_x - 1)
+    x, y, z = klient(ucty["x"]), klient(ucty["y"]), klient(ucty["z"])
+    r = x.get(f"/songbook/{ids['rodina']}")
+    zkontroluj(r.status_code == 302 and r.headers["Location"].endswith("/my-songbooks"),
+               "zamčený se neotevře, vrátí do Mých zpěvníků", r.status_code)
+    zkontroluj(x.get(f"/songbook/{ids['v1']}").status_code == 200, "nezamčený ano")
+    html = x.get("/my-songbooks").get_data(as_text=True)
+    zkontroluj(f'songbook-card zamceny" data-book-id="{ids["rodina"]}"' in html
+               and "lock.svg" in html, "šedá dlaždice se zámkem")
+    zkontroluj("zamčené zpěvníky: 1" in html, "v nabídce účtu počet zamčených")
+    polozky = [p["id"] for p in x.get("/api/my-songbooks/options").get_json()["items"]]
+    zkontroluj(ids["rodina"] not in polozky and ids["v1"] in polozky, "není v nabídce Přidat do zpěvníku")
+    zkontroluj(f'data-songbook-id="{ids["rodina"]}"' not in x.get("/search").get_data(as_text=True),
+               "není v hledání")
+    r = x.post(f"/api/zpevnik/{ids['rodina']}", data={"nazev": "x"}, content_type="multipart/form-data")
+    zkontroluj(r.status_code == 404, "neupraví ho", r.status_code)
+    kod, telo = post(x, f"/api/songbooks/{ids['v2']}/add-song", {"song_id": verejna_pisen})
+    zkontroluj(kod == 413, "přes limit nepřidá nic ani do vlastního", (kod, telo.get("error", "")[:60]))
+
+    print("\n── zámky: člen přes limit rodinu neblokuje ──")
+    kod, telo = post(y, f"/api/songbooks/{ids['rodina']}/add-song", {"song_id": verejna_pisen})
+    zkontroluj(kod == 200, "vlastník přidá, i když je člen přes limit", (kod, telo))
+    with A.app.app_context():
+        zabrano_y = A.zabrane_misto(ucty["y"])
+    nastav_limit("y", zabrano_y)
+    with A.app.app_context():
+        jina = A.db.session.execute(A.text(
+            "SELECT ps.song_id FROM pisne_na_strane ps JOIN strany s ON s.id = ps.strana_id "
+            "JOIN songbooks b ON b.id = s.songbook_id WHERE b.is_public = 1 AND ps.song_id != :p "
+            "LIMIT 1"), {"p": verejna_pisen}).scalar()
+    kod, telo = post(z, f"/api/songbooks/{ids['rodina']}/add-song", {"song_id": jina})
+    zkontroluj(kod == 413 and "vlastníka" in telo.get("error", ""),
+               "člen nezvětší zpěvník vlastníkovi přes jeho limit", (kod, telo.get("error", "")[:90]))
+    nastav_limit("y", None)
+
+    print("\n── zámky: odemknutí ──")
+    nastav_limit("x", None)
+    zkontroluj(zamcene("x") == [] and x.get(f"/songbook/{ids['rodina']}").status_code == 200,
+               "s větším limitem se sám odemkne")
+    nastav_limit("x", ceny["v1"] + ceny["v2"])
+    zkontroluj(zamcene("x") == [ids["rodina"]], "znovu přes limit")
+    r = x.delete(f"/api/my-songbooks/{ids['rodina']}")
+    zkontroluj(r.status_code == 200 and (r.get_json() or {}).get("odesel") and zamcene("x") == [],
+               "zamčený sdílený jde opustit a nic dalšího se nezamkne", r.get_json())
+
+    print("\n── zámky: správa ──")
+    admin = klient(aid)
+    kod, telo = post(admin, f"/api/sprava/uzivatel/{ucty['x']}",
+                     {"akce": "limit", "hodnota": str(max(1, ceny['v2'] // (1024 * 1024))), "nahled": True})
+    with A.app.app_context():
+        limit_po = A.db.session.get(A.User, ucty["x"]).limit_mista
+    zkontroluj(kod == 200 and any("Velký vlastní" in z for z in telo.get("zamkne", []))
+               and limit_po == ceny["v1"] + ceny["v2"], "náhled řekne, co se zamkne, a nic neuloží", telo)
+    nastav_limit("x", ceny["v2"])
+    html = admin.get("/sprava/uzivatele").get_data(as_text=True)
+    zkontroluj("zamčené zpěvníky: 1" in html, "v Uživatelích je vidět počet zamčených")
+    zkontroluj(admin.get(f"/songbook/{ids['v1']}").status_code == 200, "admin zamčený zpěvník vidí")
+
+
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.
     Jen čte - server běží nad vlastní kopií databáze a na obrázky nesahá."""
@@ -776,7 +881,17 @@ def prohlizec():
         srv.terminate()
 
 
+def srovnej_kopii():
+    """Lokální data si Aleš ručně mění (limity, blokace). V kopii DB se srovnají na
+    výchozí, ať testy nezávisí na tom, s čím si zrovna hrál."""
+    with A.app.app_context():
+        A.User.query.update({A.User.limit_mista: None, A.User.zablokovan: False})
+        A.ZasahAdmina.query.delete()
+        A.db.session.commit()
+
+
 def main():
+    srovnej_kopii()
     moje_zpevniky()
     hledani()
     vsechny_zpevniky()
@@ -784,6 +899,7 @@ def main():
     uzivatele()
     odhlaseni()
     prihlaseni_jako()
+    zamky()
     smazani_uctu()
     prohlizec()
     print()

@@ -40,7 +40,8 @@
         <div class="sz-mrizka su sz-souhrn" role="button" tabindex="0" aria-expanded="false">
           <div class="sz-kdo">{{ kolecko(u, 32) }}<span><strong>{{ u.jmeno }}</strong>{% if u.jmeno != u.email %}<br><span class="sz-ztlumene">{{ u.email }}</span>{% endif %}
             {% if u.zablokovan %}<span class="sz-stitek su-zablokovan">zablokovaný</span>{% endif %}
-            {% if not u.overen %}<span class="sz-stitek">neověřený</span>{% endif %}</span></div>
+            {% if not u.overen %}<span class="sz-stitek">neověřený</span>{% endif %}
+            {% if u.zamceno %}<span class="sz-stitek su-zablokovan" title="Účet je přes limit místa">zamčené zpěvníky: {{ u.zamceno }}</span>{% endif %}</span></div>
           <div class="sz-udaj"><span class="sz-popisek">Role:</span>{{ u.role_text }}</div>
           <div class="sz-udaj cislo"><span class="sz-popisek">Zpěvníky (vlastní / sdílené):</span>{{ u.vlastni|length }} / {{ u.sdilene|length }}</div>
           <div class="sz-udaj su-misto"><span class="sz-popisek">Místo:</span>
@@ -269,6 +270,23 @@
     const pole = radek.querySelector(`[data-pole="${akce}"]`);
     if (akce === 'prihlasit') { prihlasJako(radek.dataset.id); return; }
     if (akce === 'smazat') { smazUcet(radek); return; }
+    if (akce === 'limit') {
+      // Nejdřív náhled: když by se po změně něco zamklo, zeptat se.
+      try {
+        const res = await fetch(`/api/sprava/uzivatel/${radek.dataset.id}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ akce, hodnota: pole.value, nahled: true }),
+        });
+        const n = await res.json().catch(() => ({}));
+        if (!res.ok || !n.ok) { oznam(n.error || `Chyba serveru ${res.status}.`, { nadpis: 'Úprava se nepovedla' }); return; }
+        if (n.zamkne.length && !(await showConfirm(
+            `${radek.dataset.jmeno} zabírá ${n.zabrano}, s limitem ${n.limit} bude přes limit. `
+            + `Zamknou se mu: ${n.zamkne.join(', ')}.`, 'Uložit limit', { nebezpecne: true }))) return;
+      } catch (_) {
+        oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+        return;
+      }
+    }
     if (POTVRZENI[akce]) {
       const [text, ok, nebezpecne] = POTVRZENI[akce](radek.dataset.jmeno);
       if (!(await showConfirm(text, ok, { nebezpecne }))) return;

@@ -306,21 +306,76 @@ def cena_zpevniku(knihy) -> int:
     return int((strany or 0) + (obalky or 0))
 
 
-def drzitele_zpevniku(sb) -> list:
-    """Kdo zpěvník má, a komu se tedy počítá do limitu. Veřejný nikomu."""
-    if sb is None or sb.is_public:
-        return []
-    ids = [sb.owner_id] if sb.owner_id else []
-    ids += [r[0] for r in db.session.query(UserSongbookAccess.user_id).filter_by(
-        songbook_id=sb.id)]
-    return sorted(set(ids))
-
-
 def limit_uzivatele(kdo) -> int:
     """Kolik místa účet smí zabrat: vlastní limit, který mu nastavil admin, jinak
     výchozí MAX_USER_STORAGE_BYTES. `kdo` je uživatel nebo jeho id."""
     u = db.session.get(User, kdo) if isinstance(kdo, int) else kdo
     return getattr(u, 'limit_mista', None) or MAX_USER_STORAGE_BYTES
+
+
+def zamcene_zpevniky(user, limit=None) -> dict:
+    """Zpěvníky, které má účet zamčené, protože je přes limit: {id: cena}, v pořadí
+    zamykání. Vlastní zamčený zpěvník jde dál upravit v editoru (jen ubrat). Pravidla (Aleš 2. 11. 2026):
+
+    - Zamyká se, jen když účet zabírá víc, než je jeho limit - třeba proto, že někdo
+      z rodiny do společného zpěvníku přidal, nebo admin limit zmenšil.
+    - Nejdřív sdílené zpěvníky, od největšího, potom vlastní, od největšího - dokud se
+      zbytek nevejde. Pořadí se může měnit, jak zpěvníky rostou; to nevadí.
+    - Zamčený zpěvník účet nevidí ani neupraví (can_view/can_edit), ale v Mých
+      zpěvnících má šedou dlaždici a může ho opustit nebo smazat. Do zabraného místa
+      (zabrane_misto, kontrola limitu) se počítá dál - zámek ho jen zpřístupní znovu,
+      až se účet do limitu zase vejde.
+
+    `limit` jiný než skutečný slouží správě: co by se zamklo po změně limitu.
+    Admin a host nemají zámky nikdy.
+    """
+    if user is None or getattr(user, 'role', None) in ('admin', 'guest'):
+        return {}
+    klic = (user.id, limit)
+    try:
+        cache = g._zamky
+    except (AttributeError, RuntimeError):
+        cache = {}
+        try:
+            g._zamky = cache
+        except RuntimeError:
+            pass
+    if klic in cache:
+        return cache[klic]
+    limit = limit if limit is not None else limit_uzivatele(user)
+    zbyva = zabrane_misto(user.id) - limit
+    zamcene = {}
+    if zbyva > 0:
+        vlastni = [r[0] for r in db.session.query(Songbook.id).filter(
+            Songbook.owner_id == user.id, Songbook.is_public != 1)]
+        sdilene = [r[0] for r in db.session.query(UserSongbookAccess.songbook_id).filter(
+            UserSongbookAccess.user_id == user.id)]
+        for skupina in (sdilene, vlastni):
+            for sid, cena in sorted(((k, cena_zpevniku([k])) for k in skupina),
+                                    key=lambda x: (-x[1], x[0])):
+                if zbyva <= 0:
+                    break
+                if cena <= 0:
+                    continue    # prázdný zpěvník - zámek by nic neuvolnil
+                zamcene[sid] = cena
+                zbyva -= cena
+    cache[klic] = zamcene
+    return zamcene
+
+
+def je_zamceny(user, sb) -> bool:
+    return (sb is not None and not getattr(sb, 'is_public', 0)
+            and getattr(user, 'is_authenticated', False)
+            and sb.id in zamcene_zpevniky(user))
+
+
+def kontrolovani_pri_uprave(sb) -> list:
+    """Komu se při úpravě společného zpěvníku hlídá limit: tomu, kdo upravuje,
+    a vlastníkovi (ať mu člen rodiny nemůže zpěvník přes limit zvětšit). Ostatním
+    členům se zpěvník, který se jim přestane vejít, jen zamkne - úpravu neblokují."""
+    if sb is None or sb.is_public:
+        return []
+    return sorted({current_user.id, *([sb.owner_id] if sb.owner_id else [])})
 
 
 def zjisti_mista(ids) -> dict:
@@ -401,7 +456,10 @@ def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
     if uid is not None:
         zbyva = _zbyva_uzivateli(uid)
         if max(len(data), MIN_CENA_STRANY) > zbyva:
-            raise KvotaPrekrocena(limit_uzivatele(uid) - zbyva, len(data))
+            # Strana do cizího (společného) zpěvníku jde do kořene vlastníka - hláška
+            # pak musí říct, že místo chybí jemu.
+            kdo = None if uid == getattr(current_user, 'id', None) else db.session.get(User, uid)
+            raise KvotaPrekrocena(limit_uzivatele(uid) - zbyva, len(data), kdo=kdo)
     with open(dest_path, 'wb') as fh:
         fh.write(data)
     if uid is not None:
@@ -446,6 +504,8 @@ def can_view_songbook(user, songbook):
         return True
     if songbook.is_public:
         return True
+    if je_zamceny(user, songbook):
+        return False
     if songbook.owner_id == user.id:
         return True
     access = UserSongbookAccess.query.filter_by(user_id=user.id, songbook_id=songbook.id).first()
@@ -459,8 +519,12 @@ def can_edit_songbook(user, songbook):
     # Admin can edit all songbooks
     if user.role == 'admin':
         return True
+    # Vlastní zamčený zpěvník smí vlastník dál upravovat, ať z něj může ubrat a dostat
+    # se pod limit (přidat nic nepůjde - to zarazí limit). Číst ho nesmí (can_view).
     if songbook.owner_id == user.id:
         return True
+    if je_zamceny(user, songbook):
+        return False
     access = UserSongbookAccess.query.filter_by(user_id=user.id, songbook_id=songbook.id).first()
     if access and access.permission in ['edit', 'admin']:
         return True
@@ -652,9 +716,9 @@ def _kvota_prekrocena(chyba):
     limit = limit_uzivatele(chyba.kdo if chyba.kdo is not None else current_user)
     zbyva = max(0, limit - chyba.zabrano)
     if chyba.kdo is not None:
-        zprava = (f"Změna se nevejde do limitu místa uživatele {chyba.kdo.email}: volných "
-                  f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Společný zpěvník "
-                  f"se započítává každému, kdo ho má.")
+        zprava = (f"Změna se nevejde do limitu místa vlastníka zpěvníku "
+                  f"({jmeno_uzivatele(chyba.kdo)}): volných má {mb(zbyva)}, změna potřebuje "
+                  f"{mb(chyba.pridavek)}. Místo uvolní vlastník smazáním nepotřebného zpěvníku.")
     else:
         zprava = (f"Změna by překročila limit místa {mb(limit)}: volných "
                   f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Místo uvolní "
@@ -1503,6 +1567,7 @@ def misto_uzivatele(user):
         # Dva prahy: nad polovinou stojí za to o tom vědět, nad 85 % už je potřeba
         # něco udělat, než nahrávání spadne na strop.
         'stav': 'kriticky' if podil >= 0.85 else ('varovani' if podil >= 0.5 else 'ok'),
+        'zamceno': len(zamcene_zpevniky(user)),
     }
 
 
@@ -2113,6 +2178,9 @@ def search():
             if shared_ids:
                 filters.append(Songbook.id.in_(shared_ids))
         q = q.filter(or_(*filters))
+        zamcene = list(zamcene_zpevniky(current_user))
+        if zamcene:
+            q = q.filter(Songbook.id.notin_(zamcene))
 
     rows = (
         q.order_by(Song.title.asc(), Songbook.title.asc(), first_page_number.asc())
@@ -2212,7 +2280,8 @@ def list_my_songbooks_options():
     ).scalars().all()
     add_books(shared_books)
 
-    books = list(books_by_id.values())
+    zamcene = zamcene_zpevniky(current_user)
+    books = [b for b in books_by_id.values() if b.id not in zamcene]
     song_id = request.args.get('song_id')
     present_ids = set()
     if song_id:
@@ -2261,7 +2330,7 @@ def add_song_to_songbook(songbook_id):
     # tentýž (řádek v `images`), strana je vlastní - jejím pořadím tenhle zpěvník
     # nehýbe s nikým jiným. Když píseň ve zdroji sdílí stranu s jinou, přejde sem
     # obrázek celé strany, ale vazba jen na tuhle píseň.
-    pred = zjisti_mista(drzitele_zpevniku(sb))
+    pred = zjisti_mista(kontrolovani_pri_uprave(sb))
     zdroj = strany_pisne(song.id)
     dalsi = len(sb.strany)
     added = 0
@@ -2430,10 +2499,14 @@ def my_songbooks():
         ]
         filtered.sort(key=lambda info: (0 if info.get("is_owner") else 1, info.get("email", "").lower()))
         shared_users_map[book_id] = filtered
+    zamcene = zamcene_zpevniky(current_user)
+    misto = misto_uzivatele(current_user) if zamcene else None
     return render_template(
         'my_songbooks.html',
         songbooks=serad_zpevniky(books, current_user),
         shared_users_map=shared_users_map,
+        zamcene=zamcene,
+        volne=max(0, misto['kvota'] - misto['zabrano']) if misto else 0,
         max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
         max_upload_mb=MAX_IMAGE_UPLOAD_MB,
     )
@@ -2765,6 +2838,7 @@ def prehled_uzivatelu_pro_spravu():
             zabrano=zabrano, zabrano_text=mb(zabrano), limit=limit, limit_text=mb(limit),
             limit_mb=round(u.limit_mista / 1024 / 1024) if u.limit_mista else None,
             procent=min(100, round(zabrano * 100 / limit)) if limit else 0,
+            zamceno=len(zamcene_zpevniky(u)),
             vytvoreno=datum(u.vytvoreno), vytvoreno_ts=int(u.vytvoreno.timestamp()) if u.vytvoreno else 0,
             prihlaseni=datum(u.posledni_prihlaseni),
             prihlaseni_ts=int(u.posledni_prihlaseni.timestamp()) if u.posledni_prihlaseni else 0,
@@ -2836,6 +2910,14 @@ def sprava_uprav_uzivatele(user_id):
                 return jsonify({'ok': False, 'error': 'Limit musí být kladné číslo v MB.'}), 400
             if novy == MAX_USER_STORAGE_BYTES:
                 novy = None
+        if data.get('nahled'):
+            # Co se po změně zamkne - okno se na to zeptá dřív, než se limit uloží.
+            zamkne = zamcene_zpevniky(u, limit=novy or MAX_USER_STORAGE_BYTES)
+            nazvy = dict(db.session.query(Songbook.id, Songbook.title)
+                         .filter(Songbook.id.in_(list(zamkne)))) if zamkne else {}
+            return jsonify({'ok': True, 'zabrano': mb(zabrane_misto(u.id)),
+                            'limit': mb(novy or MAX_USER_STORAGE_BYTES),
+                            'zamkne': [f"{nazvy.get(k, k)} ({mb(c)})" for k, c in zamkne.items()]})
         if novy == u.limit_mista:
             return jsonify({'ok': True})
         zapis_zasah('změnil limit místa', komu=u,
@@ -3860,8 +3942,8 @@ def uloz_zpevnik(songbook_id=None):
 
     koren = _koren_pro_zpevnik(sb)
     ke_smazani = set()
-    # Místo všech, kdo zpěvník mají, před změnou - u nového jen zakladatel.
-    pred = zjisti_mista(drzitele_zpevniku(sb))
+    # Místo toho, kdo upravuje, a vlastníka před změnou - u nového jen zakladatel.
+    pred = zjisti_mista(kontrolovani_pri_uprave(sb))
     try:
         nazev = (request.form.get('nazev') or '').strip()
         if nazev:
@@ -5046,6 +5128,10 @@ def songbook_detail(book_id):
 
     # Permission check: can current user view this songbook?
     if not can_view_songbook(current_user, songbook):
+        if je_zamceny(current_user, songbook):
+            flash(f"Zpěvník „{songbook.title}“ je zamčený: účet je přes limit místa. "
+                  "Odemkne se po uvolnění místa.", 'error')
+            return redirect(url_for('my_songbooks'))
         return "Access denied", 403
 
     # Determine first_page_side from songbook attribute or default

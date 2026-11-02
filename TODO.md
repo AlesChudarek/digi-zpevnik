@@ -856,6 +856,14 @@ kdo maže.
         i správa). Ve správě okno s opsáním e-mailu a volbou převést jeho zpěvníky ke
         správci (členové u nich zůstanou); bez ní jako vlastní zrušení (členové dostanou
         kopii). Admin přihlášený jako uživatel smí účet zrušit taky - pak se vrátí do správy.
+- [X] **zamykání zpěvníků přes limit** (Aleš 2. 11.): úpravu společného zpěvníku hlídá
+      jen limit toho, kdo upravuje, a vlastníka (`kontrolovani_pri_uprave`). Účtu přes
+      limit se zamknou zpěvníky - sdílené od největšího, pak vlastní od největšího, dokud
+      se zbytek nevejde (`zamcene_zpevniky`, ve `can_view/can_edit`, hledání, nabídce).
+      Šedá dlaždice s lock.svg, jen Odebrat/Smazat, odemkne se sám. Správa: počet zamčených
+      u uživatele, náhled před snížením limitu. Hlídá `test_sprava` (zámky).
+- [ ] **časový limit zámku** (Aleš 2. 11.: 14 dní?) - navrženo: sdílený zamčený po 14 dnech
+      automaticky opustit, vlastní nemazat. Čeká na rozhodnutí.
 
 ## Obsah a prezentace
 
