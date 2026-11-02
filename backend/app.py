@@ -576,7 +576,8 @@ def _dopln_chybejici_sloupce():
             for sloupec, typ in (('prezdivka', 'TEXT'), ('fotka', 'TEXT'),
                                  ('vytvoreno', 'DATETIME'), ('posledni_prihlaseni', 'DATETIME'),
                                  ('limit_mista', 'INTEGER'),
-                                 ('zablokovan', 'BOOLEAN NOT NULL DEFAULT 0')):
+                                 ('zablokovan', 'BOOLEAN NOT NULL DEFAULT 0'),
+                                 ('verze_prihlaseni', 'INTEGER NOT NULL DEFAULT 0')):
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
@@ -1123,7 +1124,23 @@ def zapomen_pokusy(email):
 # ---------- LOGIN ----------
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    """`<id>:<verze přihlášení>` (User.get_id). Přihlášení se starší verzí neplatí -
+    tak funguje odhlášení ze všech zařízení. Relace z doby před verzí nesou jen id;
+    platí, dokud se účtu verze nezvýší, takže nasazení nikoho neodhlásilo."""
+    uid, _, verze = str(user_id).partition(':')
+    try:
+        user = db.session.get(User, int(uid))
+        verze = int(verze or 0)
+    except ValueError:
+        return None
+    if user is None or verze != (user.verze_prihlaseni or 0):
+        return None
+    return user
+
+
+def odhlas_vsude(user):
+    """Zneplatní všechna přihlášení účtu. Necommituje."""
+    user.verze_prihlaseni = (user.verze_prihlaseni or 0) + 1
 
 # ---------- ROUTY ----------
 POMALY_POZADAVEK_S = 3   # od kolika sekund se požadavek zapíše do logu jako pomalý
@@ -1766,7 +1783,11 @@ def zmena_hesla():
     else:
         current_user.password = generate_password_hash(nove, method='pbkdf2:sha256',
                                                        salt_length=16)
+        # Kdo heslo znal (a třeba si ho poznamenal na cizím počítači), se změnou vypadne
+        # všude. Tohle zařízení zůstane přihlášené - relace dostane novou verzi.
+        odhlas_vsude(current_user)
         db.session.commit()
+        login_user(current_user._get_current_object())
         zapomen_pokusy(current_user.email)
         return jsonify({'ok': True, 'zprava': 'Heslo bylo změněno.'})
     return jsonify({'ok': False, 'error': chyba}), 400
@@ -1888,6 +1909,7 @@ def obnova_hesla(token):
         user.password = generate_password_hash(heslo, method='pbkdf2:sha256', salt_length=16)
         # Kdo si dokázal vyzvednout odkaz z e-mailu, prokázal tím i vlastnictví adresy.
         user.email_verified = True
+        odhlas_vsude(user)
         db.session.commit()
         zapomen_pokusy(user.email)
         flash('Heslo bylo změněno, můžete se přihlásit.', 'success')
@@ -2779,6 +2801,11 @@ def sprava_uprav_uzivatele(user_id):
                     podrobnosti=f"{mb(limit_uzivatele(u))} → {mb(novy or MAX_USER_STORAGE_BYTES)}"
                                 + ('' if novy else ' (výchozí)'))
         u.limit_mista = novy
+    elif akce == 'odhlasit':
+        if u.id == current_user.id:
+            return jsonify({'ok': False, 'error': 'Vlastní přihlášení se ruší odhlášením.'}), 400
+        zapis_zasah('odhlásil ze všech zařízení', komu=u)
+        odhlas_vsude(u)
     elif akce in ('zablokovat', 'odblokovat'):
         if u.role == 'admin':
             return jsonify({'ok': False, 'error': 'Správce zablokovat nejde.'}), 400

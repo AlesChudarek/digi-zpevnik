@@ -99,6 +99,13 @@ class User(db.Model, UserMixin):
     limit_mista = db.Column(db.Integer, nullable=True)
     # Zablokovaný účet se nepřihlásí a už přihlášený nesmí nic (before_request v app.py).
     zablokovan = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
+    # Zvýšením se zneplatní všechna přihlášení účtu (i trvalá „zapamatovat si mě“):
+    # verze je součástí id v relaci (get_id) a load_user v app.py přihlášení se starou
+    # verzí odmítne. Flask-Login relace na serveru neeviduje, jinak to nejde.
+    verze_prihlaseni = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+
+    def get_id(self):
+        return f"{self.id}:{self.verze_prihlaseni or 0}"
 
 class LoginAttempt(db.Model):
     """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.

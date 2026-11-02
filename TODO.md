@@ -844,7 +844,10 @@ kdo maže.
         **Správa** (Aleš 2. 11.: pět odkazů se nevešlo).
   - [ ] lišta: texty odkazů se pod ~1100 px lámou na dva řádky i běžnému uživateli
         (zjištěno 2. 11. při měření lišty admina). Nehlášené, jen k posouzení.
-  - [ ] **5. odhlásit ze všech zařízení** (`verze_prihlaseni` v `get_id()`; i při změně hesla).
+  - [X] **5. odhlásit ze všech zařízení**: `User.verze_prihlaseni` je v `get_id()`
+        (`<id>:<verze>`), `load_user` odmítne jinou verzi; `odhlas_vsude()`. Akce ve správě
+        (sám sebe ne), změna hesla (tohle zařízení zůstane přihlášené) a obnova hesla
+        e-mailem. Staré relace (jen id) platí, dokud se verze nezvýší.
   - [ ] **6. přihlásit se jako uživatel** (pruh „Zpět do svého účtu“; zamčená změna hesla
         a e-mailu, zrušení účtu smí).
   - [ ] **7. smazání účtu adminem** přes společné `zrus_ucet()`, volba převést zpěvníky k adminovi.

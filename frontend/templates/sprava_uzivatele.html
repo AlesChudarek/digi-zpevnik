@@ -83,6 +83,7 @@
             <a class="btn" href="{{ url_for('sprava_zpevniku', hledat=u.email) }}">Zpěvníky ve správě</a>
             {% if not u.overen %}<button type="button" class="btn" data-akce="overit">Ověřit e-mail</button>{% endif %}
             {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
+            {% if not u.ja %}<button type="button" class="btn" data-akce="odhlasit">Odhlásit ze všech zařízení</button>{% endif %}
             {% if u.role != 'admin' %}
               {% if u.zablokovan %}
                 <button type="button" class="btn" data-akce="odblokovat">Odblokovat</button>
@@ -182,6 +183,7 @@
   const POTVRZENI = {
     fotka: j => [`Smazat profilovou fotku uživatele ${j}?`, 'Smazat', true],
     overit: j => [`Označit e-mail uživatele ${j} jako ověřený, bez ověřovacího odkazu?`, 'Ověřit', false],
+    odhlasit: j => [`Odhlásit ${j} ze všech zařízení? Přihlásit se může hned znovu.`, 'Odhlásit', false],
     zablokovat: j => [`Zablokovat účet ${j}? Okamžitě se odhlásí a nepřihlásí se, dokud ho neodblokujete. Jeho zpěvníky zůstávají.`, 'Zablokovat', true],
     odblokovat: j => [`Odblokovat účet ${j}?`, 'Odblokovat', false],
   };

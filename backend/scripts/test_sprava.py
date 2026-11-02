@@ -353,6 +353,58 @@ def uzivatele():
                         "zablokoval účet", "odblokoval účet"], "úpravy jsou v záznamu", akce)
 
 
+def odhlaseni():
+    print("\n── odhlášení ze všech zařízení ──")
+    aid, _, _ = admin_a_cizi()
+    admin = klient(aid)
+    with A.app.app_context():
+        uid = A.User.query.filter_by(email="user2@test.com").first().id
+        from werkzeug.security import generate_password_hash
+        A.db.session.get(A.User, uid).password = generate_password_hash("heslo-1-Sprava", method="pbkdf2:sha256")
+        A.db.session.commit()
+
+    def prihlas(heslo="heslo-1-Sprava"):
+        c = A.app.test_client()
+        r = c.post("/login", data={"email": "user2@test.com", "password": heslo})
+        return c if r.status_code == 302 else None
+
+    def uvnitr(c):
+        return c.get("/my-songbooks").status_code == 200
+
+    stara_relace = klient(uid)          # relace z doby před verzí: jen id
+    pocitac, telefon = prihlas(), prihlas()
+    zkontroluj(pocitac and telefon and uvnitr(pocitac) and uvnitr(telefon) and uvnitr(stara_relace),
+               "přihlášený na dvou zařízeních i ve staré relaci")
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{uid}", {"akce": "odhlasit"})
+    zkontroluj(kod == 200, "admin odhlásí ze všech zařízení", kod)
+    zkontroluj(not uvnitr(pocitac) and not uvnitr(telefon) and not uvnitr(stara_relace),
+               "všechny relace skončily, i ta stará")
+    znovu = prihlas()
+    zkontroluj(znovu and uvnitr(znovu), "přihlásit se jde hned znovu")
+    kod, _ = post(admin, f"/api/sprava/uzivatel/{aid}", {"akce": "odhlasit"})
+    zkontroluj(kod == 400 and uvnitr(admin), "sám sebe admin takhle neodhlásí", kod)
+
+    print("\n── změna hesla odhlásí ostatní zařízení ──")
+    druhe = prihlas()
+    r = znovu.post("/profil/zmena-hesla", json={"stare": "heslo-1-Sprava", "nove": "heslo-2-Sprava",
+                                                "nove2": "heslo-2-Sprava"})
+    zkontroluj(r.status_code == 200 and (r.get_json() or {}).get("ok"), "heslo změněno", r.get_json())
+    zkontroluj(uvnitr(znovu), "zařízení, kde se heslo měnilo, zůstane přihlášené")
+    zkontroluj(not uvnitr(druhe), "ostatní zařízení vypadnou")
+
+    print("\n── obnova hesla přes e-mail odhlásí všude ──")
+    with A.app.app_context():
+        from backend.tokeny import token_hesla
+        token = token_hesla(A.db.session.get(A.User, uid))
+    r = A.app.test_client().post(f"/obnova-hesla/{token}", data={"password": "heslo-3-Sprava"})
+    zkontroluj(r.status_code == 302, "nové heslo nastavené", r.status_code)
+    zkontroluj(not uvnitr(znovu), "přihlášené zařízení vypadne")
+    zkontroluj(prihlas("heslo-3-Sprava") is not None, "s novým heslem se přihlásí")
+    with A.app.app_context():
+        akce = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first().akce
+    zkontroluj(akce == "odhlásil ze všech zařízení", "zásah je v záznamu", akce)
+
+
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.
     Jen čte - server běží nad vlastní kopií databáze a na obrázky nesahá."""
@@ -530,6 +582,7 @@ def main():
     vsechny_zpevniky()
     akce_se_zpevniky()
     uzivatele()
+    odhlaseni()
     prohlizec()
     print()
     if selhani:
