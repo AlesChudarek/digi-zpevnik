@@ -301,6 +301,48 @@ def main():
                        "a odhlásit se dá i tady")
             ctx.close()
 
+            print("\n── lišta: burger, jakmile se nevejde ──")
+            # Dřív přepínala pevná šířka 820 px; mezi ~820 a ~1100 px se texty odkazů
+            # lámaly a lišta vylezla ze stránky (Aleš 2. 11.). Teď rozhoduje měření.
+            ctx = browser.new_context(viewport={"width": 1400, "height": 800})
+            page = ctx.new_page()
+            page.on("pageerror", lambda e: chyby.append(str(e)))
+            prihlas(page, base)
+            page.goto(base + "/dashboard")
+            page.wait_for_load_state("networkidle")
+            spatne, prechod = [], None
+            for sirka in range(1400, 319, -10):
+                page.set_viewport_size({"width": sirka, "height": 800})
+                page.wait_for_timeout(30)
+                st = page.evaluate("""() => {
+                    const uzka = document.documentElement.classList.contains('lista-uzka');
+                    const odkazy = [...document.querySelectorAll('.nav-links a')].filter(a => a.offsetParent);
+                    const radku = Math.max(0, ...odkazy.map(a => { const g = document.createRange();
+                        g.selectNodeContents(a); return new Set([...g.getClientRects()].map(x => Math.round(x.top))).size; }));
+                    const ucet = document.querySelector('.navbar .right').getBoundingClientRect().left;
+                    return {uzka, radku, presah: document.documentElement.scrollWidth - innerWidth,
+                            kolize: !uzka && Math.max(0, ...odkazy.map(a => a.getBoundingClientRect().right)) > ucet,
+                            burger: getComputedStyle(document.querySelector('.nav-burger')).display !== 'none'};
+                }""")
+                if st["uzka"] and prechod is None:
+                    prechod = sirka
+                if (st["presah"] > 0 or st["kolize"] or st["uzka"] != st["burger"]
+                        or (not st["uzka"] and st["radku"] > 1)):
+                    spatne.append((sirka, st))
+            zkontroluj(not spatne, "320-1400 px: odkazy na jednom řádku, nic nepřetéká, jinak burger",
+                       str(spatne[:3]))
+            zkontroluj(prechod and 821 < prechod < 1400, "burger naskočí podle obsahu, ne na 820 px",
+                       f"od {prechod} px")
+            page.set_viewport_size({"width": 320, "height": 640})
+            page.wait_for_timeout(100)
+            tl = page.evaluate("""() => [...document.querySelectorAll('.main-buttons a')].map(a => {
+                const g = document.createRange(); g.selectNodeContents(a);
+                return {radku: new Set([...g.getClientRects()].map(x => Math.round(x.top))).size,
+                        vpravo: Math.round(a.getBoundingClientRect().right)}; })""")
+            zkontroluj(all(t["radku"] == 1 and t["vpravo"] <= 320 for t in tl),
+                       "320 px: tlačítka úvodní stránky se vejdou (dřív o 13 px přes)", str(tl))
+            ctx.close()
+
             print("\n── ikony úprav uvnitř dlaždice ──")
             for sirka in SIRKY_TELEFONU + [1280]:
                 ctx = browser.new_context(viewport={"width": sirka, "height": 800})

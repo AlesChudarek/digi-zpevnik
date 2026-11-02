@@ -759,30 +759,24 @@ def prohlizec():
             page.wait_for_load_state("networkidle")
 
             print("\n── prohlížeč: lišta admina ──")
-            # Pod ~1100 px se texty odkazů lámou na dva řádky i běžnému uživateli (starší
-            # stav). Hlídá se, že odkaz Správa nic navíc nerozbije: nic nepřeteče, odkazy
-            # nevjedou do účtu a žádný nemá víc než dva řádky.
-            for sirka in range(821, 1281, 20):
+            # Admin má o odkaz Správa víc. Lišta se nesmí lámat ani přetékat - když se
+            # nevejde, přepne se na burger (zmerListu, test_mobil to hlídá pro uživatele).
+            spatne = []
+            for sirka in range(821, 1401, 20):
                 page.set_viewport_size({"width": sirka, "height": 800})
+                page.wait_for_timeout(30)
                 stav = page.evaluate("""() => {
-                    const odkazy = [...document.querySelectorAll('.nav-links a')]
-                        .filter(a => getComputedStyle(a).display !== 'none');
-                    const r = odkazy.map(a => a.getBoundingClientRect());
-                    return {presah: document.documentElement.scrollWidth - innerWidth,
-                            vpravo: Math.max(...r.map(x => x.right)),
-                            ucet: document.querySelector('.navbar .right').getBoundingClientRect().left,
-                            radku: Math.max(...odkazy.map(a => {
-                                const g = document.createRange(); g.selectNodeContents(a);
-                                return new Set([...g.getClientRects()].map(x => Math.round(x.top))).size;
-                            }))};
+                    const uzka = document.documentElement.classList.contains('lista-uzka');
+                    const odkazy = [...document.querySelectorAll('.nav-links a')].filter(a => a.offsetParent);
+                    const radku = Math.max(0, ...odkazy.map(a => { const g = document.createRange();
+                        g.selectNodeContents(a); return new Set([...g.getClientRects()].map(x => Math.round(x.top))).size; }));
+                    return {uzka, radku, presah: document.documentElement.scrollWidth - innerWidth,
+                            sprava: odkazy.some(a => a.textContent.trim() === 'Správa')};
                 }""")
-                if stav["presah"] > 0 or stav["vpravo"] > stav["ucet"] or stav["radku"] > 2:
-                    zkontroluj(False, f"{sirka} px: lišta admina se vejde", stav)
-                    break
-                if sirka == 821:
-                    zkontroluj(stav["radku"] == 2, "821 px: měření řádků funguje (dva, jako u uživatele)", stav["radku"])
-            else:
-                zkontroluj(True, "821-1280 px: lišta admina s odkazem Správa se vejde")
+                if stav["presah"] > 0 or (not stav["uzka"] and (stav["radku"] > 1 or not stav["sprava"])):
+                    spatne.append((sirka, stav))
+            zkontroluj(not spatne, "821-1400 px: lišta admina s odkazem Správa na jednom řádku, jinak burger",
+                       spatne[:3])
 
             print("\n── prohlížeč: Všechny zpěvníky ──")
             page.set_viewport_size({"width": 1280, "height": 800})

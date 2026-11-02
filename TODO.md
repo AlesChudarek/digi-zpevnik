@@ -842,8 +842,11 @@ kdo maže.
         zablokovat/odblokovat (`_zablokovany_ucet` v before_request odhlásí i běžící relaci;
         přihlášení se správným heslem hlásí blok, se špatným ne). V liště jen odkaz
         **Správa** (Aleš 2. 11.: pět odkazů se nevešlo).
-  - [ ] lišta: texty odkazů se pod ~1100 px lámou na dva řádky i běžnému uživateli
-        (zjištěno 2. 11. při měření lišty admina). Nehlášené, jen k posouzení.
+  - [X] lišta: texty odkazů se pod ~1100 px lámaly na dva řádky a lišta pak vylezla ze
+        stránky, burger naskočil až na 820 px. Teď rozhoduje měření (`zmerListu`,
+        `html.lista-uzka`): burger hned, jak se lišta nevejde na jeden řádek - u uživatele
+        kolem 1060-1090 px, u admina 1170 px. Odkazy se nelámou (nowrap). Navíc tlačítka
+        úvodní stránky přečuhovala na 320 px o 13 px. Hlídá `test_mobil`.
   - [X] **5. odhlásit ze všech zařízení**: `User.verze_prihlaseni` je v `get_id()`
         (`<id>:<verze>`), `load_user` odmítne jinou verzi; `odhlas_vsude()`. Akce ve správě
         (sám sebe ne), změna hesla (tohle zařízení zůstane přihlášené) a obnova hesla
