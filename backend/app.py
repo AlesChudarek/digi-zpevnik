@@ -2068,10 +2068,15 @@ def search():
             'book_type': book_type,
             'page_number': r.page_number,
             'owned_by_user': (current_user.is_authenticated and r.owner_id == current_user.id),
+            # Soukromý zpěvník, ke kterému se admin dostane jen díky roli. Skrývá ho
+            # filtr „Cizí“ (výchozí vypnutý), takže admin hledá jako každý jiný.
+            'cizi': (r.is_public != 1 and r.owner_id != current_user.id
+                     and r.songbook_id not in shared_access),
             'can_edit': can_edit
         })
 
-    return render_template('search.html', rows=results, guest=is_guest(current_user))
+    return render_template('search.html', rows=results, guest=is_guest(current_user),
+                           admin=is_admin(current_user))
 
 # API: List current user's private songbooks (for adding songs)
 @app.route('/api/my-songbooks/options')
@@ -2087,30 +2092,24 @@ def list_my_songbooks_options():
             if book and book.id not in books_by_id:
                 books_by_id[book.id] = book
 
-    if current_user.role == 'admin':
-        add_books(
-            db.session.execute(
-                db.select(Songbook).where(Songbook.is_public == 0)
-            ).scalars().all()
+    # I admin jen do svých a sdílených, stejně jako v Mých zpěvnících.
+    owned_books = db.session.execute(
+        db.select(Songbook).where(
+            (Songbook.is_public == 0) & (Songbook.owner_id == current_user.id)
         )
-    else:
-        owned_books = db.session.execute(
-            db.select(Songbook).where(
-                (Songbook.is_public == 0) & (Songbook.owner_id == current_user.id)
-            )
-        ).scalars().all()
-        add_books(owned_books)
+    ).scalars().all()
+    add_books(owned_books)
 
-        shared_books = db.session.execute(
-            db.select(Songbook)
-            .join(UserSongbookAccess, UserSongbookAccess.songbook_id == Songbook.id)
-            .where(
-                (Songbook.is_public == 0)
-                & (UserSongbookAccess.user_id == current_user.id)
-                & (UserSongbookAccess.permission.in_(('edit', 'admin')))
-            )
-        ).scalars().all()
-        add_books(shared_books)
+    shared_books = db.session.execute(
+        db.select(Songbook)
+        .join(UserSongbookAccess, UserSongbookAccess.songbook_id == Songbook.id)
+        .where(
+            (Songbook.is_public == 0)
+            & (UserSongbookAccess.user_id == current_user.id)
+            & (UserSongbookAccess.permission.in_(('edit', 'admin')))
+        )
+    ).scalars().all()
+    add_books(shared_books)
 
     books = list(books_by_id.values())
     song_id = request.args.get('song_id')
@@ -2285,19 +2284,14 @@ def my_songbooks():
             max_upload_bytes=MAX_IMAGE_UPLOAD_BYTES,
             max_upload_mb=MAX_IMAGE_UPLOAD_MB,
         )
-    # Admin can see all private songbooks
-    if current_user.role == 'admin':
-        books = db.session.execute(
-            db.select(Songbook).where(Songbook.is_public == 0)
-        ).scalars().all()
-    else:
-        # Users see their own and shared private songbooks
-        shared_ids = [row.songbook_id for row in UserSongbookAccess.query.filter_by(user_id=current_user.id).all()]
-        books = db.session.execute(
-            db.select(Songbook).where(
-                (Songbook.owner_id == current_user.id) | (Songbook.id.in_(shared_ids))
-            )
-        ).scalars().all()
+    # Vlastní a sdílené - i u admina. Dřív tu admin viděl všechny soukromé zpěvníky
+    # a mezi cizími se ztrácely jeho vlastní; cizí jsou ve Správě (Všechny zpěvníky).
+    shared_ids = [row.songbook_id for row in UserSongbookAccess.query.filter_by(user_id=current_user.id).all()]
+    books = db.session.execute(
+        db.select(Songbook).where(
+            (Songbook.owner_id == current_user.id) | (Songbook.id.in_(shared_ids))
+        )
+    ).scalars().all()
     book_ids = [book.id for book in books]
     user_map_by_book = {bid: {} for bid in book_ids}
     if book_ids:

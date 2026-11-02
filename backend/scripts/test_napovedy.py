@@ -111,7 +111,7 @@ def main():
             page.on("pageerror", lambda e: chyby.append(str(e)))
 
             page.goto(base + "/login")
-            page.fill('input[name="email"]', "admin@test.com")
+            page.fill('input[name="email"]', "user@test.com")
             page.fill('input[name="password"]', PASSWORD)
             page.click('button[type="submit"], input[type="submit"]')
             page.wait_for_load_state("networkidle")

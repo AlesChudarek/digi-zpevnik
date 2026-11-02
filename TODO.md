@@ -676,7 +676,8 @@ kdo maže.
       768-1024 px. Čtečka: obsah na 320 × 640 přečuhoval 12 px (padding mimo max-height),
       křížek obsahu a šipka ↑ v liště (28 × 25) zvětšené, burger o kus dál. Tablet: nic
       nepřetéká, tlačítka Přidat/Odebrat v tabulce hledání 40 px. Hlídá `test_mobil.py`.
-      Zbývá jen ručně: tisk ze Safari a z telefonu (Playwright ho neověří).
+      Tisk ze Safari a z telefonu: brán jako hotový, ale NEOVĚŘENÝ (Aleš 27. 10. nemá
+      vhodné zařízení; Playwright ho neověří). Při první příležitosti zkusit.
 - [X] **okna Účet a Přátelé, ořez fotky, Vítejte na telefonu** (27. 10.): nic nepřetéká,
       dlouhá okna jde dorolovat. Na dotyku větší křížek (24 → 40), „Změnit e-mail/heslo“,
       „Odstranit účet“ a odkazy na společné zpěvníky (16 px na výšku). Ořez: přiblížení
@@ -821,6 +822,21 @@ kdo maže.
 - [ ] **správa uživatelů pro admina** (Aleš 20. 10.): stránka se seznamem uživatelů, kde
       admin může cokoli - odhlásit je z rodin, smazat účet, změnit obrázek atd. Hlavně
       přehled, jaké mají zpěvníky, a možnost se v nich přehledně dívat a upravovat je.
+      Zadání a odpovědi v paměti `zpevnik-admin-sprava`. Plán schválený 2. 11.:
+  - [X] **1. admin v Mých zpěvnících jen svoje** (+ nabídka „Přidat do zpěvníku“).
+        V hledání filtr **Cizí** (jen admin, výchozí vypnutý) přidá ostatní soukromé.
+        Hlídá `test_sprava.py`.
+  - [ ] **2. Všechny zpěvníky** (`/sprava/zpevniky`): seznam s filtry, detail, akce
+        (otevřít, smazat, odebrat ze sdílení - bez oznámení, zrušit pozvánku, převést
+        vlastníka s volbou „původní zůstane členem“, zkopírovat k sobě). Veřejné ne.
+  - [ ] **3. záznam zásahů admina** (tabulka, záložka ve Správě).
+  - [ ] **4. Uživatelé** (`/sprava/uzivatele`): sloupce `vytvoreno`, `posledni_prihlaseni`,
+        `limit_mista`; akce role, ověření, přezdívka, fotka, limit, **blokování**
+        (zablokovaný nesmí nic, ani v už přihlášené relaci).
+  - [ ] **5. odhlásit ze všech zařízení** (`verze_prihlaseni` v `get_id()`; i při změně hesla).
+  - [ ] **6. přihlásit se jako uživatel** (pruh „Zpět do svého účtu“; zamčená změna hesla
+        a e-mailu, zrušení účtu smí).
+  - [ ] **7. smazání účtu adminem** přes společné `zrus_ucet()`, volba převést zpěvníky k adminovi.
 
 ## Obsah a prezentace
 

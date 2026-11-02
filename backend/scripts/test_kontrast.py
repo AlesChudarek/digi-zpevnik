@@ -62,7 +62,7 @@ def start_server(db_copy):
          'from backend.app import app, db, User\n'
          'from werkzeug.security import generate_password_hash\n'
          'with app.app_context():\n'
-         '    u = User.query.filter_by(email="admin@test.com").first()\n'
+         '    u = User.query.filter_by(email="user@test.com").first()\n'
          f'    u.password = generate_password_hash("{PASSWORD}", method="pbkdf2:sha256")\n'
          '    db.session.commit()\n'],
         env=env, check=True, capture_output=True)
@@ -153,7 +153,7 @@ def main():
                 ctx = browser.new_context(viewport={"width": 1280, "height": 900})
                 page = ctx.new_page()
                 page.goto(base + "/login")
-                page.fill('input[name="email"]', "admin@test.com")
+                page.fill('input[name="email"]', "user@test.com")
                 page.fill('input[name="password"]', PASSWORD)
                 page.click('button[type="submit"], input[type="submit"]')
                 page.wait_for_load_state("networkidle")

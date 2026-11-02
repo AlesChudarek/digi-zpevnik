@@ -270,6 +270,11 @@
       {% else %}
         <label><input type="checkbox" id="t-private" checked> Soukromé</label>
       {% endif %}
+      {% if admin %}
+        <label class="s-napovedou" data-napoveda="Soukromé zpěvníky ostatních uživatelů">
+          <input type="checkbox" id="t-cizi"> Cizí
+        </label>
+      {% endif %}
     </div>
   </div>
 
@@ -301,6 +306,7 @@
               data-book="{{ r.songbook_title }}" data-page="{{ r.page_number }}"
               data-song-id="{{ r.song_id }}"
               data-songbook-id="{{ r.songbook_id }}" data-page-num="{{ r.page_number }}" data-type="{{ r.book_type }}"
+              data-cizi="{{ '1' if r.cizi else '0' }}"
               data-can-edit="{{ '1' if r.can_edit else '0' }}"
               data-color="{{ r.songbook_color or '#ffffff' }}"
               style="background-color: {{ r.tint_bg }}; box-shadow: inset 8px 0 0 0 {{ r.tint_accent }};"
@@ -362,6 +368,7 @@
     const fPage = document.getElementById('f-page');
     const tPublic = document.getElementById('t-public');
     const tPrivate = document.getElementById('t-private');
+    const tCizi = document.getElementById('t-cizi');   // jen u admina
     function updateCounts() {
       const all = Array.from(document.querySelectorAll('#results-table tbody tr'));
       const visible = all.filter(tr => tr.style.display !== 'none');
@@ -378,6 +385,7 @@
       const p = normalizeStr(fPage.value);
       const showPublic = !!tPublic.checked;
       const showPrivate = !!tPrivate.checked;
+      const showCizi = !!(tCizi && tCizi.checked);
 
       rows.forEach(tr => {
         const mt = normalizeStr(tr.getAttribute('data-title'));
@@ -385,7 +393,8 @@
         const mb = normalizeStr(tr.getAttribute('data-book'));
         const mp = normalizeStr(tr.getAttribute('data-page'));
         const type = (tr.getAttribute('data-type') || '').trim(); // '' = public, jinak soukromy (vlastni nebo sdileny)
-        const typeOk = type === '' ? showPublic : showPrivate;
+        const typeOk = tr.getAttribute('data-cizi') === '1' ? showCizi
+          : (type === '' ? showPublic : showPrivate);
         const ok = typeOk && (!t || mt.includes(t)) && (!a || ma.includes(a)) && (!b || mb.includes(b)) && (!p || mp.includes(p));
         tr.style.display = ok ? '' : 'none';
       });
@@ -398,7 +407,7 @@
     window.__searchApply = apply;
 
     [fTitle, fAuthor, fBook, fPage].forEach(inp => inp.addEventListener('input', apply));
-    [tPublic, tPrivate].forEach(cb => cb.addEventListener('change', apply));
+    [tPublic, tPrivate, tCizi].filter(Boolean).forEach(cb => cb.addEventListener('change', apply));
     // Initial pass to apply any default state
     apply();
   }
