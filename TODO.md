@@ -826,10 +826,14 @@ kdo maže.
   - [X] **1. admin v Mých zpěvnících jen svoje** (+ nabídka „Přidat do zpěvníku“).
         V hledání filtr **Cizí** (jen admin, výchozí vypnutý) přidá ostatní soukromé.
         Hlídá `test_sprava.py`.
-  - [ ] **2. Všechny zpěvníky** (`/sprava/zpevniky`): seznam s filtry, detail, akce
-        (otevřít, smazat, odebrat ze sdílení - bez oznámení, zrušit pozvánku, převést
+  - [X] **2. Všechny zpěvníky** (`/sprava/zpevniky`): seznam s hledáním, filtry Jen
+        sdílené / Jen s pozvánkou, řazení sloupci, klik rozbalí detail s akcemi (otevřít,
+        upravit - editor v Mých zpěvnících přes `?upravit=<id>&zpet=sprava` a zpátky,
+        smazat, odebrat ze sdílení bez kopie a oznámení, zrušit pozvánku, převést
         vlastníka s volbou „původní zůstane členem“, zkopírovat k sobě). Veřejné ne.
-  - [ ] **3. záznam zásahů admina** (tabulka, záložka ve Správě).
+        Na telefonu kartičky. API `/api/sprava/...`, `jen_admin` (ostatním 404/403).
+  - [X] **3. záznam zásahů admina**: tabulka `zasahy_admina` (`zapis_zasah`, ve stejné
+        transakci jako zásah), záložka Záznam zásahů ve správě.
   - [ ] **4. Uživatelé** (`/sprava/uzivatele`): sloupce `vytvoreno`, `posledni_prihlaseni`,
         `limit_mista`; akce role, ověření, přezdívka, fotka, limit, **blokování**
         (zablokovaný nesmí nic, ani v už přihlášené relaci).

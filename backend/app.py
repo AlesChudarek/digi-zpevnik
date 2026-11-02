@@ -4,7 +4,7 @@ import sys
 import subprocess
 import json
 import click
-from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file, g
+from flask import Flask, render_template, redirect, url_for, request, flash, session, send_from_directory, jsonify, send_file, g, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, UserMixin, current_user
 from flask.cli import with_appcontext
@@ -14,6 +14,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import re
 import unicodedata
 from datetime import datetime, timedelta
+from functools import wraps
 import time
 import hashlib
 import threading
@@ -422,11 +423,12 @@ try:
         PoradiZpevniku,
         Pratelstvi,
         LoginAttempt,
+        ZasahAdmina,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -2542,6 +2544,200 @@ def api_share_songbook(songbook_id):
                             druh=druh, vytvoreno=datetime.now()))
     db.session.commit()
     return jsonify({"ok": True, "message": f"Pozvánka pro {target.email} byla odeslána."}), 200
+
+
+# ---------- Správa pro admina ----------
+def jen_admin(f):
+    """Stránka nebo akce správy. Ostatním se tváří jako neexistující - nemusí vědět,
+    že tam něco je."""
+    @wraps(f)
+    def obal(*args, **kwargs):
+        if not is_admin(current_user):
+            if request.path.startswith('/api/'):
+                return jsonify({'ok': False, 'error': 'Jen pro správce.'}), 403
+            abort(404)
+        return f(*args, **kwargs)
+    return obal
+
+
+def zapis_zasah(akce, komu=None, zpevnik=None, podrobnosti=None):
+    """Záznam zásahu admina. Necommituje - jde do téže transakce jako zásah sám,
+    takže se nezapíše nic, co se nakonec neprovedlo."""
+    db.session.add(ZasahAdmina(
+        cas=datetime.now(), admin_id=current_user.id, admin=current_user.email, akce=akce,
+        komu_id=getattr(komu, 'id', None),
+        komu=(f"{jmeno_uzivatele(komu)} ({komu.email})" if komu is not None
+              and jmeno_uzivatele(komu) != komu.email else getattr(komu, 'email', None)),
+        zpevnik_id=getattr(zpevnik, 'id', None), zpevnik=getattr(zpevnik, 'title', None),
+        podrobnosti=podrobnosti))
+
+
+def datum_zalozeni(sb):
+    """Kdy zpěvník vznikl - je to v id (`u<účet>-<sekundy>`). Starší id bez času nic."""
+    m = re.match(r'u\d+-(\d+)', sb.id)
+    return datetime.fromtimestamp(int(m.group(1))) if m else None
+
+
+def prehled_zpevniku_pro_spravu():
+    """Všechny soukromé zpěvníky s tím, co o nich admin potřebuje vidět. Veřejné ne -
+    na ty správa nesahá."""
+    knihy = Songbook.query.filter(Songbook.is_public != 1).all()
+    uzivatele = {u.id: u for u in User.query}
+    clenove, pozvanky = {}, {}
+    for a in UserSongbookAccess.query:
+        clenove.setdefault(a.songbook_id, []).append(a.user_id)
+    for p in Pozvanka.query.order_by(Pozvanka.vytvoreno):
+        pozvanky.setdefault(p.songbook_id, []).append(p)
+    stran = dict(db.session.query(Strana.songbook_id, func.count(Strana.id))
+                 .group_by(Strana.songbook_id))
+
+    def info(uid):
+        u = uzivatele.get(uid)
+        return uzivatel_info(u) if u is not None else None
+
+    radky = []
+    for sb in knihy:
+        zalozeno = datum_zalozeni(sb)
+        misto = cena_zpevniku([sb.id])
+        radky.append({
+            'id': sb.id, 'nazev': sb.title, 'barva': sb.color or '#FFFFFF',
+            'vlastnik': info(sb.owner_id),
+            'clenove': sorted(filter(None, (info(uid) for uid in clenove.get(sb.id, []))),
+                              key=lambda i: i['jmeno'].lower()),
+            'pozvanky': [{'id': p.id, 'druh': p.druh, 'komu': info(p.komu_id),
+                          'od': info(p.od_id)} for p in pozvanky.get(sb.id, [])],
+            'stran': stran.get(sb.id, 0),
+            'misto': misto, 'misto_text': mb(misto),
+            'zalozeno': zalozeno.strftime('%-d. %-m. %Y') if zalozeno else '',
+            'zalozeno_ts': int(zalozeno.timestamp()) if zalozeno else 0,
+        })
+    radky.sort(key=lambda r: r['nazev'].lower())
+    return radky
+
+
+@app.route('/sprava/zpevniky')
+@login_required
+@jen_admin
+def sprava_zpevniku():
+    vlastnici = [dict(uzivatel_info(u), role=u.role)
+                 for u in User.query.filter(User.role != 'guest').order_by(User.email)]
+    return render_template('sprava_zpevniky.html', zpevniky=prehled_zpevniku_pro_spravu(),
+                           uzivatele=vlastnici, karta='zpevniky')
+
+
+@app.route('/sprava/zaznam')
+@login_required
+@jen_admin
+def sprava_zaznam():
+    zaznam = ZasahAdmina.query.order_by(ZasahAdmina.cas.desc()).limit(500).all()
+    return render_template('sprava_zaznam.html', zaznam=zaznam, karta='zaznam')
+
+
+def _zpevnik_pro_spravu(songbook_id):
+    sb = db.session.get(Songbook, songbook_id)
+    return sb if sb is not None and not sb.is_public else None
+
+
+NENALEZEN = ({'ok': False, 'error': 'Zpěvník nenalezen.'}, 404)
+
+
+@app.route('/api/sprava/zpevnik/<songbook_id>/smazat', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_smaz_zpevnik(songbook_id):
+    """Smazání jako u vlastníka: členové společných úprav dostanou kopii."""
+    sb = _zpevnik_pro_spravu(songbook_id)
+    if sb is None:
+        return jsonify(NENALEZEN[0]), NENALEZEN[1]
+    zapis_zasah('smazal zpěvník', komu=db.session.get(User, sb.owner_id), zpevnik=sb)
+    kandidati = smaz_zpevnik(sb, "Správce smazal společný zpěvník „{nazev}“.")
+    db.session.commit()
+    smaz_osirele_obrazky(kandidati)
+    return jsonify({'ok': True})
+
+
+@app.route('/api/sprava/zpevnik/<songbook_id>/clen/<int:user_id>/odebrat', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_odeber_clena(songbook_id, user_id):
+    """Odebere přístup ke společnému zpěvníku. Stejně, jako když člen odejde sám:
+    jen vazba, bez kopie a bez upozornění - správa běží na pozadí."""
+    sb = _zpevnik_pro_spravu(songbook_id)
+    pristup = sb and UserSongbookAccess.query.filter_by(songbook_id=sb.id, user_id=user_id).first()
+    if not pristup:
+        return jsonify({'ok': False, 'error': 'Tenhle uživatel zpěvník neupravuje.'}), 404
+    zapis_zasah('odebral ze společného zpěvníku', komu=db.session.get(User, user_id), zpevnik=sb)
+    db.session.delete(pristup)
+    PoradiZpevniku.query.filter_by(user_id=user_id, songbook_id=sb.id).delete()
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/sprava/pozvanka/<int:pozvanka_id>/zrusit', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_zrus_pozvanku(pozvanka_id):
+    p = db.session.get(Pozvanka, pozvanka_id)
+    if p is None:
+        return jsonify({'ok': False, 'error': 'Pozvánka už neexistuje.'}), 404
+    zapis_zasah('zrušil pozvánku', komu=p.komu, zpevnik=p.songbook,
+                podrobnosti=f"od {p.od.email if p.od else '?'}, "
+                            + ('ke společným úpravám' if p.druh == 'spolecny' else 'na kopii'))
+    db.session.delete(p)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/sprava/zpevnik/<songbook_id>/prevest', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_preved_zpevnik(songbook_id):
+    """Převede zpěvník na jiného vlastníka. Původní vlastník podle volby zůstane členem
+    společných úprav, nebo o zpěvník přijde. Soubory zůstávají, kde jsou - cesta je
+    v databázi, nové strany už půjdou do kořene nového vlastníka."""
+    sb = _zpevnik_pro_spravu(songbook_id)
+    if sb is None:
+        return jsonify(NENALEZEN[0]), NENALEZEN[1]
+    data = request.get_json(silent=True) or {}
+    novy = db.session.get(User, data.get('komu')) if isinstance(data.get('komu'), int) else None
+    if novy is None or is_guest(novy):
+        return jsonify({'ok': False, 'error': 'Vyberte uživatele, na kterého zpěvník převést.'}), 400
+    if novy.id == sb.owner_id:
+        return jsonify({'ok': False, 'error': 'Tenhle uživatel už zpěvník vlastní.'}), 400
+    stary = db.session.get(User, sb.owner_id) if sb.owner_id else None
+    ponechat = bool(data.get('ponechat')) and stary is not None
+    pred = zjisti_mista([novy.id] + ([stary.id] if ponechat else []))
+
+    UserSongbookAccess.query.filter_by(songbook_id=sb.id, user_id=novy.id).delete()
+    Pozvanka.query.filter_by(songbook_id=sb.id, komu_id=novy.id).delete()
+    sb.owner_id = novy.id
+    if ponechat:
+        db.session.add(UserSongbookAccess(user_id=stary.id, songbook_id=sb.id, permission='edit'))
+    elif stary is not None:
+        PoradiZpevniku.query.filter_by(user_id=stary.id, songbook_id=sb.id).delete()
+    zapis_zasah('převedl zpěvník', komu=novy, zpevnik=sb,
+                podrobnosti=f"od {stary.email if stary else 'nikoho'}"
+                            + ('; původní vlastník zůstal členem' if ponechat else ''))
+    zkontroluj_limity(pred)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@app.route('/api/sprava/zpevnik/<songbook_id>/kopie', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_zkopiruj_zpevnik(songbook_id):
+    sb = _zpevnik_pro_spravu(songbook_id)
+    if sb is None:
+        return jsonify(NENALEZEN[0]), NENALEZEN[1]
+    pred = zjisti_mista([current_user.id])
+    nova = kopiruj_zpevnik(sb, current_user.id, f"{sb.title} (kopie)")
+    zapis_zasah('zkopíroval si zpěvník', komu=db.session.get(User, sb.owner_id), zpevnik=sb)
+    zkontroluj_limity(pred)
+    db.session.commit()
+    dopocitej_nahledy(nova.id)
+    schedule_export_warm(nova.id)
+    return jsonify({'ok': True, 'id': nova.id})
 
 
 # ---------- Kopie a pozvánky ----------

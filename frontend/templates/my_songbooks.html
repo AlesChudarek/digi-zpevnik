@@ -1070,6 +1070,14 @@ function openCreateModal() {
       // spolklo - okno se ukázalo, ale zbytek se už nevykonal.
       setTimeout(() => {
         const sp = new URLSearchParams(window.location.search);
+        // ?upravit=<id> - úprava cizího zpěvníku ze správy (Všechny zpěvníky). Po uložení
+        // i zavření se vrací zpátky tam, odkud admin přišel.
+        if (sp.get('upravit')) {
+          history.replaceState(null, '', window.location.pathname);
+          if (sp.get('zpet') === 'sprava') window.__zpetPoEditoru = '/sprava/zpevniky#z-' + sp.get('upravit');
+          window.openEditSongbookModal(sp.get('upravit'));
+          return;
+        }
         if (sp.get('create') !== '1') return;
         // Z adresy hned pryč, jinak by ji obnovení stránky po uložení otevřelo znovu
         // a zpěvník s toutéž písní by šel založit podruhé.
@@ -1095,6 +1103,7 @@ function openCreateModal() {
         modal.style.display = 'none'; stopAnim(); resetColorToRandom(); resetUploads();
         // Leaving create/edit modal: ensure next open via "+" is fresh create
         window.__editMode = false; window.__editBookId = null;
+        if (window.__zpetPoEditoru) window.location.href = window.__zpetPoEditoru;
       }
       document.getElementById('nb-cancel').addEventListener('click', zkusZavritEditor);
       document.getElementById('nb-zavrit').addEventListener('click', zkusZavritEditor);
@@ -1384,7 +1393,8 @@ function openCreateModal() {
             return;
           }
           createDirty = false;
-          window.location.reload();
+          if (window.__zpetPoEditoru) window.location.href = window.__zpetPoEditoru;
+          else window.location.reload();
           resetLoading = false;
         } catch (e) {
           oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });

@@ -1,0 +1,33 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Záznam zásahů{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_bust('css/sprava.css') }}">
+<div class="sprava">
+  <h1>Záznam zásahů</h1>
+  {% include "_sprava_karty.html" %}
+
+  <div class="sprava-panel">
+    {% if zaznam %}
+    <table class="zaznam">
+      <thead>
+        <tr><th>Kdy</th><th>Kdo</th><th>Co</th><th>Komu</th><th>Zpěvník</th><th>Podrobnosti</th></tr>
+      </thead>
+      <tbody>
+        {% for z in zaznam %}
+        <tr>
+          <td class="kdy">{{ z.cas.strftime('%-d. %-m. %Y %H:%M') }}</td>
+          <td>{{ z.admin }}</td>
+          <td>{{ z.akce }}</td>
+          <td>{{ z.komu or '' }}</td>
+          <td>{{ z.zpevnik or '' }}</td>
+          <td class="sz-ztlumene">{{ z.podrobnosti or '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="sprava-prazdne">Zatím žádný zásah.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

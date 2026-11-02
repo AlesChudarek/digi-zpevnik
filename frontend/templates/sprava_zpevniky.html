@@ -1,0 +1,280 @@
+{% extends "dashboard_base.html" %}
+{% from "_sprava_makra.html" import kdo, kolecko %}
+{% block title %}Všechny zpěvníky{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_bust('css/sprava.css') }}">
+<div class="sprava">
+  <h1>Všechny zpěvníky</h1>
+  {% include "_sprava_karty.html" %}
+
+  <div class="sprava-panel">
+    <div class="sprava-filtry">
+      <input type="search" id="sz-hledat" placeholder="Název, vlastník nebo člen" aria-label="Hledat">
+      <label><input type="checkbox" id="sz-sdilene"> Jen sdílené</label>
+      <label><input type="checkbox" id="sz-pozvanky"> Jen s pozvánkou</label>
+      <span class="sprava-pocet" id="sz-pocet"></span>
+    </div>
+
+    <div class="sz-mrizka sz-hlavicka" role="group" aria-label="Řadit podle">
+      <button type="button" data-razeni="nazev">Název</button>
+      <button type="button" data-razeni="vlastnik">Vlastník</button>
+      <button type="button" data-razeni="sdileni">Sdíleno s</button>
+      <button type="button" data-razeni="stran" class="cislo">Stran</button>
+      <button type="button" data-razeni="misto" class="cislo">Místo</button>
+      <button type="button" data-razeni="zalozeno" class="cislo">Založeno</button>
+    </div>
+
+    <div id="sz-seznam">
+      {% for z in zpevniky %}
+      <div class="sz-radek" id="z-{{ z.id }}" data-id="{{ z.id }}" data-nazev="{{ z.nazev }}"
+           data-vlastnik="{{ z.vlastnik.jmeno if z.vlastnik else '' }}"
+           data-vlastnik-id="{{ z.vlastnik.id if z.vlastnik else '' }}"
+           data-hledat="{{ ([z.nazev] + ([z.vlastnik.jmeno, z.vlastnik.email] if z.vlastnik else [])
+                            + (z.clenove|map(attribute='jmeno')|list) + (z.clenove|map(attribute='email')|list)
+                            + (z.pozvanky|map(attribute='komu')|select|map(attribute='email')|list))|join(' ') }}"
+           data-sdileni="{{ z.clenove|length }}" data-pozvanek="{{ z.pozvanky|length }}"
+           data-stran="{{ z.stran }}" data-misto="{{ z.misto }}" data-zalozeno="{{ z.zalozeno_ts }}">
+        <div class="sz-mrizka sz-souhrn" role="button" tabindex="0" aria-expanded="false">
+          <div class="sz-nazev"><span class="sz-barva" style="background: {{ z.barva }}"></span><span>{{ z.nazev }}</span></div>
+          <div class="sz-udaj"><span class="sz-popisek">Vlastník:</span>{{ kdo(z.vlastnik) }}</div>
+          <div class="sz-udaj sz-lide">
+            <span class="sz-popisek">Sdíleno s:</span>
+            {% for c in z.clenove %}<span title="{{ c.jmeno }}">{{ kolecko(c, 22) }}</span>{% endfor %}
+            {% if not z.clenove %}<span class="sz-ztlumene">nikým</span>{% endif %}
+            {% if z.pozvanky %}<span class="sz-stitek">{{ z.pozvanky|length }} {{ 'pozvánka' if z.pozvanky|length == 1 else ('pozvánky' if z.pozvanky|length < 5 else 'pozvánek') }}</span>{% endif %}
+          </div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Stran:</span>{{ z.stran }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Místo:</span>{{ z.misto_text }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Založeno:</span>{{ z.zalozeno or '–' }}</div>
+        </div>
+        <div class="sz-detail" hidden>
+          <h3>Společné úpravy</h3>
+          {% if z.clenove %}
+            <ul>
+              {% for c in z.clenove %}
+              <li>{{ kdo(c) }}
+                <button type="button" class="btn male" data-akce="odebrat" data-uzivatel="{{ c.id }}" data-jmeno="{{ c.jmeno }}">Odebrat</button>
+              </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="sz-ztlumene">Zpěvník nikdo jiný neupravuje.</p>
+          {% endif %}
+
+          {% if z.pozvanky %}
+            <h3>Nevyřízené pozvánky</h3>
+            <ul>
+              {% for p in z.pozvanky %}
+              <li>{{ kdo(p.komu) }}
+                <span class="sz-ztlumene">{{ 'ke společným úpravám' if p.druh == 'spolecny' else 'na kopii' }}{% if p.od and (not z.vlastnik or p.od.id != z.vlastnik.id) %}, od {{ p.od.jmeno }}{% endif %}</span>
+                <button type="button" class="btn male" data-akce="pozvanka" data-pozvanka="{{ p.id }}" data-jmeno="{{ p.komu.jmeno if p.komu else '' }}">Zrušit</button>
+              </li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+
+          <div class="sz-akce">
+            <a class="btn" href="{{ url_for('songbook_detail', book_id=z.id) }}">Otevřít</a>
+            <a class="btn" href="{{ url_for('my_songbooks', upravit=z.id, zpet='sprava') }}">Upravit</a>
+            <button type="button" class="btn" data-akce="kopie">Zkopírovat k sobě</button>
+            <button type="button" class="btn" data-akce="prevest">Převést na jiného vlastníka</button>
+            <button type="button" class="btn nebezpecne" data-akce="smazat">Smazat</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sprava-prazdne" id="sz-prazdne" hidden>Filtrům neodpovídá žádný zpěvník.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const UZIVATELE = {{ uzivatele|tojson }};
+  const radky = Array.from(document.querySelectorAll('.sz-radek'));
+  const seznam = document.getElementById('sz-seznam');
+  const hledat = document.getElementById('sz-hledat');
+  const jenSdilene = document.getElementById('sz-sdilene');
+  const jenPozvanky = document.getElementById('sz-pozvanky');
+
+  const bezDiakritiky = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function filtruj() {
+    const q = bezDiakritiky(hledat.value.trim());
+    let videt = 0;
+    radky.forEach(r => {
+      const ok = (!q || bezDiakritiky(r.dataset.hledat).includes(q))
+        && (!jenSdilene.checked || +r.dataset.sdileni > 0)
+        && (!jenPozvanky.checked || +r.dataset.pozvanek > 0);
+      r.hidden = !ok;
+      if (ok) videt++;
+    });
+    document.getElementById('sz-pocet').textContent = `Zobrazeno ${videt} z ${radky.length}`;
+    document.getElementById('sz-prazdne').hidden = videt > 0;
+  }
+  [hledat, jenSdilene, jenPozvanky].forEach(el => ['input', 'change'].forEach(u => el.addEventListener(u, filtruj)));
+
+  // Řazení: klik na sloupec, druhý klik obrátí směr. Čísla od největšího.
+  let razeni = { klic: 'nazev', smer: 1 };
+  const CISELNE = ['sdileni', 'stran', 'misto', 'zalozeno'];
+  function serad() {
+    const { klic, smer } = razeni;
+    const hodnota = r => CISELNE.includes(klic) ? +r.dataset[klic] : bezDiakritiky(r.dataset[klic]);
+    radky.sort((a, b) => {
+      const x = hodnota(a), y = hodnota(b);
+      const v = typeof x === 'number' ? x - y : x.localeCompare(y, 'cs');
+      return v * smer || bezDiakritiky(a.dataset.nazev).localeCompare(bezDiakritiky(b.dataset.nazev), 'cs');
+    }).forEach(r => seznam.appendChild(r));
+    document.querySelectorAll('[data-razeni]').forEach(b => {
+      b.classList.toggle('aktivni', b.dataset.razeni === klic);
+      b.setAttribute('aria-pressed', b.dataset.razeni === klic ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('[data-razeni]').forEach(b => b.addEventListener('click', () => {
+    const klic = b.dataset.razeni;
+    razeni = razeni.klic === klic ? { klic, smer: -razeni.smer }
+                                  : { klic, smer: CISELNE.includes(klic) ? -1 : 1 };
+    serad();
+  }));
+
+  function prepni(radek, otevrit) {
+    const souhrn = radek.querySelector('.sz-souhrn');
+    otevrit = otevrit ?? !radek.classList.contains('otevreny');
+    radek.classList.toggle('otevreny', otevrit);
+    radek.querySelector('.sz-detail').hidden = !otevrit;
+    souhrn.setAttribute('aria-expanded', otevrit ? 'true' : 'false');
+  }
+  radky.forEach(r => {
+    const souhrn = r.querySelector('.sz-souhrn');
+    souhrn.addEventListener('click', () => prepni(r));
+    souhrn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); prepni(r); }
+    });
+  });
+
+  // Po akci se stránka načte znovu a řádek, se kterým se pracovalo, zůstane otevřený.
+  function znovuNacist(id) {
+    history.replaceState(null, '', id ? '#z-' + id : location.pathname);
+    location.reload();
+  }
+  async function posli(url, telo, nadpisChyby) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(telo || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) { oznam(data.error || `Chyba serveru ${res.status}.`, { nadpis: nadpisChyby }); return null; }
+      return data;
+    } catch (_) {
+      oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+      return null;
+    }
+  }
+
+  function oknoPrevodu(radek) {
+    const id = radek.dataset.id;
+    const nazev = radek.dataset.nazev;
+    const puvodni = radek.dataset.vlastnik;
+    const puvodniId = +radek.dataset.vlastnikId || null;
+    return new Promise(hotovo => {
+      const zaclona = document.createElement('div');
+      zaclona.className = 'oznameni-zaclona';
+      zaclona.setAttribute('role', 'dialog');
+      zaclona.setAttribute('aria-modal', 'true');
+      zaclona.innerHTML = `
+        <div class="okno">
+          <h3>Převést zpěvník</h3>
+          <p></p>
+          <select aria-label="Nový vlastník"><option value="">Vyberte uživatele…</option></select>
+          <label class="zaskrtnuti" ${puvodniId ? '' : 'hidden'}><input type="checkbox" checked>
+            <span></span></label>
+          <div class="actions">
+            <button type="button" class="btn" data-volba="zrusit">Zrušit</button>
+            <button type="button" class="btn primary" data-volba="ok" disabled>Převést</button>
+          </div>
+        </div>`;
+      zaclona.querySelector('p').textContent = `Nový vlastník zpěvníku „${nazev}“:`;
+      zaclona.querySelector('.zaskrtnuti span').textContent =
+        `Původní vlastník (${puvodni}) zůstane členem společných úprav`;
+      const vyber = zaclona.querySelector('select');
+      UZIVATELE.filter(u => u.id !== puvodniId).forEach(u => {
+        const o = document.createElement('option');
+        o.value = u.id;
+        o.textContent = u.jmeno === u.email ? u.email : `${u.jmeno} (${u.email})`;
+        vyber.appendChild(o);
+      });
+      const ok = zaclona.querySelector('[data-volba="ok"]');
+      vyber.addEventListener('change', () => { ok.disabled = !vyber.value; });
+      const zavri = vysledek => {
+        window.removeEventListener('keydown', naEsc, true);
+        zaclona.remove();
+        hotovo(vysledek);
+      };
+      const naEsc = e => {
+        const okna = document.querySelectorAll('.oznameni-zaclona');
+        if (e.key !== 'Escape' || okna[okna.length - 1] !== zaclona) return;
+        e.stopPropagation();
+        zavri(null);
+      };
+      window.addEventListener('keydown', naEsc, true);
+      zaclona.addEventListener('click', e => { if (e.target === zaclona) zavri(null); });
+      zaclona.querySelector('[data-volba="zrusit"]').addEventListener('click', () => zavri(null));
+      ok.addEventListener('click', () => zavri({
+        komu: +vyber.value,
+        ponechat: !!puvodniId && zaclona.querySelector('.zaskrtnuti input').checked,
+      }));
+      document.body.appendChild(zaclona);
+      vyber.focus();
+    });
+  }
+
+  seznam.addEventListener('click', async e => {
+    const tlacitko = e.target.closest('button[data-akce]');
+    if (!tlacitko) return;
+    const radek = tlacitko.closest('.sz-radek');
+    const id = radek.dataset.id;
+    const nazev = radek.dataset.nazev;
+    const zakl = `/api/sprava/zpevnik/${encodeURIComponent(id)}`;
+    switch (tlacitko.dataset.akce) {
+      case 'odebrat':
+        if (!(await showConfirm(`Odebrat uživateli ${tlacitko.dataset.jmeno} přístup ke zpěvníku „${nazev}“? Kopii nedostane a upozornění se mu nezobrazí.`, 'Odebrat', { nebezpecne: true }))) return;
+        if (await posli(`${zakl}/clen/${tlacitko.dataset.uzivatel}/odebrat`, null, 'Odebrání se nepovedlo')) znovuNacist(id);
+        break;
+      case 'pozvanka':
+        if (!(await showConfirm(`Zrušit pozvánku pro ${tlacitko.dataset.jmeno} ke zpěvníku „${nazev}“?`, 'Zrušit pozvánku'))) return;
+        if (await posli(`/api/sprava/pozvanka/${tlacitko.dataset.pozvanka}/zrusit`, null, 'Zrušení se nepovedlo')) znovuNacist(id);
+        break;
+      case 'kopie': {
+        const data = await posli(`${zakl}/kopie`, null, 'Kopie se nepovedla');
+        if (data) {
+          await oznam(`Kopie „${nazev} (kopie)“ je v Mých zpěvnících.`, { druh: 'info', nadpis: 'Zkopírováno' });
+          znovuNacist(id);
+        }
+        break;
+      }
+      case 'prevest': {
+        const volba = await oknoPrevodu(radek);
+        if (volba && await posli(`${zakl}/prevest`, volba, 'Převod se nepovedl')) znovuNacist(id);
+        break;
+      }
+      case 'smazat': {
+        const vlastnik = radek.dataset.vlastnik ? ` uživatele ${radek.dataset.vlastnik}` : '';
+        const clenove = +radek.dataset.sdileni ? ' Členové společných úprav dostanou kopii.' : '';
+        if (!(await showConfirm(`Smazat zpěvník „${nazev}“${vlastnik}?${clenove} Akce je nevratná.`, 'Smazat', { nebezpecne: true }))) return;
+        if (await posli(`${zakl}/smazat`, null, 'Smazání se nepovedlo')) znovuNacist(null);
+        break;
+      }
+    }
+  });
+
+  serad();
+  filtruj();
+  const zKotvy = location.hash && document.getElementById(location.hash.slice(1));
+  if (zKotvy && zKotvy.classList.contains('sz-radek')) {
+    prepni(zKotvy, true);
+    zKotvy.scrollIntoView({ block: 'center' });
+  }
+})();
+</script>
+{% endblock %}

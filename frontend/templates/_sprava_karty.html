@@ -1,0 +1,5 @@
+{# Záložky správy pro admina. `karta` říká, která je otevřená. #}
+<nav class="sprava-karty" aria-label="Správa">
+  <a href="{{ url_for('sprava_zpevniku') }}" {% if karta == 'zpevniky' %}class="aktivni" aria-current="page"{% endif %}>Všechny zpěvníky</a>
+  <a href="{{ url_for('sprava_zaznam') }}" {% if karta == 'zaznam' %}class="aktivni" aria-current="page"{% endif %}>Záznam zásahů</a>
+</nav>

@@ -468,6 +468,9 @@
         {% else %}
           <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
         {% endif %}
+        {% if current_user.is_authenticated and current_user.role == 'admin' %}
+          <a href="{{ url_for('sprava_zpevniku') }}">Všechny zpěvníky</a>
+        {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>
     </div>

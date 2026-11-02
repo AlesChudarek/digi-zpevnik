@@ -311,6 +311,28 @@ class PoradiZpevniku(db.Model):
     poradi = db.Column(db.Integer, nullable=False)
 
 
+class ZasahAdmina(db.Model):
+    """Co admin udělal ve správě: kdo, co, komu, u kterého zpěvníku a kdy.
+
+    Uživatele a zpěvník drží i jako text, ne jen jako odkaz - záznam má dávat smysl
+    i potom, co admin účet nebo zpěvník smazal. Odkazy (`*_id`) bez cizího klíče
+    ze stejného důvodu.
+    """
+
+    __tablename__ = "zasahy_admina"
+
+    id = db.Column(db.Integer, primary_key=True)
+    cas = db.Column(db.DateTime, nullable=False, index=True)
+    admin_id = db.Column(db.Integer, nullable=True)
+    admin = db.Column(db.String, nullable=False)
+    akce = db.Column(db.String, nullable=False)
+    komu_id = db.Column(db.Integer, nullable=True, index=True)
+    komu = db.Column(db.String, nullable=True)
+    zpevnik_id = db.Column(db.String, nullable=True)
+    zpevnik = db.Column(db.String, nullable=True)
+    podrobnosti = db.Column(db.String, nullable=True)
+
+
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
 

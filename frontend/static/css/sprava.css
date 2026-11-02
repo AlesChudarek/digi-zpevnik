@@ -1,0 +1,126 @@
+/* Správa pro admina (Všechny zpěvníky, Uživatelé, Záznam). Karta na proměnných
+   --panel-*, stejně jako okna: ve světlých motivech bílá, v tmavém tmavá.
+   Na telefonu (do 760 px) se řádky seznamu skládají do kartiček. */
+
+.sprava { max-width: 1200px; margin: 24px auto 40px; padding: 0 16px; box-sizing: border-box; }
+.sprava h1 { text-align: center; margin: 6px 0 18px; }
+
+.sprava-karty { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
+.sprava-karty a {
+  padding: 8px 16px; border-radius: 999px; text-decoration: none; font-size: 14px;
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+.sprava-karty a.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; font-weight: 600; }
+
+.sprava-panel {
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+  border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); overflow: hidden;
+}
+
+/* Filtry */
+.sprava-filtry {
+  display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  padding: 14px 16px; border-bottom: 1px solid var(--panel-border, #ddd);
+}
+.sprava-filtry input[type="search"] {
+  flex: 1 1 260px; min-width: 0; padding: 9px 12px; border-radius: 8px; font-size: 14px;
+  border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff);
+  color: var(--panel-text, #222); font-family: inherit;
+}
+.sprava-filtry label { font-size: 14px; display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.sprava-pocet { font-size: 13px; color: var(--panel-muted, #666); margin-left: auto; }
+
+/* Seznam: hlavička a řádky na stejné mřížce */
+.sz-mrizka {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1.4fr) 64px 82px 96px;
+  padding: 10px 16px;
+}
+.sz-hlavicka { font-size: 12px; color: var(--panel-muted, #666); border-bottom: 1px solid var(--panel-border, #ddd); }
+.sz-hlavicka button {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left;
+}
+.sz-hlavicka button.aktivni { color: var(--panel-text, #222); font-weight: 700; }
+.sz-hlavicka .cislo, .sz-souhrn .cislo { text-align: right; }
+
+.sz-radek { border-bottom: 1px solid var(--panel-border, #eee); }
+.sz-radek:last-child { border-bottom: 0; }
+.sz-radek[hidden] { display: none; }
+.sz-souhrn { cursor: pointer; font-size: 14px; }
+@media (hover: hover) { .sz-souhrn:hover { background: var(--panel-btn-bg, #f4f4f4); } }
+.sz-radek.otevreny > .sz-souhrn { background: var(--panel-btn-bg, #f4f4f4); }
+
+.sz-nazev { display: flex; align-items: center; gap: 10px; font-weight: 600; min-width: 0; }
+.sz-nazev span:last-child { overflow-wrap: anywhere; }
+.sz-barva {
+  width: 14px; height: 18px; border-radius: 3px; flex: 0 0 auto;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+.sz-kdo { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sz-kdo > span:last-child { overflow-wrap: anywhere; }
+.sz-lide { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.sz-stitek {
+  font-size: 12px; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  background: var(--panel-btn-bg, #eee); color: var(--panel-text, #222);
+}
+.sz-ztlumene { color: var(--panel-muted, #777); }
+.sz-popisek { display: none; }
+
+/* Rozbalený detail */
+.sz-detail { padding: 4px 16px 16px; font-size: 14px; }
+.sz-detail[hidden] { display: none; }
+.sz-detail h3 { font-size: 13px; margin: 12px 0 6px; color: var(--panel-muted, #666); font-weight: 600; }
+.sz-detail ul { list-style: none; margin: 0; padding: 0; }
+.sz-detail li { display: flex; align-items: center; gap: 8px; padding: 4px 0; flex-wrap: wrap; }
+.sz-detail li .sz-kdo { flex: 1 1 auto; }
+.sz-akce { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+
+.sprava .btn {
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
+  border: 0; border-radius: 8px; padding: 8px 14px; font-size: 14px; font-family: inherit;
+  line-height: 1.2; cursor: pointer; text-decoration: none; display: inline-block;
+}
+@media (hover: hover) { .sprava .btn:hover { background: var(--panel-btn-hover, #e2e2e2); } }
+.sprava .btn.nebezpecne { background: #b3261e; color: #fff; font-weight: 600; }
+@media (hover: hover) { .sprava .btn.nebezpecne:hover { background: #b3261e; filter: brightness(1.15); } }
+.sprava .btn.male { padding: 5px 10px; font-size: 13px; }
+.sprava .btn:disabled { opacity: 0.5; cursor: default; }
+
+.sprava-prazdne { padding: 24px 16px; text-align: center; color: var(--panel-muted, #777); }
+.sprava-prazdne[hidden] { display: none; }
+
+/* Okno převodu */
+.okno select {
+  width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+  margin-bottom: 12px;
+}
+.okno .zaskrtnuti { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
+.okno .zaskrtnuti[hidden] { display: none; }
+
+/* Záznam zásahů */
+.zaznam { width: 100%; border-collapse: collapse; font-size: 14px; }
+.zaznam th, .zaznam td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--panel-border, #eee); vertical-align: top; }
+.zaznam th { font-size: 12px; color: var(--panel-muted, #666); font-weight: 600; }
+.zaznam td { overflow-wrap: anywhere; }
+.zaznam .kdy { white-space: nowrap; }
+
+@media (pointer: coarse) {
+  .sprava .btn { padding: 11px 16px; }
+  .sprava .btn.male { padding: 9px 14px; }
+  .sprava-filtry label { min-height: 40px; }
+}
+
+/* Telefon: řádek jako kartička, popisky před hodnotami */
+@media (max-width: 760px) {
+  .sz-hlavicka { display: none; }
+  .sz-mrizka { grid-template-columns: 1fr; gap: 6px; padding: 12px 16px; }
+  .sz-souhrn .cislo { text-align: left; }
+  .sz-popisek { display: inline; color: var(--panel-muted, #666); font-size: 12px; margin-right: 4px; }
+  .sz-souhrn > .sz-udaj { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .zaznam thead { display: none; }
+  .zaznam, .zaznam tbody, .zaznam tr, .zaznam td { display: block; }
+  .zaznam tr { padding: 10px 16px; border-bottom: 1px solid var(--panel-border, #eee); }
+  .zaznam td { border: 0; padding: 2px 0; }
+}

@@ -1,0 +1,16 @@
+{# Kolečko a jméno uživatele ve správě. `info` je slovník z uzivatel_info(). #}
+{% macro kolecko(info, velikost=24) -%}
+  {%- if info and info.fotka -%}
+    <img class="avatar" src="{{ info.fotka }}" alt="" width="{{ velikost }}" height="{{ velikost }}" style="--avatar: {{ velikost }}px">
+  {%- elif info -%}
+    <span class="avatar avatar-inicialy" aria-hidden="true" style="--avatar: {{ velikost }}px; background: {{ info.barva }}">{{ info.inicialy }}</span>
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro kdo(info, velikost=24) -%}
+  {%- if info -%}
+    <span class="sz-kdo">{{ kolecko(info, velikost) }}<span>{{ info.jmeno }}{% if info.jmeno != info.email %} <span class="sz-ztlumene">({{ info.email }})</span>{% endif %}</span></span>
+  {%- else -%}
+    <span class="sz-ztlumene">bez vlastníka</span>
+  {%- endif -%}
+{%- endmacro %}
