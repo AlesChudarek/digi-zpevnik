@@ -641,7 +641,8 @@ def _dopln_chybejici_sloupce():
                                  ('vytvoreno', 'DATETIME'), ('posledni_prihlaseni', 'DATETIME'),
                                  ('limit_mista', 'INTEGER'),
                                  ('zablokovan', 'BOOLEAN NOT NULL DEFAULT 0'),
-                                 ('verze_prihlaseni', 'INTEGER NOT NULL DEFAULT 0')):
+                                 ('verze_prihlaseni', 'INTEGER NOT NULL DEFAULT 0'),
+                                 ('zamceno_od', 'DATETIME'), ('zamky_email', 'DATETIME')):
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
@@ -5348,6 +5349,92 @@ def nahledy_warm(jen, zpevnik_id):
         velikost = sum(f.stat().st_size for f in strany_dir.glob('*.webp')) if strany_dir.exists() else 0
         click.echo(f"strany: {hotovo} hotovo, {preskoceno} bez souboru, {chyb} chyb, "
                    f"celkem {velikost / 1e6:.2f} MB")
+
+
+ZAMEK_ODLEZET = timedelta(hours=1)    # zamyká a odemyká se při práci; e-mail až po ustálení
+ZAMEK_EMAIL_NEJDRIV = timedelta(days=7)
+
+
+def upozorni_na_zamky(ted=None, posli=None) -> list:
+    """Projde účty a tomu, komu se zamkly zpěvníky, pošle jeden e-mail. Commituje.
+
+    Pravidla (Aleš 2. 11. 2026), aby to nešlo použít ke spamu:
+    - e-mail až po hodině souvislého zámku - při práci na společném zpěvníku se může
+      zamykat a odemykat pořád dokola;
+    - jeden e-mail na každé zamčení (`zamceno_od` se při odemčení maže) a nejvýš jeden
+      za 7 dní;
+    - jen na ověřenou adresu a jen majiteli účtu;
+    - bez názvů zpěvníků: název si volí kdokoli, kdo zpěvník založí, a nesmí se jím
+      dát rozesílat cizí text.
+    Vrací e-maily, kterým se poslalo. S `posli` None jen vypíše, komu by se poslalo,
+    a nic neuloží.
+    """
+    ted = ted or datetime.now()
+    komu = []
+    for u in User.query.filter(User.role.notin_(['admin', 'guest'])):
+        zamcene = zamcene_zpevniky(u)
+        if not zamcene:
+            u.zamceno_od = None
+            continue
+        if u.zamceno_od is None:
+            u.zamceno_od = ted
+            continue
+        if (ted - u.zamceno_od < ZAMEK_ODLEZET or not u.email_verified or u.zablokovan
+                or (u.zamky_email and (u.zamky_email >= u.zamceno_od
+                                       or ted - u.zamky_email < ZAMEK_EMAIL_NEJDRIV))):
+            continue
+        pocet = len(zamcene)
+        zamkl, slovo = (('zamkl', 'zpěvník') if pocet == 1 else
+                        ('zamkly', 'zpěvníky') if pocet < 5 else ('zamklo', 'zpěvníků'))
+        if posli is not None:
+            posli(
+                u.email,
+                "Zamčené zpěvníky - Digi zpěvník",
+                "Dobrý den,\n\n"
+                f"účet {u.email} na webu Digi zpěvník je přes limit místa, a proto se {zamkl} "
+                f"{pocet} {slovo}. Zamčený zpěvník nejde otevřít ani stáhnout, nic se z něj "
+                "ale nemaže.\n\n"
+                "Zamčené zpěvníky najdete v Mých zpěvnících:\n"
+                "https://digizpevnik.cz/my-songbooks\n\n"
+                "Odemknou se samy, jakmile se účet do limitu zase vejde - po smazání nebo "
+                "opuštění některého zpěvníku, nebo po ubrání stran z vlastního zpěvníku "
+                "v editoru. Limit se mohl překročit i bez vašeho zásahu, například když "
+                "někdo přidal strany do společného zpěvníku.\n\n"
+                "Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.\n",
+                "<p>Dobrý den,</p>"
+                f"<p>účet {escape(u.email)} na webu <strong>Digi zpěvník</strong> je přes limit "
+                f"místa, a proto se {zamkl} {pocet} {slovo}. Zamčený zpěvník nejde otevřít ani "
+                "stáhnout, nic se z něj ale nemaže.</p>"
+                '<p><a href="https://digizpevnik.cz/my-songbooks">Zamčené zpěvníky najdete '
+                "v Mých zpěvnících</a></p>"
+                "<p>Odemknou se samy, jakmile se účet do limitu zase vejde - po smazání nebo "
+                "opuštění některého zpěvníku, nebo po ubrání stran z vlastního zpěvníku "
+                "v editoru. Limit se mohl překročit i bez vašeho zásahu, například když "
+                "někdo přidal strany do společného zpěvníku.</p>"
+                "<p>Tato zpráva byla vygenerována automaticky, neodpovídejte na ni.</p>")
+            u.zamky_email = ted
+        komu.append(u.email)
+    if posli is not None:
+        db.session.commit()     # jen výpis (posli=None) nesmí nic uložit
+    else:
+        db.session.rollback()
+    return komu
+
+
+@app.cli.command("zamky-upozorni")
+@click.option("--jen-vypsat", is_flag=True, help="nic neposílat ani neukládat, jen ukázat komu")
+def zamky_upozorni_command(jen_vypsat):
+    """Upozornění na zamčené zpěvníky e-mailem. Spouští cron každou hodinu
+    (scripts/zamky-upozorni.sh)."""
+    if jen_vypsat:
+        komu = upozorni_na_zamky()
+    else:
+        try:
+            from .mail import posli_email
+        except ImportError:
+            from mail import posli_email
+        komu = upozorni_na_zamky(posli=posli_email)
+    print(f"{'Poslalo by se' if jen_vypsat else 'Posláno'}: {len(komu)}", *komu, sep="\n  ")
 
 
 @app.cli.command("mesicni-hlaseni")

@@ -862,8 +862,14 @@ kdo maže.
       se zbytek nevejde (`zamcene_zpevniky`, ve `can_view/can_edit`, hledání, nabídce).
       Šedá dlaždice s lock.svg, jen Odebrat/Smazat, odemkne se sám. Správa: počet zamčených
       u uživatele, náhled před snížením limitu. Hlídá `test_sprava` (zámky).
-- [ ] **časový limit zámku** (Aleš 2. 11.: 14 dní?) - navrženo: sdílený zamčený po 14 dnech
-      automaticky opustit, vlastní nemazat. Čeká na rozhodnutí.
+- [X] **upozornění na zamčené zpěvníky** (Aleš 2. 11.: místo časového limitu): bez
+      odpočtu a bez automatického mazání. E-mail `flask zamky-upozorni` z cronu každou
+      hodinu (`scripts/zamky-upozorni.sh`): až po hodině souvislého zámku, jednou na každé
+      zamčení, nejvýš jednou za 7 dní, jen na ověřenou adresu, bez názvů zpěvníků (název
+      volí kdokoli - nesmí jít rozesílat cizí text).
+- [ ] **neaktivní účty** (na později): kdo se např. rok nepřihlásil, dostane e-mail
+      a když nereaguje, účet se po 30 dnech smaže. Uklidí i zamčené zpěvníky. Navrženo
+      2. 11. místo odpočtu u každého zpěvníku; lhůty na Alešovi.
 
 ## Obsah a prezentace
 

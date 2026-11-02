@@ -688,6 +688,51 @@ def zamky():
     zkontroluj("zamčené zpěvníky: 1" in html, "v Uživatelích je vidět počet zamčených")
     zkontroluj(admin.get(f"/songbook/{ids['v1']}").status_code == 200, "admin zamčený zpěvník vidí")
 
+    print("\n── zámky: upozornění e-mailem ──")
+    from datetime import timedelta
+    with A.app.app_context():
+        A.User.query.filter(A.User.id != ucty["x"]).update({A.User.limit_mista: None})
+        A.db.session.commit()
+    poslano = []
+
+    def kolo(posun):
+        with A.app.app_context():
+            pred = len(poslano)
+            A.upozorni_na_zamky(ted=t0 + posun,
+                                posli=lambda komu, predmet, text, html: poslano.append((komu, text, html)))
+            return [k for k, _, _ in poslano[pred:]]
+
+    t0 = A.datetime(2026, 11, 2, 12, 0)
+    nastav_limit("x", ceny["v2"])
+    with A.app.app_context():
+        A.upozorni_na_zamky(ted=t0)          # jen výpis, bez odeslání
+        zkontroluj(A.db.session.get(A.User, ucty["x"]).zamceno_od is None, "výpis nic neuloží")
+    zkontroluj(kolo(timedelta(0)) == [], "hned po zamčení nic")
+    zkontroluj(kolo(timedelta(minutes=30)) == [], "po půl hodině nic")
+    zkontroluj(kolo(timedelta(minutes=61)) == ["zamek-x@test.cz"], "po hodině jeden e-mail", [k for k, _, _ in poslano])
+    _, text, html = poslano[-1]
+    zkontroluj("Velký vlastní" not in text + html and "Rodinný" not in text + html
+               and "zamkl 1 zpěvník" in text, "bez názvů zpěvníků, jen počet", text[:120])
+    zkontroluj(kolo(timedelta(hours=5)) == [], "stejný zámek podruhé ne")
+    nastav_limit("x", None)
+    kolo(timedelta(hours=6))
+    nastav_limit("x", ceny["v2"])
+    kolo(timedelta(hours=7))
+    zkontroluj(kolo(timedelta(hours=9)) == [], "nové zamčení do týdne bez e-mailu")
+    nastav_limit("x", None)
+    kolo(timedelta(days=8))
+    nastav_limit("x", ceny["v2"])
+    kolo(timedelta(days=8, hours=1))
+    zkontroluj(kolo(timedelta(days=8, hours=3)) == ["zamek-x@test.cz"], "po týdnu nové zamčení zase e-mail")
+    with A.app.app_context():
+        A.db.session.get(A.User, ucty["x"]).email_verified = False
+        A.db.session.commit()
+    nastav_limit("x", None)
+    kolo(timedelta(days=20))
+    nastav_limit("x", ceny["v2"])
+    kolo(timedelta(days=20, hours=1))
+    zkontroluj(kolo(timedelta(days=20, hours=3)) == [], "neověřená adresa nic nedostane")
+
 
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.

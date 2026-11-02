@@ -103,6 +103,10 @@ class User(db.Model, UserMixin):
     # verze je součástí id v relaci (get_id) a load_user v app.py přihlášení se starou
     # verzí odmítne. Flask-Login relace na serveru neeviduje, jinak to nejde.
     verze_prihlaseni = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+    # Upozornění na zamčené zpěvníky (flask zamky-upozorni, cron každou hodinu): od kdy
+    # je účet souvisle zamčený a kdy dostal poslední e-mail.
+    zamceno_od = db.Column(db.DateTime, nullable=True)
+    zamky_email = db.Column(db.DateTime, nullable=True)
 
     def get_id(self):
         return f"{self.id}:{self.verze_prihlaseni or 0}"
