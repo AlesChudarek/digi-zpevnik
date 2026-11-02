@@ -330,6 +330,9 @@ def uzivatele():
                    "převod přes jeho limit neprojde", (kod, telo.get("error", "")[:80]))
     html = klient(uid).get("/my-songbooks").get_data(as_text=True)
     zkontroluj(A.mb(mensi * 1024 * 1024) in html, "uživatel vidí svůj limit", A.mb(mensi * 1024 * 1024))
+    kod, _ = uprav("limit", " 1,5 MB")
+    zkontroluj(kod == 200 and ja().limit_mista == int(1.5 * 1024 * 1024), "limit s čárkou i jednotkou",
+               ja().limit_mista)
     kod, _ = uprav("limit", "")
     zkontroluj(kod == 200 and ja().limit_mista is None, "prázdný limit = výchozí")
 
@@ -372,7 +375,7 @@ def uzivatele():
     with A.app.app_context():
         akce = [z.akce for z in A.ZasahAdmina.query.order_by(A.ZasahAdmina.id)][zasahu:]
     zkontroluj(akce == ["změnil roli", "změnil roli", "ověřil e-mail", "změnil přezdívku",
-                        "smazal fotku", "změnil limit místa", "změnil limit místa",
+                        "smazal fotku", "změnil limit místa", "změnil limit místa", "změnil limit místa",
                         "zablokoval účet", "odblokoval účet"], "úpravy jsou v záznamu", akce)
 
 

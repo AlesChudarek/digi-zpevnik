@@ -123,8 +123,10 @@
 .su-zpevniky a { color: inherit; }
 .su-pole { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
 .su-pole label { flex: 0 0 140px; font-size: 13px; }
+/* Select a pole stejně široké i vysoké - prohlížeč jim jinak dává jiné výchozí rozměry. */
 .su-pole input, .su-pole select {
-  flex: 0 1 220px; min-width: 0; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  flex: 0 1 220px; width: 220px; min-width: 0; height: 36px; box-sizing: border-box;
+  padding: 0 10px; border-radius: 8px; font-size: 14px; font-family: inherit; margin: 0;
   border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff); color: var(--panel-text, #222);
 }
 
@@ -147,7 +149,7 @@
   .sz-mrizka, .sz-mrizka.su { grid-template-columns: 1fr; gap: 6px; padding: 12px 16px; }
   .su-misto { flex-direction: row; align-items: center; }
   .su-pole label { flex-basis: 100%; }
-  .su-pole input, .su-pole select { flex: 1 1 140px; }
+  .su-pole input, .su-pole select { flex: 1 1 140px; width: auto; }
   .sz-souhrn .cislo { text-align: left; }
   .sz-popisek { display: inline; color: var(--panel-muted, #666); font-size: 12px; margin-right: 4px; }
   .sz-souhrn > .sz-udaj { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

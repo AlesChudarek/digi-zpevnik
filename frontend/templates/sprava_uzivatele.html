@@ -76,7 +76,7 @@
           </div>
           <div class="su-pole">
             <label for="su-limit-{{ u.id }}">Limit místa (MB)</label>
-            <input type="number" id="su-limit-{{ u.id }}" data-pole="limit" min="1" step="1" value="{{ u.limit_mb or '' }}" placeholder="výchozí {{ vychozi_limit_mb }}">
+            <input type="text" inputmode="decimal" id="su-limit-{{ u.id }}" data-pole="limit" value="{{ u.limit_mb or '' }}" placeholder="výchozí {{ vychozi_limit_mb }}">
             <button type="button" class="btn male" data-akce="limit">Uložit</button>
           </div>
 

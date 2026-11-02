@@ -2903,7 +2903,9 @@ def sprava_uprav_uzivatele(user_id):
             novy = None
         else:
             try:
-                novy = int(float(hodnota) * 1024 * 1024)
+                # Textové pole: „1,5“ i „ 50 MB“ projde.
+                novy = int(float(str(hodnota).lower().replace('mb', '').replace(',', '.').strip())
+                           * 1024 * 1024)
             except (TypeError, ValueError):
                 novy = 0
             if novy <= 0:
