@@ -92,6 +92,13 @@ class User(db.Model, UserMixin):
     # nové jméno při každé změně, takže adresa může být cachovaná natvrdo.
     prezdivka = db.Column(db.String, nullable=True)
     fotka = db.Column(db.String, nullable=True)
+    # Pro správu. U účtů z doby před těmi sloupci prázdné - nikdo to tehdy nezapisoval.
+    vytvoreno = db.Column(db.DateTime, nullable=True)
+    posledni_prihlaseni = db.Column(db.DateTime, nullable=True)
+    # Vlastní limit místa v bajtech, který nastavil admin. Prázdno = výchozí limit.
+    limit_mista = db.Column(db.Integer, nullable=True)
+    # Zablokovaný účet se nepřihlásí a už přihlášený nesmí nic (before_request v app.py).
+    zablokovan = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
 
 class LoginAttempt(db.Model):
     """Neúspěšné pokusy o přihlášení, kvůli omezení jejich frekvence.

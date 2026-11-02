@@ -99,6 +99,30 @@
 .okno .zaskrtnuti { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
 .okno .zaskrtnuti[hidden] { display: none; }
 
+/* Uživatelé: jiné sloupce, stejné řádky a detail jako u zpěvníků */
+.sz-mrizka.su {
+  grid-template-columns: minmax(0, 2.2fr) 90px 80px minmax(0, 1.3fr) 64px 92px 92px;
+}
+.sprava-filtry select {
+  padding: 9px 10px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+}
+.su-zablokovan { background: #b3261e; color: #fff; }
+.su-misto { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.su-pruh {
+  display: block; width: 100%; max-width: 160px; height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--panel-track, #e5e5e5);
+}
+.su-pruh > span { display: block; height: 100%; background: var(--brand-dark, #1b5e20); }
+.su-zpevniky { margin: 0; line-height: 1.6; }
+.su-zpevniky a { color: inherit; }
+.su-pole { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0; }
+.su-pole label { flex: 0 0 140px; font-size: 13px; }
+.su-pole input, .su-pole select {
+  flex: 0 1 220px; min-width: 0; padding: 7px 10px; border-radius: 8px; font-size: 14px; font-family: inherit;
+  border: 1px solid var(--panel-border, #ccc); background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+}
+
 /* Záznam zásahů */
 .zaznam { width: 100%; border-collapse: collapse; font-size: 14px; }
 .zaznam th, .zaznam td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--panel-border, #eee); vertical-align: top; }
@@ -115,7 +139,10 @@
 /* Telefon: řádek jako kartička, popisky před hodnotami */
 @media (max-width: 760px) {
   .sz-hlavicka { display: none; }
-  .sz-mrizka { grid-template-columns: 1fr; gap: 6px; padding: 12px 16px; }
+  .sz-mrizka, .sz-mrizka.su { grid-template-columns: 1fr; gap: 6px; padding: 12px 16px; }
+  .su-misto { flex-direction: row; align-items: center; }
+  .su-pole label { flex-basis: 100%; }
+  .su-pole input, .su-pole select { flex: 1 1 140px; }
   .sz-souhrn .cislo { text-align: left; }
   .sz-popisek { display: inline; color: var(--panel-muted, #666); font-size: 12px; margin-right: 4px; }
   .sz-souhrn > .sz-udaj { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

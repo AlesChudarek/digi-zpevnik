@@ -834,9 +834,16 @@ kdo maže.
         Na telefonu kartičky. API `/api/sprava/...`, `jen_admin` (ostatním 404/403).
   - [X] **3. záznam zásahů admina**: tabulka `zasahy_admina` (`zapis_zasah`, ve stejné
         transakci jako zásah), záložka Záznam zásahů ve správě.
-  - [ ] **4. Uživatelé** (`/sprava/uzivatele`): sloupce `vytvoreno`, `posledni_prihlaseni`,
-        `limit_mista`; akce role, ověření, přezdívka, fotka, limit, **blokování**
-        (zablokovaný nesmí nic, ani v už přihlášené relaci).
+  - [X] **4. Uživatelé** (`/sprava/uzivatele`, záložka): sloupce `vytvoreno`,
+        `posledni_prihlaseni`, `limit_mista`, `zablokovan` (doplní `_dopln_chybejici_sloupce`).
+        Seznam s hledáním (jméno/e-mail, název zpěvníku, role, jen zablokovaní) a řazením;
+        detail se zpěvníky a úpravami: role (vlastní ne), ověřit e-mail, přezdívka, smazat
+        fotku, vlastní limit místa (`limit_uzivatele()` místo jednoho čísla všude),
+        zablokovat/odblokovat (`_zablokovany_ucet` v before_request odhlásí i běžící relaci;
+        přihlášení se správným heslem hlásí blok, se špatným ne). V liště jen odkaz
+        **Správa** (Aleš 2. 11.: pět odkazů se nevešlo).
+  - [ ] lišta: texty odkazů se pod ~1100 px lámou na dva řádky i běžnému uživateli
+        (zjištěno 2. 11. při měření lišty admina). Nehlášené, jen k posouzení.
   - [ ] **5. odhlásit ze všech zařízení** (`verze_prihlaseni` v `get_id()`; i při změně hesla).
   - [ ] **6. přihlásit se jako uživatel** (pruh „Zpět do svého účtu“; zamčená změna hesla
         a e-mailu, zrušení účtu smí).

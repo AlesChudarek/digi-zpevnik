@@ -469,7 +469,9 @@
           <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
         {% endif %}
         {% if current_user.is_authenticated and current_user.role == 'admin' %}
-          <a href="{{ url_for('sprava_zpevniku') }}">Všechny zpěvníky</a>
+          {# Jeden odkaz: Uživatelé a Záznam jsou záložky na stránce. Pět odkazů se do lišty
+             nevešlo (potřebovaly přes 1400 px) - Aleš 2. 11. #}
+          <a href="{{ url_for('sprava_zpevniku') }}">Správa</a>
         {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>

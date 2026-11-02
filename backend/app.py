@@ -316,6 +316,13 @@ def drzitele_zpevniku(sb) -> list:
     return sorted(set(ids))
 
 
+def limit_uzivatele(kdo) -> int:
+    """Kolik místa účet smí zabrat: vlastní limit, který mu nastavil admin, jinak
+    výchozí MAX_USER_STORAGE_BYTES. `kdo` je uživatel nebo jeho id."""
+    u = db.session.get(User, kdo) if isinstance(kdo, int) else kdo
+    return getattr(u, 'limit_mista', None) or MAX_USER_STORAGE_BYTES
+
+
 def zjisti_mista(ids) -> dict:
     return {uid: zabrane_misto(uid) for uid in ids}
 
@@ -329,7 +336,7 @@ def zkontroluj_limity(pred: dict) -> None:
     db.session.flush()
     for uid, predtim in pred.items():
         potom = zabrane_misto(uid)
-        if potom > MAX_USER_STORAGE_BYTES and potom > predtim:
+        if potom > limit_uzivatele(uid) and potom > predtim:
             kdo = None if uid == getattr(current_user, 'id', None) else db.session.get(User, uid)
             raise KvotaPrekrocena(predtim, potom - predtim, kdo=kdo)
 
@@ -346,7 +353,7 @@ def _zbyva_uzivateli(user_id: int) -> int:
         except RuntimeError:
             pass  # mimo požadavek (CLI, skripty) - jen se necachuje
     if user_id not in cache:
-        cache[user_id] = MAX_USER_STORAGE_BYTES - zabrane_misto(user_id)
+        cache[user_id] = limit_uzivatele(user_id) - zabrane_misto(user_id)
     return cache[user_id]
 
 
@@ -394,7 +401,7 @@ def _save_image_with_limit(file_storage, dest_path: Path, ext_hint=None):
     if uid is not None:
         zbyva = _zbyva_uzivateli(uid)
         if max(len(data), MIN_CENA_STRANY) > zbyva:
-            raise KvotaPrekrocena(MAX_USER_STORAGE_BYTES - zbyva, len(data))
+            raise KvotaPrekrocena(limit_uzivatele(uid) - zbyva, len(data))
     with open(dest_path, 'wb') as fh:
         fh.write(data)
     if uid is not None:
@@ -566,9 +573,12 @@ def _dopln_chybejici_sloupce():
         try:
             db.create_all()
             uzivatele = {r[1] for r in db.session.execute(text("PRAGMA table_info(users)"))}
-            for sloupec in ('prezdivka', 'fotka'):
+            for sloupec, typ in (('prezdivka', 'TEXT'), ('fotka', 'TEXT'),
+                                 ('vytvoreno', 'DATETIME'), ('posledni_prihlaseni', 'DATETIME'),
+                                 ('limit_mista', 'INTEGER'),
+                                 ('zablokovan', 'BOOLEAN NOT NULL DEFAULT 0')):
                 if uzivatele and sloupec not in uzivatele:
-                    db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} TEXT"))
+                    db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
             sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(images)"))}
             if sloupce and 'velikost' not in sloupce:
@@ -638,19 +648,20 @@ def _kvota_prekrocena(chyba):
     db.session.rollback()
     _uklid_zapsane()
 
-    zbyva = max(0, MAX_USER_STORAGE_BYTES - chyba.zabrano)
+    limit = limit_uzivatele(chyba.kdo if chyba.kdo is not None else current_user)
+    zbyva = max(0, limit - chyba.zabrano)
     if chyba.kdo is not None:
         zprava = (f"Změna se nevejde do limitu místa uživatele {chyba.kdo.email}: volných "
                   f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Společný zpěvník "
                   f"se započítává každému, kdo ho má.")
     else:
-        zprava = (f"Změna by překročila limit místa {mb(MAX_USER_STORAGE_BYTES)}: volných "
+        zprava = (f"Změna by překročila limit místa {mb(limit)}: volných "
                   f"je {mb(zbyva)}, změna potřebuje {mb(chyba.pridavek)}. Místo uvolní "
                   f"smazání nepotřebného zpěvníku.")
     return jsonify({
         'ok': False,
         'error': zprava,
-        'kvota_bytes': MAX_USER_STORAGE_BYTES,
+        'kvota_bytes': limit,
         'zabrano_bytes': chyba.zabrano,
     }), 413
 
@@ -1123,6 +1134,24 @@ def _zacatek_pozadavku():
     g.zacatek_pozadavku = time.time()
 
 
+ZABLOKOVANY_UCET = 'Účet je zablokovaný. Pro odblokování kontaktujte správce.'
+
+
+@app.before_request
+def _zablokovany_ucet():
+    """Zablokovaný účet nesmí nic, ani v relaci přihlášené před zablokováním: odhlásí
+    se a dostane hlášku. Statické soubory projdou, ať se přihlašovací stránka vykreslí."""
+    if request.endpoint == 'static' or not current_user.is_authenticated:
+        return None
+    if not getattr(current_user, 'zablokovan', False):
+        return None
+    logout_user()
+    if request.path.startswith('/api/') or request.is_json:
+        return jsonify({'ok': False, 'error': ZABLOKOVANY_UCET}), 403
+    flash(ZABLOKOVANY_UCET, 'error')
+    return redirect(url_for('login'))
+
+
 @app.after_request
 def _zapis_pomaly_pozadavek(odpoved):
     """Pomalý požadavek do logu s cestou a účtem - ať je vidět, co server brzdí, dřív
@@ -1166,6 +1195,12 @@ def login():
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
             zapomen_pokusy(email)
+            if user.zablokovan:
+                # Až po ověření hesla - jinak by šlo zjistit, které účty jsou zablokované.
+                flash(ZABLOKOVANY_UCET, 'error')
+                return render_template('auth.html')
+            user.posledni_prihlaseni = datetime.now()
+            db.session.commit()
             login_user(user)
             return redirect(url_for('dashboard'))
         else:
@@ -1198,8 +1233,9 @@ def register():
             return redirect(url_for('register'))
         else:
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
+            ted = datetime.now()
             new_user = User(email=email, password=hashed_password, role='user',
-                            email_verified=False)
+                            email_verified=False, vytvoreno=ted, posledni_prihlaseni=ted)
             db.session.add(new_user)
             db.session.commit()
             # Nepouštíme ho pryč a nenutíme ho nejdřív ověřit. Kdyby si adresu překlepl nebo
@@ -1438,10 +1474,11 @@ def misto_uzivatele(user):
     if not getattr(user, 'is_authenticated', False) or getattr(user, 'role', None) in ('guest', 'admin'):
         return None
     zabrano = zabrane_misto(user.id)
-    podil = zabrano / MAX_USER_STORAGE_BYTES if MAX_USER_STORAGE_BYTES else 0
+    limit = limit_uzivatele(user)
+    podil = zabrano / limit if limit else 0
     return {
         'zabrano': zabrano,
-        'kvota': MAX_USER_STORAGE_BYTES,
+        'kvota': limit,
         'procent': min(100, round(podil * 100)),
         # Dva prahy: nad polovinou stojí za to o tom vědět, nad 85 % už je potřeba
         # něco udělat, než nahrávání spadne na strop.
@@ -1470,7 +1507,7 @@ def misto_zpevniku(book):
         celkem = g._misto_uctu
     except AttributeError:
         celkem = g._misto_uctu = zabrane_misto(current_user.id)
-    limit = MAX_USER_STORAGE_BYTES or 1
+    limit = limit_uzivatele(current_user) or 1
 
     def procenta(b):
         p = b * 100 / limit
@@ -1485,7 +1522,7 @@ def misto_zpevniku(book):
         'celkem_bajtu': max(celkem, bajtu),
         'celkem_sirka': max(1.5, min(100.0, procent_celkem)),
         'celkem_text': text_celkem,
-        'limit': MAX_USER_STORAGE_BYTES,
+        'limit': limit,
     }
 
 
@@ -2633,6 +2670,128 @@ def sprava_zaznam():
     return render_template('sprava_zaznam.html', zaznam=zaznam, karta='zaznam')
 
 
+ROLE_UZIVATELU = {'user': 'Uživatel', 'premium': 'Prémiový', 'admin': 'Správce'}
+
+
+def prehled_uzivatelu_pro_spravu():
+    """Všechny účty kromě hosta: profil, role, zpěvníky, místo, přátelé a data."""
+    uzivatele = User.query.filter(User.role != 'guest').all()
+    vlastni, sdilene, pratel = {}, {}, {}
+    for sb in Songbook.query.filter(Songbook.is_public != 1):
+        vlastni.setdefault(sb.owner_id, []).append({'id': sb.id, 'nazev': sb.title})
+    nazvy = {sb_id: nazev for sb_id, nazev in db.session.query(Songbook.id, Songbook.title)}
+    for a in UserSongbookAccess.query:
+        sdilene.setdefault(a.user_id, []).append({'id': a.songbook_id, 'nazev': nazvy.get(a.songbook_id, '')})
+    for p in Pratelstvi.query.filter_by(prijato=True):
+        pratel[p.od_id] = pratel.get(p.od_id, 0) + 1
+        pratel[p.komu_id] = pratel.get(p.komu_id, 0) + 1
+
+    def datum(d):
+        return d.strftime('%-d. %-m. %Y') if d else ''
+
+    radky = []
+    for u in uzivatele:
+        zabrano = zabrane_misto(u.id)
+        limit = limit_uzivatele(u)
+        radky.append(dict(
+            uzivatel_info(u), role=u.role, role_text=ROLE_UZIVATELU.get(u.role, u.role),
+            overen=bool(u.email_verified), zablokovan=bool(u.zablokovan),
+            vlastni=sorted(vlastni.get(u.id, []), key=lambda z: z['nazev'].lower()),
+            sdilene=sorted(sdilene.get(u.id, []), key=lambda z: z['nazev'].lower()),
+            pratel=pratel.get(u.id, 0),
+            zabrano=zabrano, zabrano_text=mb(zabrano), limit=limit, limit_text=mb(limit),
+            limit_mb=round(u.limit_mista / 1024 / 1024) if u.limit_mista else None,
+            procent=min(100, round(zabrano * 100 / limit)) if limit else 0,
+            vytvoreno=datum(u.vytvoreno), vytvoreno_ts=int(u.vytvoreno.timestamp()) if u.vytvoreno else 0,
+            prihlaseni=datum(u.posledni_prihlaseni),
+            prihlaseni_ts=int(u.posledni_prihlaseni.timestamp()) if u.posledni_prihlaseni else 0,
+            ja=(u.id == current_user.id),
+        ))
+    radky.sort(key=lambda r: r['jmeno'].lower())
+    return radky
+
+
+@app.route('/sprava/uzivatele')
+@login_required
+@jen_admin
+def sprava_uzivatelu():
+    return render_template('sprava_uzivatele.html', uzivatele=prehled_uzivatelu_pro_spravu(),
+                           role=ROLE_UZIVATELU, vychozi_limit_mb=round(MAX_USER_STORAGE_MB),
+                           karta='uzivatele')
+
+
+@app.route('/api/sprava/uzivatel/<int:user_id>', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_uprav_uzivatele(user_id):
+    """Jedna úprava účtu adminem: `akce` a případně `hodnota`. Každá se zapíše."""
+    u = db.session.get(User, user_id)
+    if u is None or is_guest(u):
+        return jsonify({'ok': False, 'error': 'Uživatel nenalezen.'}), 404
+    data = request.get_json(silent=True) or {}
+    akce, hodnota = data.get('akce'), data.get('hodnota')
+
+    if akce == 'role':
+        if hodnota not in ROLE_UZIVATELU:
+            return jsonify({'ok': False, 'error': 'Neznámá role.'}), 400
+        if u.id == current_user.id:
+            return jsonify({'ok': False, 'error': 'Vlastní roli změnit nejde - účet by mohl '
+                            'přijít o správu.'}), 400
+        if u.role == hodnota:
+            return jsonify({'ok': True})
+        zapis_zasah('změnil roli', komu=u, podrobnosti=f"{ROLE_UZIVATELU.get(u.role, u.role)} → "
+                                                       f"{ROLE_UZIVATELU[hodnota]}")
+        u.role = hodnota
+    elif akce == 'overit':
+        if u.email_verified:
+            return jsonify({'ok': True})
+        zapis_zasah('ověřil e-mail', komu=u)
+        u.email_verified = True
+    elif akce == 'prezdivka':
+        nova = (hodnota or '').strip()[:MAX_PREZDIVKA] or None
+        if nova == u.prezdivka:
+            return jsonify({'ok': True})
+        zapis_zasah('změnil přezdívku', komu=u, podrobnosti=f"„{u.prezdivka or ''}“ → „{nova or ''}“")
+        u.prezdivka = nova
+    elif akce == 'fotka':
+        if not u.fotka:
+            return jsonify({'ok': True})
+        zapis_zasah('smazal fotku', komu=u)
+        stara, u.fotka = u.fotka, None
+        db.session.commit()
+        (PROFILY_DIR / stara).unlink(missing_ok=True)
+        return jsonify({'ok': True})
+    elif akce == 'limit':
+        if hodnota in (None, ''):
+            novy = None
+        else:
+            try:
+                novy = int(float(hodnota) * 1024 * 1024)
+            except (TypeError, ValueError):
+                novy = 0
+            if novy <= 0:
+                return jsonify({'ok': False, 'error': 'Limit musí být kladné číslo v MB.'}), 400
+            if novy == MAX_USER_STORAGE_BYTES:
+                novy = None
+        if novy == u.limit_mista:
+            return jsonify({'ok': True})
+        zapis_zasah('změnil limit místa', komu=u,
+                    podrobnosti=f"{mb(limit_uzivatele(u))} → {mb(novy or MAX_USER_STORAGE_BYTES)}"
+                                + ('' if novy else ' (výchozí)'))
+        u.limit_mista = novy
+    elif akce in ('zablokovat', 'odblokovat'):
+        if u.role == 'admin':
+            return jsonify({'ok': False, 'error': 'Správce zablokovat nejde.'}), 400
+        if u.zablokovan == (akce == 'zablokovat'):
+            return jsonify({'ok': True})
+        zapis_zasah('zablokoval účet' if akce == 'zablokovat' else 'odblokoval účet', komu=u)
+        u.zablokovan = akce == 'zablokovat'
+    else:
+        return jsonify({'ok': False, 'error': 'Neznámá akce.'}), 400
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
 def _zpevnik_pro_spravu(songbook_id):
     sb = db.session.get(Songbook, songbook_id)
     return sb if sb is not None and not sb.is_public else None
@@ -2935,13 +3094,14 @@ def pozvanky_pro(user):
     if not getattr(user, 'is_authenticated', False) or is_guest(user):
         return []
     vysledek = []
+    limit = limit_uzivatele(user)
     for p in Pozvanka.query.filter_by(komu_id=user.id).order_by(Pozvanka.vytvoreno):
         cena = cena_zpevniku([p.songbook_id])
         vysledek.append({
             'id': p.id, 'druh': p.druh, 'nazev': p.songbook.title,
             'od': jmeno_uzivatele(p.od),
-            'procent': ('méně než 1 %' if cena < MAX_USER_STORAGE_BYTES / 100
-                        else f"{cena * 100 / MAX_USER_STORAGE_BYTES:.0f} %"),
+            'procent': ('méně než 1 %' if cena < limit / 100
+                        else f"{cena * 100 / limit:.0f} %"),
         })
     return vysledek
 
@@ -3026,10 +3186,10 @@ def prehled_pritele(ja, pritel):
         pozvanky.append({'nazev': p.songbook.title if p.songbook else '', 'druh': p.druh,
                          'odeslana': p.od_id == ja.id})
     zabrano = zabrane_misto(pritel.id)
+    limit = limit_uzivatele(pritel)
     return {'spolecne': spolecne, 'pozvanky': pozvanky,
-            'misto': {'zabrano': zabrano, 'volne': max(0, MAX_USER_STORAGE_BYTES - zabrano),
-                      'procent': min(100, round(zabrano * 100 / MAX_USER_STORAGE_BYTES))
-                      if MAX_USER_STORAGE_BYTES else 0}}
+            'misto': {'zabrano': zabrano, 'volne': max(0, limit - zabrano),
+                      'procent': min(100, round(zabrano * 100 / limit)) if limit else 0}}
 
 
 @app.route('/pratele')

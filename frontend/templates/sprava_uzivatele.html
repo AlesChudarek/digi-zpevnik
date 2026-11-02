@@ -1,0 +1,217 @@
+{% extends "dashboard_base.html" %}
+{% from "_sprava_makra.html" import kolecko %}
+{% block title %}Uživatelé{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_bust('css/sprava.css') }}">
+<div class="sprava">
+  <h1>Uživatelé</h1>
+  {% include "_sprava_karty.html" %}
+
+  <div class="sprava-panel">
+    <div class="sprava-filtry">
+      <input type="search" id="su-hledat" placeholder="Jméno nebo e-mail" aria-label="Hledat podle jména nebo e-mailu">
+      <input type="search" id="su-zpevnik" placeholder="Název zpěvníku" aria-label="Hledat podle názvu zpěvníku">
+      <select id="su-role" aria-label="Role">
+        <option value="">Všechny role</option>
+        {% for klic, nazev in role.items() %}<option value="{{ klic }}">{{ nazev }}</option>{% endfor %}
+      </select>
+      <label><input type="checkbox" id="su-zablokovani"> Jen zablokovaní</label>
+      <span class="sprava-pocet" id="su-pocet"></span>
+    </div>
+
+    <div class="sz-mrizka su sz-hlavicka" role="group" aria-label="Řadit podle">
+      <button type="button" data-razeni="jmeno">Uživatel</button>
+      <button type="button" data-razeni="role">Role</button>
+      <button type="button" data-razeni="zpevniku" class="cislo">Zpěvníky</button>
+      <button type="button" data-razeni="misto">Místo</button>
+      <button type="button" data-razeni="pratel" class="cislo">Přátelé</button>
+      <button type="button" data-razeni="vytvoreno" class="cislo">Registrace</button>
+      <button type="button" data-razeni="prihlaseni" class="cislo">Přihlášení</button>
+    </div>
+
+    <div id="su-seznam">
+      {% for u in uzivatele %}
+      <div class="sz-radek" id="u-{{ u.id }}" data-id="{{ u.id }}" data-jmeno="{{ u.jmeno }}" data-email="{{ u.email }}"
+           data-hledat="{{ u.jmeno }} {{ u.email }}"
+           data-zpevniky="{{ ((u.vlastni + u.sdilene)|map(attribute='nazev')|list)|join(' | ') }}"
+           data-role="{{ u.role }}" data-zablokovan="{{ '1' if u.zablokovan else '0' }}"
+           data-zpevniku="{{ u.vlastni|length + u.sdilene|length }}" data-misto="{{ u.zabrano }}"
+           data-pratel="{{ u.pratel }}" data-vytvoreno="{{ u.vytvoreno_ts }}" data-prihlaseni="{{ u.prihlaseni_ts }}">
+        <div class="sz-mrizka su sz-souhrn" role="button" tabindex="0" aria-expanded="false">
+          <div class="sz-kdo">{{ kolecko(u, 32) }}<span><strong>{{ u.jmeno }}</strong>{% if u.jmeno != u.email %}<br><span class="sz-ztlumene">{{ u.email }}</span>{% endif %}
+            {% if u.zablokovan %}<span class="sz-stitek su-zablokovan">zablokovaný</span>{% endif %}
+            {% if not u.overen %}<span class="sz-stitek">neověřený</span>{% endif %}</span></div>
+          <div class="sz-udaj"><span class="sz-popisek">Role:</span>{{ u.role_text }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Zpěvníky (vlastní / sdílené):</span>{{ u.vlastni|length }} / {{ u.sdilene|length }}</div>
+          <div class="sz-udaj su-misto"><span class="sz-popisek">Místo:</span>
+            <span class="su-pruh" title="{{ u.procent }} %"><span style="width: {{ u.procent }}%"></span></span>
+            <span>{{ u.zabrano_text }} / {{ u.limit_text }}</span></div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Přátelé:</span>{{ u.pratel }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Registrace:</span>{{ u.vytvoreno or '–' }}</div>
+          <div class="sz-udaj cislo"><span class="sz-popisek">Přihlášení:</span>{{ u.prihlaseni or '–' }}</div>
+        </div>
+        <div class="sz-detail" hidden>
+          <h3>Vlastní zpěvníky</h3>
+          {% if u.vlastni %}
+            <p class="su-zpevniky">{% for z in u.vlastni %}<a href="{{ url_for('sprava_zpevniku') }}#z-{{ z.id }}">{{ z.nazev }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+          {% else %}<p class="sz-ztlumene">Žádné.</p>{% endif %}
+          {% if u.sdilene %}
+            <h3>Společné úpravy cizích zpěvníků</h3>
+            <p class="su-zpevniky">{% for z in u.sdilene %}<a href="{{ url_for('sprava_zpevniku') }}#z-{{ z.id }}">{{ z.nazev }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+          {% endif %}
+
+          <h3>Úpravy účtu</h3>
+          <div class="su-pole">
+            <label for="su-role-{{ u.id }}">Role</label>
+            <select id="su-role-{{ u.id }}" data-pole="role" {% if u.ja %}disabled title="Vlastní roli změnit nejde"{% endif %}>
+              {% for klic, nazev in role.items() %}<option value="{{ klic }}" {% if klic == u.role %}selected{% endif %}>{{ nazev }}</option>{% endfor %}
+            </select>
+            <button type="button" class="btn male" data-akce="role" {% if u.ja %}disabled{% endif %}>Uložit</button>
+          </div>
+          <div class="su-pole">
+            <label for="su-prezdivka-{{ u.id }}">Přezdívka</label>
+            <input type="text" id="su-prezdivka-{{ u.id }}" data-pole="prezdivka" maxlength="40" value="{{ u.prezdivka or '' }}" placeholder="bez přezdívky">
+            <button type="button" class="btn male" data-akce="prezdivka">Uložit</button>
+          </div>
+          <div class="su-pole">
+            <label for="su-limit-{{ u.id }}">Limit místa (MB)</label>
+            <input type="number" id="su-limit-{{ u.id }}" data-pole="limit" min="1" step="1" value="{{ u.limit_mb or '' }}" placeholder="výchozí {{ vychozi_limit_mb }}">
+            <button type="button" class="btn male" data-akce="limit">Uložit</button>
+          </div>
+
+          <div class="sz-akce">
+            <a class="btn" href="{{ url_for('sprava_zpevniku', hledat=u.email) }}">Zpěvníky ve správě</a>
+            {% if not u.overen %}<button type="button" class="btn" data-akce="overit">Ověřit e-mail</button>{% endif %}
+            {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
+            {% if u.role != 'admin' %}
+              {% if u.zablokovan %}
+                <button type="button" class="btn" data-akce="odblokovat">Odblokovat</button>
+              {% else %}
+                <button type="button" class="btn nebezpecne" data-akce="zablokovat">Zablokovat</button>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sprava-prazdne" id="su-prazdne" hidden>Filtrům neodpovídá žádný uživatel.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const radky = Array.from(document.querySelectorAll('.sz-radek'));
+  const seznam = document.getElementById('su-seznam');
+  const hledat = document.getElementById('su-hledat');
+  const zpevnik = document.getElementById('su-zpevnik');
+  const role = document.getElementById('su-role');
+  const jenZablokovani = document.getElementById('su-zablokovani');
+
+  const bezDiakritiky = s => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+  function filtruj() {
+    const q = bezDiakritiky(hledat.value.trim());
+    const z = bezDiakritiky(zpevnik.value.trim());
+    let videt = 0;
+    radky.forEach(r => {
+      const ok = (!q || bezDiakritiky(r.dataset.hledat).includes(q))
+        && (!z || bezDiakritiky(r.dataset.zpevniky).includes(z))
+        && (!role.value || r.dataset.role === role.value)
+        && (!jenZablokovani.checked || r.dataset.zablokovan === '1');
+      r.hidden = !ok;
+      if (ok) videt++;
+    });
+    document.getElementById('su-pocet').textContent = `Zobrazeno ${videt} z ${radky.length}`;
+    document.getElementById('su-prazdne').hidden = videt > 0;
+  }
+  [hledat, zpevnik, role, jenZablokovani].forEach(el => ['input', 'change'].forEach(u => el.addEventListener(u, filtruj)));
+
+  // Řazení: klik na sloupec, druhý klik obrátí směr. Čísla a data od největšího.
+  let razeni = { klic: 'jmeno', smer: 1 };
+  const CISELNE = ['zpevniku', 'misto', 'pratel', 'vytvoreno', 'prihlaseni'];
+  function serad() {
+    const { klic, smer } = razeni;
+    const hodnota = r => CISELNE.includes(klic) ? +r.dataset[klic] : bezDiakritiky(r.dataset[klic]);
+    radky.sort((a, b) => {
+      const x = hodnota(a), y = hodnota(b);
+      const v = typeof x === 'number' ? x - y : x.localeCompare(y, 'cs');
+      return v * smer || bezDiakritiky(a.dataset.jmeno).localeCompare(bezDiakritiky(b.dataset.jmeno), 'cs');
+    }).forEach(r => seznam.appendChild(r));
+    document.querySelectorAll('[data-razeni]').forEach(b => {
+      b.classList.toggle('aktivni', b.dataset.razeni === klic);
+      b.setAttribute('aria-pressed', b.dataset.razeni === klic ? 'true' : 'false');
+    });
+  }
+  document.querySelectorAll('[data-razeni]').forEach(b => b.addEventListener('click', () => {
+    const klic = b.dataset.razeni;
+    razeni = razeni.klic === klic ? { klic, smer: -razeni.smer }
+                                  : { klic, smer: CISELNE.includes(klic) ? -1 : 1 };
+    serad();
+  }));
+
+  function prepni(radek, otevrit) {
+    otevrit = otevrit ?? !radek.classList.contains('otevreny');
+    radek.classList.toggle('otevreny', otevrit);
+    radek.querySelector('.sz-detail').hidden = !otevrit;
+    radek.querySelector('.sz-souhrn').setAttribute('aria-expanded', otevrit ? 'true' : 'false');
+  }
+  radky.forEach(r => {
+    const souhrn = r.querySelector('.sz-souhrn');
+    souhrn.addEventListener('click', () => prepni(r));
+    souhrn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); prepni(r); }
+    });
+  });
+
+  async function uprav(id, akce, hodnota) {
+    try {
+      const res = await fetch(`/api/sprava/uzivatel/${id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ akce, hodnota }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) { oznam(data.error || `Chyba serveru ${res.status}.`, { nadpis: 'Úprava se nepovedla' }); return; }
+      history.replaceState(null, '', '#u-' + id);
+      location.reload();
+    } catch (_) {
+      oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+    }
+  }
+
+  const POTVRZENI = {
+    fotka: j => [`Smazat profilovou fotku uživatele ${j}?`, 'Smazat', true],
+    overit: j => [`Označit e-mail uživatele ${j} jako ověřený, bez ověřovacího odkazu?`, 'Ověřit', false],
+    zablokovat: j => [`Zablokovat účet ${j}? Okamžitě se odhlásí a nepřihlásí se, dokud ho neodblokujete. Jeho zpěvníky zůstávají.`, 'Zablokovat', true],
+    odblokovat: j => [`Odblokovat účet ${j}?`, 'Odblokovat', false],
+  };
+
+  seznam.addEventListener('click', async e => {
+    const tlacitko = e.target.closest('button[data-akce]');
+    if (!tlacitko) return;
+    const radek = tlacitko.closest('.sz-radek');
+    const akce = tlacitko.dataset.akce;
+    const pole = radek.querySelector(`[data-pole="${akce}"]`);
+    if (POTVRZENI[akce]) {
+      const [text, ok, nebezpecne] = POTVRZENI[akce](radek.dataset.jmeno);
+      if (!(await showConfirm(text, ok, { nebezpecne }))) return;
+    }
+    uprav(radek.dataset.id, akce, pole ? pole.value : null);
+  });
+  // Enter v poli uloží jako tlačítko vedle něj
+  seznam.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || !e.target.matches('input[data-pole]')) return;
+    e.preventDefault();
+    e.target.parentElement.querySelector('button[data-akce]').click();
+  });
+
+  serad();
+  filtruj();
+  const zKotvy = location.hash && document.getElementById(location.hash.slice(1));
+  if (zKotvy && zKotvy.classList.contains('sz-radek')) {
+    prepni(zKotvy, true);
+    zKotvy.scrollIntoView({ block: 'center' });
+  }
+})();
+</script>
+{% endblock %}

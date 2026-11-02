@@ -34,6 +34,8 @@ if subprocess.run(["cp", "-cR", str(A.IMAGES_DIR), str(OBRAZKY)],
                   capture_output=True).returncode != 0:
     shutil.copytree(A.IMAGES_DIR, OBRAZKY)
 A.IMAGES_DIR = OBRAZKY
+A.PROFILY_DIR = TMP / "profily"     # mazání fotky nesmí sahat na skutečné profilovky
+A.PROFILY_DIR.mkdir()
 A.schedule_export_warm = lambda *a, **k: None
 A.dopocitej_nahledy = lambda *a, **k: None   # podproces by běžel nad skutečnými daty
 A.app.config["TESTING"] = True
@@ -146,9 +148,9 @@ def vsechny_zpevniky():
     zkontroluj(verejny not in radky, "veřejné zpěvníky ve správě nejsou")
     kod, _ = post(admin, f"/api/sprava/zpevnik/{verejny}/smazat")
     zkontroluj(kod == 404, "veřejný zpěvník správa smazat nedovolí", kod)
-    zkontroluj("Všechny zpěvníky" in admin.get("/dashboard").get_data(as_text=True),
-               "admin má v liště odkaz Všechny zpěvníky")
-    zkontroluj("Všechny zpěvníky" not in klient(uzivatel).get("/dashboard").get_data(as_text=True),
+    zkontroluj('href="/sprava/zpevniky">Správa</a>' in admin.get("/dashboard").get_data(as_text=True),
+               "admin má v liště odkaz Správa")
+    zkontroluj("/sprava/" not in klient(uzivatel).get("/dashboard").get_data(as_text=True),
                "běžný uživatel ho nemá")
 
 
@@ -238,6 +240,119 @@ def akce_se_zpevniky():
     zkontroluj(klient(clen).get("/sprava/zaznam").status_code == 404, "běžný uživatel záznam nevidí")
 
 
+def uzivatele():
+    print("\n── Uživatelé: přehled ──")
+    from werkzeug.security import generate_password_hash
+    aid, _, _ = admin_a_cizi()
+    admin = klient(aid)
+    with A.app.app_context():
+        u = A.User.query.filter_by(email="user@test.com").first()
+        uid = u.id
+        u.password = generate_password_hash("heslo-sprava", method="pbkdf2:sha256")
+        u.fotka = "test-fotka.webp"
+        u.role, u.email_verified, u.zablokovan, u.limit_mista = "user", False, False, None
+        (A.PROFILY_DIR / u.fotka).write_bytes(b"x")
+        host = A.User.query.filter_by(role="guest").first()
+        A.db.session.commit()
+        host_id = host.id if host else None
+        zabrano = A.zabrane_misto(uid)
+    zkontroluj(klient(uid).get("/sprava/uzivatele").status_code == 404,
+               "běžný uživatel stránku Uživatelé nenajde")
+    html = admin.get("/sprava/uzivatele").get_data(as_text=True)
+    radky = set(re.findall(r'class="sz-radek" id="u-(\d+)"', html))
+    zkontroluj(str(uid) in radky and str(aid) in radky, "seznam má uživatele i admina", len(radky))
+    zkontroluj(host_id is None or str(host_id) not in radky, "host v seznamu není")
+    zkontroluj('href="/sprava/uzivatele"' in admin.get("/sprava/zpevniky").get_data(as_text=True),
+               "záložka Uživatelé ve správě")
+
+    def uprav(akce, hodnota=None, kdo=uid):
+        return post(admin, f"/api/sprava/uzivatel/{kdo}", {"akce": akce, "hodnota": hodnota})
+
+    def ja():
+        with A.app.app_context():
+            return A.db.session.get(A.User, uid)
+
+    print("\n── Uživatelé: úpravy ──")
+    zasahu = pocet_zasahu()
+    kod, _ = uprav("role", "premium")
+    zkontroluj(kod == 200 and ja().role == "premium", "změna role", kod)
+    kod, _ = uprav("role", "bubak")
+    zkontroluj(kod == 400, "neznámá role neprojde", kod)
+    kod, _ = uprav("role", "user", kdo=aid)
+    with A.app.app_context():
+        zkontroluj(kod == 400 and A.db.session.get(A.User, aid).role == "admin",
+                   "vlastní roli admin nezmění", kod)
+    uprav("role", "user")
+    kod, _ = uprav("overit")
+    zkontroluj(kod == 200 and ja().email_verified, "ověření e-mailu", kod)
+    kod, _ = uprav("prezdivka", "  Nová přezdívka  ")
+    zkontroluj(kod == 200 and ja().prezdivka == "Nová přezdívka", "přezdívka", ja().prezdivka)
+    kod, _ = uprav("fotka")
+    zkontroluj(kod == 200 and ja().fotka is None and not (A.PROFILY_DIR / "test-fotka.webp").exists(),
+               "smazání fotky i se souborem", kod)
+
+    print("\n── Uživatelé: limit místa ──")
+    kod, _ = uprav("limit", "abc")
+    zkontroluj(kod == 400, "nesmyslný limit neprojde", kod)
+    mensi = max(1, zabrano // (1024 * 1024) - 1)
+    kod, _ = uprav("limit", str(mensi))
+    zkontroluj(kod == 200 and ja().limit_mista == mensi * 1024 * 1024, "vlastní limit", ja().limit_mista)
+    with A.app.app_context():
+        zkontroluj(A.limit_uzivatele(uid) == mensi * 1024 * 1024, "limit_uzivatele ho vrací")
+    with A.app.app_context():
+        cizi = A.Songbook.query.filter(A.Songbook.is_public == 0, A.Songbook.owner_id != uid).first().id
+    kod, telo = post(admin, f"/api/sprava/zpevnik/{cizi}/prevest", {"komu": uid})
+    with A.app.app_context():
+        zkontroluj(kod == 413 and A.db.session.get(A.Songbook, cizi).owner_id != uid,
+                   "převod přes jeho limit neprojde", (kod, telo.get("error", "")[:80]))
+    html = klient(uid).get("/my-songbooks").get_data(as_text=True)
+    zkontroluj(A.mb(mensi * 1024 * 1024) in html, "uživatel vidí svůj limit", A.mb(mensi * 1024 * 1024))
+    kod, _ = uprav("limit", "")
+    zkontroluj(kod == 200 and ja().limit_mista is None, "prázdný limit = výchozí")
+
+    print("\n── Uživatelé: blokování ──")
+    prihlaseny = klient(uid)
+    zkontroluj(prihlaseny.get("/my-songbooks").status_code == 200, "před zablokováním funguje")
+    kod, _ = uprav("zablokovat")
+    zkontroluj(kod == 200 and ja().zablokovan, "zablokování", kod)
+    r = prihlaseny.get("/my-songbooks")
+    zkontroluj(r.status_code == 302 and "/login" in r.headers.get("Location", ""),
+               "už přihlášená relace skončí na přihlášení", r.status_code)
+    zkontroluj(prihlaseny.get("/my-songbooks").status_code == 302, "a zůstane odhlášená")
+    kod, telo = post(klient(uid), "/api/zpevnik/x/kopie")
+    zkontroluj(kod == 403 and "zablokovaný" in telo.get("error", ""), "API odmítne", (kod, telo))
+    novy = A.app.test_client()
+    r = novy.post("/login", data={"email": "user@test.com", "password": "heslo-sprava"})
+    zkontroluj(r.status_code == 200 and "zablokovaný" in r.get_data(as_text=True),
+               "přihlásit se nejde, se správným heslem hláška")
+    zkontroluj(novy.get("/my-songbooks").status_code == 302, "a dovnitř se nedostane")
+    r = A.app.test_client().post("/login", data={"email": "user@test.com", "password": "spatne"})
+    zkontroluj("zablokovaný" not in r.get_data(as_text=True), "se špatným heslem se o bloku nedozví")
+    kod, _ = uprav("zablokovat", kdo=aid)
+    zkontroluj(kod == 400, "správce zablokovat nejde", kod)
+    kod, _ = uprav("odblokovat")
+    zkontroluj(kod == 200 and not ja().zablokovan, "odblokování", kod)
+
+    print("\n── Uživatelé: registrace a přihlášení ──")
+    pred = A.datetime.now().replace(microsecond=0)
+    r = A.app.test_client().post("/login", data={"email": "user@test.com", "password": "heslo-sprava"})
+    zkontroluj(r.status_code == 302 and ja().posledni_prihlaseni and ja().posledni_prihlaseni >= pred,
+               "přihlášení zapíše čas", ja().posledni_prihlaseni)
+    A.posli_overovaci_email = lambda u: True
+    A.app.test_client().post("/register", data={"email": "novy-sprava@test.cz",
+                                                "password": "Heslo-sprava-123", "password2": "Heslo-sprava-123"})
+    with A.app.app_context():
+        n = A.User.query.filter_by(email="novy-sprava@test.cz").first()
+        zkontroluj(n is not None and n.vytvoreno and n.vytvoreno >= pred, "registrace zapíše datum",
+                   n and n.vytvoreno)
+
+    with A.app.app_context():
+        akce = [z.akce for z in A.ZasahAdmina.query.order_by(A.ZasahAdmina.id)][zasahu:]
+    zkontroluj(akce == ["změnil roli", "změnil roli", "ověřil e-mail", "změnil přezdívku",
+                        "smazal fotku", "změnil limit místa", "změnil limit místa",
+                        "zablokoval účet", "odblokoval účet"], "úpravy jsou v záznamu", akce)
+
+
 def prohlizec():
     """Stránka v prohlížeči: filtry, rozbalení, okno převodu, telefon a lišta admina.
     Jen čte - server běží nad vlastní kopií databáze a na obrázky nesahá."""
@@ -263,22 +378,30 @@ def prohlizec():
             page.wait_for_load_state("networkidle")
 
             print("\n── prohlížeč: lišta admina ──")
+            # Pod ~1100 px se texty odkazů lámou na dva řádky i běžnému uživateli (starší
+            # stav). Hlídá se, že odkaz Správa nic navíc nerozbije: nic nepřeteče, odkazy
+            # nevjedou do účtu a žádný nemá víc než dva řádky.
             for sirka in range(821, 1281, 20):
                 page.set_viewport_size({"width": sirka, "height": 800})
                 stav = page.evaluate("""() => {
                     const odkazy = [...document.querySelectorAll('.nav-links a')]
                         .filter(a => getComputedStyle(a).display !== 'none');
                     const r = odkazy.map(a => a.getBoundingClientRect());
-                    return {radky: new Set(r.map(x => Math.round(x.top))).size,
-                            presah: document.documentElement.scrollWidth - innerWidth,
+                    return {presah: document.documentElement.scrollWidth - innerWidth,
                             vpravo: Math.max(...r.map(x => x.right)),
-                            ucet: document.querySelector('.navbar .right').getBoundingClientRect().left};
+                            ucet: document.querySelector('.navbar .right').getBoundingClientRect().left,
+                            radku: Math.max(...odkazy.map(a => {
+                                const g = document.createRange(); g.selectNodeContents(a);
+                                return new Set([...g.getClientRects()].map(x => Math.round(x.top))).size;
+                            }))};
                 }""")
-                if stav["radky"] > 1 or stav["presah"] > 0 or stav["vpravo"] > stav["ucet"]:
-                    zkontroluj(False, f"{sirka} px: odkazy lišty na jednom řádku a mimo účet", stav)
+                if stav["presah"] > 0 or stav["vpravo"] > stav["ucet"] or stav["radku"] > 2:
+                    zkontroluj(False, f"{sirka} px: lišta admina se vejde", stav)
                     break
+                if sirka == 821:
+                    zkontroluj(stav["radku"] == 2, "821 px: měření řádků funguje (dva, jako u uživatele)", stav["radku"])
             else:
-                zkontroluj(True, "821-1280 px: odkazy lišty admina se vejdou na jeden řádek")
+                zkontroluj(True, "821-1280 px: lišta admina s odkazem Správa se vejde")
 
             print("\n── prohlížeč: Všechny zpěvníky ──")
             page.set_viewport_size({"width": 1280, "height": 800})
@@ -344,6 +467,57 @@ def prohlizec():
                 }""")
                 zkontroluj(stav["presah"] <= 0 and not stav["ven"] and stav["hlavicka"] == "none",
                            f"{sirka} px: kartičky, nic nepřetéká", stav)
+            print("\n── prohlížeč: Uživatelé ──")
+            page.set_viewport_size({"width": 1280, "height": 800})
+            page.goto(base + "/sprava/uzivatele")
+            page.wait_for_load_state("networkidle")
+            vsech = page.locator(".sz-radek").count()
+            page.fill("#su-hledat", "user2")
+            zkontroluj(page.locator(".sz-radek:not([hidden])").count() == 1, "hledání podle e-mailu",
+                       page.locator(".sz-radek:not([hidden])").count())
+            page.fill("#su-hledat", "")
+            page.select_option("#su-role", "admin")
+            zkontroluj(page.locator(".sz-radek:not([hidden])").count() == 1, "filtr role Správce")
+            page.select_option("#su-role", "")
+            page.fill("#su-zpevnik", "zzz-nic-takoveho")
+            zkontroluj(page.locator(".sz-radek:not([hidden])").count() == 0
+                       and page.locator("#su-prazdne").is_visible(), "filtr zpěvníku a prázdný stav")
+            page.fill("#su-zpevnik", "")
+            zkontroluj(page.locator(".sz-radek:not([hidden])").count() == vsech, "bez filtrů všichni", vsech)
+            radek = page.locator('.sz-radek[data-email="user2@test.com"]')
+            radek.locator(".sz-souhrn").click()
+            radek.locator('[data-pole="prezdivka"]').fill("Přezdívka z prohlížeče")
+            radek.locator('[data-pole="prezdivka"]').press("Enter")
+            # Po uložení se stránka načte znovu; řádek má být otevřený už s novým jménem.
+            # (expect_navigation nestačí - za navigaci bere už replaceState kotvy.)
+            try:
+                page.wait_for_selector('.sz-radek.otevreny[data-jmeno="Přezdívka z prohlížeče"] .sz-detail',
+                                       state="visible", timeout=10000)
+                ulozeno = True
+            except Exception:
+                ulozeno = False
+            radek = page.locator('.sz-radek[data-email="user2@test.com"]')
+            zkontroluj(ulozeno, "Enter v přezdívce uloží, řádek zůstane otevřený",
+                       radek.get_attribute("data-jmeno"))
+            radek.locator('[data-akce="zablokovat"]').click()
+            zkontroluj(page.locator("#app-confirm-overlay").is_visible(), "zablokování se ptá")
+            page.keyboard.press("Escape")
+            zkontroluj(radek.get_attribute("data-zablokovan") == "0", "Esc nic nezablokuje")
+            for sirka in (320, 390):
+                page.set_viewport_size({"width": sirka, "height": 740})
+                page.goto(base + "/sprava/uzivatele#u-" + radek.get_attribute("data-id"))
+                page.wait_for_load_state("networkidle")
+                stav = page.evaluate("""() => {
+                    const p = document.querySelector('.sprava-panel').getBoundingClientRect();
+                    const ven = [...document.querySelectorAll('.sprava-panel *')].filter(e => {
+                        const r = e.getBoundingClientRect();
+                        return r.width && (r.right > p.right + 0.5 || r.left < p.left - 0.5);
+                    }).map(e => e.className || e.tagName);
+                    return {presah: document.documentElement.scrollWidth - innerWidth, ven: ven.slice(0, 5),
+                            otevreny: !!document.querySelector('.sz-radek.otevreny')};
+                }""")
+                zkontroluj(stav["presah"] <= 0 and not stav["ven"] and stav["otevreny"],
+                           f"{sirka} px: Uživatelé jako kartičky, nic nepřetéká", stav)
             zkontroluj(not chyby, "bez chyb v JavaScriptu", chyby[:3])
             browser.close()
     finally:
@@ -355,6 +529,7 @@ def main():
     hledani()
     vsechny_zpevniky()
     akce_se_zpevniky()
+    uzivatele()
     prohlizec()
     print()
     if selhani:
