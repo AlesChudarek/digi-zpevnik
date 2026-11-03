@@ -51,6 +51,9 @@
     z-index: 1;
   }
   .songbook-card:focus-within { z-index: 20; }
+  /* Obrázky v dlaždici nejdou vytáhnout jako obrázek - prohlížeč to jinak dovolí
+     a vypadá to, že se zpěvník dá přetáhnout za obálku. Přesouvá se za držadlo ≡. */
+  .songbook-card img { -webkit-user-drag: none; user-select: none; }
   /* Zamčený zpěvník (účet přes limit): šedá obálka se zámkem, neotevírá se. */
   .songbook-card.zamceny .cover-preview > img { filter: grayscale(1) opacity(0.45); }
   .songbook-card.zamceny .songbook-nazev { color: #777; cursor: default; }
@@ -419,7 +422,7 @@
             {# Náhled se při prvním zobrazení teprve vyrábí (nová kopie, nová obálka) -
                do té doby točící se kolečko, ať místo není prázdné. #}
             <img src="{{ url_nahledu(book) or ('/songbooks/' + book.img_path_cover_preview) }}"
-                 loading="lazy" alt="Náhled obalu"
+                 loading="lazy" alt="Náhled obalu" draggable="false"
                  onload="this.parentElement.classList.remove('nacita')"
                  onerror="this.parentElement.classList.remove('nacita'); this.parentElement.classList.add('chybi'); this.remove()">
           {% else %}
@@ -428,7 +431,7 @@
           {% set share_users = shared_users_map.get(book.id, []) if shared_users_map is defined else [] %}
           {% if share_users %}
             <span class="shared-indicator napoveda-kotva napoveda-tuk" tabindex="0">
-              <img src="{{ static_bust('img/icons/group.svg') }}" alt="Sdíleno s dalšími uživateli">
+              <img src="{{ static_bust('img/icons/group.svg') }}" alt="Sdíleno s dalšími uživateli" draggable="false">
               <div class="napoveda-obsah" hidden>
                 <strong>Společné úpravy:</strong>
                 <ul>
@@ -441,7 +444,7 @@
           {% endif %}
           {% if zamek is not none %}
             <div class="zamek-prekryv napoveda-tuk" data-napoveda="Zpěvník je zamčený: účet je přes limit místa. Zpěvník zabírá {{ mb(zamek) }}, volných je {{ mb(volne) }}. Odemkne se sám, až se účet do limitu vejde - po smazání nebo opuštění jiného zpěvníku{% if book.owner_id == current_user.id %}, nebo když z tohoto ubere strany (Upravit){% endif %}.">
-              <img src="{{ static_bust('img/icons/lock.svg') }}" alt="">
+              <img src="{{ static_bust('img/icons/lock.svg') }}" alt="" draggable="false">
               <span>Zamčeno</span>
             </div>
           {% endif %}

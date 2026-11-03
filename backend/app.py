@@ -1468,7 +1468,7 @@ def avatar(u, velikost=32):
     info = uzivatel_info(u)
     titulek = escape(info['jmeno'])
     if info['fotka']:
-        return Markup(f'<img class="avatar" src="{escape(info["fotka"])}" alt="" '
+        return Markup(f'<img class="avatar" src="{escape(info["fotka"])}" alt="" draggable="false" '
                       f'width="{velikost}" height="{velikost}" title="{titulek}" '
                       f'style="--avatar: {velikost}px">')
     return Markup(f'<span class="avatar avatar-inicialy" aria-hidden="true" title="{titulek}" '

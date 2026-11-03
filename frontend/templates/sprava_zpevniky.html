@@ -140,6 +140,9 @@
   function prepni(radek, otevrit) {
     const souhrn = radek.querySelector('.sz-souhrn');
     otevrit = otevrit ?? !radek.classList.contains('otevreny');
+    // Otevřený je vždycky nejvýš jeden řádek - jako po uložení, kdy zůstane otevřený
+    // jen ten upravovaný (Aleš 3. 11.: konzistentně).
+    if (otevrit) radky.forEach(r => { if (r !== radek && r.classList.contains('otevreny')) prepni(r, false); });
     radek.classList.toggle('otevreny', otevrit);
     radek.querySelector('.sz-detail').hidden = !otevrit;
     souhrn.setAttribute('aria-expanded', otevrit ? 'true' : 'false');

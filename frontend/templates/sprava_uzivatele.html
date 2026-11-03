@@ -81,26 +81,44 @@
             <button type="button" class="btn male" data-akce="limit">Uložit</button>
           </div>
 
-          <div class="sz-akce">
-            <a class="btn" href="{{ url_for('sprava_zpevniku', hledat=u.email) }}">Zpěvníky ve správě</a>
-            {% if u.role != 'admin' and not u.zablokovan %}<button type="button" class="btn" data-akce="prihlasit">Přihlásit se jako {{ u.jmeno }}</button>{% endif %}
-            {% if not u.overen %}<button type="button" class="btn" data-akce="overit">Ověřit e-mail</button>{% endif %}
-            {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
-            {% if not u.ja %}<button type="button" class="btn" data-akce="odhlasit">Odhlásit ze všech zařízení</button>{% endif %}
-            {% if u.role != 'admin' %}
-              {% if u.nemazat %}
-                <button type="button" class="btn" data-akce="mazat">Zrušit výjimku z mazání</button>
-              {% else %}
-                <button type="button" class="btn" data-akce="nemazat" title="Účet se nesmaže ani po roce bez aktivity - pro testovací účty">Nemazat při neaktivitě</button>
-              {% endif %}
+          {# Akce po řádcích se stejným popiskem jako pole výš - v jedné řadě se nevešly
+             a poslední tlačítko přeskakovalo na nový řádek (Aleš 3. 11.). #}
+          <div class="su-radek">
+            <span class="su-popis">Přejít</span>
+            <div class="su-tlacitka">
+              <a class="btn" href="{{ url_for('sprava_zpevniku', hledat=u.email) }}">Zpěvníky ve správě</a>
+              {% if u.role != 'admin' and not u.zablokovan %}<button type="button" class="btn" data-akce="prihlasit">Přihlásit se jako uživatel</button>{% endif %}
+            </div>
+          </div>
+          {% if not u.overen or u.fotka or not u.ja %}
+          <div class="su-radek">
+            <span class="su-popis">Účet</span>
+            <div class="su-tlacitka">
+              {% if not u.overen %}<button type="button" class="btn" data-akce="overit">Ověřit e-mail</button>{% endif %}
+              {% if u.fotka %}<button type="button" class="btn" data-akce="fotka">Smazat fotku</button>{% endif %}
+              {% if not u.ja %}<button type="button" class="btn" data-akce="odhlasit">Odhlásit ze všech zařízení</button>{% endif %}
+            </div>
+          </div>
+          {% endif %}
+          {% if u.role != 'admin' %}
+          <div class="su-radek">
+            <span class="su-popis">Neaktivita</span>
+            <label class="su-zaskrtnuti" title="Účet se nesmaže ani po roce bez aktivity - pro testovací účty">
+              <input type="checkbox" data-prepinac="nemazat" {% if u.nemazat %}checked{% endif %}> Nemazat při neaktivitě
+            </label>
+          </div>
+          <div class="su-radek">
+            <span class="su-popis">Zásah</span>
+            <div class="su-tlacitka">
               {% if u.zablokovan %}
                 <button type="button" class="btn" data-akce="odblokovat">Odblokovat</button>
               {% else %}
                 <button type="button" class="btn nebezpecne" data-akce="zablokovat">Zablokovat</button>
               {% endif %}
               <button type="button" class="btn nebezpecne" data-akce="smazat">Smazat účet</button>
-            {% endif %}
+            </div>
           </div>
+          {% endif %}
         </div>
       </div>
       {% endfor %}
@@ -162,6 +180,9 @@
 
   function prepni(radek, otevrit) {
     otevrit = otevrit ?? !radek.classList.contains('otevreny');
+    // Otevřený je vždycky nejvýš jeden řádek - jako po uložení, kdy zůstane otevřený
+    // jen ten upravovaný (Aleš 3. 11.: konzistentně).
+    if (otevrit) radky.forEach(r => { if (r !== radek && r.classList.contains('otevreny')) prepni(r, false); });
     radek.classList.toggle('otevreny', otevrit);
     radek.querySelector('.sz-detail').hidden = !otevrit;
     radek.querySelector('.sz-souhrn').setAttribute('aria-expanded', otevrit ? 'true' : 'false');
@@ -298,6 +319,10 @@
       if (!(await showConfirm(text, ok, { nebezpecne }))) return;
     }
     uprav(radek.dataset.id, akce, pole ? pole.value : null);
+  });
+  seznam.addEventListener('change', e => {
+    const prepinac = e.target.closest('input[data-prepinac="nemazat"]');
+    if (prepinac) uprav(prepinac.closest('.sz-radek').dataset.id, prepinac.checked ? 'nemazat' : 'mazat');
   });
   // Enter v poli uloží jako tlačítko vedle něj
   seznam.addEventListener('keydown', e => {

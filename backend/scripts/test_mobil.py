@@ -299,6 +299,8 @@ def main():
                        "panel účtu zůstává úzký a ukotvený u tlačítka", str(siroky))
             zkontroluj(page.evaluate(TREFA, ".ucet-odhlasit") == "ano",
                        "a odhlásit se dá i tady")
+            tahnou = page.evaluate("() => [...document.querySelectorAll('.songbook-card .cover-preview img')].filter(i => i.draggable).length")
+            zkontroluj(tahnou == 0, "obrázky v dlaždici nejdou vytáhnout (přesouvá se jen za ≡)", f"{tahnou} tahatelných")
             ctx.close()
 
             print("\n── lišta: burger, jakmile se nevejde ──")

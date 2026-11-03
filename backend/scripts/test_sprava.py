@@ -909,9 +909,13 @@ def prohlizec():
             stran = page.eval_on_selector_all(".sz-radek", "r => r.map(x => +x.dataset.stran)")
             zkontroluj(stran == sorted(stran, reverse=True), "řazení podle počtu stran", stran[:6])
 
+            radek = page.locator(".sz-radek").nth(1)
+            radek.locator(".sz-souhrn").click()
             radek = page.locator(".sz-radek").first
             radek.locator(".sz-souhrn").click()
             zkontroluj(radek.locator(".sz-detail").is_visible(), "klik rozbalí detail s akcemi")
+            zkontroluj(page.locator(".sz-radek.otevreny").count() == 1,
+                       "otevřený je jen jeden zpěvník (Aleš 3. 11.)", page.locator(".sz-radek.otevreny").count())
             radek.locator('[data-akce="prevest"]').click()
             okno = page.locator(".oznameni-zaclona .okno")
             zkontroluj(okno.is_visible(), "Převést otevře okno")
@@ -970,8 +974,15 @@ def prohlizec():
                        and page.locator("#su-prazdne").is_visible(), "filtr zpěvníku a prázdný stav")
             page.fill("#su-zpevnik", "")
             zkontroluj(page.locator(".sz-radek:not([hidden])").count() == vsech, "bez filtrů všichni", vsech)
+            page.locator(".sz-radek").first.locator(".sz-souhrn").click()
             radek = page.locator('.sz-radek[data-email="user2@test.com"]')
             radek.locator(".sz-souhrn").click()
+            zkontroluj(page.locator(".sz-radek.otevreny").count() == 1, "otevřený je jen jeden uživatel")
+            rozlozeni = page.evaluate("""() => [...document.querySelectorAll('.sz-radek.otevreny .su-pole, .sz-radek.otevreny .su-radek')]
+                .map(x => [Math.round(x.querySelector('input:not([type=checkbox]), select, .btn, .su-zaskrtnuti').getBoundingClientRect().left),
+                           new Set([...x.querySelectorAll('.btn')].map(b => Math.round(b.getBoundingClientRect().top))).size])""")
+            zkontroluj(len({x for x, _ in rozlozeni}) == 1 and all(n <= 1 for _, n in rozlozeni),
+                       "1280 px: pole i tlačítka zarovnaná pod sebou, žádné přeskočení na nový řádek", rozlozeni)
             radek.locator('[data-pole="prezdivka"]').fill("Přezdívka z prohlížeče")
             radek.locator('[data-pole="prezdivka"]').press("Enter")
             # Po uložení se stránka načte znovu; řádek má být otevřený už s novým jménem.
