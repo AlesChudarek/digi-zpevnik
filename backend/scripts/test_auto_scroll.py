@@ -19,7 +19,7 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENV_PY = PROJECT_ROOT / ".venv" / "bin" / "python"
-PORT = 5597
+PORT = 5596
 PASSWORD = "autoscroll-test"
 BOOK = "/songbook/00006"
 

@@ -856,6 +856,7 @@ def prohlizec():
     with sqlite3.connect(str(PROJECT_ROOT / "backend" / "instance" / "zpevnik.db")) as zdroj, \
             sqlite3.connect(str(kopie)) as cil:
         zdroj.backup(cil)
+    T.PORT = 5587      # vlastní port, ať test_sprava může běžet souběžně s test_napovedy
     srv, base = T.start_server(kopie)
     try:
         with sync_playwright() as pw:

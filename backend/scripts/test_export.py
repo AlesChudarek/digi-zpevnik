@@ -28,7 +28,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENV_PY = PROJECT_ROOT / ".venv" / "bin" / "python"
 EXPORTS_DIR = PROJECT_ROOT / "data" / "exports"
-PORT = 5584
+PORT = 5586
 ADMIN = ("admin@test.com", "export-test")
 # Běžný účet: denní limit skládání se adminovi nepočítá, takže se na něm neověří.
 UZIVATEL = ("user@test.com", "export-test-user")
