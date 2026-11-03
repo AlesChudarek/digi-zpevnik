@@ -14,7 +14,7 @@ PY=.venv/bin/python
 LOGY="${LOGY:-$(mktemp -d)}"
 mkdir -p "$LOGY"
 SOUBEZNE=(test_sprava test_editor test_editor_ui kontrola_zpevniku test_mobil test_napovedy
-          test_kontrast test_pratele)
+          test_kontrast test_pratele test_navrh_strany)
 NAKONEC=(test_export)
 if [ $# -gt 0 ]; then
   SOUBEZNE=(); NAKONEC=()

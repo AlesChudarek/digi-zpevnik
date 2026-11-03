@@ -993,14 +993,63 @@ kdo maže.
 - [ ] **vlastní textově-grafický editor písní s akordy** (13. 10.). Dnes je píseň
       obrázek strany (sken nebo nahraný soubor); editor by umožnil napsat text písně
       přímo v aplikaci, umístit akordy nad slabiky a nechat z toho vysázet stranu,
-      která se vloží do zpěvníku stejně jako nahraná. Rozmyslet před začátkem:
-      - **formát uložení** — text s akordy v hranatých závorkách (ChordPro a podobné)
-        místo hotového obrázku, ať jde píseň později upravit, transponovat a přesázet;
-      - **sazba** — jak z textu vznikne strana: v prohlížeči, nebo na serveru stejnou
-        cestou jako export PDF; písmo, velikost, sloky/refrén, píseň přes víc stran;
-      - **napojení na model stran** (`docs/model-stran.md`) — strana s vysázenou písní
-        vs. strana s obrázkem, započítání do limitu místa, sdílení a kopie;
-      - **co navíc to umožní** — transpozice, hledání v textu písní, čtečka bez obrázků
-        (menší data, souvisí s offline režimem), tisk v libovolném formátu.
+      která se vloží do zpěvníku stejně jako nahraná. Cíl: otevřu web, vyrobím
+      zpěvník, dám tisk - bez jiného programu.
+      **Rozhodnuto s Alešem (3. 11.)** - průzkum: nic takového na webu není (nejblíž
+      Counterpoint Studio; kotva akordu ke znaku je technika sazečů v InDesignu):
+      - **akord ukotvený ke znaku** jako overlay: vlastní posun (v em, výchozí ze
+        šablony) a volitelně vlastní styl; při úpravě zvýrazněný znak a čárkovaná
+        spojnice. Technicky neviditelný inline uzel před znakem (ProseMirror, MIT,
+        vendorovaný bundle) = totéž co `[Am]` v ChordPro, jen s posunem a stylem.
+        Smazaný znak -> akord přejde na další znak (a blikne).
+      - **kolize akordů**: volba v šabloně, výchozí automatická nejmenší mezera
+        v textu (neukládá se, po transpozici se přepočítá); jinak jen zvýraznit.
+      - **ChordPro** import i export; posuny a styly v direktivách `{x_…}`, ať náš
+        vlastní export a zpětný import nic neztratí. Import „akordů nad textem“ z webu
+        (Supermusic, pisnicky-akordy.cz) s automatickým ukotvením.
+      - **transpozice**: notace je vlastnost písně, základ jako pisnicky-akordy.cz
+        (česky H/B, mění se jen základní tón a bas, přípona `mi` apod. zůstane);
+        přepínač dalších notací až kdyby byl potřeba. Vlastní modul (ChordSheetJS je
+        GPL a H/B neumí).
+      - **strana**: pevné plátno A4 nebo A5 (formát je vlastnost zpěvníku), obsah
+        nepřetéká sám, přetečení se označí a zbytek jde jedním klikem dál. Hlavní proud
+        textu (sloky, refrén, 1-3 sloupce) + volná vrstva grafik a ozdobných textů
+        (před i za textem), bez obtékání. Šablona vzhledu pro celý zpěvník. Píseň přes
+        víc stran i víc písní na straně.
+      - **uložení**: zdroj (JSON s verzí schématu) patří k obrázku; každé uložení =
+        nová dvojice obrázek + zdroj (neměnná verze, jako dnes obrázky). PNG vyrábí
+        prohlížeč (1748×2480 = A5 při 300 dpi; A4 větší), zbytek webu s ním zachází
+        jako s nahranou stranou. Sdílený zpěvník vidí změnu hned (tentýž řádek
+        strany), kopie a přidané písně až do úpravy sdílí verzi. Grafiky ve straně jako
+        vlastní soubory s vazbou na verzi (úklid, limit, práva).
+      - **číslo strany** je statický prvek obrázku, ne naše číslování; při vložení se
+        předvyplní podle pozice a ve zdroji si pamatuje, že je číslo -> upozornění „má
+        napsané 12, je na 14“, později případně „Přečíslovat“.
+      - **editor**: jeden editor zpěvníku se dvěma pohledy a jedním Uložit - Přehled
+        (dnešní) a Strany (svitek, u strany číslo a L/P stejnou funkcí jako čtečka,
+        přepínač na dvojstranu). „Hotovo“ u strany = PNG jako neuložená nahrávka, ve
+        zpěvníku až po Uložit. Záloha rozpracované strany v prohlížeči.
+      - **jen prémiové účty**; ostatní tlačítka vidí zašedlá s důvodem. Ve sdíleném
+        zpěvníku dělá neprémiový s navrženými stranami jen běžné úpravy.
+      - **později**: zkušební strana pro neprémiové (po uložení a tisku vyprší),
+        transpozice a živé vykreslení ve čtečce, hledání v textech písní, export
+        zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
+      - **odkaz v liště** (Aleš 3. 11.): zatím otevřené. Aleš ho chce jako lákadlo -
+        hodně lidí přijde jen kvůli tvorbě vlastních zpěvníků; proti je, že by to byl
+        druhý vstup vedle Mých zpěvníků. Rozhodnout, až bude editor v editoru zpěvníku.
+      **Postup** (schválený 3. 11.):
+      1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
+         ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
+         kolize, akordy, navrh), `css/strana.css`, písma `static/fonts/strana/`,
+         ProseMirror `static/vendor/prosemirror/`. Test `test_navrh_strany.py`
+         (Chromium, Firefox, WebKit).
+      2. [ ] PNG z prohlížeče (1748×2480), shoda s editorem i v Safari
+      3. [ ] server: zdroj u obrázku (verze), ukládání jako nahrávka, limit, úklid,
+         práva ke grafikám, kontrola_zpevniku, testy
+      4. [ ] pohled Strany v editoru zpěvníku (svitek, L/P, dvojstrana, Navrhnout/
+         Upravit stranu, Hotovo + Uložit, prémiová brána, zašedlé pro ostatní)
+      5. [ ] šablona zpěvníku, sloupce, přetečení, číslo strany, volná vrstva grafik
+      6. [ ] ChordPro tam i zpět, vložení „akordů nad textem“ z webu
+      7. [ ] nasazení pro prémiové účty
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie

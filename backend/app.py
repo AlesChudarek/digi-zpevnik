@@ -2806,6 +2806,18 @@ def prehled_zpevniku_pro_spravu():
     return radky
 
 
+@app.route('/editor-strany')
+@login_required
+@jen_admin
+def navrh_strany():
+    """Editor navržené strany s akordy - pokusná stránka (krok 1 bodu 11 v TODO).
+
+    Zatím jen pro admina a bez ukládání: strana zůstává v prohlížeči. Až bude editor
+    součástí editoru zpěvníku, tahle samostatná stránka zmizí (nebo z ní bude vstup
+    z lišty - zatím otevřené)."""
+    return render_template('navrh_strany.html')
+
+
 @app.route('/sprava/zpevniky')
 @login_required
 @jen_admin

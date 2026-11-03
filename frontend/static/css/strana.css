@@ -1,0 +1,172 @@
+/* Editor navržené strany. Třídy obsahu mají předponu ps- (písňová strana): .radek,
+   .pole i .nadpis už používají globální styly webu (profil.css, dashboard_base).
+   Dvě části:
+   - ovládání (lišta, panel) na proměnných --panel-* jako okna a správa, ať sedí do motivu;
+   - strana sama je papír: vždy bílá s černým textem, v každém motivu stejná, protože
+     z ní vznikne obrázek do zpěvníku. Rozměry v mm, písmo v pt. */
+
+.navrh {
+  display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 14px;
+  max-width: 1500px; margin: 14px auto 24px; padding: 0 16px; box-sizing: border-box;
+}
+.navrh-hlavni { min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.navrh-lista, .navrh-panel {
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+  border-radius: 12px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.navrh-lista {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 4px; padding: 8px 10px;
+  position: sticky; top: 8px; z-index: 5;
+}
+.navrh-lista .oddel { width: 1px; align-self: stretch; background: var(--panel-border, #ddd); margin: 2px 6px; }
+.navrh-lista button, .navrh-panel button {
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
+  border: 1px solid transparent; border-radius: 8px; padding: 6px 10px; font: inherit;
+  font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+@media (hover: hover) {
+  .navrh-lista button:hover:not(:disabled), .navrh-panel button:hover:not(:disabled) {
+    background: var(--panel-btn-hover, #e2e2e2);
+  }
+}
+.navrh-lista button.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
+.navrh-lista button:disabled { opacity: 0.45; cursor: default; }
+.navrh-lista .meritko-text { font-size: 13px; min-width: 44px; text-align: center; color: var(--panel-muted, #666); }
+
+.navrh-plocha {
+  background: var(--muted-bg, #e8e8e8); border-radius: 12px; padding: 24px 16px 40px;
+  overflow: auto;
+}
+/* Stav pod stranou na podkladu panelu - na samotném pozadí motivu by šedý text
+   v tmavých motivech nebyl čitelný. */
+.navrh-stav {
+  font-size: 13px; text-align: center; min-height: 1.4em; align-self: center;
+  background: var(--panel-bg, #fff); color: var(--panel-muted, #666);
+  border-radius: 8px; padding: 5px 12px;
+}
+.navrh-stav .varovani { color: #b00020; font-weight: 600; }
+
+/* --- panel vpravo ------------------------------------------------------------- */
+.navrh-panel { padding: 6px 14px 14px; align-self: start; position: sticky; top: 8px; font-size: 14px; }
+.navrh-panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--panel-muted, #666); margin: 14px 0 8px; }
+.navrh-panel label.navrh-pole { display: grid; grid-template-columns: 1fr 120px; gap: 8px; align-items: center; margin: 6px 0; }
+.navrh-panel label.zaskrt { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; cursor: pointer; }
+.navrh-panel select, .navrh-panel input[type="number"], .navrh-panel input[type="color"] {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 14px;
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-text, #222);
+  border: 1px solid var(--panel-border, #ddd); border-radius: 6px; padding: 4px 6px;
+}
+.navrh-panel input[type="color"] { padding: 1px 2px; height: 30px; }
+.navrh-panel .tlacitka { display: flex; gap: 6px; flex-wrap: wrap; }
+.navrh-panel .napoveda-textem { font-size: 12.5px; color: var(--panel-muted, #666); line-height: 1.45; margin: 8px 0 0; }
+.navrh-panel .vybrany-akord[hidden] { display: none; }
+.navrh-panel .nebezpecne { color: #b00020; }
+
+/* --- strana (papír) --------------------------------------------------------------- */
+.stranka-obal { position: relative; margin: 0 auto; }
+.stranka {
+  position: absolute; left: 0; top: 0; transform-origin: 0 0;
+  background: #fff; color: #000; box-shadow: 0 2px 14px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  /* Šablona - přepisuje ji skript z nastavení strany. */
+  --pismo: 'Noto Sans'; --velikost: 11pt; --radkovani: 1.25;
+  --pismo-nadpisu: 'Noto Serif'; --velikost-nadpisu: 17pt;
+  --pismo-akordu: 'Roboto Condensed'; --velikost-akordu: 10pt; --barva-akordu: #b00020;
+  --vaha-akordu: 700; --odsazeni-sloky: 7mm; --odsazeni-refrenu: 6mm; --mezera-slok: 0.7em;
+  --akord-x: 0em; --akord-y: -0.1em;
+  --okraj: 12mm;
+}
+.stranka.format-A5 { width: 148mm; height: 210mm; }
+.stranka.format-A4 { width: 210mm; height: 297mm; }
+
+.stranka-obsah {
+  position: absolute; inset: var(--okraj); outline: none;
+  font-family: var(--pismo), sans-serif; font-size: var(--velikost); line-height: var(--radkovani);
+  counter-reset: sloka;
+}
+/* Hranice sazebního obrazce: tečkovaně jen v editoru, do obrázku nejde. */
+.stranka-hranice {
+  position: absolute; inset: var(--okraj); pointer-events: none;
+  outline: 1px dashed rgba(0, 0, 0, 0.12);
+}
+.stranka-hranice.pretece { outline: 2px solid #d00; }
+
+.stranka-obsah .ps-nadpis {
+  font-family: var(--pismo-nadpisu), serif; font-size: var(--velikost-nadpisu);
+  font-weight: 700; line-height: 1.2; margin: 0 0 0.15em; white-space: pre;
+}
+.stranka-obsah .ps-autor {
+  font-style: italic; margin: 0 0 1.1em; white-space: pre; font-size: 0.9em;
+}
+.stranka-obsah .ps-text { margin: 0 0 0.6em; white-space: pre-wrap; }
+
+.stranka-obsah .ps-sloka {
+  position: relative; padding-left: var(--odsazeni-sloky); margin: 0 0 var(--mezera-slok);
+}
+.stranka-obsah .ps-sloka-refren { padding-left: calc(var(--odsazeni-sloky) + var(--odsazeni-refrenu)); }
+.stranka-obsah .ps-sloka-sloka { counter-increment: sloka; }
+.stranka-obsah .ps-radek { margin: 0; white-space: pre; }
+/* Řádek s akordy dostane nad sebou místo na jejich řádek; řádky bez akordů zůstanou
+   husté. Výška podle velikosti písma akordů. */
+.stranka-obsah .ps-radek:has(.akord-kotva) { padding-top: calc(var(--velikost-akordu) * 1.15); }
+
+/* Značka sloky visí v levém okraji sloky; svisle sedí na prvním řádku textu (statická
+   poloha absolutního prvku = tam, kde by byl v toku, tedy až pod místem pro akordy). */
+.stranka-obsah .ps-sloka > .ps-radek:first-child::before {
+  position: absolute; left: 0; font-weight: 700;
+}
+.stranka-obsah .ps-sloka-sloka > .ps-radek:first-child::before { content: counter(sloka) "."; }
+.stranka-obsah .ps-sloka-refren > .ps-radek:first-child::before { content: "R:"; }
+
+/* --- akordy ------------------------------------------------------------------------ */
+.akord-kotva { position: relative; }
+.akord-posun {
+  position: absolute; width: 0; height: 0;
+  left: calc(var(--akord-x) + var(--dx, 0) * 1em);
+  top: calc(var(--akord-y) + var(--dy, 0) * 1em);
+}
+.akord {
+  position: absolute; left: 0; bottom: 0; white-space: pre; line-height: 1;
+  font-family: var(--pismo-akordu), sans-serif; font-style: normal;
+  font-size: calc(var(--velikost-akordu) * var(--vel, 1));
+  font-weight: var(--vaha-akordu); color: var(--barva-akordu);
+  cursor: grab; user-select: none; -webkit-user-select: none;
+}
+.akord::before { content: attr(data-n); }
+.akord-kotva.prazdny .akord { min-width: 1.2em; outline: 1px dashed #1a73e8; }
+.akord-kotva.vybrany .akord { outline: 1px dashed #1a73e8; outline-offset: 2px; border-radius: 2px; }
+.akord-kotva.tazeny .akord { cursor: grabbing; opacity: 0.85; }
+.akord-kotva.kolize .akord { outline: 2px solid #d00; outline-offset: 1px; }
+.akord-kotva.blik .akord { animation: akord-blik 0.9s ease-out; }
+@keyframes akord-blik {
+  0%, 40% { background: #ffd54f; box-shadow: 0 0 0 3px #ffd54f; }
+  100% { background: transparent; box-shadow: none; }
+}
+.kotva-znak { background: #ffe58a; box-shadow: 0 0 0 1px #e0b400; border-radius: 2px; }
+.ps-radek.siroky { background: rgba(220, 0, 0, 0.07); box-shadow: inset -3px 0 0 #d00; }
+
+/* Nástroj Akordy: klik do textu vkládá akord. */
+.navrh.rezim-akordu .stranka-obsah { cursor: crosshair; }
+
+/* Spojnice akordu s kotvou a pole pro zápis - mimo stranu, v souřadnicích obalu. */
+.spojnice {
+  position: absolute; left: 0; top: 0; width: 100%; height: 100%;
+  pointer-events: none; overflow: visible; display: none;
+}
+.spojnice.viditelna { display: block; }
+.spojnice line { stroke: #1a73e8; stroke-width: 1.2; stroke-dasharray: 3 3; }
+.akord-pole {
+  position: absolute; z-index: 4; box-sizing: border-box; margin: 0;
+  padding: 2px 4px; border: 1.5px solid #1a73e8; border-radius: 4px;
+  background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); outline: none;
+}
+.akord-pole[hidden] { display: none; }
+
+/* ProseMirror potřebuje své základní styly (white-space u editoru) - z vendor/. */
+
+@media (max-width: 900px) {
+  .navrh { grid-template-columns: minmax(0, 1fr); }
+  .navrh-panel { position: static; }
+}

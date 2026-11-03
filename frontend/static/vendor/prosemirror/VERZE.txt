@@ -1,0 +1,14 @@
+ProseMirror (MIT) - jeden ESM bundle pro editor stran (static/js/strana/).
+Sestaveno esbuildem z npm balíčků:
+  prosemirror-model 1.25.12
+  prosemirror-state 1.4.4
+  prosemirror-view 1.42.9
+  prosemirror-transform 1.12.4
+  prosemirror-commands 1.7.2
+  prosemirror-keymap 1.2.3
+  prosemirror-history 1.5.1
+
+Postup: v prázdné složce npm install těch balíčků + esbuild, vstup.js re-exportuje
+všechny moduly (keymap, history jmenovitě) a pak:
+  esbuild vstup.js --bundle --format=esm --minify --outfile=prosemirror.js
+Jeden soubor schválně: dvě kopie prosemirror-model shodí kontroly instanceof.

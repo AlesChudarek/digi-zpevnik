@@ -1,0 +1,110 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Editor strany - DigiZpěvník{% endblock %}
+{% block content %}
+{# Editor navržené strany, krok 1 (TODO bod 11): zatím jen pro admina a bez ukládání do
+   zpěvníku. Skripty jsou ES moduly; mapa importů dává každému modulu verzi podle data
+   změny (static_bust), jinak by prohlížeč držel staré podmoduly v cache. #}
+<link rel="stylesheet" href="{{ static_bust('vendor/prosemirror/prosemirror.css') }}">
+<link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
+<link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror": "{{ static_bust('vendor/prosemirror/prosemirror.js') }}",
+    "{{ url_for('static', filename='js/strana/schema.js') }}": "{{ static_bust('js/strana/schema.js') }}",
+    "{{ url_for('static', filename='js/strana/akordy.js') }}": "{{ static_bust('js/strana/akordy.js') }}",
+    "{{ url_for('static', filename='js/strana/akord-uzel.js') }}": "{{ static_bust('js/strana/akord-uzel.js') }}",
+    "{{ url_for('static', filename='js/strana/kolize.js') }}": "{{ static_bust('js/strana/kolize.js') }}"
+  }
+}
+</script>
+
+<div class="navrh" id="navrh">
+  <div class="navrh-hlavni">
+    <div class="navrh-lista" role="toolbar" aria-label="Úpravy strany">
+      <button type="button" data-prikaz="nadpis" data-napoveda="Název písně">Název</button>
+      <button type="button" data-prikaz="autor" data-napoveda="Autor nebo podtitul">Autor</button>
+      <button type="button" data-prikaz="sloka" data-napoveda="Číslovaná sloka">Sloka</button>
+      <button type="button" data-prikaz="refren" data-napoveda="Refrén (R:)">Refrén</button>
+      <button type="button" data-prikaz="bez" data-napoveda="Sloka bez značky">Bez značky</button>
+      <button type="button" data-prikaz="text" data-napoveda="Volný text, zalamuje se">Text</button>
+      <span class="oddel"></span>
+      <button type="button" data-prikaz="tucne" data-napoveda="Tučně (Ctrl+B)"><b>B</b></button>
+      <button type="button" data-prikaz="kurziva" data-napoveda="Kurzívou (Ctrl+I)"><i>I</i></button>
+      <span class="oddel"></span>
+      <button type="button" data-prikaz="akordy" data-napoveda="Klik na znak vloží akord (Esc vypne)">♪ Akordy</button>
+      <button type="button" data-prikaz="transp-dolu" data-napoveda="Všechny akordy o půltón níž">−½</button>
+      <button type="button" data-prikaz="transp-nahoru" data-napoveda="Všechny akordy o půltón výš">+½</button>
+      <span class="oddel"></span>
+      <button type="button" data-prikaz="zpet" data-napoveda="Zpět (Ctrl+Z)">↶</button>
+      <button type="button" data-prikaz="znovu" data-napoveda="Znovu (Ctrl+Y)">↷</button>
+      <span class="oddel"></span>
+      <button type="button" data-prikaz="mensi" data-napoveda="Zmenšit">−</button>
+      <span class="meritko-text" id="meritko-text">100 %</span>
+      <button type="button" data-prikaz="vetsi" data-napoveda="Zvětšit">+</button>
+      <button type="button" data-prikaz="na-sirku" data-napoveda="Na šířku plochy">↔</button>
+    </div>
+
+    <div class="navrh-plocha" id="navrh-plocha">
+      <div class="stranka-obal" id="stranka-obal">
+        <div class="stranka format-A5" id="stranka">
+          <div class="stranka-hranice" id="stranka-hranice"></div>
+          <div class="stranka-mount"></div>
+        </div>
+      </div>
+    </div>
+    <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+  </div>
+
+  <aside class="navrh-panel" aria-label="Vzhled strany">
+    <div class="vybrany-akord" id="vybrany-akord" hidden>
+      <h2>Vybraný akord</h2>
+      <label class="navrh-pole">Velikost (%)
+        <input type="number" id="akord-velikost" min="40" max="300" step="10" value="100">
+      </label>
+      <div class="tlacitka">
+        <button type="button" id="akord-vychozi">Výchozí poloha</button>
+        <button type="button" id="akord-smazat" class="nebezpecne">Smazat</button>
+      </div>
+    </div>
+
+    <h2>Strana</h2>
+    <label class="navrh-pole">Formát
+      <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
+    </label>
+
+    <h2>Text</h2>
+    <label class="navrh-pole">Písmo <select data-nastaveni="pismo"></select></label>
+    <label class="navrh-pole">Velikost (pt) <input type="number" data-nastaveni="velikost" min="6" max="40" step="0.5"></label>
+    <label class="navrh-pole">Řádkování <input type="number" data-nastaveni="radkovani" min="1" max="3" step="0.05"></label>
+    <label class="navrh-pole">Odsazení refrénu (mm) <input type="number" data-nastaveni="odsazeniRefrenu" min="0" max="40" step="1"></label>
+    <label class="navrh-pole">Písmo názvu <select data-nastaveni="pismoNadpisu"></select></label>
+    <label class="navrh-pole">Velikost názvu (pt) <input type="number" data-nastaveni="velikostNadpisu" min="8" max="60" step="0.5"></label>
+
+    <h2>Akordy</h2>
+    <label class="navrh-pole">Písmo <select data-nastaveni="pismoAkordu"></select></label>
+    <label class="navrh-pole">Velikost (pt) <input type="number" data-nastaveni="velikostAkordu" min="6" max="40" step="0.5"></label>
+    <label class="navrh-pole">Barva <input type="color" data-nastaveni="barvaAkordu"></label>
+    <label class="zaskrt"><input type="checkbox" data-nastaveni="tucneAkordy"> Tučně</label>
+    <label class="navrh-pole">Notace
+      <select data-nastaveni="notace">
+        <option value="cz">Česká (H, B)</option>
+        <option value="en">Anglická (B, Bb)</option>
+      </select>
+    </label>
+    <label class="zaskrt"><input type="checkbox" data-nastaveni="automatickaMezera">
+      Akordy přes sebe odsunou text (jinak se jen označí)</label>
+
+    <p class="napoveda-textem">
+      Akord se vkládá nástrojem ♪ Akordy kliknutím na znak, nebo znakem [ u kurzoru.
+      Enter akord zapíše, Tab přejde na další. Tažený akord se přichytí ke znaku pod sebou;
+      s klávesou Alt se jen posune. Prázdný řádek ve sloce (Enter) ji ukončí.
+    </p>
+    <div class="tlacitka" style="margin-top: 12px">
+      <button type="button" id="zacit-znovu" class="nebezpecne">Začít znovu</button>
+    </div>
+  </aside>
+</div>
+
+<script type="module" src="{{ static_bust('js/strana/navrh.js') }}"></script>
+{% endblock %}
