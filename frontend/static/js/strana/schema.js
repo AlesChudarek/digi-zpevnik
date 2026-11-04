@@ -1,6 +1,7 @@
 // Schéma navržené strany (ProseMirror) a převod z/do prostého textu s akordy.
 //
-// Strana je plátno pevného rozměru s rámečky (jako v Canvě). Textový rámeček je malý
+// Strana je plátno pevného rozměru s prvky (jako v Canvě): textové rámečky a obrázky,
+// každý s polohou v mm. Textový rámeček je malý
 // Word: odstavce se stylem (Normální, Název, Autor, Sloka, Refrén) a přímým formátováním
 // (písmo, velikost, barva, tučné, kurzíva, podtržení, zarovnání, odsazení). Styl je jen
 // výchozí vzhled ze šablony zpěvníku, ne struktura - každý odstavec jde přenastavit.
@@ -28,11 +29,11 @@ const mm = (x) => `${x}mm`;
 
 export const schema = new Schema({
   nodes: {
-    doc: { content: 'ramecek+' },
+    doc: { content: 'prvek+' },
 
     // Rámeček: poloha a rozměr v mm od levého horního rohu strany.
     ramecek: {
-      content: 'odstavec+', isolating: true, defining: true,
+      group: 'prvek', content: 'odstavec+', isolating: true, defining: true,
       attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 } },
       toDOM: (n) => ['div', {
         class: 'ps-ramecek', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
@@ -41,6 +42,30 @@ export const schema = new Schema({
       parseDOM: [{
         tag: 'div.ps-ramecek', contentElement: '.ps-ramecek-obsah',
         getAttrs: (d) => ({ x: +d.dataset.x || 12, y: +d.dataset.y || 12, w: +d.dataset.w || 124, h: +d.dataset.h || 186 }),
+      }],
+    },
+
+    // Obrázek na straně. src je zatím data: URL (strana se ještě neukládá na server);
+    // vrstva: 'pred' nad textem, 'za' pod textem.
+    obrazek: {
+      group: 'prvek', atom: true, selectable: true, draggable: false,
+      attrs: {
+        src: {}, x: { default: 20 }, y: { default: 20 }, w: { default: 50 }, h: { default: 40 },
+        vrstva: { default: 'pred' },
+      },
+      toDOM: (n) => ['div', {
+        class: `ps-obrazek ps-vrstva-${n.attrs.vrstva}`, 'data-x': n.attrs.x, 'data-y': n.attrs.y,
+        'data-w': n.attrs.w, 'data-h': n.attrs.h, 'data-vrstva': n.attrs.vrstva,
+        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
+      }, ['img', { src: n.attrs.src, alt: '' }]],
+      parseDOM: [{
+        tag: 'div.ps-obrazek',
+        getAttrs: (d) => {
+          const img = d.querySelector('img');
+          if (!img) return false;
+          return { src: img.getAttribute('src'), x: +d.dataset.x || 20, y: +d.dataset.y || 20,
+            w: +d.dataset.w || 50, h: +d.dataset.h || 40, vrstva: d.dataset.vrstva || 'pred' };
+        },
       }],
     },
 
@@ -212,15 +237,31 @@ export function textZUzlu(obsah) {
   return radky.join('\n');
 }
 
+// Ukázková píseň nové strany (vymyšlená, ať se nemusí řešit autorská práva).
+export const UKAZKA = `[G]Večer u [D]ohně sedí[Emi]me,
+[C]staré písně [G]zpívá[D]me,
+[G]nad lesem se [D]hvězdy roz[Emi]svítí,
+[C]nikomu se [D]spát ne[G]chce.
+
+R: [C]Hraj, kytaro, [G]hraj,
+[D]ať to slyší [Emi]celý kraj,
+[C]hraj, kytaro, [G]hraj
+[D]až do rána [G]dál.
+
+[G]Kamarád mi [D]podá hrne[Emi]ček,
+[C]v ohni praská [G]suchý [D]klacek,
+[G]a když oheň [D]tiše dohasí[Emi]ná,
+[C]každý ví, že [D]ráno začí[G]ná.`;
+
 export function prazdnyDokument(format) {
   const okraj = format.okraj;
   return N.doc.create(null, [
     N.ramecek.create(
       { x: okraj, y: okraj, w: format.sirka - 2 * okraj, h: format.vyska - 2 * okraj },
       [
-        N.odstavec.create({ styl: 'nadpis' }, schema.text('Název písně')),
-        N.odstavec.create({ styl: 'autor' }, schema.text('Autor')),
-        ...odstavceZTextu('Sem napiš první řádek\na druhý řádek sloky\n\nR:\nTady začíná refrén'),
+        N.odstavec.create({ styl: 'nadpis' }, schema.text('U ohně')),
+        N.odstavec.create({ styl: 'autor' }, schema.text('ukázková píseň')),
+        ...odstavceZTextu(UKAZKA),
       ],
     ),
   ]);

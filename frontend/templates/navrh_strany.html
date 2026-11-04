@@ -21,119 +21,191 @@
 }
 </script>
 
-<div class="navrh" id="navrh">
-  <div class="navrh-hlavni">
-    <div class="navrh-lista" role="toolbar" aria-label="Úpravy strany">
-      <select id="lista-styl" data-napoveda="Styl odstavce" aria-label="Styl odstavce"></select>
-      <select id="lista-pismo" data-napoveda="Písmo" aria-label="Písmo"></select>
-      <select id="lista-velikost" data-napoveda="Velikost písma (pt)" aria-label="Velikost písma"></select>
-      <input type="color" id="lista-barva" data-napoveda="Barva textu" aria-label="Barva textu">
-      <button type="button" data-prikaz="tucne" data-napoveda="Tučně (Ctrl+B)"><b>B</b></button>
-      <button type="button" data-prikaz="kurziva" data-napoveda="Kurzívou (Ctrl+I)"><i>I</i></button>
-      <button type="button" data-prikaz="podtrzeni" data-napoveda="Podtrženě (Ctrl+U)"><u>U</u></button>
-      <button type="button" data-prikaz="vymazat" data-napoveda="Vymazat přímé formátování (zůstane styl)">⌫ formát</button>
-      <span class="oddel"></span>
-      <button type="button" data-prikaz="zarovnat-left" data-napoveda="Zarovnat vlevo">⯇</button>
-      <button type="button" data-prikaz="zarovnat-center" data-napoveda="Na střed">≡</button>
-      <button type="button" data-prikaz="zarovnat-right" data-napoveda="Zarovnat vpravo">⯈</button>
-      <button type="button" data-prikaz="zarovnat-justify" data-napoveda="Do bloku">☰</button>
-      <button type="button" data-prikaz="odsadit-mene" data-napoveda="Zmenšit odsazení">⇤</button>
-      <button type="button" data-prikaz="odsadit-vice" data-napoveda="Zvětšit odsazení">⇥</button>
-      <span class="oddel"></span>
-      <button type="button" data-prikaz="akordy" data-napoveda="Klik na znak vloží akord (Esc vypne)">♪ Akordy</button>
-      <button type="button" data-prikaz="transp-dolu" data-napoveda="Všechny akordy o půltón níž">−½</button>
-      <button type="button" data-prikaz="transp-nahoru" data-napoveda="Všechny akordy o půltón výš">+½</button>
-      <span class="oddel"></span>
-      <button type="button" data-prikaz="ramecek" data-napoveda="Nový textový rámeček">+ Rámeček</button>
-      <span class="oddel"></span>
-      <button type="button" data-prikaz="zpet" data-napoveda="Zpět (Ctrl+Z)">↶</button>
-      <button type="button" data-prikaz="znovu" data-napoveda="Znovu (Ctrl+Y)">↷</button>
-      <span class="oddel"></span>
-      <button type="button" data-prikaz="mensi" data-napoveda="Zmenšit">−</button>
-      <span class="meritko-text" id="meritko-text">100 %</span>
-      <button type="button" data-prikaz="vetsi" data-napoveda="Zvětšit">+</button>
-      <button type="button" data-prikaz="na-sirku" data-napoveda="Na šířku plochy">↔</button>
-    </div>
+{# Ikony lišty: jednoduché tahy ve 24×24, barvu berou z textu tlačítka. #}
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-zpet" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+    <symbol id="i-znovu" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+    <symbol id="i-vlevo" viewBox="0 0 24 24"><path d="M3 6h18M3 12h12M3 18h16"/></symbol>
+    <symbol id="i-stred" viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M4 18h16"/></symbol>
+    <symbol id="i-vpravo" viewBox="0 0 24 24"><path d="M3 6h18M9 12h12M5 18h16"/></symbol>
+    <symbol id="i-blok" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+    <symbol id="i-odsadit-mene" viewBox="0 0 24 24"><path d="M21 5H11M21 12H11M21 19H3M7 8l-4 4 4 4"/></symbol>
+    <symbol id="i-odsadit-vice" viewBox="0 0 24 24"><path d="M21 5H11M21 12H11M21 19H3M3 8l4 4-4 4"/></symbol>
+    <symbol id="i-vymazat" viewBox="0 0 24 24"><path d="M4 7V4h16v3M12 4v12M9 20h4"/><path d="m15 15 6 6m0-6-6 6"/></symbol>
+    <symbol id="i-ramecek" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 8h8M12 8v9"/></symbol>
+    <symbol id="i-obrazek" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></symbol>
+    <symbol id="i-akord" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+    <symbol id="i-becko" viewBox="0 0 24 24"><path d="M9 3v17c5-1 9-3.5 9-7s-4-4-9-1"/></symbol>
+    <symbol id="i-krizek" viewBox="0 0 24 24"><path d="M10 4v17M15 3v17M6 10l13-3M5 17l13-3"/></symbol>
+    <symbol id="i-mensi" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6"/></symbol>
+    <symbol id="i-vetsi" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6M11 8v6"/></symbol>
+    <symbol id="i-cela" viewBox="0 0 24 24"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></symbol>
+    <symbol id="i-tuzka" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
+  </defs>
+</svg>
 
-    <div class="navrh-plocha" id="navrh-plocha">
-      <div class="stranka-obal" id="stranka-obal">
-        <div class="stranka" id="stranka">
-          <div class="stranka-hranice"></div>
-          <div class="stranka-mount"></div>
-        </div>
+<div class="navrh" id="navrh">
+  <div class="navrh-lista" role="toolbar" aria-label="Úpravy strany">
+    <div class="skupina">
+      <button type="button" class="ikona" data-prikaz="zpet" data-napoveda="Zpět (Ctrl+Z)" aria-label="Zpět"><svg><use href="#i-zpet"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="znovu" data-napoveda="Znovu (Ctrl+Y)" aria-label="Znovu"><svg><use href="#i-znovu"/></svg></button>
+    </div>
+    <div class="skupina">
+      <select id="lista-styl" class="vyber-styl" data-napoveda="Styl odstavce" aria-label="Styl odstavce"></select>
+      <select id="lista-pismo" class="vyber-pismo" data-napoveda="Písmo" aria-label="Písmo"></select>
+      <div class="velikost-pisma">
+        <button type="button" data-prikaz="pismo-mensi" data-napoveda="Menší písmo" aria-label="Menší písmo">−</button>
+        <input type="text" id="lista-velikost" inputmode="decimal" data-napoveda="Velikost písma (pt)" aria-label="Velikost písma v bodech">
+        <button type="button" data-prikaz="pismo-vetsi" data-napoveda="Větší písmo" aria-label="Větší písmo">+</button>
       </div>
     </div>
-    <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+    <div class="skupina">
+      <button type="button" class="ikona text" data-prikaz="tucne" data-napoveda="Tučně (Ctrl+B)" aria-label="Tučně"><b>B</b></button>
+      <button type="button" class="ikona text" data-prikaz="kurziva" data-napoveda="Kurzívou (Ctrl+I)" aria-label="Kurzívou"><i>I</i></button>
+      <button type="button" class="ikona text" data-prikaz="podtrzeni" data-napoveda="Podtrženě (Ctrl+U)" aria-label="Podtrženě"><u>U</u></button>
+      <label class="ikona barva-textu" data-napoveda="Barva textu">
+        <span class="pismeno">A</span><span class="pruh" id="lista-barva-pruh"></span>
+        <input type="color" id="lista-barva" aria-label="Barva textu">
+      </label>
+      <button type="button" class="ikona" data-prikaz="vymazat" data-napoveda="Vymazat přímé formátování (zůstane styl)" aria-label="Vymazat formátování"><svg><use href="#i-vymazat"/></svg></button>
+    </div>
+    <div class="skupina">
+      <button type="button" class="ikona" data-prikaz="zarovnat-left" data-napoveda="Zarovnat vlevo" aria-label="Zarovnat vlevo"><svg><use href="#i-vlevo"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="zarovnat-center" data-napoveda="Na střed" aria-label="Na střed"><svg><use href="#i-stred"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="zarovnat-right" data-napoveda="Zarovnat vpravo" aria-label="Zarovnat vpravo"><svg><use href="#i-vpravo"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="zarovnat-justify" data-napoveda="Do bloku" aria-label="Do bloku"><svg><use href="#i-blok"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="odsadit-mene" data-napoveda="Zmenšit odsazení" aria-label="Zmenšit odsazení"><svg><use href="#i-odsadit-mene"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="odsadit-vice" data-napoveda="Zvětšit odsazení" aria-label="Zvětšit odsazení"><svg><use href="#i-odsadit-vice"/></svg></button>
+    </div>
+    <div class="skupina">
+      <button type="button" class="s-popisem" data-prikaz="akordy" data-napoveda="Klik na znak vloží akord (Esc vypne)"><svg><use href="#i-akord"/></svg>Akord</button>
+      <button type="button" class="ikona" data-prikaz="transp-dolu" data-napoveda="Transponovat o půltón níž" aria-label="Transponovat níž"><svg><use href="#i-becko"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="transp-nahoru" data-napoveda="Transponovat o půltón výš" aria-label="Transponovat výš"><svg><use href="#i-krizek"/></svg></button>
+    </div>
+    <div class="skupina">
+      <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček"><svg><use href="#i-ramecek"/></svg>Text</button>
+      <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
+      <input type="file" id="soubor-obrazku" accept="image/*" hidden>
+    </div>
+  </div>
+
+  <div class="navrh-plocha" id="navrh-plocha">
+    <div class="stranka-obal" id="stranka-obal">
+      <div class="stranka" id="stranka">
+        <div class="stranka-mount"></div>
+      </div>
+    </div>
+    {# Spodní pruh plochy: stav uprostřed, přiblížení vpravo (jako v grafických editorech). #}
+    <div class="navrh-dole">
+      <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+      <div class="navrh-zoom" role="group" aria-label="Přiblížení">
+        <button type="button" data-prikaz="mensi" data-napoveda="Oddálit" aria-label="Oddálit"><svg><use href="#i-mensi"/></svg></button>
+        <span class="meritko-text" id="meritko-text">100 %</span>
+        <button type="button" data-prikaz="vetsi" data-napoveda="Přiblížit" aria-label="Přiblížit"><svg><use href="#i-vetsi"/></svg></button>
+        <button type="button" data-prikaz="cela-strana" data-napoveda="Celá strana" aria-label="Celá strana"><svg><use href="#i-cela"/></svg></button>
+      </div>
+    </div>
   </div>
 
   <aside class="navrh-panel" aria-label="Vzhled strany">
-    <div class="vybrany-akord" id="vybrany-akord" hidden>
+    {# Kontextové karty: jen když je vybraný akord, obrázek nebo kurzor ve sloce. #}
+    <section class="karta kontext" id="vybrany-akord" hidden>
       <h2>Vybraný akord</h2>
-      <label class="navrh-pole">Velikost (%)
-        <input type="number" id="akord-velikost" min="40" max="300" step="10" value="100">
+      <label class="radek-pole">Velikost
+        <span class="s-jednotkou"><input type="number" id="akord-velikost" min="40" max="300" step="10" value="100"> %</span>
       </label>
       <div class="tlacitka">
         <button type="button" id="akord-vychozi">Výchozí poloha</button>
         <button type="button" id="akord-smazat" class="nebezpecne">Smazat</button>
       </div>
-    </div>
+    </section>
 
-    <div class="panel-znacka" id="panel-znacka" hidden>
+    <section class="karta kontext" id="vybrany-obrazek" hidden>
+      <h2>Obrázek</h2>
+      <div class="prepinac" role="group" aria-label="Vrstva obrázku">
+        <button type="button" data-vrstva="pred">Před textem</button>
+        <button type="button" data-vrstva="za">Za textem</button>
+      </div>
+      <div class="tlacitka">
+        <button type="button" id="obrazek-smazat" class="nebezpecne">Smazat</button>
+      </div>
+    </section>
+
+    <section class="karta kontext" id="panel-znacka" hidden>
       <h2>Sloka</h2>
-      <label class="navrh-pole">Značka
+      <label class="radek-pole">Značka
         <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
       </label>
-      <p class="napoveda-textem">Prázdné pole = číslo automaticky. Číslo zadané ručně
-        (např. 5.) posune i číslování dalších slok.</p>
-    </div>
+      <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
+    </section>
 
-    <h2>Strana</h2>
-    <label class="navrh-pole">Formát
-      <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
-    </label>
+    <section class="karta">
+      <h2>Styly odstavců</h2>
+      <ul class="styly" id="seznam-stylu"></ul>
+      {# Úprava stylu: jeden formulář, který se přesune pod rozbalený styl. #}
+      <div class="uprava-stylu" id="uprava-stylu" hidden>
+        <label class="radek-pole">Písmo <select data-styl-pole="pismo" data-pisma></select></label>
+        <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-styl-pole="velikost" min="5" max="72" step="0.5"> pt</span></label>
+        <div class="radek-pole">Řez
+          <span class="prepinace">
+            <label class="zaskrt"><input type="checkbox" data-styl-pole="tucne"> <b>B</b></label>
+            <label class="zaskrt"><input type="checkbox" data-styl-pole="kurziva"> <i>I</i></label>
+            <input type="color" data-styl-pole="barva" aria-label="Barva">
+          </span>
+        </div>
+        <label class="radek-pole">Zarovnání
+          <select data-styl-pole="zarovnani">
+            <option value="left">Vlevo</option><option value="center">Na střed</option>
+            <option value="right">Vpravo</option><option value="justify">Do bloku</option>
+          </select>
+        </label>
+        <label class="radek-pole">Odsazení <span class="s-jednotkou"><input type="number" data-styl-pole="odsazeni" min="0" max="80" step="0.5"> mm</span></label>
+        <label class="radek-pole">Řádkování <input type="number" data-styl-pole="radkovani" min="0.8" max="3" step="0.05"></label>
+        <label class="radek-pole">Mezera před <span class="s-jednotkou"><input type="number" data-styl-pole="pred" min="0" max="60" step="1"> pt</span></label>
+        <label class="radek-pole">Mezera za <span class="s-jednotkou"><input type="number" data-styl-pole="po" min="0" max="60" step="1"> pt</span></label>
+      </div>
+    </section>
 
-    <h2>Styl odstavce</h2>
-    <label class="navrh-pole">Upravit styl <select id="upravovany-styl"></select></label>
-    <label class="navrh-pole">Písmo <select data-styl-pole="pismo" data-pisma></select></label>
-    <label class="navrh-pole">Velikost (pt) <input type="number" data-styl-pole="velikost" min="5" max="72" step="0.5"></label>
-    <label class="zaskrt"><input type="checkbox" data-styl-pole="tucne"> Tučně</label>
-    <label class="zaskrt"><input type="checkbox" data-styl-pole="kurziva"> Kurzívou</label>
-    <label class="navrh-pole">Barva <input type="color" data-styl-pole="barva"></label>
-    <label class="navrh-pole">Zarovnání
-      <select data-styl-pole="zarovnani">
-        <option value="left">Vlevo</option><option value="center">Na střed</option>
-        <option value="right">Vpravo</option><option value="justify">Do bloku</option>
-      </select>
-    </label>
-    <label class="navrh-pole">Odsazení (mm) <input type="number" data-styl-pole="odsazeni" min="0" max="80" step="0.5"></label>
-    <label class="navrh-pole">Řádkování <input type="number" data-styl-pole="radkovani" min="0.8" max="3" step="0.05"></label>
-    <label class="navrh-pole">Mezera před (pt) <input type="number" data-styl-pole="pred" min="0" max="60" step="1"></label>
-    <label class="navrh-pole">Mezera za (pt) <input type="number" data-styl-pole="po" min="0" max="60" step="1"></label>
+    <section class="karta">
+      <h2>Akordy</h2>
+      <div class="ukazka-akordu" id="ukazka-akordu"><span class="ukazka-akord">Ami</span><span class="ukazka-akord">C#7</span></div>
+      <label class="radek-pole">Písmo <select data-nastaveni="pismoAkordu" data-pisma></select></label>
+      <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-nastaveni="velikostAkordu" min="6" max="40" step="0.5"> pt</span></label>
+      <div class="radek-pole">Řez
+        <span class="prepinace">
+          <label class="zaskrt"><input type="checkbox" data-nastaveni="tucneAkordy"> <b>B</b></label>
+          <input type="color" data-nastaveni="barvaAkordu" aria-label="Barva akordů">
+        </span>
+      </div>
+      <label class="radek-pole">Notace
+        <select data-nastaveni="notace">
+          <option value="cz">Česká (H, B)</option>
+          <option value="en">Anglická (B, Bb)</option>
+        </select>
+      </label>
+      <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="automatickaMezera">
+        Akordy přes sebe odsunou text (ručně posunuté nikdy)</label>
+    </section>
 
-    <h2>Akordy</h2>
-    <label class="navrh-pole">Písmo <select data-nastaveni="pismoAkordu" data-pisma></select></label>
-    <label class="navrh-pole">Velikost (pt) <input type="number" data-nastaveni="velikostAkordu" min="6" max="40" step="0.5"></label>
-    <label class="navrh-pole">Barva <input type="color" data-nastaveni="barvaAkordu"></label>
-    <label class="zaskrt"><input type="checkbox" data-nastaveni="tucneAkordy"> Tučně</label>
-    <label class="navrh-pole">Notace
-      <select data-nastaveni="notace">
-        <option value="cz">Česká (H, B)</option>
-        <option value="en">Anglická (B, Bb)</option>
-      </select>
-    </label>
-    <label class="zaskrt"><input type="checkbox" data-nastaveni="automatickaMezera">
-      Akordy přes sebe odsunou text (ručně posunuté akordy nikdy)</label>
+    <section class="karta">
+      <h2>Strana</h2>
+      <label class="radek-pole">Formát
+        <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
+      </label>
+    </section>
 
-    <p class="napoveda-textem">
-      Akord se vkládá nástrojem ♪ Akordy kliknutím na znak, nebo znakem [ u kurzoru.
-      Enter akord zapíše, Tab přejde na další. Tažený akord se přichytí ke znaku pod sebou
-      a k výšce sousedních akordů; s Altem drží svůj znak, se Shiftem se posouvá jen
-      vodorovně. Shift+Enter zalomí řádek v odstavci. Na prázdném řádku se stylem Refrén
-      Tab vloží kopii předchozího refrénu.
-    </p>
-    <div class="tlacitka" style="margin-top: 12px">
-      <button type="button" id="zacit-znovu" class="nebezpecne">Začít znovu</button>
-    </div>
+    <details class="karta napoveda-editoru">
+      <summary>Ovládání</summary>
+      <ul>
+        <li><b>Akord:</b> nástroj Akord a klik na znak, nebo znak [ u kurzoru. Enter zapíše, Tab přejde na další.</li>
+        <li><b>Posun akordu:</b> přichytí se ke znaku pod sebou a k výšce sousedů. Alt drží jeho znak, Shift jen vodorovně.</li>
+        <li><b>Refrén znovu:</b> na prázdném řádku se stylem Refrén vloží Tab kopii předchozího.</li>
+        <li><b>Řádek v odstavci:</b> Shift+Enter.</li>
+        <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
+      </ul>
+    </details>
+    <button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>
   </aside>
 </div>
 

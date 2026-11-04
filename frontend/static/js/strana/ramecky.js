@@ -1,19 +1,21 @@
-// Rámečky na straně (jako v Canvě): přesun, změna velikosti, smazání.
+// Prvky na straně (jako v Canvě): textové rámečky a obrázky - přesun, změna velikosti,
+// smazání.
 //
-// Rámeček je blokový uzel s polohou v mm. Lišta s úchytem nad horním okrajem a roh
-// vpravo dole nejsou součástí textu (contenteditable=false) a obsluhuje je tenhle
-// pohled; obsah rámečku spravuje ProseMirror. Přesun mění během tažení jen styl
-// a teprve při puštění pošle jednu transakci - jde vrátit jedním „Zpět“.
+// Prvek je blokový uzel s polohou v mm. Lišta s úchytem nad horním okrajem a roh vpravo
+// dole nejsou součástí textu (contenteditable=false) a obsluhuje je tenhle pohled; obsah
+// textového rámečku spravuje ProseMirror. Obrázek jde táhnout za celou plochu a jeho roh
+// drží poměr stran (se Shiftem volně). Během tažení se mění jen styl a teprve při
+// puštění jde jedna transakce - celý přesun vrátí jedno „Zpět“.
 
-import { closeHistory, TextSelection } from 'prosemirror';
+import { closeHistory, TextSelection, NodeSelection } from 'prosemirror';
 
 const MM_NA_PX = 96 / 25.4;
-const MIN_MM = 10;
+const MIN_MM = 8;
 const KROK_MM = 0.5;
 
 const zaokrouhli = (x) => Math.round(x / KROK_MM) * KROK_MM;
 
-export class RamecekView {
+export class PrvekView {
   // volby: meritko() a rozmer() -> { sirka, vyska } strany v mm
   constructor(node, view, getPos, volby) {
     this.node = node;
@@ -21,30 +23,39 @@ export class RamecekView {
     this.getPos = getPos;
     this.volby = volby;
     this.tah = null;
+    this.jeObrazek = node.type.name === 'obrazek';
 
     this.dom = document.createElement('div');
-    this.dom.className = 'ps-ramecek';
+    this.dom.className = this.jeObrazek ? 'ps-obrazek' : 'ps-ramecek';
 
     this.lista = document.createElement('div');
-    this.lista.className = 'ps-ramecek-lista';
+    this.lista.className = 'ps-prvek-lista';
     this.lista.contentEditable = 'false';
-    this.lista.title = 'Přesunout rámeček';
+    this.lista.title = this.jeObrazek ? 'Přesunout obrázek' : 'Přesunout rámeček';
     this.smazat = document.createElement('button');
     this.smazat.type = 'button';
-    this.smazat.className = 'ps-ramecek-smazat';
+    this.smazat.className = 'ps-prvek-smazat';
     this.smazat.textContent = '×';
-    this.smazat.title = 'Smazat rámeček';
+    this.smazat.title = this.jeObrazek ? 'Smazat obrázek' : 'Smazat rámeček';
     this.lista.appendChild(this.smazat);
 
     this.roh = document.createElement('div');
-    this.roh.className = 'ps-ramecek-roh';
+    this.roh.className = 'ps-prvek-roh';
     this.roh.contentEditable = 'false';
     this.roh.title = 'Změnit velikost';
 
-    this.contentDOM = document.createElement('div');
-    this.contentDOM.className = 'ps-ramecek-obsah';
-
-    this.dom.append(this.lista, this.contentDOM, this.roh);
+    if (this.jeObrazek) {
+      this.img = document.createElement('img');
+      this.img.alt = '';
+      this.img.draggable = false;
+      this.dom.contentEditable = 'false';
+      this.dom.append(this.lista, this.img, this.roh);
+      this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
+    } else {
+      this.contentDOM = document.createElement('div');
+      this.contentDOM.className = 'ps-ramecek-obsah';
+      this.dom.append(this.lista, this.contentDOM, this.roh);
+    }
     this.nastav();
 
     this.lista.addEventListener('pointerdown', (e) => {
@@ -61,6 +72,11 @@ export class RamecekView {
     s.top = a.y + 'mm';
     s.width = a.w + 'mm';
     s.height = a.h + 'mm';
+    if (this.jeObrazek) {
+      if (this.img.getAttribute('src') !== a.src) this.img.src = a.src;
+      this.dom.classList.toggle('ps-vrstva-za', a.vrstva === 'za');
+      this.dom.classList.toggle('ps-vrstva-pred', a.vrstva !== 'za');
+    }
   }
 
   update(node) {
@@ -70,13 +86,17 @@ export class RamecekView {
     return true;
   }
 
-  // Lišta, roh a styl rámečku nejsou obsah dokumentu.
+  selectNode() { this.dom.classList.add('vybrany'); }
+  deselectNode() { this.dom.classList.remove('vybrany'); }
+
+  // Lišta, roh a styl prvku nejsou obsah dokumentu.
   ignoreMutation(m) {
+    if (!this.contentDOM) return true;
     if (m.type === 'selection') return false;
     return !this.contentDOM.contains(m.target) || m.target === this.contentDOM && m.type === 'attributes';
   }
 
-  stopEvent(e) { return !this.contentDOM.contains(e.target); }
+  stopEvent(e) { return !this.contentDOM || !this.contentDOM.contains(e.target); }
 
   zacni(e, druh) {
     if (e.button !== 0) return;
@@ -103,11 +123,21 @@ export class RamecekView {
     const { sirka, vyska } = this.volby.rozmer();
     const p = t.puvodni;
     if (t.druh === 'presun') {
-      t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), 0), sirka - p.w);
-      t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), 0), vyska - p.h);
+      // Obrázek smí přesahovat přes okraj strany (ořízne se), rámeček ne.
+      const presah = this.jeObrazek ? Math.min(p.w, p.h) * 0.8 : 0;
+      t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -presah), sirka - p.w + presah);
+      t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -presah), vyska - p.h + presah);
     } else {
-      t.nove.w = Math.min(Math.max(zaokrouhli(p.w + dx), MIN_MM), sirka - p.x);
-      t.nove.h = Math.min(Math.max(zaokrouhli(p.h + dy), MIN_MM), vyska - p.y);
+      let w = Math.max(zaokrouhli(p.w + dx), MIN_MM);
+      let h = Math.max(zaokrouhli(p.h + dy), MIN_MM);
+      if (this.jeObrazek && !e.shiftKey) {
+        // Poměr stran: rozhoduje větší z obou změn.
+        const pomer = p.w / p.h;
+        if (Math.abs(dx) * p.h >= Math.abs(dy) * p.w) h = zaokrouhli(w / pomer);
+        else w = zaokrouhli(h * pomer);
+      }
+      t.nove.w = this.jeObrazek ? w : Math.min(w, sirka - p.x);
+      t.nove.h = this.jeObrazek ? h : Math.min(h, vyska - p.y);
     }
     this.nastav(t.nove);
   }
@@ -117,13 +147,18 @@ export class RamecekView {
     this.uklid();
     if (!t) return;
     if (!t.posunuto) {
-      // Klik na lištu: kurzor na konec rámečku.
-      const pos = this.getPos() + this.node.nodeSize - 2;
-      this.view.dispatch(this.view.state.tr.setSelection(TextSelection.near(this.view.state.doc.resolve(pos), -1)));
+      if (this.jeObrazek) {
+        this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, this.getPos())));
+      } else {
+        // Klik na lištu rámečku: kurzor na konec jeho textu.
+        const pos = this.getPos() + this.node.nodeSize - 2;
+        this.view.dispatch(this.view.state.tr.setSelection(TextSelection.near(this.view.state.doc.resolve(pos), -1)));
+      }
       this.view.focus();
       return;
     }
     const tr = closeHistory(this.view.state.tr).setNodeMarkup(this.getPos(), null, t.nove);
+    if (this.jeObrazek) tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
     this.view.dispatch(tr);
   }
 
@@ -143,9 +178,13 @@ export class RamecekView {
 
   odstran() {
     const { state } = this.view;
-    if (state.doc.childCount < 2) {
-      if (window.oznam) window.oznam('Strana musí mít aspoň jeden textový rámeček.', { nadpis: 'Rámeček nejde smazat', druh: 'info' });
-      return;
+    if (!this.jeObrazek) {
+      let ramecku = 0;
+      state.doc.forEach((n) => { if (n.type === this.node.type) ramecku += 1; });
+      if (ramecku < 2) {
+        window.oznam('Strana musí mít aspoň jeden textový rámeček.', { nadpis: 'Rámeček nejde smazat', druh: 'info' });
+        return;
+      }
     }
     const pos = this.getPos();
     this.view.dispatch(closeHistory(state.tr).delete(pos, pos + this.node.nodeSize));
@@ -167,5 +206,55 @@ export function pridejRamecek(view, format) {
   const tr = closeHistory(view.state.tr).insert(konec, ramecek);
   tr.setSelection(TextSelection.create(tr.doc, konec + 2));
   view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
+// --- obrázky --------------------------------------------------------------------------
+
+const MAX_PX = 2000;      // delší strana; víc tisk při 300 dpi na A5 nepotřebuje
+
+// Soubor -> data: URL, větší obrázky zmenšené. Průhledné zůstanou PNG, ostatní JPEG.
+export function nactiObrazek(soubor) {
+  return new Promise((ok, chyba) => {
+    if (!soubor || !/^image\//.test(soubor.type)) { chyba(new Error('Soubor není obrázek.')); return; }
+    const url = URL.createObjectURL(soubor);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const k = Math.min(1, MAX_PX / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+      const platno = document.createElement('canvas');
+      platno.width = w;
+      platno.height = h;
+      const c = platno.getContext('2d');
+      c.drawImage(img, 0, 0, w, h);
+      const pruhledny = /png|gif|webp|svg/.test(soubor.type) && maPruhlednost(c, w, h);
+      ok({ src: platno.toDataURL(pruhledny ? 'image/png' : 'image/jpeg', 0.9), w, h });
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); chyba(new Error('Obrázek se nepodařilo načíst.')); };
+    img.src = url;
+  });
+}
+
+function maPruhlednost(c, w, h) {
+  const data = c.getImageData(0, 0, w, h).data;
+  for (let i = 3; i < data.length; i += 4 * 7) if (data[i] < 250) return true;
+  return false;
+}
+
+// Vloží obrázek na stranu: na šířku poloviny sazby (nejvýš na výšku sazby), uprostřed.
+export function vlozObrazek(view, format, { src, w, h }, kam = null) {
+  const sirkaSazby = format.sirka - 2 * format.okraj, vyskaSazby = format.vyska - 2 * format.okraj;
+  let sirka = sirkaSazby / 2, vyska = sirka * h / w;
+  if (vyska > vyskaSazby) { vyska = vyskaSazby; sirka = vyska * w / h; }
+  sirka = zaokrouhli(sirka);
+  vyska = zaokrouhli(vyska);
+  const x = kam ? zaokrouhli(kam.x - sirka / 2) : zaokrouhli((format.sirka - sirka) / 2);
+  const y = kam ? zaokrouhli(kam.y - vyska / 2) : zaokrouhli((format.vyska - vyska) / 2);
+  const uzel = view.state.schema.nodes.obrazek.create({ src, x, y, w: sirka, h: vyska });
+  const konec = view.state.doc.content.size;
+  const tr = closeHistory(view.state.tr).insert(konec, uzel);
+  tr.setSelection(NodeSelection.create(tr.doc, konec));
+  view.dispatch(tr);
   view.focus();
 }

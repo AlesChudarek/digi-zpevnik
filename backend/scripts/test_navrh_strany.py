@@ -111,6 +111,15 @@ def otevri_editor(page, base):
     page.evaluate(POMOCNE)
 
 
+# Výchozí text testu (ukázková píseň nové strany má akordy už v sobě).
+TEXT_TESTU = 'Sem napiš první řádek\\na druhý řádek sloky\\n\\nR:\\nTady začíná refrén'
+
+
+def zacni_testovacim_textem(page):
+    page.evaluate(f"navrhStrany.nahradTextem('Název písně', 'Autor', '{TEXT_TESTU}')")
+    page.wait_for_timeout(100)
+
+
 def test_prohlizece(p, base, jmeno):
     print(f"\n── {jmeno} ──")
     br = getattr(p, jmeno).launch()
@@ -125,6 +134,22 @@ def test_prohlizece(p, base, jmeno):
     page.wait_for_load_state('networkidle')
     otevri_editor(page, base)
     J = page.evaluate
+
+    # Nová strana: ukázková píseň se vejde, celá strana je vidět, lišta na jednom řádku.
+    ok('ukázková píseň: dvě sloky a refrén', J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)") == ['1.', 'R:', '2.'])
+    ok('ukázková píseň má akordy', J("document.querySelectorAll('.akord-kotva').length") >= 20)
+    ok('ukázková píseň se vejde bez přetečení a kolizí',
+       J("!document.querySelector('.ps-ramecek.pretece') && !document.querySelector('.kolize')"))
+    ok('na začátku je vidět celá strana', J("""(() => { const r = document.getElementById('stranka').getBoundingClientRect(),
+       p = document.getElementById('navrh-plocha').getBoundingClientRect();
+       return r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right; })()"""))
+    ok('lišta je na jednom řádku', J("new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size") == 1)
+    ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].map(s => s.getBoundingClientRect().width)")))
+
+    zacni_testovacim_textem(page)
+    page.click('[data-prikaz="vetsi"]')
+    page.click('[data-prikaz="vetsi"]')
+    page.wait_for_timeout(100)
     m = J('navrhStrany.meritko()')
     tol = 1.2 * m           # do 1,2 CSS px (WebKit má kotvu o zlomek pixelu vedle)
     # Výchozí strana: 0 Název, 1 Autor, 2-3 sloka, 4 prázdný, 5 refrén.
@@ -284,7 +309,8 @@ def test_prohlizece(p, base, jmeno):
     ok('styl z lišty změní odstavec', J(f"document.querySelectorAll('.ps-p')[{S2}].dataset.styl") == 'normalni')
     ok('a bez stylu Sloka zmizí číslo druhého řádku', J("[...document.querySelectorAll('.ps-zacatek')].length") == 2)
     page.keyboard.press(f'{MOD}+z')
-    page.select_option('#upravovany-styl', 'sloka')
+    page.click('#seznam-stylu li[data-styl="sloka"] .upravit')
+    ok('tužka rozbalí úpravu stylu', J("!document.getElementById('uprava-stylu').hidden"))
     page.fill('[data-styl-pole="velikost"]', '14')
     page.wait_for_timeout(100)
     ok('úprava stylu změní všechny sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontSize")
@@ -293,7 +319,8 @@ def test_prohlizece(p, base, jmeno):
     ok('po zvětšení písma je akord nad svým znakem', abs(r['x'] - z['x']) < tol, round(r['x'] - z['x'], 2))
     J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice({S1}, 0), b = T.pozice({S1}, 3);"
       f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
-    page.select_option('#lista-velikost', '20')
+    page.fill('#lista-velikost', '20')
+    page.press('#lista-velikost', 'Enter')
     ok('velikost z lišty jako přímé formátování', J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-velikost=\"20\"]')"))
 
     # Číslování slok: nová sloka dostane 2., ruční značka 5. posune další na 6.
@@ -334,7 +361,7 @@ def test_prohlizece(p, base, jmeno):
     ok('+ Rámeček přidá rámeček', J("document.querySelectorAll('.ps-ramecek').length") == 2)
     page.keyboard.type('Poznámka')
     pred = J("navrhStrany.view.state.doc.child(1).attrs")
-    l = J("document.querySelectorAll('.ps-ramecek-lista')[1].getBoundingClientRect().toJSON()")
+    l = J("document.querySelectorAll('.ps-ramecek .ps-prvek-lista')[1].getBoundingClientRect().toJSON()")
     page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
     page.mouse.down()
     page.mouse.move(l['x'] + 20 + 40 * m * 96 / 25.4 / 10, l['y'] + l['height'] / 2 + 20 * m * 96 / 25.4 / 10, steps=5)
@@ -343,8 +370,37 @@ def test_prohlizece(p, base, jmeno):
     ok('rámeček jde přesunout (o 4 a 2 mm)', abs(po['x'] - pred['x'] - 4) < 0.6 and abs(po['y'] - pred['y'] - 2) < 0.6, (pred, po))
     page.keyboard.press(f'{MOD}+z')
     ok('Zpět vrátí přesun rámečku', J("navrhStrany.view.state.doc.child(1).attrs") == pred)
-    page.click('.ps-ramecek:nth-child(2) .ps-ramecek-smazat', force=True)
+    page.click('.ps-ramecek:nth-child(2) .ps-prvek-smazat', force=True)
     ok('rámeček jde smazat', J("document.querySelectorAll('.ps-ramecek').length") == 1)
+
+    # Obrázek: vložení souborem, přesun, změna velikosti se zachovaným poměrem, vrstva.
+    png = Path(tempfile.mkdtemp(prefix='navrh-obr-')) / 'obr.png'
+    from PIL import Image as PILImage
+    PILImage.new('RGB', (400, 200), (40, 120, 200)).save(png)
+    page.set_input_files('#soubor-obrazku', str(png))
+    page.wait_for_function("document.querySelectorAll('.ps-obrazek').length === 1", timeout=5000)
+    o = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
+    ok('obrázek se vloží s poměrem stran 2:1', abs(o['w'] / o['h'] - 2) < 0.05, {k: o[k] for k in 'xywh'})
+    ok('vložený obrázek je vybraný a panel ukáže jeho kartu', J("!document.getElementById('vybrany-obrazek').hidden"))
+    r = J("document.querySelector('.ps-obrazek img').getBoundingClientRect().toJSON()")
+    krok = 10 * m * 96 / 25.4
+    page.mouse.move(r['x'] + r['width'] / 2, r['y'] + r['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(r['x'] + r['width'] / 2 + krok, r['y'] + r['height'] / 2 + krok, steps=5)
+    page.mouse.up()
+    o2 = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
+    ok('obrázek jde přesunout za plochu (o 10 mm)', abs(o2['x'] - o['x'] - 10) < 0.6 and abs(o2['y'] - o['y'] - 10) < 0.6, (o['x'], o['y'], o2['x'], o2['y']))
+    roh = J("document.querySelector('.ps-obrazek .ps-prvek-roh').getBoundingClientRect().toJSON()")
+    page.mouse.move(roh['x'] + roh['width'] / 2, roh['y'] + roh['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(roh['x'] + roh['width'] / 2 + krok, roh['y'] + roh['height'] / 2 + 2, steps=5)
+    page.mouse.up()
+    o3 = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
+    ok('roh zvětší obrázek se stejným poměrem', o3['w'] > o2['w'] + 5 and abs(o3['w'] / o3['h'] - 2) < 0.05, (o3['w'], o3['h']))
+    page.click('#vybrany-obrazek [data-vrstva="za"]')
+    ok('obrázek jde dát za text', J("getComputedStyle(document.querySelector('.ps-obrazek')).zIndex") == '0')
+    page.click('#obrazek-smazat')
+    ok('obrázek jde smazat', J("document.querySelectorAll('.ps-obrazek').length") == 0)
 
     # Vložení textu se závorkami a prázdnými řádky.
     J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")

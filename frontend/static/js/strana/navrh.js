@@ -13,7 +13,7 @@ import {
 } from 'prosemirror';
 import { schema, STYLY, DALSI_STYL, VERZE_SCHEMATU, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
 import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-uzel.js';
-import { RamecekView, pridejRamecek } from './ramecky.js';
+import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok } from './sloky.js';
 import { prepocitej } from './kolize.js';
 import { transponuj } from './akordy.js';
@@ -24,27 +24,29 @@ const KLIC_ZALOHY = 'navrh-strany-pokus';
 const MM_NA_PX = 96 / 25.4;
 
 const FORMATY = {
-  A5: { sirka: 148, vyska: 210, okraj: 12 },
-  A4: { sirka: 210, vyska: 297, okraj: 18 },
+  A5: { sirka: 148, vyska: 210, okraj: 10 },
+  A4: { sirka: 210, vyska: 297, okraj: 15 },
 };
 
 const PISMA = ['Noto Sans', 'Noto Serif', 'Roboto Condensed', 'Caveat'];
-const VELIKOSTI = [7, 8, 9, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40];
+// Kroky tlačítek −/+ u velikosti písma (jako v textových editorech).
+const VELIKOSTI = [6, 7, 8, 9, 9.5, 10, 10.5, 11, 12, 13, 14, 16, 18, 20, 24, 28, 32, 40, 48, 60, 72];
 
+// Výchozí velikosti počítají se zpěvníkem A5: tři sloky a refrén s akordy na stranu.
 const zakladStylu = {
-  pismo: 'Noto Sans', velikost: 11, tucne: false, kurziva: false, barva: '#000000',
-  zarovnani: 'left', odsazeni: 0, pred: 0, po: 0, radkovani: 1.25,
+  pismo: 'Noto Sans', velikost: 9.5, tucne: false, kurziva: false, barva: '#000000',
+  zarovnani: 'left', odsazeni: 0, pred: 0, po: 0, radkovani: 1.2,
 };
 const VYCHOZI = {
   format: 'A5',
   styly: {
     normalni: { ...zakladStylu },
-    nadpis: { ...zakladStylu, pismo: 'Noto Serif', velikost: 17, tucne: true, radkovani: 1.2, po: 1 },
-    autor: { ...zakladStylu, velikost: 10, kurziva: true, po: 10 },
-    sloka: { ...zakladStylu, odsazeni: 7 },
-    refren: { ...zakladStylu, odsazeni: 13 },
+    nadpis: { ...zakladStylu, pismo: 'Noto Serif', velikost: 15, tucne: true, radkovani: 1.15, po: 1 },
+    autor: { ...zakladStylu, velikost: 8.5, kurziva: true, po: 8, barva: '#444444' },
+    sloka: { ...zakladStylu, odsazeni: 6 },
+    refren: { ...zakladStylu, odsazeni: 11 },
   },
-  pismoAkordu: 'Roboto Condensed', velikostAkordu: 10, barvaAkordu: '#b00020', tucneAkordy: true,
+  pismoAkordu: 'Roboto Condensed', velikostAkordu: 8.5, barvaAkordu: '#b00020', tucneAkordy: true,
   automatickaMezera: false,
   notace: 'cz',
 };
@@ -55,6 +57,7 @@ let nastaveni = structuredClone(VYCHOZI);
 let meritko = 1;
 let meritkoRucne = false;
 let rezimAkordu = false;
+let rozbalenyStyl = null;     // styl, jehož úprava je v panelu rozbalená
 
 const el = (id) => document.getElementById(id);
 const koren = el('navrh');
@@ -157,6 +160,8 @@ const ovladac = new OvladacAkordu(obal, {
 const zaloha = nactiZalohu();
 if (zaloha) nastaveni = zaloha.nastaveni;
 
+const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: format });
+
 const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   state: EditorState.create({
     doc: zaloha ? zaloha.doc : prazdnyDokument(format()),
@@ -165,10 +170,14 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   attributes: { class: 'stranka-obsah', spellcheck: 'false' },
   nodeViews: {
     akord: (n, v, g) => new AkordView(n, v, g),
-    ramecek: (n, v, g) => new RamecekView(n, v, g, { meritko: () => meritko, rozmer: format }),
+    ramecek: prvek,
+    obrazek: prvek,
   },
   clipboardTextSerializer: (slice) => textZUzlu(slice.content),
   clipboardTextParser: vlozenyText,
+  // Obrázek ze schránky nebo přetažený soubor se vloží jako obrázek na stranu.
+  handlePaste: (v, e) => vlozSoubory(e.clipboardData && e.clipboardData.files),
+  handleDrop: (v, e) => vlozSoubory(e.dataTransfer && e.dataTransfer.files, e),
   dispatchTransaction(tr) {
     const blik = akordyPoMazani(tr);
     view.updateState(view.state.apply(tr));
@@ -227,23 +236,36 @@ function pouzijNastaveni() {
   s.width = f.sirka + 'mm';
   s.height = f.vyska + 'mm';
   s.setProperty('--okraj', f.okraj + 'mm');
-  s.setProperty('--pismo-akordu', `'${nastaveni.pismoAkordu}'`);
-  s.setProperty('--velikost-akordu', nastaveni.velikostAkordu + 'pt');
-  s.setProperty('--barva-akordu', nastaveni.barvaAkordu);
-  s.setProperty('--vaha-akordu', nastaveni.tucneAkordy ? 700 : 400);
+  for (const cil of [s, el('ukazka-akordu').style]) {
+    cil.setProperty('--pismo-akordu', `'${nastaveni.pismoAkordu}'`);
+    cil.setProperty('--velikost-akordu', nastaveni.velikostAkordu + 'pt');
+    cil.setProperty('--barva-akordu', nastaveni.barvaAkordu);
+    cil.setProperty('--vaha-akordu', nastaveni.tucneAkordy ? 700 : 400);
+  }
   stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu(k, v)).join('\n');
+  vykresliStyly();
   nastavMeritko();
   document.fonts.ready.then(naplanujPrepocet);
   naplanujPrepocet();
 }
 
+// Výška pracovní plochy: do spodku okna (lišta a panel se pak neposouvají se stránkou).
+function nastavVysku() {
+  if (window.innerWidth <= 900) { koren.style.height = ''; return; }
+  const horni = koren.getBoundingClientRect().top + window.scrollY;
+  koren.style.height = Math.max(420, window.innerHeight - horni) + 'px';
+}
+
+// Bez ručního přiblížení se ukazuje celá strana.
 function nastavMeritko(nove) {
   const f = format();
   const sirka = f.sirka * MM_NA_PX, vyska = f.vyska * MM_NA_PX;
   if (nove != null) { meritko = nove; meritkoRucne = true; }
   else if (!meritkoRucne) {
-    const volno = el('navrh-plocha').clientWidth - 32;
-    meritko = Math.max(0.5, Math.min(2.5, volno / sirka));
+    const plocha = el('navrh-plocha');
+    // Okraj plochy (24 px kolem) a spodní pruh se stavem a přiblížením.
+    const volnoX = plocha.clientWidth - 48, volnoY = plocha.clientHeight - 48 - 44;
+    meritko = Math.max(0.3, Math.min(3, volnoX / sirka, volnoY / vyska));
   }
   meritko = Math.round(meritko * 100) / 100;
   stranka.style.transform = `scale(${meritko})`;
@@ -264,7 +286,7 @@ function zmenFormat(novy) {
     view.state.doc.forEach((r, pos) => {
       const a = r.attrs;
       const z = (x) => Math.round(x * pomer * 2) / 2;
-      tr = tr.setNodeMarkup(pos, null, { x: z(a.x), y: z(a.y), w: z(a.w), h: z(a.h) });
+      tr = tr.setNodeMarkup(pos, null, { ...a, x: z(a.x), y: z(a.y), w: z(a.w), h: z(a.h) });
     });
     view.dispatch(tr);
   }
@@ -297,15 +319,12 @@ function napojPanel() {
       zalohuj();
     });
   }
-  const vyberStylu = el('upravovany-styl');
-  for (const [k, nazev] of Object.entries(STYLY)) vyberStylu.add(new Option(nazev, k));
-  vyberStylu.addEventListener('change', nactiPanel);
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
     const klic = prvek.dataset.stylPole;
     prvek.addEventListener(udalostPrvku(prvek), () => {
       const h = hodnotaPrvku(prvek);
-      if (Number.isNaN(h)) return;
-      const styl = vyberStylu.value;
+      if (Number.isNaN(h) || !rozbalenyStyl) return;
+      const styl = rozbalenyStyl;
       nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [styl]: { ...nastaveni.styly[styl], [klic]: h } } };
       pouzijNastaveni();
       zalohuj();
@@ -320,11 +339,86 @@ function nactiPanel() {
     const h = nastaveni[prvek.dataset.nastaveni];
     if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
   }
-  const styl = nastaveni.styly[el('upravovany-styl').value];
+  if (!rozbalenyStyl) return;
+  const styl = nastaveni.styly[rozbalenyStyl];
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
     const h = styl[prvek.dataset.stylPole];
     if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
   }
+}
+
+// Seznam stylů v panelu: ukázka každého stylu jeho písmem a krátký popis. Klik na styl ho
+// použije na odstavce ve výběru, tužka rozbalí jeho úpravu.
+function vykresliStyly() {
+  const seznam = el('seznam-stylu');
+  const uprava = el('uprava-stylu');
+  seznam.textContent = '';
+  for (const [k, nazev] of Object.entries(STYLY)) {
+    const s = nastaveni.styly[k];
+    const li = document.createElement('li');
+    li.dataset.styl = k;
+    const nahled = document.createElement('button');
+    nahled.type = 'button';
+    nahled.className = 'nahled';
+    nahled.title = `Použít styl ${nazev}`;
+    nahled.style.fontFamily = `'${s.pismo}', sans-serif`;
+    nahled.style.fontSize = Math.min(Math.max(s.velikost * 1.25, 12), 19) + 'px';
+    nahled.style.fontWeight = s.tucne ? 700 : 400;
+    nahled.style.fontStyle = s.kurziva ? 'italic' : 'normal';
+    nahled.style.color = s.barva;
+    nahled.textContent = nazev;
+    const popis = document.createElement('span');
+    popis.className = 'popis';
+    popis.textContent = `${s.pismo}, ${String(s.velikost).replace('.', ',')} pt` + (s.odsazeni ? `, odsazení ${String(s.odsazeni).replace('.', ',')} mm` : '');
+    nahled.appendChild(popis);
+    nahled.addEventListener('mousedown', (e) => e.preventDefault());
+    nahled.addEventListener('click', () => nastavStyl(k));
+    const upravit = document.createElement('button');
+    upravit.type = 'button';
+    upravit.className = 'upravit';
+    upravit.title = `Upravit styl ${nazev}`;
+    upravit.setAttribute('aria-expanded', String(rozbalenyStyl === k));
+    upravit.innerHTML = '<svg viewBox="0 0 24 24"><use href="#i-tuzka"/></svg>';
+    upravit.addEventListener('click', () => {
+      rozbalenyStyl = rozbalenyStyl === k ? null : k;
+      vykresliStyly();
+    });
+    li.append(nahled, upravit);
+    li.classList.toggle('rozbaleny', rozbalenyStyl === k);
+    seznam.appendChild(li);
+    if (rozbalenyStyl === k) li.after(uprava);
+  }
+  uprava.hidden = !rozbalenyStyl;
+  if (!rozbalenyStyl) seznam.after(uprava);
+  nactiPanel();
+  if (typeof view !== 'undefined') oznacAktivniStyl();
+}
+
+function oznacAktivniStyl() {
+  const p = view.state.selection.$from.parent;
+  const styl = p.type === N.odstavec ? p.attrs.styl : null;
+  for (const li of el('seznam-stylu').children) li.classList.toggle('aktivni', li.dataset.styl === styl);
+}
+
+// --- obrázky --------------------------------------------------------------------------
+
+// Soubory ze schránky, přetažení nebo výběru: obrázky se vloží na stranu. Vrací true,
+// když se něco vkládalo (pak se událost dál nezpracovává).
+function vlozSoubory(soubory, udalost = null) {
+  const obrazky = [...(soubory || [])].filter((f) => /^image\//.test(f.type));
+  if (!obrazky.length) return false;
+  let kam = null;
+  if (udalost) {
+    const r = stranka.getBoundingClientRect();
+    const pxNaMm = MM_NA_PX * meritko;
+    kam = { x: (udalost.clientX - r.left) / pxNaMm, y: (udalost.clientY - r.top) / pxNaMm };
+  }
+  for (const soubor of obrazky) {
+    nactiObrazek(soubor)
+      .then((o) => vlozObrazek(view, format(), o, kam))
+      .catch((chyba) => window.oznam(chyba.message, { nadpis: 'Obrázek se nevložil', druh: 'chyba' }));
+  }
+  return true;
 }
 
 // --- příkazy lišty --------------------------------------------------------------------
@@ -376,6 +470,22 @@ function vymazFormatovani() {
   view.dispatch(tr);
 }
 
+// Velikost písma u kurzoru (přímé formátování, jinak styl odstavce), v pt.
+function velikostUKurzoru() {
+  const { state } = view;
+  const znacky = state.storedMarks || state.selection.$from.marks();
+  const m = znacky.find((z) => z.type === M.velikost);
+  if (m) return m.attrs.v;
+  const p = state.selection.$from.parent;
+  return nastaveni.styly[p.type === N.odstavec ? p.attrs.styl : 'normalni'].velikost;
+}
+
+function krokVelikosti(smer) {
+  const v = velikostUKurzoru();
+  const dalsi = smer > 0 ? VELIKOSTI.find((x) => x > v) : [...VELIKOSTI].reverse().find((x) => x < v);
+  if (dalsi) nastavZnacku(M.velikost, { v: dalsi });
+}
+
 function odsad(o) {
   upravOdstavce((n) => {
     const aktualni = n.attrs.odsazeni ?? nastaveni.styly[n.attrs.styl].odsazeni;
@@ -416,12 +526,17 @@ const PRIKAZY = {
   'transp-dolu': () => transponujVse(-1),
   'transp-nahoru': () => transponujVse(1),
   ramecek: () => pridejRamecek(view, format()),
+  obrazek: () => el('soubor-obrazku').click(),
+  'pismo-mensi': () => krokVelikosti(-1),
+  'pismo-vetsi': () => krokVelikosti(1),
   zpet: () => undo(view.state, view.dispatch),
   znovu: () => redo(view.state, view.dispatch),
-  mensi: () => nastavMeritko(Math.max(0.4, meritko - 0.1)),
-  vetsi: () => nastavMeritko(Math.min(3, meritko + 0.1)),
-  'na-sirku': () => { meritkoRucne = false; nastavMeritko(); },
+  mensi: () => nastavMeritko(Math.max(0.3, Math.round((meritko - 0.1) * 10) / 10)),
+  vetsi: () => nastavMeritko(Math.min(3, Math.round((meritko + 0.1) * 10) / 10)),
+  'cela-strana': () => { meritkoRucne = false; nastavMeritko(); },
 };
+
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -429,7 +544,7 @@ function napojListu() {
     b.addEventListener('mousedown', (e) => e.preventDefault());
     b.addEventListener('click', () => {
       PRIKAZY[b.dataset.prikaz]();
-      if (!['mensi', 'vetsi', 'na-sirku', 'ramecek'].includes(b.dataset.prikaz)) view.focus();
+      if (!BEZ_FOKUSU.includes(b.dataset.prikaz)) view.focus();
     });
   }
   const styl = el('lista-styl');
@@ -438,11 +553,37 @@ function napojListu() {
   const pismo = el('lista-pismo');
   for (const p of PISMA) pismo.add(new Option(p, p));
   pismo.addEventListener('change', () => nastavZnacku(M.pismo, { f: pismo.value }));
+  // Velikost: napsat číslo a Enter (nebo opustit pole).
   const velikost = el('lista-velikost');
-  for (const v of VELIKOSTI) velikost.add(new Option(String(v).replace('.', ','), v));
-  velikost.addEventListener('change', () => nastavZnacku(M.velikost, { v: Number(velikost.value) }));
+  const potvrdVelikost = () => {
+    const v = parseFloat(velikost.value.replace(',', '.'));
+    if (Number.isFinite(v) && v >= 4 && v <= 200 && v !== velikostUKurzoru()) nastavZnacku(M.velikost, { v });
+    else aktualizujListu();
+  };
+  velikost.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); potvrdVelikost(); view.focus(); }
+    if (e.key === 'Escape') { aktualizujListu(); view.focus(); }
+  });
+  velikost.addEventListener('change', potvrdVelikost);
   const barva = el('lista-barva');
+  barva.addEventListener('input', () => { el('lista-barva-pruh').style.background = barva.value; });
   barva.addEventListener('change', () => nastavZnacku(M.barva, { c: barva.value }));
+  el('soubor-obrazku').addEventListener('change', (e) => {
+    vlozSoubory(e.target.files);
+    e.target.value = '';
+  });
+  // Přetahovaný soubor nad plochou: zvýraznit stranu.
+  const plocha = el('navrh-plocha');
+  plocha.addEventListener('dragover', (e) => {
+    if ([...(e.dataTransfer?.types || [])].includes('Files')) { e.preventDefault(); plocha.classList.add('pretahovani'); }
+  });
+  plocha.addEventListener('dragleave', () => plocha.classList.remove('pretahovani'));
+  plocha.addEventListener('drop', (e) => {
+    plocha.classList.remove('pretahovani');
+    if (e.defaultPrevented) return;
+    // Pád vedle strany (mimo editor): vložit doprostřed.
+    if (vlozSoubory(e.dataTransfer && e.dataTransfer.files)) e.preventDefault();
+  });
 }
 
 // Lišta ukazuje skutečný vzhled u kurzoru: přímé formátování, jinak styl odstavce.
@@ -461,8 +602,12 @@ function aktualizujListu() {
   };
   if (p) el('lista-styl').value = p.attrs.styl;
   nastavVyber(el('lista-pismo'), znacka(M.pismo)?.attrs.f || styl.pismo);
-  nastavVyber(el('lista-velikost'), znacka(M.velikost)?.attrs.v || styl.velikost);
+  if (document.activeElement !== el('lista-velikost')) {
+    el('lista-velikost').value = String(znacka(M.velikost)?.attrs.v || styl.velikost).replace('.', ',');
+  }
   el('lista-barva').value = znacka(M.barva)?.attrs.c || styl.barva;
+  el('lista-barva-pruh').style.background = el('lista-barva').value;
+  oznacAktivniStyl();
   const zarovnani = p ? p.attrs.zarovnani || styl.zarovnani : null;
 
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -480,11 +625,18 @@ function aktualizujListu() {
   const aktivni = $from.depth >= 1 ? view.nodeDOM($from.before(1)) : null;
   for (const r of view.dom.querySelectorAll('.ps-ramecek')) r.classList.toggle('aktivni', r === aktivni);
 
-  // Panel vybraného akordu.
+  // Kontextové karty: vybraný akord, vybraný obrázek.
   const sel = state.selection;
   const vybrany = sel instanceof NodeSelection && sel.node.type === N.akord ? sel : null;
   el('vybrany-akord').hidden = !vybrany;
   if (vybrany) el('akord-velikost').value = vybrany.node.attrs.vel || 100;
+  const obrazek = sel instanceof NodeSelection && sel.node.type === N.obrazek ? sel.node : null;
+  el('vybrany-obrazek').hidden = !obrazek;
+  if (obrazek) {
+    for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
+      b.classList.toggle('aktivni', b.dataset.vrstva === obrazek.attrs.vrstva);
+    }
+  }
 
   // Značka sloky: u sloky nebo refrénu, ve kterém je kurzor.
   const zacatek = zacatekSloky(state);
@@ -530,6 +682,20 @@ function napojPanelAkordu() {
     upravVybranyAkord({ vel: !v || v === 100 ? null : Math.max(40, Math.min(300, v)) });
   });
   el('akord-vychozi').addEventListener('click', () => upravVybranyAkord({ dx: 0, dy: 0 }));
+  for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
+    b.addEventListener('click', () => {
+      const sel = view.state.selection;
+      if (!(sel instanceof NodeSelection) || sel.node.type !== N.obrazek) return;
+      const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, vrstva: b.dataset.vrstva });
+      tr.setSelection(NodeSelection.create(tr.doc, sel.from));
+      view.dispatch(tr);
+    });
+  }
+  el('obrazek-smazat').addEventListener('click', () => {
+    const sel = view.state.selection;
+    if (sel instanceof NodeSelection && sel.node.type === N.obrazek) view.dispatch(view.state.tr.deleteSelection());
+    view.focus();
+  });
   el('akord-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
     if (sel instanceof NodeSelection) view.dispatch(view.state.tr.deleteSelection());
@@ -560,12 +726,25 @@ function napojPanelAkordu() {
 napojPanel();
 napojListu();
 napojPanelAkordu();
+nastavVysku();
 pouzijNastaveni();
 aktualizujListu();
-window.addEventListener('resize', () => { if (!meritkoRucne) nastavMeritko(); });
+window.addEventListener('resize', () => { nastavVysku(); if (!meritkoRucne) nastavMeritko(); });
 view.focus();
 
 // Pro testy a ladění.
+// nahradTextem: test začíná od známého textu, ne od ukázkové písně.
 window.navrhStrany = {
   view, schema, TextSelection, nastaveni: () => nastaveni, meritko: () => meritko, prepniRezimAkordu,
+  nahradTextem(nazev, autor, text) {
+    const f = format();
+    const doc = N.doc.create(null, N.ramecek.create(
+      { x: f.okraj, y: f.okraj, w: f.sirka - 2 * f.okraj, h: f.vyska - 2 * f.okraj },
+      [N.odstavec.create({ styl: 'nadpis' }, schema.text(nazev)),
+        N.odstavec.create({ styl: 'autor' }, schema.text(autor)), ...odstavceZTextu(text)],
+    ));
+    view.updateState(EditorState.create({ doc, plugins: view.state.plugins }));
+    aktualizujListu();
+    naplanujPrepocet();
+  },
 };
