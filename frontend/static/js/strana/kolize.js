@@ -1,15 +1,12 @@
-// Měřicí průchod po vykreslení: akordy, které by do sebe narazily, a obsah, který se na
-// stranu nevejde.
+// Měřicí průchod po vykreslení: akordy, které by do sebe narazily, a rámečky, do kterých
+// se text nevejde.
 //
-// Akordy jsou overlay, takže samy text neodsunou. Když se dva překrývají (krátká slabika,
-// dlouhý akord, transpozice C -> C#mi7), šablona rozhodne:
-//   automatická mezera - před kotvu druhého se přidá nejmenší nutná mezera v textu.
-//     Je spočítaná, ne uložená: po transpozici nebo změně písma se spočítá znovu.
-//   jen zvýraznit - text zůstane, oba akordy se označí a autor je posune sám.
-//
-// Řádky písně se nelámou (white-space: pre), takže posun jednoho akordu posune všechny
-// další v řádku přesně o tolik - stačí jedno čtení a jedno psaní, bez opakovaného
-// přepočítávání rozložení.
+// Akordy jsou overlay a text neovlivňují. Když se dva překrývají (krátká slabika, dlouhý
+// akord, transpozice C -> C#mi7), označí se červeně. Šablona může zapnout automatickou
+// mezeru: před kotvu druhého akordu se přidá nejmenší nutná mezera v textu. Ta je
+// spočítaná, ne uložená (po transpozici nebo změně písma se spočítá znovu) a nikdy se
+// nepoužije u ručně posunutého akordu - ten autor umístil sám a text se pod ním hýbat
+// nemá.
 
 const MEZERA_EM = 0.35;      // nejmenší vzduch mezi akordy, v em písma textu
 
@@ -20,19 +17,24 @@ export function prepocitej(koren, { automatickaMezera, meritko }) {
     k.classList.remove('kolize');
   }
 
-  // Čtení: všechny obdélníky najednou (jedno přepočítání rozložení).
+  // Čtení: všechny obdélníky najednou (jedno přepočítání rozložení). Akordy se seskupí
+  // po vizuálních řádcích - odstavec se může zalamovat.
   const radky = [];
-  for (const radek of koren.querySelectorAll('.ps-radek')) {
-    const ks = radek.querySelectorAll('.akord-kotva');
+  for (const odstavec of koren.querySelectorAll('.ps-p')) {
+    const ks = odstavec.querySelectorAll('.akord-kotva');
     if (ks.length < 2) continue;
-    const pismo = parseFloat(getComputedStyle(radek).fontSize) || 16;
-    radky.push({
-      pismo,
-      akordy: [...ks].map((k) => ({ k, r: k.querySelector('.akord').getBoundingClientRect() })),
-    });
+    const pismo = parseFloat(getComputedStyle(odstavec).fontSize) || 16;
+    const podleRadku = new Map();
+    for (const k of ks) {
+      const top = Math.round(k.getBoundingClientRect().top);
+      if (!podleRadku.has(top)) podleRadku.set(top, []);
+      podleRadku.get(top).push({ k, r: k.querySelector('.akord').getBoundingClientRect(), rucne: k.classList.contains('rucne') });
+    }
+    for (const akordy of podleRadku.values()) if (akordy.length > 1) radky.push({ pismo, akordy });
   }
 
-  // Psaní.
+  // Psaní. Posun jednoho akordu posune všechny další v řádku o tolik, o kolik se odsunul
+  // text - stačí sčítat, bez opakovaného měření.
   for (const { pismo, akordy } of radky) {
     const mezera = pismo * MEZERA_EM * meritko;
     let posun = 0;
@@ -41,7 +43,7 @@ export function prepocitej(koren, { automatickaMezera, meritko }) {
       const levy = a.r.left + posun;
       if (predchozi && svisleSePrekryvaji(predchozi.r, a.r) && levy < predchozi.pravy + mezera) {
         const chybi = predchozi.pravy + mezera - levy;
-        if (automatickaMezera) {
+        if (automatickaMezera && !a.rucne && !predchozi.rucne) {
           a.k.style.marginLeft = (chybi / meritko).toFixed(2) + 'px';
           posun += chybi;
         } else {
@@ -49,20 +51,19 @@ export function prepocitej(koren, { automatickaMezera, meritko }) {
           predchozi.k.classList.add('kolize');
         }
       }
-      predchozi = { k: a.k, r: a.r, pravy: a.r.right + posun };
+      predchozi = { k: a.k, r: a.r, rucne: a.rucne, pravy: a.r.right + posun };
     }
   }
 
-  // Přetečení: obsah delší než strana, řádek širší než sazební obrazec.
-  let siroke = 0;
-  for (const radek of koren.querySelectorAll('.ps-radek, .ps-nadpis, .ps-autor')) {
-    const sirsi = radek.scrollWidth > radek.clientWidth + 1;
-    radek.classList.toggle('siroky', sirsi);
-    if (sirsi) siroke += 1;
+  // Přetečení: text delší než rámeček.
+  let pretece = 0;
+  for (const ramecek of koren.querySelectorAll('.ps-ramecek')) {
+    const obsah = ramecek.querySelector('.ps-ramecek-obsah');
+    const ano = obsah.scrollHeight > obsah.clientHeight + 1;
+    ramecek.classList.toggle('pretece', ano);
+    if (ano) pretece += 1;
   }
-  const pretece = koren.scrollHeight > koren.clientHeight + 1;
-  koren.classList.toggle('pretece', pretece);
-  return { pretece, siroke, kolize: koren.querySelectorAll('.akord-kotva.kolize').length };
+  return { pretece, kolize: koren.querySelectorAll('.akord-kotva.kolize').length };
 }
 
 function svisleSePrekryvaji(a, b) {

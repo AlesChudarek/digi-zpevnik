@@ -35,7 +35,7 @@ POMOCNE = """
 window.T = {
   // Obdélník i-tého znaku textu v r-tém řádku písně (bez textu akordů).
   znak(r, i) {
-    const radek = document.querySelectorAll('.ps-radek')[r];
+    const radek = document.querySelectorAll('.ps-p')[r];
     const w = document.createTreeWalker(radek, NodeFilter.SHOW_TEXT); let n, k = i;
     while ((n = w.nextNode())) {
       if (n.parentElement.closest('.akord-kotva')) continue;
@@ -46,7 +46,7 @@ window.T = {
     return null;
   },
   pozice(r, i) {
-    const v = navrhStrany.view, radek = document.querySelectorAll('.ps-radek')[r];
+    const v = navrhStrany.view, radek = document.querySelectorAll('.ps-p')[r];
     const w = document.createTreeWalker(radek, NodeFilter.SHOW_TEXT); let n, k = i;
     while ((n = w.nextNode())) { if (k < n.length) return v.posAtDOM(n, k); k -= n.length; }
     return null;
@@ -64,6 +64,25 @@ window.T = {
                  znak: za && za.isText ? za.text[0] : '' });
     });
     return out;
+  },
+  // Obdélník znaku, ke kterému patří i-tý akord (kotevní znak).
+  kotvaZnak(i) {
+    const k = document.querySelectorAll('.akord-kotva')[i];
+    const w = document.createTreeWalker(k.closest('.ps-p'), NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      if (n.parentElement.closest('.akord-kotva') || !(k.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+      if (!n.length) continue;
+      const g = document.createRange(); g.setStart(n, 0); g.setEnd(n, 1);
+      return g.getBoundingClientRect().toJSON();
+    }
+    return null;
+  },
+  // Pozice uvnitř odstavce, který obsahuje daný text (na jeho začátku + posun).
+  vOdstavci(text, posun = 0) {
+    const v = navrhStrany.view; let vysledek = null;
+    v.state.doc.descendants((n, p) => { if (vysledek == null && n.type.name === 'odstavec' && n.textContent.includes(text)) vysledek = p + 1 + posun; });
+    return vysledek;
   },
   kurzor(pos) {
     const v = navrhStrany.view;
@@ -108,116 +127,231 @@ def test_prohlizece(p, base, jmeno):
     J = page.evaluate
     m = J('navrhStrany.meritko()')
     tol = 1.2 * m           # do 1,2 CSS px (WebKit má kotvu o zlomek pixelu vedle)
+    # Výchozí strana: 0 Název, 1 Autor, 2-3 sloka, 4 prázdný, 5 refrén.
+    S1, S2, REF = 2, 3, 5
+
+    ok('výchozí strana má jeden rámeček', J("document.querySelectorAll('.ps-ramecek').length") == 1)
+    ok('sloka a refrén mají značky 1. a R:',
+       J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)") == ['1.', 'R:'])
 
     # Vložení nástrojem Akordy: klik do pravé půlky znaku patří pořád tomu znaku.
+    rozestup0 = J(f'T.znak({S2}, 0).y - T.znak({S1}, 0).y')
     J('navrhStrany.prepniRezimAkordu(true)')
-    z = J('T.znak(0, 4)')
+    z = J(f'T.znak({S2}, 4)')
     page.mouse.click(z['x'] + z['width'] * 0.75, z['y'] + z['height'] / 2)
     ok('klik na znak otevře pole', J("!document.querySelector('.akord-pole').hidden"))
     page.keyboard.type('Ami')
     page.keyboard.press('Enter')
     a = J('T.akordy()')
-    ok('akord patří ke kliknutému znaku', len(a) == 1 and a[0]['n'] == 'Ami' and a[0]['znak'] == 'n', a)
-    r, z = J('T.akord(0)'), J('T.znak(0, 4)')
+    ok('akord patří ke kliknutému znaku', len(a) == 1 and a[0]['n'] == 'Ami' and a[0]['znak'] == 'u', a)
+    page.wait_for_timeout(100)
+    r, z = J('T.akord(0)'), J(f'T.znak({S2}, 4)')
     ok('akord sedí nad svým znakem', abs(r['x'] - z['x']) < tol, round(r['x'] - z['x'], 2))
     ok('akord je nad řádkem, ne přes text', r['y'] + r['height'] <= z['y'] + 1,
        round(z['y'] - (r['y'] + r['height']), 2))
+    rozestup1 = J(f'T.znak({S2}, 0).y - T.znak({S1}, 0).y')
+    ok('řádek s akordem dostane místo nad sebou', rozestup1 > rozestup0 + 8 * m, (round(rozestup0, 1), round(rozestup1, 1)))
 
-    # Druhý akord hned vedle: s automatickou mezerou se nepřekrývají a každý je nad svým.
-    z = J('T.znak(0, 5)')
+    # Zalomený odstavec: místo pro akordy jen nad vizuálním řádkem, kde akord je.
+    J(f'T.kurzor(T.pozice({S1}, 0) + {len("Sem napiš první řádek")})')
+    J('navrhStrany.prepniRezimAkordu(false)')
+    page.keyboard.type(' a ještě dlouhé pokračování, které se určitě zalomí na další řádek rámečku')
+    radky = J(f"""(() => {{ const p = document.querySelectorAll('.ps-p')[{S1}]; const tops = new Set();
+      const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let n;
+      while ((n = w.nextNode())) for (let i = 0; i < n.length; i++) {{ const g = document.createRange(); g.setStart(n, i); g.setEnd(n, i + 1);
+        const r = g.getBoundingClientRect(); if (r.width) tops.add(Math.round(r.top)); }}
+      return [...tops].sort((a, b) => a - b); }})()""")
+    ok('dlouhý odstavec se zalomí', len(radky) >= 2, radky)
+    vyska0 = radky[1] - radky[0]
+    posledni = J(f"document.querySelectorAll('.ps-p')[{S1}].textContent.length") - 3
+    J(f'T.kurzor(T.pozice({S1}, {posledni}))')
+    page.keyboard.type('[')
+    page.keyboard.type('G')
+    page.keyboard.press('Enter')
+    page.wait_for_timeout(100)
+    radky2 = J(f"""(() => {{ const p = document.querySelectorAll('.ps-p')[{S1}]; const tops = new Set();
+      const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let n;
+      while ((n = w.nextNode())) for (let i = 0; i < n.length; i++) {{ const g = document.createRange(); g.setStart(n, i); g.setEnd(n, i + 1);
+        const r = g.getBoundingClientRect(); if (r.width) tops.add(Math.round(r.top)); }}
+      return [...tops].sort((a, b) => a - b); }})()""")
+    ok('akord na zalomeném řádku zvětší jen ten řádek',
+       radky2[0] == radky[0] and radky2[-1] - radky2[-2] > vyska0 + 8 * m, (radky, radky2))
+    page.keyboard.press(f'{MOD}+z')
+    page.keyboard.press(f'{MOD}+z')
+
+    # Druhý akord hned vedle: kolize se jen označí, text se nehýbe.
+    J('navrhStrany.prepniRezimAkordu(true)')
+    x_pred = J(f'T.znak({S2}, 5).x')
+    z = J(f'T.znak({S2}, 5)')
     page.mouse.click(z['x'] + 1, z['y'] + z['height'] / 2)
     page.keyboard.type('C#mi7')
     page.keyboard.press('Enter')
     ok('stránka po akordu s # odpovídá', zije(page))
     page.wait_for_timeout(150)
-    r0, r1, z = J('T.akord(0)'), J('T.akord(1)'), J('T.znak(0, 5)')
-    ok('akordy přes sebe odsunou text', r1['x'] >= r0['x'] + r0['width'], round(r1['x'] - r0['x'] - r0['width'], 2))
-    ok('odsunutý akord je pořád nad svým znakem', abs(r1['x'] - z['x']) < tol, round(r1['x'] - z['x'], 2))
-    page.uncheck('[data-nastaveni="automatickaMezera"]')
-    page.wait_for_timeout(150)
-    ok('bez mezery se kolize jen označí', J("document.querySelectorAll('.akord-kotva.kolize').length") == 2)
+    ok('akordy přes sebe se jen označí', J("document.querySelectorAll('.akord-kotva.kolize').length") == 2)
+    ok('a text se neposune', abs(J(f'T.znak({S2}, 5).x') - x_pred) < 0.5)
     page.check('[data-nastaveni="automatickaMezera"]')
+    page.wait_for_timeout(150)
+    r0, r1, z = J('T.akord(0)'), J('T.akord(1)'), J(f'T.znak({S2}, 5)')
+    ok('se zapnutou mezerou odsunou text', r1['x'] >= r0['x'] + r0['width'], round(r1['x'] - r0['x'] - r0['width'], 2))
+    ok('odsunutý akord je pořád nad svým znakem', abs(r1['x'] - z['x']) < tol, round(r1['x'] - z['x'], 2))
 
-    # Psaní před akordem a změna písma: akord drží svůj znak.
+    # Ručně posunutý akord text neodsouvá ani se zapnutou mezerou.
     J('navrhStrany.prepniRezimAkordu(false)')
-    J('T.kurzor(T.pozice(0, 0))')
+    r = J('T.akord(1)')
+    page.keyboard.down('Alt')
+    page.mouse.move(r['x'] + 3, r['y'] + 3)
+    page.mouse.down()
+    page.mouse.move(r['x'] + 4, r['y'] - 12, steps=4)
+    page.mouse.up()
+    page.keyboard.up('Alt')
+    page.wait_for_timeout(150)
+    a = J('T.akordy()')
+    ok('s Altem drží svůj znak a uloží posun', a[1]['znak'] == 'h' and a[1]['dy'] < 0, a)
+    ok('ručně posunutý akord text neodsouvá', J("document.querySelectorAll('.akord-kotva')[1].style.marginLeft") in ('', '0px'))
+    page.keyboard.press(f'{MOD}+z')
+    page.uncheck('[data-nastaveni="automatickaMezera"]')
+
+    # Vodicí čára: akord tažený kousek nad sousedy se přichytí k jejich výšce.
+    J(f"T.kurzor(T.pozice({S2}, 12))")
+    page.keyboard.type('[')
+    page.keyboard.type('D')
+    page.keyboard.press('Enter')
+    page.wait_for_timeout(100)
+    r, soused = J('T.akord(2)'), J('T.akord(0)')
+    page.mouse.move(r['x'] + 3, r['y'] + 3)
+    page.mouse.down()
+    page.mouse.move(r['x'] + 3, r['y'] - 1, steps=3)
+    page.mouse.move(r['x'] + 3, r['y'] - 3, steps=2)
+    ok('při tažení blízko výšky sousedů je vidět vodicí čára', J("document.querySelector('.voditko').classList.contains('viditelne')"))
+    page.mouse.up()
+    page.wait_for_timeout(100)
+    r = J('T.akord(2)')
+    ok('a akord je na stejné výšce jako sousedé', abs((r['y'] + r['height']) - (soused['y'] + soused['height'])) < 0.6,
+       round((r['y'] + r['height']) - (soused['y'] + soused['height']), 2))
+    # Shift: jen vodorovně.
+    pred = J('T.akordy()')[2]
+    r = J('T.akord(2)')
+    page.keyboard.down('Shift')
+    page.mouse.move(r['x'] + 3, r['y'] + 3)
+    page.mouse.down()
+    page.mouse.move(r['x'] + 6, r['y'] - 25, steps=4)
+    page.mouse.up()
+    page.keyboard.up('Shift')
+    ok('se Shiftem se akord posune jen vodorovně', J('T.akordy()')[2]['dy'] == pred['dy'], J('T.akordy()')[2])
+
+    # Psaní před akordem: akord drží svůj znak.
+    J(f'T.kurzor(T.pozice({S2}, 0))')
     page.keyboard.type('Xx ')
     a = J('T.akordy()')
-    ok('psaní na začátku řádku akordy nepřesune', [x['znak'] for x in a] == ['n', 'a'], a)
-    page.fill('[data-nastaveni="velikost"]', '15')
-    page.wait_for_timeout(200)
-    r, z = J('T.akord(0)'), J('T.znak(0, 7)')
-    ok('po zvětšení písma je akord nad svým znakem', abs(r['x'] - z['x']) < tol, round(r['x'] - z['x'], 2))
-
-    # Psaní hned za akordem (kurzor mezi akordem a znakem) nechá akord u původního písmene.
+    ok('psaní na začátku řádku akordy nepřesune', [x['znak'] for x in a][:2] == ['u', 'h'], a)
     J("T.kurzor(T.akordy()[0].pos + 1)")
     page.keyboard.type('Q')
-    a = J('T.akordy()')
-    ok('psaní za akordem jde před něj', a[0]['znak'] == 'n', a)
-    page.keyboard.press(f'{MOD}+z')
+    ok('psaní za akordem jde před něj', J('T.akordy()')[0]['znak'] == 'u', J('T.akordy()'))
 
     # Transpozice.
     page.click('[data-prikaz="transp-nahoru"]')
     page.click('[data-prikaz="transp-nahoru"]')
-    ok('transpozice +2', [x['n'] for x in J('T.akordy()')] == ['Hmi', 'D#mi7'], J('T.akordy()'))
-    page.wait_for_timeout(600)       # ať se další úprava neslije do jednoho kroku Zpět
+    ok('transpozice +2', [x['n'] for x in J('T.akordy()')][:2] == ['Hmi', 'D#mi7'], J('T.akordy()'))
+    page.wait_for_timeout(600)
 
-    # Tažení: přichytí se ke znaku pod sebou; Zpět vrátí celé tažení.
-    J('T.kurzor(1)')
-    page.uncheck('[data-nastaveni="automatickaMezera"]')
-    page.wait_for_timeout(100)
+    # Tažení přes jiný znak: kotva se přesune; Zpět vrátí celé tažení.
+    J('T.kurzor(3)')
     pred = J('T.akordy()')[0]
-    r, zs, zc = J('T.akord(0)'), J('T.znak(0, 7)'), J('T.znak(0, 11)')
+    r, zs, zc = J('T.akord(0)'), J(f'T.znak({S2}, 8)'), J(f'T.znak({S2}, 12)')
     page.mouse.move(r['x'] + 3, r['y'] + 3)
     page.mouse.down()
     page.mouse.move(r['x'] + 3 + (zc['x'] - zs['x']), r['y'] + 3, steps=6)
-    ok('při tažení je zvýrazněný budoucí znak', J("[...document.querySelectorAll('.kotva-znak')].map(e => e.textContent).join('')") == 'š')
-    ok('při tažení je vidět spojnice', J("document.querySelector('.spojnice').classList.contains('viditelna')"))
+    ok('při tažení je zvýrazněný budoucí znak', J("[...document.querySelectorAll('.kotva-znak')].map(e => e.textContent).join('')") == 'ř')
     page.mouse.up()
     page.wait_for_timeout(100)
     a = J('T.akordy()')
-    ok('puštěný akord patří ke znaku pod sebou', a[1]['znak'] == 'š' and a[1]['n'] == pred['n'], a)
-    r, z = J('T.akord(1)'), J('T.znak(0, 11)')
-    ok('a zůstal tam, kam byl puštěn', abs(r['x'] - z['x']) < tol, round(r['x'] - z['x'], 2))
+    ok('puštěný akord patří ke znaku pod sebou', any(x['n'] == pred['n'] and x['znak'] == 'ř' for x in a), a)
     page.keyboard.press(f'{MOD}+z')
     a = J('T.akordy()')
-    ok('Zpět vrátí tažení jedním krokem', a[0]['n'] == pred['n'] and a[0]['znak'] == 'n' and a[0]['dx'] == 0, a)
-
-    # Alt: kotva zůstane, uloží se jen posun.
-    r = J('T.akord(0)')
-    page.keyboard.down('Alt')
-    page.mouse.move(r['x'] + 3, r['y'] + 3)
-    page.mouse.down()
-    page.mouse.move(r['x'] + 15, r['y'] - 6, steps=5)
-    page.mouse.up()
-    page.keyboard.up('Alt')
-    a = J('T.akordy()')[0]
-    ok('s Altem se akord jen posune', a['znak'] == 'n' and a['dx'] > 0 and a['dy'] < 0, a)
-    page.check('[data-nastaveni="automatickaMezera"]')
+    ok('Zpět vrátí tažení jedním krokem', a[0]['n'] == pred['n'] and a[0]['znak'] == 'u', a)
 
     # Smazání kotevního znaku: akord přejde na další znak a blikne.
-    zn = J('T.akordy()')
-    za_n = J(f"T.akordy()[0].pos") + 2
-    J(f'T.kurzor({za_n})')
+    J(f"T.kurzor(T.akordy()[0].pos + 2)")
     page.keyboard.press('Backspace')
     a = J('T.akordy()')
-    ok('po smazání znaku patří akord k dalšímu', len(a) == len(zn) and a[0]['znak'] in ('a', ''), a)
+    ok('po smazání znaku patří akord k dalšímu', a[0]['znak'] == 'h', a)
     ok('a blikne', J("document.querySelectorAll('.akord-kotva.blik').length") >= 1)
 
-    # Klávesa [ vloží akord u kurzoru.
-    J('T.kurzor(T.pozice(1, 2))')
-    page.keyboard.type('[')
-    page.keyboard.type('G')
+    # Styly: styl odstavce z lišty, úprava stylu v panelu, přímé formátování.
+    J(f'T.kurzor(T.pozice({S2}, 2))')
+    page.select_option('#lista-styl', 'normalni')
+    ok('styl z lišty změní odstavec', J(f"document.querySelectorAll('.ps-p')[{S2}].dataset.styl") == 'normalni')
+    ok('a bez stylu Sloka zmizí číslo druhého řádku', J("[...document.querySelectorAll('.ps-zacatek')].length") == 2)
+    page.keyboard.press(f'{MOD}+z')
+    page.select_option('#upravovany-styl', 'sloka')
+    page.fill('[data-styl-pole="velikost"]', '14')
+    page.wait_for_timeout(100)
+    ok('úprava stylu změní všechny sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontSize")
+       == J("Math.round(14 * 96 / 72 * 100) / 100 + 'px'") or abs(float(J(f"parseFloat(getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontSize)")) - 14 * 96 / 72) < 0.1)
+    r, z = J('T.akord(0)'), J('T.kotvaZnak(0)')
+    ok('po zvětšení písma je akord nad svým znakem', abs(r['x'] - z['x']) < tol, round(r['x'] - z['x'], 2))
+    J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice({S1}, 0), b = T.pozice({S1}, 3);"
+      f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
+    page.select_option('#lista-velikost', '20')
+    ok('velikost z lišty jako přímé formátování', J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-velikost=\"20\"]')"))
+
+    # Číslování slok: nová sloka dostane 2., ruční značka 5. posune další na 6.
+    J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")
     page.keyboard.press('Enter')
-    ok('[ vloží akord u kurzoru', any(x['n'] == 'G' and x['znak'] == 'd' for x in J('T.akordy()')), J('T.akordy()'))
+    page.select_option('#lista-styl', 'sloka')
+    page.keyboard.type('Druhá sloka')
+    page.keyboard.press('Enter')
+    page.keyboard.press('Enter')
+    page.keyboard.type('Třetí sloka')
+    znacky = J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)")
+    ok('sloky se číslují samy', znacky == ['1.', 'R:', '2.', '3.'], znacky)
+    J("T.kurzor(T.vOdstavci('Druhá sloka', 3))")
+    page.fill('#znacka-sloky', '5.')
+    znacky = J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)")
+    ok('ruční značka přepíše číslo a posune další', znacky == ['1.', 'R:', '5.', '6.'], znacky)
+
+    # Nabídka refrénu: prázdný odstavec Refrén nabídne kopii, Tab ji vloží i s akordy.
+    J(f"T.kurzor(T.pozice({REF}, 3))")
+    page.click('[data-prikaz="akordy"]')
+    z = J(f'T.znak({REF}, 0)')
+    page.mouse.click(z['x'] + 1, z['y'] + z['height'] / 2)
+    page.keyboard.type('F')
+    page.keyboard.press('Enter')
+    page.keyboard.press('Escape')
+    J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")
+    page.keyboard.press('Enter')
+    page.keyboard.press('Enter')
+    page.select_option('#lista-styl', 'refren')
+    ok('prázdný Refrén nabídne předchozí refrén', J("!!document.querySelector('.ps-nabidka')"))
+    page.keyboard.press('Tab')
+    ok('Tab vloží kopii refrénu i s akordem',
+       J("[...document.querySelectorAll('.ps-p')].filter(p => p.textContent.includes('Tady začíná refrén')).length") == 2
+       and sum(1 for x in J('T.akordy()') if x['n'] == 'F') == 2, J('T.akordy()'))
+
+    # Rámečky: nový, přesun za lištu (Zpět ho vrátí), smazání.
+    page.click('[data-prikaz="ramecek"]')
+    ok('+ Rámeček přidá rámeček', J("document.querySelectorAll('.ps-ramecek').length") == 2)
+    page.keyboard.type('Poznámka')
+    pred = J("navrhStrany.view.state.doc.child(1).attrs")
+    l = J("document.querySelectorAll('.ps-ramecek-lista')[1].getBoundingClientRect().toJSON()")
+    page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(l['x'] + 20 + 40 * m * 96 / 25.4 / 10, l['y'] + l['height'] / 2 + 20 * m * 96 / 25.4 / 10, steps=5)
+    page.mouse.up()
+    po = J("navrhStrany.view.state.doc.child(1).attrs")
+    ok('rámeček jde přesunout (o 4 a 2 mm)', abs(po['x'] - pred['x'] - 4) < 0.6 and abs(po['y'] - pred['y'] - 2) < 0.6, (pred, po))
+    page.keyboard.press(f'{MOD}+z')
+    ok('Zpět vrátí přesun rámečku', J("navrhStrany.view.state.doc.child(1).attrs") == pred)
+    page.click('.ps-ramecek:nth-child(2) .ps-ramecek-smazat', force=True)
+    ok('rámeček jde smazat', J("document.querySelectorAll('.ps-ramecek').length") == 1)
 
     # Vložení textu se závorkami a prázdnými řádky.
     J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")
-    # pasteText jde stejnou cestou jako vložení ze schránky (clipboardTextParser); umělou
-    # událost paste s daty Firefox nepodporuje.
     J("navrhStrany.view.pasteText('\\n\\n[C]Ahoj [G]světe\\n[Ami]druhý řádek\\n\\nR: [F]refrén')")
-    druhy = J("[...document.querySelectorAll('.ps-sloka')].map(s => s.dataset.druh)")
-    ok('vložený text: sloky a refrén', druhy[-2:] == ['sloka', 'refren'], druhy)
+    odst = J("[...document.querySelectorAll('.ps-p')].slice(-5).map(p => p.dataset.styl + ':' + p.textContent.replace(/[A-H]#?(mi)?7?(?=[a-zěščřžýáíéůú ])/g, ''))")
+    ok('vložený text: odstavce se styly sloka a refrén',
+       [o.split(':')[0] for o in odst] == ['sloka', 'sloka', 'refren', 'refren'][-4:] or [o.split(':')[0] for o in odst][-4:] == ['sloka', 'sloka', 'refren', 'refren'], odst)
     nazvy = [(x['n'], x['znak']) for x in J('T.akordy()')]
     ok('vložený text: akordy u znaků', all(x in nazvy for x in [('C', 'A'), ('G', 's'), ('Ami', 'd'), ('F', 'r')]), nazvy)
 

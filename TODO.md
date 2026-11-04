@@ -1002,8 +1002,11 @@ kdo maže.
         spojnice. Technicky neviditelný inline uzel před znakem (ProseMirror, MIT,
         vendorovaný bundle) = totéž co `[Am]` v ChordPro, jen s posunem a stylem.
         Smazaný znak -> akord přejde na další znak (a blikne).
-      - **kolize akordů**: volba v šabloně, výchozí automatická nejmenší mezera
-        v textu (neukládá se, po transpozici se přepočítá); jinak jen zvýraznit.
+      - **kolize akordů**: akordy text nikdy neovlivní (Aleš 4. 11. po vyzkoušení) -
+        kolize se jen označí. Automatická nejmenší mezera v textu je volba v šabloně,
+        výchozí vypnutá a nikdy pro ručně posunutý akord. Tažení: přichycení ke znaku
+        pod akordem (jemný posun drží kotvu), k výšce sousedů s vodicí čárou, Alt drží
+        znak, Shift jen vodorovně.
       - **ChordPro** import i export; posuny a styly v direktivách `{x_…}`, ať náš
         vlastní export a zpětný import nic neztratí. Import „akordů nad textem“ z webu
         (Supermusic, pisnicky-akordy.cz) s automatickým ukotvením.
@@ -1011,11 +1014,18 @@ kdo maže.
         (česky H/B, mění se jen základní tón a bas, přípona `mi` apod. zůstane);
         přepínač dalších notací až kdyby byl potřeba. Vlastní modul (ChordSheetJS je
         GPL a H/B neumí).
-      - **strana**: pevné plátno A4 nebo A5 (formát je vlastnost zpěvníku), obsah
-        nepřetéká sám, přetečení se označí a zbytek jde jedním klikem dál. Hlavní proud
-        textu (sloky, refrén, 1-3 sloupce) + volná vrstva grafik a ozdobných textů
-        (před i za textem), bez obtékání. Šablona vzhledu pro celý zpěvník. Píseň přes
-        víc stran i víc písní na straně.
+      - **strana** (přepracováno 4. 11. - pevná struktura sloka/refrén byla moc
+        svazující, Aleš chtěl „Word s akordovým nástrojem“): pevné plátno A4 nebo A5
+        jako v Canvě s rámečky (přesun, velikost, smazání); text v rámečku jako ve
+        Wordu - písmo, velikost, barva, B/I/U, zarovnání, odsazení u výběru, Shift+Enter
+        zalomení. Styly odstavců (Normální, Název, Autor, Sloka, Refrén) jsou jen
+        výchozí vzhled ze šablony, každý odstavec jde přenastavit. Sloky se číslují
+        samy (dekorace, ne text), značka jde ručně přepsat a číselná posune další.
+        Na prázdném Refrénu Tab vloží kopii předchozího refrénu i s akordy. Místo pro
+        akordy dostane jen vizuální řádek s akordem (vzpěra v kotvě), i zalomený.
+        Obsah nepřetéká sám, přetečení rámečku se označí. Obtékání obrázků vlevo
+        a vpravo (floaty) ano, uprostřed textu ne. Píseň přes víc stran i víc písní
+        na straně.
       - **uložení**: zdroj (JSON s verzí schématu) patří k obrázku; každé uložení =
         nová dvojice obrázek + zdroj (neměnná verze, jako dnes obrázky). PNG vyrábí
         prohlížeč (1748×2480 = A5 při 300 dpi; A4 větší), zbytek webu s ním zachází
@@ -1031,7 +1041,9 @@ kdo maže.
         zpěvníku až po Uložit. Záloha rozpracované strany v prohlížeči.
       - **jen prémiové účty**; ostatní tlačítka vidí zašedlá s důvodem. Ve sdíleném
         zpěvníku dělá neprémiový s navrženými stranami jen běžné úpravy.
-      - **později**: zkušební strana pro neprémiové (po uložení a tisku vyprší),
+      - **později**: přepínač formátovaný / volný režim (ve volném jen rámečky
+        s přímým formátováním, bez stylů - Aleš 4. 11.), zkušební strana pro
+        neprémiové (po uložení a tisku vyprší),
         transpozice a živé vykreslení ve čtečce, hledání v textech písní, export
         zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
       - **odkaz v liště** (Aleš 3. 11.): zatím otevřené. Aleš ho chce jako lákadlo -
@@ -1040,7 +1052,7 @@ kdo maže.
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
-         kolize, akordy, navrh), `css/strana.css`, písma `static/fonts/strana/`,
+         ramecky, sloky, kolize, akordy, navrh), `css/strana.css`, písma `static/fonts/strana/`,
          ProseMirror `static/vendor/prosemirror/`. Test `test_navrh_strany.py`
          (Chromium, Firefox, WebKit).
       2. [ ] PNG z prohlížeče (1748×2480), shoda s editorem i v Safari
@@ -1048,7 +1060,8 @@ kdo maže.
          práva ke grafikám, kontrola_zpevniku, testy
       4. [ ] pohled Strany v editoru zpěvníku (svitek, L/P, dvojstrana, Navrhnout/
          Upravit stranu, Hotovo + Uložit, prémiová brána, zašedlé pro ostatní)
-      5. [ ] šablona zpěvníku, sloupce, přetečení, číslo strany, volná vrstva grafik
+      5. [ ] šablona zpěvníku (styly pro celý zpěvník), číslo strany, obrázky
+         v rámečcích + obtékání vlevo/vpravo, vodítka při přesunu rámečků
       6. [ ] ChordPro tam i zpět, vložení „akordů nad textem“ z webu
       7. [ ] nasazení pro prémiové účty
 

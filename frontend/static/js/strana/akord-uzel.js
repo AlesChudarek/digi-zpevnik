@@ -27,12 +27,17 @@ export class AkordView {
     this.dom = document.createElement('span');
     this.dom.className = 'akord-kotva';
     this.dom.contentEditable = 'false';
+    // Vzpěra: prázdný inline prvek s vlastní výškou řádku zarovnaný ke spodku textu.
+    // Zvětší jen ten vizuální řádek, ve kterém akord je (i zalomený), a nevytváří místo
+    // pro zalomení - akord se od svého znaku nikdy neoddělí.
+    this.vzpera = document.createElement('span');
+    this.vzpera.className = 'akord-vzpera';
     this.posun = document.createElement('span');
     this.posun.className = 'akord-posun';
     this.akord = document.createElement('span');
     this.akord.className = 'akord';
     this.posun.appendChild(this.akord);
-    this.dom.appendChild(this.posun);
+    this.dom.append(this.vzpera, this.posun);
     instance.set(this.dom, this);
     this.vykresli();
   }
@@ -45,6 +50,8 @@ export class AkordView {
     this.akord.dataset.n = n || '\u00a0';
     this.dom.dataset.akord = n;
     this.dom.classList.toggle('prazdny', !n);
+    // Ručně posunutý akord text nikdy neodsouvá (viz kolize.js).
+    this.dom.classList.toggle('rucne', !!(dx || dy));
     if (this.tazeni) return;            // během tažení drží polohu ukazatel
     this.posun.style.setProperty('--dx', dx);
     this.posun.style.setProperty('--dy', dy);
@@ -259,7 +266,9 @@ export class OvladacAkordu {
     this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     this.svg.classList.add('spojnice');
     this.cara = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    this.svg.appendChild(this.cara);
+    this.voditko = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    this.voditko.classList.add('voditko');
+    this.svg.append(this.cara, this.voditko);
     obal.appendChild(this.svg);
 
     this.pole = document.createElement('input');
@@ -367,16 +376,49 @@ export class OvladacAkordu {
     if (!t.posunuto) { t.posunuto = true; t.inst.tazeni = true; t.inst.dom.classList.add('tazeny'); }
     t.alt = e.altKey;
     t.dx = zaokrouhli(t.dx0 + mx / t.pismo);
-    t.dy = zaokrouhli(t.dy0 + my / t.pismo);
+    // Shift: jen vodorovně (výška zůstane).
+    t.dy = e.shiftKey ? t.dy0 : zaokrouhli(t.dy0 + my / t.pismo);
     t.inst.posun.style.setProperty('--dx', t.dx);
     t.inst.posun.style.setProperty('--dy', t.dy);
     t.kandidat = t.alt ? null : this.najdiKandidata(t);
+    t.uroven = e.shiftKey ? null : this.prichytVysku(t);
     const kandZnak = t.kandidat != null ? kotevniZnak(this.view.state.doc, t.kandidat) : null;
     const stary = klicAkordu.getState(this.view.state).kandidat;
     if (JSON.stringify(stary) !== JSON.stringify(kandZnak)) {
       this.view.dispatch(this.view.state.tr.setMeta(klicAkordu, { kandidat: kandZnak }));
     }
     this.prekresliSpojnici();
+  }
+
+  // Vodicí čára: když je spodek akordu blízko spodku jiného akordu ve stejném řádku
+  // (nebo výchozí výšky), přichytí se na ni. Vrací svislou polohu čáry, nebo null.
+  prichytVysku(t) {
+    const m = this.meritko();
+    const em = t.pismo * m;
+    const r = t.inst.akord.getBoundingClientRect();
+    // Řádek, do kterého akord patří: kandidát, jinak vlastní kotva.
+    let horniKotvy;
+    if (t.kandidat != null) {
+      try { horniKotvy = this.view.coordsAtPos(t.kandidat, 1).top; } catch (_) { return null; }
+    } else horniKotvy = t.inst.dom.getBoundingClientRect().top;
+    const urovne = [];
+    // Výchozí výška vlastního akordu (dy = 0), když zůstává na svém řádku.
+    if (t.kandidat == null) urovne.push(r.bottom - t.dy * em);
+    for (const k of this.view.dom.querySelectorAll('.akord-kotva')) {
+      if (k === t.inst.dom) continue;
+      if (Math.abs(k.getBoundingClientRect().top - horniKotvy) > 3) continue;
+      urovne.push(k.querySelector('.akord').getBoundingClientRect().bottom);
+    }
+    let nejblizsi = null;
+    for (const u of urovne) {
+      if (Math.abs(u - r.bottom) < 6 && (nejblizsi == null || Math.abs(u - r.bottom) < Math.abs(nejblizsi - r.bottom))) nejblizsi = u;
+    }
+    if (nejblizsi == null) return null;
+    t.dy = zaokrouhli(t.dy + (nejblizsi - r.bottom) / em);
+    t.inst.posun.style.setProperty('--dy', t.dy);
+    const odstavec = t.inst.dom.closest('.ps-p') || this.view.dom;
+    const o = odstavec.getBoundingClientRect();
+    return { y: nejblizsi, x1: o.left, x2: o.right };
   }
 
   // Znak, ke kterému by se akord po puštění přichytil: nejbližší hranice znaku pod
@@ -592,6 +634,14 @@ export class OvladacAkordu {
     this.cara.setAttribute('y1', k.top - o.top);
     this.cara.setAttribute('x2', a.left - o.left);
     this.cara.setAttribute('y2', a.bottom - o.top);
+    const u = this.tah && this.tah.uroven;
+    this.voditko.classList.toggle('viditelne', !!u);
+    if (u) {
+      this.voditko.setAttribute('x1', u.x1 - o.left);
+      this.voditko.setAttribute('x2', u.x2 - o.left);
+      this.voditko.setAttribute('y1', u.y - o.top);
+      this.voditko.setAttribute('y2', u.y - o.top);
+    }
     this.svg.classList.add('viditelna');
     if (this.upravovany != null) this.umistiPole();
   }
