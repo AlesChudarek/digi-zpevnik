@@ -14,16 +14,16 @@ import { Schema } from 'prosemirror';
 
 export const VERZE_SCHEMATU = 2;
 
-export const STYLY = {
-  normalni: 'Normální',
-  nadpis: 'Název',
+// Role stylu říká, jak se odstavec chová: sloka se čísluje, refrén dostane R:, název
+// písně začíná číslování znovu. Vestavěné styly mají id stejné jako roli; vlastní styly
+// („Alešova sloka“) mají id v1, v2… a jednu z těchto rolí.
+export const ROLE = {
+  normalni: 'Text',
+  nadpis: 'Název písně',
   autor: 'Autor',
-  sloka: 'Sloka',
-  refren: 'Refrén',
+  sloka: 'Sloka (čísluje se)',
+  refren: 'Refrén (R:)',
 };
-
-// Po Enteru: jakým stylem pokračuje nový odstavec (jako „další styl“ ve Wordu).
-export const DALSI_STYL = { nadpis: 'autor', autor: 'sloka', sloka: 'sloka', refren: 'refren', normalni: 'normalni' };
 
 const mm = (x) => `${x}mm`;
 
@@ -91,7 +91,7 @@ export const schema = new Schema({
       parseDOM: [{
         tag: 'p',
         getAttrs: (d) => ({
-          styl: STYLY[d.dataset.styl] ? d.dataset.styl : 'normalni',
+          styl: /^[a-z0-9]+$/.test(d.dataset.styl || '') ? d.dataset.styl : 'normalni',
           zarovnani: d.dataset.zarovnani || null,
           odsazeni: d.dataset.odsazeni != null ? Number(d.dataset.odsazeni) : null,
           znacka: d.dataset.vlastniZnacka ?? null,

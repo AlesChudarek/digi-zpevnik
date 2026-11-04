@@ -158,7 +158,25 @@
 .styly .upravit svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .styly li.rozbaleny .upravit { color: #1a73e8 !important; }
 .uprava-stylu { margin: 2px 0 6px; padding: 6px 10px; border-radius: 6px; background: var(--panel-btn-bg, #f6f6f6); }
-.uprava-stylu[hidden] { display: none; }
+.uprava-stylu[hidden], .novy-styl[hidden], .jen-vlastni[hidden] { display: none; }
+/* „Uložit“ u stylu odstavce, který se od stylu liší přímým formátováním. */
+.styly .ulozit-styl {
+  flex: 0 0 auto; padding: 3px 8px !important; font-size: 12px !important; border-radius: 999px !important;
+  background: #1a73e8 !important; color: #fff !important;
+}
+.styly .ulozit-styl[hidden] { display: none; }
+/* Řez a zarovnání ve stylu: přepínače jako v liště. */
+.navrh-panel .rez { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.navrh-panel .prepinac-rez {
+  width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  font-family: Georgia, serif; font-size: 15px; background: var(--panel-bg, #fff);
+  border: 1px solid var(--panel-border, #ddd);
+}
+.navrh-panel .prepinac-rez svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.navrh-panel .prepinac-rez.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; border-color: transparent; }
+.navrh-panel .rez input[type="color"] { margin-left: 6px; }
+.novy-styl { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: var(--panel-btn-bg, #f6f6f6); }
+.navrh-panel button.hlavni { background: var(--brand-dark, #1b5e20); color: #fff; }
 .ukazka-akordu { display: flex; gap: 14px; padding: 4px 8px; border-radius: 6px; margin-bottom: 6px; background: #fff; border: 1px solid var(--panel-border, #e4e4e4); }
 
 .napoveda-editoru summary { cursor: pointer; font-weight: 600; color: var(--panel-muted, #555); }
@@ -280,6 +298,7 @@
 .spojnice.viditelna { display: block; }
 .spojnice line { stroke: #1a73e8; stroke-width: 1.2; stroke-dasharray: 3 3; }
 .spojnice line.voditko { stroke: #e91e63; stroke-dasharray: 5 3; display: none; }
+.spojnice line.vse { stroke: rgba(26, 115, 232, 0.55); stroke-width: 1; stroke-dasharray: 2 2; }
 .spojnice line.voditko.viditelne { display: inline; }
 .akord-pole {
   position: absolute; z-index: 4; box-sizing: border-box; margin: 0;
@@ -287,6 +306,15 @@
   background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); outline: none;
 }
 .akord-pole[hidden] { display: none; }
+
+/* Nabídka u sloky s nástrojem Akord: doplnit akordy podle předchozí sloky / smazat. */
+.nabidka-sloky { position: absolute; z-index: 5; }
+.nabidka-sloky[hidden] { display: none; }
+.nabidka-sloky button {
+  border: 0; border-radius: 999px; padding: 4px 12px; font: 600 12.5px/1.3 system-ui, sans-serif;
+  background: #1a73e8; color: #fff; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); white-space: nowrap;
+}
+.nabidka-sloky button.smazat { background: #fff; color: #b00020; border: 1px solid #e3b3b3; }
 
 /* Přetažení obrázku nad stranu. */
 .navrh-plocha.pretahovani .stranka { box-shadow: 0 0 0 3px #1a73e8; }

@@ -15,8 +15,11 @@ import { schema } from './schema.js';
 
 export const klicSlok = new PluginKey('sloky');
 
-function neprazdny(p, styl) {
-  return p && p.attrs.styl === styl && p.content.size > 0;
+// role(styl) -> role stylu odstavce ('sloka', 'refren', 'nadpis'…); nastavuje pluginSlok.
+let role = (styl) => styl;
+
+function neprazdny(p, r) {
+  return p && role(p.attrs.styl) === r && p.content.size > 0;
 }
 
 function spocitej(state) {
@@ -28,8 +31,7 @@ function spocitej(state) {
     let rozepsanyRefren = null;
     ramecek.forEach((p, offP) => {
       const pos = offR + 1 + offP;
-      const styl = p.attrs.styl;
-      if (styl === 'nadpis') cislo = 0;
+      if (role(p.attrs.styl) === 'nadpis') cislo = 0;
       if (neprazdny(p, 'refren')) {
         if (!neprazdny(predchozi, 'refren')) {
           rozepsanyRefren = { od: pos, odstavce: [] };
@@ -61,7 +63,7 @@ function spocitej(state) {
   if (sel.empty) {
     const $p = sel.$from;
     const p = $p.parent;
-    if (p.type === schema.nodes.odstavec && p.attrs.styl === 'refren' && p.content.size === 0) {
+    if (p.type === schema.nodes.odstavec && role(p.attrs.styl) === 'refren' && p.content.size === 0) {
       const index = $p.index(-1);
       const pred = index > 0 ? $p.node(-1).child(index - 1) : null;
       if (!neprazdny(pred, 'refren')) {
@@ -84,12 +86,14 @@ function spocitej(state) {
   return { dekorace: DecorationSet.create(state.doc, dekorace), nabidka };
 }
 
-export function pluginSlok() {
+export function pluginSlok(volby = {}) {
+  if (volby.role) role = volby.role;
   return new Plugin({
     key: klicSlok,
     state: {
       init: (_, state) => spocitej(state),
-      apply: (tr, stary, _, novy) => (tr.docChanged || tr.selectionSet ? spocitej(novy) : stary),
+      // Meta „prepocitat“: změnil se styl (jeho role) mimo dokument.
+      apply: (tr, stary, _, novy) => (tr.docChanged || tr.selectionSet || tr.getMeta(klicSlok) ? spocitej(novy) : stary),
     },
     props: {
       decorations: (state) => klicSlok.getState(state).dekorace,

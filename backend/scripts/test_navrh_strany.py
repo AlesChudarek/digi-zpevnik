@@ -146,6 +146,34 @@ def test_prohlizece(p, base, jmeno):
     ok('lišta je na jednom řádku', J("new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size") == 1)
     ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].map(s => s.getBoundingClientRect().width)")))
 
+    ok('panel: styly nahoře, kontextové karty pod nimi',
+       J("[...document.querySelectorAll('.navrh-panel > section')].map(e => e.id || 'karta')[0]") == 'karta'
+       and J("document.querySelector('.navrh-panel > section').textContent.includes('Styly odstavců')"))
+
+    # Akordy podle předchozí sloky (na ukázkové písni): smazat akordy 2. sloky a doplnit.
+    J('navrhStrany.prepniRezimAkordu(true)')
+    ok('s nástrojem Akord jsou vidět spojnice všech akordů',
+       J("[...document.querySelectorAll('.spojnice line.vse')].filter(l => l.style.display !== 'none').length")
+       == J("document.querySelectorAll('.akord-kotva').length"))
+    pocet = J("document.querySelectorAll('.akord-kotva').length")
+    J("T.kurzor(T.vOdstavci('Kamarád', 3))")
+    page.wait_for_timeout(100)
+    ok('u sloky s akordy je nabídka Smazat', J("document.querySelector('.nabidka-sloky').textContent") == 'Smazat akordy sloky')
+    page.click('.nabidka-sloky button')
+    page.wait_for_timeout(100)
+    po_smazani = J("document.querySelectorAll('.akord-kotva').length")
+    ok('Smazat odebere akordy sloky', po_smazani < pocet, (pocet, po_smazani))
+    ok('u sloky bez akordů je nabídka Doplnit', 'Doplnit akordy jako 1. sloka' in J("document.querySelector('.nabidka-sloky').textContent"))
+    page.click('.nabidka-sloky button')
+    page.wait_for_timeout(100)
+    ok('Doplnit vrátí akordy podle 1. sloky', J("document.querySelectorAll('.akord-kotva').length") == pocet)
+    radek = J("""(() => { let s = ''; navrhStrany.view.state.doc.descendants((n) => { if (n.type.name === 'odstavec' && n.textContent.startsWith('Kamarád'))
+      n.forEach(c => { s += c.type.name === 'akord' ? '[' + c.attrs.n + ']' : (c.text || ''); }); }); return s; })()""")
+    ok('akordy sedí po slabikách', radek.startswith('[G]Kamarád') and '[Emi]ček' in radek, radek)
+    page.keyboard.press(f'{MOD}+z')
+    ok('Zpět vrátí doplnění jedním krokem', J("document.querySelectorAll('.akord-kotva').length") == po_smazani)
+    J('navrhStrany.prepniRezimAkordu(false)')
+
     zacni_testovacim_textem(page)
     page.click('[data-prikaz="vetsi"]')
     page.click('[data-prikaz="vetsi"]')
@@ -322,6 +350,41 @@ def test_prohlizece(p, base, jmeno):
     page.fill('#lista-velikost', '20')
     page.press('#lista-velikost', 'Enter')
     ok('velikost z lišty jako přímé formátování', J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-velikost=\"20\"]')"))
+
+    # +/- u označeného textu funguje opakovaně; barva se použije na označený text.
+    J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice({S1}, 4), b = T.pozice({S1}, 9);"
+      f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
+    page.click('[data-prikaz="pismo-vetsi"]')
+    page.click('[data-prikaz="pismo-vetsi"]')
+    page.click('[data-prikaz="pismo-vetsi"]')
+    velikosti = J(f"[...document.querySelectorAll('.ps-p')][{S1}].querySelectorAll('[data-velikost]').length ? [...document.querySelectorAll('.ps-p')[{S1}].querySelectorAll('[data-velikost]')].map(e => e.dataset.velikost) : []")
+    ok('+ u výběru jde zmáčknout opakovaně', '20' in velikosti and len(set(velikosti)) >= 1 and J("document.getElementById('lista-velikost').value") not in ('14', '15'), velikosti)
+    page.dispatch_event('label.barva-textu', 'pointerdown')
+    J("(() => { const i = document.getElementById('lista-barva'); i.value = '#00aa00'; i.dispatchEvent(new Event('input', {bubbles: true})); })()")
+    ok('barva textu se použije na výběr', J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-barva=\"#00aa00\"]')"))
+
+    # Vlastní styl: odstavec naformátovaný celý -> „Uložit“ u jeho stylu převezme formátování.
+    J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice({S2}, 0); const b = a + v.state.doc.resolve(a).parent.content.size;"
+      f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
+    page.click('[data-prikaz="kurziva"]')
+    ok('u stylu odstavce se objeví Uložit', J("!document.querySelector('#seznam-stylu li[data-styl=\"sloka\"] .ulozit-styl').hidden"))
+    page.click('#seznam-stylu li[data-styl="sloka"] .ulozit-styl')
+    ok('Uložit převezme kurzívu do stylu', J("navrhStrany.nastaveni().styly.sloka.kurziva") is True)
+    ok('a přímé formátování z odstavce zmizí', not J(f"!!document.querySelectorAll('.ps-p')[{S2}].querySelector('em')"))
+    ok('kurzívu mají i ostatní sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontStyle") == 'italic')
+    # Nový styl z odstavce s rolí Sloka: odstavec ho dostane a pořád se čísluje.
+    J(f"T.kurzor(T.pozice({S1}, 2))")
+    page.click('#novy-styl')
+    page.fill('#novy-styl-nazev', 'Alešova sloka')
+    page.select_option('#novy-styl-role', 'sloka')
+    page.click('#novy-styl-vytvorit')
+    ok('nový styl je v seznamu', J("[...document.querySelectorAll('#seznam-stylu li')].some(l => l.textContent.startsWith('Alešova sloka'))"))
+    ok('odstavec dostal nový styl', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'v1')
+    ok('sloka s vlastním stylem se čísluje', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.znacka") == '1.')
+    page.click('#seznam-stylu li[data-styl="v1"] .upravit')
+    ok('vlastní styl jde přejmenovat a smazat', J("!document.querySelector('[data-styl-pole=\"nazev\"]').closest('label').hidden"))
+    page.click('#smazat-styl')
+    ok('po smazání stylu má odstavec styl Sloka', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'sloka')
 
     # Číslování slok: nová sloka dostane 2., ruční značka 5. posune další na 6.
     J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")

@@ -1049,6 +1049,12 @@ kdo maže.
       - **odkaz v liště** (Aleš 3. 11.): zatím otevřené. Aleš ho chce jako lákadlo -
         hodně lidí přijde jen kvůli tvorbě vlastních zpěvníků; proti je, že by to byl
         druhý vstup vedle Mých zpěvníků. Rozhodnout, až bude editor v editoru zpěvníku.
+      - **k rozhodnutí (4. 11., návrhy v rozhovoru)**: (a) čtečka kreslí navržené strany
+        z textu, číslo strany jako vrstva podle skutečné pozice, obrázek jen pro PDF;
+        (b) poloha čísla strany v šabloně zpěvníku na náhledu dvojstrany (zrcadlení L/P);
+        (c) kde žijí styly - u zpěvníku (šablona zpěvníku, jde uložit a použít pro další
+        zpěvník) vs. u uživatele napříč zpěvníky; (d) šablony stran („Uložit stranu jako
+        šablonu“, nová strana nabídne šablony).
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,

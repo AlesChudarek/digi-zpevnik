@@ -622,10 +622,34 @@ export class OvladacAkordu {
   }
 
   prekresliSpojnici() {
-    const pos = this.view ? this.aktivniPozice(this.view.state) : null;
-    const dom = pos != null ? this.domAkordu(pos) : null;
-    if (!dom) { this.svg.classList.remove('viditelna'); return; }
+    if (!this.view) return;
     const o = this.obal.getBoundingClientRect();
+    // S nástrojem Akord jsou spojnice vidět u všech akordů (slabší), jinak jen u vybraného.
+    const vsechny = this.rezimAkordu() ? [...this.view.dom.querySelectorAll('.akord-kotva')] : [];
+    this.slabe = this.slabe || [];
+    while (this.slabe.length < vsechny.length) {
+      const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      l.classList.add('vse');
+      this.svg.insertBefore(l, this.cara);
+      this.slabe.push(l);
+    }
+    this.slabe.forEach((l, i) => {
+      const k = vsechny[i];
+      if (!k) { l.style.display = 'none'; return; }
+      const kr = k.getBoundingClientRect();
+      const ar = k.querySelector('.akord').getBoundingClientRect();
+      l.style.display = '';
+      l.setAttribute('x1', kr.left - o.left);
+      l.setAttribute('y1', kr.top - o.top);
+      l.setAttribute('x2', ar.left - o.left);
+      l.setAttribute('y2', ar.bottom - o.top);
+    });
+
+    const pos = this.aktivniPozice(this.view.state);
+    const dom = pos != null ? this.domAkordu(pos) : null;
+    this.cara.style.display = dom ? '' : 'none';
+    this.svg.classList.toggle('viditelna', !!dom || vsechny.length > 0);
+    if (!dom) { this.voditko.classList.remove('viditelne'); return; }
     const a = dom.querySelector('.akord').getBoundingClientRect();
     // Kotva: levý horní roh kotevního znaku (prázdná kotva má nulovou šířku a sedí
     // přesně na jeho začátku).
@@ -642,9 +666,9 @@ export class OvladacAkordu {
       this.voditko.setAttribute('y1', u.y - o.top);
       this.voditko.setAttribute('y2', u.y - o.top);
     }
-    this.svg.classList.add('viditelna');
     if (this.upravovany != null) this.umistiPole();
   }
+
 }
 
 // Po transakci: akordy, před kterými se mazalo (jejich znak zmizel), k bliknutí.

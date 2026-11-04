@@ -109,6 +109,51 @@
   </div>
 
   <aside class="navrh-panel" aria-label="Vzhled strany">
+    {# Styly nahoře, kontextové karty (akord, obrázek, sloka) až pod nimi - ať se seznam
+       stylů při klikání do textu neposouvá. #}
+    <section class="karta">
+      <h2>Styly odstavců</h2>
+      <ul class="styly" id="seznam-stylu"></ul>
+      {# Úprava stylu: jeden formulář, který se přesune pod rozbalený styl. #}
+      <div class="uprava-stylu" id="uprava-stylu" hidden>
+        <label class="radek-pole jen-vlastni">Název <input type="text" data-styl-pole="nazev" maxlength="30"></label>
+        <label class="radek-pole jen-vlastni">Chová se jako <select data-styl-pole="role" data-role></select></label>
+        <label class="radek-pole">Písmo <select data-styl-pole="pismo" data-pisma></select></label>
+        <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-styl-pole="velikost" min="5" max="72" step="0.5"> pt</span></label>
+        <div class="radek-pole">Řez
+          <span class="rez">
+            <button type="button" class="prepinac-rez" data-styl-prepinac="tucne" aria-label="Tučně"><b>B</b></button>
+            <button type="button" class="prepinac-rez" data-styl-prepinac="kurziva" aria-label="Kurzívou"><i>I</i></button>
+            <button type="button" class="prepinac-rez" data-styl-prepinac="podtrzeni" aria-label="Podtrženě"><u>U</u></button>
+            <input type="color" data-styl-pole="barva" aria-label="Barva">
+          </span>
+        </div>
+        <div class="radek-pole">Zarovnání
+          <span class="rez">
+            <button type="button" class="prepinac-rez" data-styl-zarovnani="left" aria-label="Vlevo"><svg><use href="#i-vlevo"/></svg></button>
+            <button type="button" class="prepinac-rez" data-styl-zarovnani="center" aria-label="Na střed"><svg><use href="#i-stred"/></svg></button>
+            <button type="button" class="prepinac-rez" data-styl-zarovnani="right" aria-label="Vpravo"><svg><use href="#i-vpravo"/></svg></button>
+            <button type="button" class="prepinac-rez" data-styl-zarovnani="justify" aria-label="Do bloku"><svg><use href="#i-blok"/></svg></button>
+          </span>
+        </div>
+        <label class="radek-pole">Odsazení <span class="s-jednotkou"><input type="number" data-styl-pole="odsazeni" min="0" max="80" step="0.5"> mm</span></label>
+        <label class="radek-pole">Řádkování <input type="number" data-styl-pole="radkovani" min="0.8" max="3" step="0.05"></label>
+        <label class="radek-pole">Mezera před <span class="s-jednotkou"><input type="number" data-styl-pole="pred" min="0" max="60" step="1"> pt</span></label>
+        <label class="radek-pole">Mezera za <span class="s-jednotkou"><input type="number" data-styl-pole="po" min="0" max="60" step="1"> pt</span></label>
+        <div class="tlacitka jen-vlastni"><button type="button" id="smazat-styl" class="nebezpecne">Smazat styl</button></div>
+      </div>
+      <div class="tlacitka"><button type="button" id="novy-styl">+ Nový styl z odstavce</button></div>
+      <div class="novy-styl" id="novy-styl-formular" hidden>
+        <label class="radek-pole">Název <input type="text" id="novy-styl-nazev" maxlength="30" placeholder="např. Alešova sloka"></label>
+        <label class="radek-pole">Chová se jako <select id="novy-styl-role" data-role></select></label>
+        <p class="poznamka">Styl převezme vzhled odstavce s kurzorem a odstavec ho hned dostane.</p>
+        <div class="tlacitka">
+          <button type="button" id="novy-styl-vytvorit" class="hlavni">Vytvořit</button>
+          <button type="button" id="novy-styl-zrusit">Zrušit</button>
+        </div>
+      </div>
+    </section>
+
     {# Kontextové karty: jen když je vybraný akord, obrázek nebo kurzor ve sloce. #}
     <section class="karta kontext" id="vybrany-akord" hidden>
       <h2>Vybraný akord</h2>
@@ -138,33 +183,6 @@
         <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
       </label>
       <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
-    </section>
-
-    <section class="karta">
-      <h2>Styly odstavců</h2>
-      <ul class="styly" id="seznam-stylu"></ul>
-      {# Úprava stylu: jeden formulář, který se přesune pod rozbalený styl. #}
-      <div class="uprava-stylu" id="uprava-stylu" hidden>
-        <label class="radek-pole">Písmo <select data-styl-pole="pismo" data-pisma></select></label>
-        <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-styl-pole="velikost" min="5" max="72" step="0.5"> pt</span></label>
-        <div class="radek-pole">Řez
-          <span class="prepinace">
-            <label class="zaskrt"><input type="checkbox" data-styl-pole="tucne"> <b>B</b></label>
-            <label class="zaskrt"><input type="checkbox" data-styl-pole="kurziva"> <i>I</i></label>
-            <input type="color" data-styl-pole="barva" aria-label="Barva">
-          </span>
-        </div>
-        <label class="radek-pole">Zarovnání
-          <select data-styl-pole="zarovnani">
-            <option value="left">Vlevo</option><option value="center">Na střed</option>
-            <option value="right">Vpravo</option><option value="justify">Do bloku</option>
-          </select>
-        </label>
-        <label class="radek-pole">Odsazení <span class="s-jednotkou"><input type="number" data-styl-pole="odsazeni" min="0" max="80" step="0.5"> mm</span></label>
-        <label class="radek-pole">Řádkování <input type="number" data-styl-pole="radkovani" min="0.8" max="3" step="0.05"></label>
-        <label class="radek-pole">Mezera před <span class="s-jednotkou"><input type="number" data-styl-pole="pred" min="0" max="60" step="1"> pt</span></label>
-        <label class="radek-pole">Mezera za <span class="s-jednotkou"><input type="number" data-styl-pole="po" min="0" max="60" step="1"> pt</span></label>
-      </div>
     </section>
 
     <section class="karta">
@@ -200,6 +218,8 @@
       <ul>
         <li><b>Akord:</b> nástroj Akord a klik na znak, nebo znak [ u kurzoru. Enter zapíše, Tab přejde na další.</li>
         <li><b>Posun akordu:</b> přichytí se ke znaku pod sebou a k výšce sousedů. Alt drží jeho znak, Shift jen vodorovně.</li>
+        <li><b>Akordy do další sloky:</b> s nástrojem Akord najeď na sloku bez akordů a klikni na „Doplnit akordy“ - vezmou se z předchozí sloky po slabikách. Opravit jde tažením, vrátit jedním Zpět.</li>
+        <li><b>Vlastní styl:</b> naformátuj odstavec a „+ Nový styl z odstavce“; u stylu, od kterého se odstavec liší, je „Uložit“.</li>
         <li><b>Refrén znovu:</b> na prázdném řádku se stylem Refrén vloží Tab kopii předchozího.</li>
         <li><b>Řádek v odstavci:</b> Shift+Enter.</li>
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
