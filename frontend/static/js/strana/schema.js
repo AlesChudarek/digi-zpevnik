@@ -16,7 +16,7 @@ export const VERZE_SCHEMATU = 2;
 
 // Role stylu říká, jak se odstavec chová: sloka se čísluje, refrén dostane R:, název
 // písně začíná číslování znovu. Vestavěné styly mají id stejné jako roli; vlastní styly
-// („Alešova sloka“) mají id v1, v2… a jednu z těchto rolí.
+// („Úzká sloka“) mají id v1, v2… a jednu z těchto rolí.
 export const ROLE = {
   normalni: 'Text',
   nadpis: 'Název písně',

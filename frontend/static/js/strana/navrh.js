@@ -476,10 +476,10 @@ function vykresliStyly() {
   if (typeof view !== 'undefined') oznacAktivniStyl();
 }
 
-function oznacAktivniStyl() {
+// id: styl výběru, nebo null u výběru přes odstavce s různými styly (nic se neoznačí).
+function oznacAktivniStyl(id = souhrnVyberu(view.state).styl) {
   const p = view.state.selection.$from.parent;
-  const id = p.type === N.odstavec ? p.attrs.styl : null;
-  const lisi = id && Object.keys(odchylky(p)).length > 0;
+  const lisi = id && p.type === N.odstavec && p.attrs.styl === id && Object.keys(odchylky(p)).length > 0;
   // Jen položky stylů - mezi nimi může být vložený formulář úpravy.
   for (const li of el('seznam-stylu').querySelectorAll(':scope > li')) {
     const tento = li.dataset.styl === id;
@@ -619,10 +619,18 @@ function upravOdstavce(zmena) {
   view.dispatch(tr);
 }
 
-// Styl odstavce: ruční zarovnání, odsazení a značka se při změně stylu zahodí (jako ve
-// Wordu „použít styl“).
-function nastavStyl(styl) {
-  upravOdstavce(() => ({ styl, zarovnani: null, odsazeni: null, znacka: null }));
+// Styl odstavce: všechny odstavce ve výběru dostanou styl celý - ruční zarovnání,
+// odsazení, značka i přímé písmo, velikost a barva se zahodí, ať výběr s různým
+// formátováním vypadá potom jednotně. Zvýraznění slov (tučné, kurzíva) zůstane.
+function nastavStyl(id) {
+  const odstavce = vybraneOdstavce(view.state);
+  if (!odstavce.length) return;
+  let tr = closeHistory(view.state.tr);
+  for (const { node, pos } of odstavce) {
+    tr = tr.setNodeMarkup(pos, null, { ...node.attrs, styl: id, zarovnani: null, odsazeni: null, znacka: null });
+    for (const t of [M.pismo, M.velikost, M.barva]) tr = tr.removeMark(pos + 1, pos + node.nodeSize - 1, t);
+  }
+  view.dispatch(tr);
   view.focus();
 }
 
@@ -658,6 +666,42 @@ function znackyVyberu(state) {
     return !nalezene;
   });
   return nalezene || $from.marks();
+}
+
+// Souhrn formátování výběru, jak se má ukázat v liště: hodnota, když je v celém výběru
+// stejná, jinak null (lišta pak neukáže nic). Počítá se skutečný vzhled - přímé
+// formátování, jinak styl odstavce.
+function souhrnVyberu(state) {
+  const { empty, from, to, $from } = state.selection;
+  const vlastnosti = {
+    pismo: [M.pismo, (m) => m.attrs.f], velikost: [M.velikost, (m) => m.attrs.v], barva: [M.barva, (m) => m.attrs.c],
+    tucne: [M.tucne, () => true], kurziva: [M.kurziva, () => true], podtrzeni: [M.podtrzeni, () => true],
+  };
+  const hodnota = (klic, znacky, idStylu) => {
+    const [typ, cti] = vlastnosti[klic];
+    const m = znacky.find((z) => z.type === typ);
+    return m ? cti(m) : styl(idStylu)[klic] || (['tucne', 'kurziva', 'podtrzeni'].includes(klic) ? false : styl(idStylu)[klic]);
+  };
+  const vysledek = {};
+  const odstavce = vybraneOdstavce(state);
+  const styly = new Set(odstavce.map((o) => o.node.attrs.styl));
+  vysledek.styl = styly.size === 1 ? [...styly][0] : null;
+  if (empty) {
+    const p = $from.parent;
+    const id = p.type === N.odstavec ? p.attrs.styl : 'normalni';
+    const znacky = state.storedMarks || $from.marks();
+    for (const k of Object.keys(vlastnosti)) vysledek[k] = hodnota(k, znacky, id);
+    return vysledek;
+  }
+  const texty = [];
+  state.doc.nodesBetween(from, to, (n, pos, rodic) => {
+    if (n.isText) texty.push({ znacky: n.marks, styl: rodic.attrs.styl });
+  });
+  for (const k of Object.keys(vlastnosti)) {
+    const hodnoty = new Set(texty.map((t) => hodnota(k, t.znacky, t.styl)));
+    vysledek[k] = hodnoty.size === 1 ? [...hodnoty][0] : null;
+  }
+  return vysledek;
 }
 
 // Velikost písma u kurzoru (přímé formátování, jinak styl odstavce), v pt.
@@ -862,30 +906,34 @@ function aktualizujListu() {
   const { $from } = state.selection;
   const p = $from.parent.type === N.odstavec ? $from.parent : null;
   const st = styl(p ? p.attrs.styl : 'normalni');
-  const znacky = znackyVyberu(state);
-  const znacka = (t) => znacky.find((m) => m.type === t);
+  const souhrn = souhrnVyberu(state);
+  // Smíšený výběr: výběry zůstanou prázdné (prázdná volba), aby šla zvolit i hodnota,
+  // kterou už část výběru má - a použila se na celý výběr.
   const nastavVyber = (prvek, hodnota) => {
+    if (hodnota == null) hodnota = '';
     if (![...prvek.options].some((o) => o.value === String(hodnota))) {
-      prvek.add(new Option(String(hodnota).replace('.', ','), hodnota));
+      const o = new Option(String(hodnota).replace('.', ','), hodnota);
+      if (hodnota === '') o.hidden = true;
+      prvek.add(o);
     }
     prvek.value = String(hodnota);
   };
-  if (p) el('lista-styl').value = p.attrs.styl;
-  nastavVyber(el('lista-pismo'), znacka(M.pismo)?.attrs.f || st.pismo);
+  nastavVyber(el('lista-styl'), souhrn.styl);
+  nastavVyber(el('lista-pismo'), souhrn.pismo);
   if (document.activeElement !== el('lista-velikost')) {
-    el('lista-velikost').value = String(znacka(M.velikost)?.attrs.v || st.velikost).replace('.', ',');
+    el('lista-velikost').value = souhrn.velikost == null ? '' : String(souhrn.velikost).replace('.', ',');
   }
-  if (document.activeElement !== el('lista-barva')) el('lista-barva').value = znacka(M.barva)?.attrs.c || st.barva;
-  el('lista-barva-pruh').style.background = el('lista-barva').value;
-  oznacAktivniStyl();
+  if (document.activeElement !== el('lista-barva') && souhrn.barva) el('lista-barva').value = souhrn.barva;
+  el('lista-barva-pruh').style.background = souhrn.barva || 'repeating-linear-gradient(90deg, #d33 0 6px, #3a3 6px 12px, #36c 12px 18px)';
+  oznacAktivniStyl(souhrn.styl);
   const zarovnani = p ? p.attrs.zarovnani || st.zarovnani : null;
 
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
     const c = b.dataset.prikaz;
     if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
-    else if (c === 'tucne') b.classList.toggle('aktivni', !!znacka(M.tucne) || (st.tucne && !!p));
-    else if (c === 'kurziva') b.classList.toggle('aktivni', !!znacka(M.kurziva) || (st.kurziva && !!p));
-    else if (c === 'podtrzeni') b.classList.toggle('aktivni', !!znacka(M.podtrzeni) || (st.podtrzeni && !!p));
+    else if (c === 'tucne') b.classList.toggle('aktivni', souhrn.tucne === true);
+    else if (c === 'kurziva') b.classList.toggle('aktivni', souhrn.kurziva === true);
+    else if (c === 'podtrzeni') b.classList.toggle('aktivni', souhrn.podtrzeni === true);
     else if (c.startsWith('zarovnat-')) b.classList.toggle('aktivni', c === 'zarovnat-' + zarovnani);
     else if (c === 'zpet') b.disabled = undoDepth(state) === 0;
     else if (c === 'znovu') b.disabled = redoDepth(state) === 0;

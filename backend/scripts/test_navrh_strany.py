@@ -375,16 +375,30 @@ def test_prohlizece(p, base, jmeno):
     # Nový styl z odstavce s rolí Sloka: odstavec ho dostane a pořád se čísluje.
     J(f"T.kurzor(T.pozice({S1}, 2))")
     page.click('#novy-styl')
-    page.fill('#novy-styl-nazev', 'Alešova sloka')
+    page.fill('#novy-styl-nazev', 'Úzká sloka')
     page.select_option('#novy-styl-role', 'sloka')
     page.click('#novy-styl-vytvorit')
-    ok('nový styl je v seznamu', J("[...document.querySelectorAll('#seznam-stylu li')].some(l => l.textContent.startsWith('Alešova sloka'))"))
+    ok('nový styl je v seznamu', J("[...document.querySelectorAll('#seznam-stylu li')].some(l => l.textContent.startsWith('Úzká sloka'))"))
     ok('odstavec dostal nový styl', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'v1')
     ok('sloka s vlastním stylem se čísluje', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.znacka") == '1.')
     page.click('#seznam-stylu li[data-styl="v1"] .upravit')
     ok('vlastní styl jde přejmenovat a smazat', J("!document.querySelector('[data-styl-pole=\"nazev\"]').closest('label').hidden"))
     page.click('#smazat-styl')
     ok('po smazání stylu má odstavec styl Sloka', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'sloka')
+
+    # Smíšený výběr (Název + sloka s jinou velikostí): lišta neukáže nic a zvolený styl
+    # se použije na celý výběr jednotně.
+    J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice(0, 2), b = T.pozice({S1}, 6);"
+      f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
+    ok('smíšený výběr: styl, písmo ani velikost se neukážou',
+       J("[document.getElementById('lista-styl').value, document.getElementById('lista-pismo').value, document.getElementById('lista-velikost').value]") == ['', '', ''],
+       J("[document.getElementById('lista-styl').value, document.getElementById('lista-pismo').value, document.getElementById('lista-velikost').value]"))
+    ok('smíšený výběr: v panelu není označený žádný styl', J("!document.querySelector('#seznam-stylu li.aktivni')"))
+    page.select_option('#lista-styl', 'sloka')
+    ok('zvolený styl dostane celý výběr', J(f"[0, 1, {S1}].map(i => document.querySelectorAll('.ps-p')[i].dataset.styl)") == ['sloka', 'sloka', 'sloka'])
+    ok('a přímá velikost zmizí', not J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-velikost]')"))
+    ok('pak už lišta styl ukazuje', J("document.getElementById('lista-styl').value") == 'sloka')
+    page.keyboard.press(f'{MOD}+z')
 
     # Číslování slok: nová sloka dostane 2., ruční značka 5. posune další na 6.
     J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")
