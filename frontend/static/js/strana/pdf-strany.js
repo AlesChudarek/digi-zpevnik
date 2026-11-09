@@ -17,7 +17,8 @@ const PT_NA_MM = 72 / 25.4;
 
 let knihovna = null;
 async function nactiKnihovnu() {
-  if (!knihovna) knihovna = import('/static/vendor/pdf-lib/pdf-lib.js');
+  // Relativně k tomuto souboru; mapa importů v šabloně dá adrese verzi (cache).
+  if (!knihovna) knihovna = import(new URL('../../vendor/pdf-lib/pdf-lib.js', import.meta.url).href);
   return knihovna;
 }
 

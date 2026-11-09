@@ -126,7 +126,7 @@ def main():
                       f"{len(obsah_ctecky)} stran, {pruhl}/4 obálek následuje barvu")
 
         # --- struktura stran ---
-        from backend.app import db, Strana, PisenNaStrane, Song, Obrazek  # noqa: E402
+        from backend.app import db, Strana, PisenNaStrane, Song, Obrazek, NavrzenaStrana  # noqa: E402
         from sqlalchemy import text  # noqa: E402
         nalezy = []
         for kniha in knihy:
@@ -159,11 +159,26 @@ def main():
             if len({tuple(x) for x in podle_knih.values()}) > 1:
                 nalezy.append(f"píseň {sid} má v různých zpěvnících jiné strany: "
                               f"{sorted(podle_knih)}")
+        # Navržené strany (editor stran): strana má buď obrázek, nebo navrženou stranu;
+        # PDF a vložené obrázky verze musí existovat.
+        obe = Strana.query.filter(Strana.image_id.isnot(None), Strana.navrzena_id.isnot(None)).count()
+        if obe:
+            nalezy.append(f"{obe} stran má zároveň obrázek i navrženou stranu")
+        for navrh in NavrzenaStrana.query.all():
+            for obraz in [navrh.pdf] + list(navrh.obrazky):
+                if obraz is None:
+                    nalezy.append(f"navržená strana {navrh.id} nemá PDF")
+                    continue
+                pouzite.add(obraz.cesta)
+                if not (IMAGES_DIR / obraz.cesta).is_file():
+                    nalezy.append(f"navržená strana {navrh.id}: chybí soubor {obraz.cesta}")
         nepouzite = db.session.execute(text(
             "SELECT cesta FROM images i WHERE NOT EXISTS (SELECT 1 FROM strany s "
             "WHERE s.image_id = i.id) AND NOT EXISTS (SELECT 1 FROM songbooks b WHERE i.id "
             "IN (b.cover_preview_id, b.cover_front_outer_id, b.cover_front_inner_id, "
-            "b.cover_back_inner_id, b.cover_back_outer_id))")).fetchall()
+            "b.cover_back_inner_id, b.cover_back_outer_id)) "
+            "AND NOT EXISTS (SELECT 1 FROM navrzene_strany n WHERE n.pdf_id = i.id) "
+            "AND NOT EXISTS (SELECT 1 FROM navrh_obrazky o WHERE o.image_id = i.id)")).fetchall()
         if nepouzite:
             nalezy.append(f"{len(nepouzite)} řádků images, na které nic neukazuje: "
                           f"{[r[0] for r in nepouzite[:5]]}")
@@ -195,7 +210,7 @@ def main():
         if IMAGES_DIR.exists():
             for dirpath, _, names in os.walk(IMAGES_DIR):
                 for n in names:
-                    if not n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                    if not n.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.pdf')):
                         continue
                     p = Path(dirpath) / n
                     rel = str(p.relative_to(IMAGES_DIR))

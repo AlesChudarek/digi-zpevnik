@@ -1088,8 +1088,16 @@ kdo maže.
          číslo strany jako vrstva; PNG 1748 px přes SVG foreignObject za 80-190 ms
          (WebKit nezvětšuje foreignObject podle viewBox - zvětšuje se CSS transformem).
          V editoru tlačítko Náhled (+ obrázek pro PDF ke stažení).
-      3. [ ] server: zdroj strany (verze), styly k účtu, ukládání jako nahrávka, limit,
-         úklid, obrázky ve straně jako soubory (ne data: URL), práva, kontrola_zpevniku
+      3. [X] server (9. 11.): `NavrzenaStrana` (neměnná verze: zdroj JSON + PDF + vazba
+         na obrázky `navrh_obrazky`), `strany.navrzena_id`, `KnihovnaStylu` u účtu.
+         API `/api/navrh/obrazek` (PNG/JPEG, jiné se převedou), `/api/navrh/strana`
+         (POST verze, GET zdroj), `/navrh/strana/<id>.pdf`, `/api/navrh/styly`; zápis
+         jen prémiový účet, čtení autor nebo kdo vidí zpěvník. Limit: verze stojí svou
+         velikost (min. MIN_CENA_STRANY), mimo zpěvník se počítá autorovi, bez dvojího
+         počítání obrázků; úklid nepoužitých verzí po dni a nemaže soubory verzí;
+         kopie a přidaná píseň sdílí verzi; zrušení účtu verze zachová (vlastník NULL).
+         Test `test_navrh_server.py`. Na serveru zatím nenasazeno (tabulky vzniknou
+         samy při startu).
       3b. [ ] čtečka: navržené strany z textu vedle obrázků (dvojstrany, svitek, zoom,
          sjíždění), číslo a L/P z pozice
       3c. [ ] PDF: vektorové PDF navržené strany vyrobí prohlížeč při uložení strany;

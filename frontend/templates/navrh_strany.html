@@ -21,7 +21,7 @@
     "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}",
     "{{ url_for('static', filename='js/strana/vykresleni.js') }}": "{{ static_bust('js/strana/vykresleni.js') }}",
     "{{ url_for('static', filename='js/strana/pdf-strany.js') }}": "{{ static_bust('js/strana/pdf-strany.js') }}",
-    "/static/vendor/pdf-lib/pdf-lib.js": "{{ static_bust('vendor/pdf-lib/pdf-lib.js') }}"
+    "{{ url_for('static', filename='vendor/pdf-lib/pdf-lib.js') }}": "{{ static_bust('vendor/pdf-lib/pdf-lib.js') }}"
   }
 }
 </script>

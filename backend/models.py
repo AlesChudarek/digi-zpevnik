@@ -175,14 +175,67 @@ class Strana(db.Model):
     songbook_id = db.Column(db.String, db.ForeignKey("songbooks.id"), nullable=False, index=True)
     poradi = db.Column(db.Integer, nullable=False)
     image_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True, index=True)
+    # Strana navržená v editoru stran místo obrázku (TODO bod 11). Strana má buď obrázek,
+    # nebo navrženou stranu, nebo nic (prázdná).
+    navrzena_id = db.Column(db.Integer, db.ForeignKey("navrzene_strany.id"), nullable=True, index=True)
     popisek = db.Column(db.String, nullable=True)
 
     image = db.relationship("Obrazek")
     image_path = cesta_obrazku("image")
+    navrzena = db.relationship("NavrzenaStrana")
     # Pořadí písní na straně je pořadí, v jakém na ni přibyly - tak to bylo i dřív
     # (podle id řádku) a tak to ukazuje obsah.
     pisne = db.relationship("PisenNaStrane", backref="strana", cascade="all, delete-orphan",
                             order_by="PisenNaStrane.id")
+
+
+# Obrázky vložené do navržené strany (grafiky): soubory v `images`, na které ukazuje
+# verze strany. Úklid a limit místa podle téhle vazby vědí, že soubor někdo používá.
+navrh_obrazky = db.Table(
+    "navrh_obrazky",
+    db.Column("navrzena_id", db.Integer, db.ForeignKey("navrzene_strany.id"), primary_key=True),
+    db.Column("image_id", db.Integer, db.ForeignKey("images.id"), primary_key=True, index=True),
+)
+
+
+class NavrzenaStrana(db.Model):
+    """Jedna neměnná verze strany navržené v editoru stran (text, akordy, rámečky).
+
+    Neměnná jako obrázky: každé uložení z editoru je nová verze a strana zpěvníku se na
+    ni přepne. Sdílený zpěvník (tentýž řádek `strany`) tak změnu vidí hned, kopie
+    a přidaná píseň dál ukazují na starou verzi, dokud ji někdo neupraví.
+
+    - `zdroj` je JSON z editoru: { verze, nastaveni, obsah, zlomy } - z něj kreslí
+      čtečka (vykresleni.js) stejně jako editor.
+    - `pdf` je vektorové PDF strany, které při uložení vyrobil prohlížeč autora
+      (pdf-strany.js); export zpěvníku z něj skládá PDF. Bez čísla strany.
+    - `velikost` (bajty) = zdroj + PDF + vložené obrázky; z ní se počítá limit místa.
+    - `vlastnik_id` je ten, kdo verzi uložil - jemu se počítá, dokud verze není v žádném
+      zpěvníku. Po zrušení účtu NULL (verze ve sdílených zpěvnících zůstává).
+    """
+
+    __tablename__ = "navrzene_strany"
+
+    id = db.Column(db.Integer, primary_key=True)
+    vlastnik_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True, index=True)
+    vytvoreno = db.Column(db.DateTime, nullable=False)
+    zdroj = db.Column(db.Text, nullable=False)
+    pdf_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
+    velikost = db.Column(db.Integer, nullable=False, default=0)
+
+    pdf = db.relationship("Obrazek", foreign_keys=[pdf_id])
+    obrazky = db.relationship("Obrazek", secondary=navrh_obrazky)
+
+
+class KnihovnaStylu(db.Model):
+    """Styly odstavců účtu (štětce v editoru stran): JSON { id: vzhled }. Strana si nese
+    kopii verze, kterou je namalovaná, takže změna knihovny hotové strany nemění."""
+
+    __tablename__ = "knihovny_stylu"
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), primary_key=True)
+    data = db.Column(db.Text, nullable=False)
+    zmeneno = db.Column(db.DateTime, nullable=False)
 
 
 class PisenNaStrane(db.Model):

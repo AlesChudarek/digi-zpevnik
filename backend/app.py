@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.middleware.proxy_fix import ProxyFix
 import re
+import uuid
 import unicodedata
 from datetime import datetime, timedelta
 from functools import wraps
@@ -265,6 +266,10 @@ def zabrane_misto(user_id: int) -> int:
     - Obálky stojí svou velikost.
     - K tomu nahrané strany, které ještě nejsou v žádném zpěvníku (rozpracovaný
       editor), jinak by se jich za den dalo nahrát kolik libo.
+    - Navržená strana (editor stran) stojí svou velikost (zdroj + PDF + vložené
+      obrázky), aspoň MIN_CENA_STRANY. Verze, která ještě není v žádném zpěvníku, se
+      počítá tomu, kdo ji uložil; obrázek nahraný do editoru stran, který zatím není
+      v žádné verzi, jako neuložená nahrávka.
     """
     knihy = [r[0] for r in db.session.query(Songbook.id).filter(
         Songbook.owner_id == user_id, Songbook.is_public != 1)]
@@ -277,8 +282,15 @@ def zabrane_misto(user_id: int) -> int:
           AND NOT EXISTS (SELECT 1 FROM strany s WHERE s.image_id = i.id)
           AND NOT EXISTS (SELECT 1 FROM songbooks b WHERE i.id IN (b.cover_preview_id,
               b.cover_front_outer_id, b.cover_front_inner_id, b.cover_back_inner_id,
-              b.cover_back_outer_id))"""),
+              b.cover_back_outer_id))
+          AND NOT EXISTS (SELECT 1 FROM navrzene_strany n WHERE n.pdf_id = i.id)
+          AND NOT EXISTS (SELECT 1 FROM navrh_obrazky o WHERE o.image_id = i.id)"""),
         {'koren': f'uzivatele/{user_id}/%', 'minimum': MIN_CENA_STRANY}).scalar()
+    celkem += db.session.execute(text("""
+        SELECT COALESCE(SUM(MAX(n.velikost, :minimum)), 0) FROM navrzene_strany n
+        WHERE n.vlastnik_id = :uid
+          AND NOT EXISTS (SELECT 1 FROM strany s WHERE s.navrzena_id = n.id)"""),
+        {'uid': user_id, 'minimum': MIN_CENA_STRANY}).scalar()
     return int(celkem or 0)
 
 
@@ -292,11 +304,16 @@ def cena_zpevniku(knihy) -> int:
     seznam = ', '.join(f':k{i}' for i in range(len(knihy)))
     strany = db.session.execute(text(f"""
         SELECT COALESCE(SUM(CASE
+            WHEN s.navrzena_id IS NOT NULL THEN CASE
+                WHEN EXISTS (SELECT 1 FROM strany v JOIN songbooks vb ON vb.id = v.songbook_id
+                             WHERE v.navrzena_id = s.navrzena_id AND vb.is_public = 1) THEN :minimum
+                ELSE MAX(COALESCE(n.velikost, 0), :minimum) END
             WHEN s.image_id IS NULL THEN :minimum
             WHEN EXISTS (SELECT 1 FROM strany v JOIN songbooks vb ON vb.id = v.songbook_id
                          WHERE v.image_id = s.image_id AND vb.is_public = 1) THEN :minimum
             ELSE MAX(COALESCE(i.velikost, 0), :minimum) END), 0)
         FROM strany s LEFT JOIN images i ON i.id = s.image_id
+        LEFT JOIN navrzene_strany n ON n.id = s.navrzena_id
         WHERE s.songbook_id IN ({seznam})"""), {**params, 'minimum': MIN_CENA_STRANY}).scalar()
     obalky = db.session.execute(text(f"""
         SELECT COALESCE(SUM(COALESCE(i.velikost, 0)), 0) FROM songbooks b
@@ -479,6 +496,9 @@ try:
         Obrazek,
         Strana,
         PisenNaStrane,
+        NavrzenaStrana,
+        KnihovnaStylu,
+        navrh_obrazky,
         Songbook,
         Author,
         User,
@@ -493,7 +513,7 @@ try:
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, NavrzenaStrana, KnihovnaStylu, navrh_obrazky, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -648,6 +668,11 @@ def _dopln_chybejici_sloupce():
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
+            strany_sl = {r[1] for r in db.session.execute(text("PRAGMA table_info(strany)"))}
+            if strany_sl and 'navrzena_id' not in strany_sl:
+                db.session.execute(text(
+                    "ALTER TABLE strany ADD COLUMN navrzena_id INTEGER REFERENCES navrzene_strany(id)"))
+                db.session.commit()
             sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(images)"))}
             if sloupce and 'velikost' not in sloupce:
                 db.session.execute(text("ALTER TABLE images ADD COLUMN velikost INTEGER"))
@@ -1051,6 +1076,8 @@ def smaz_osirele_obrazky(kandidati):
     for obraz in Obrazek.query.filter(Obrazek.cesta.in_(kandidati)).all():
         pouzity = (
             db.session.query(Strana.id).filter_by(image_id=obraz.id).first()
+            or db.session.query(NavrzenaStrana.id).filter_by(pdf_id=obraz.id).first()
+            or db.session.query(navrh_obrazky.c.navrzena_id).filter(navrh_obrazky.c.image_id == obraz.id).first()
             or db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == obraz.id,
                 Songbook.cover_front_outer_id == obraz.id,
@@ -1911,6 +1938,10 @@ def zrus_ucet(user, co_se_stalo, prevest_k=None):
     db.session.query(Pratelstvi).filter(db.or_(Pratelstvi.od_id == uid,
                                                Pratelstvi.komu_id == uid)).delete()
     db.session.query(ExportPokus).filter_by(user_id=uid).delete()
+    db.session.query(KnihovnaStylu).filter_by(user_id=uid).delete()
+    # Navržené strany ve sdílených a převedených zpěvnících zůstávají; nepoužité smaže
+    # úklid (_uklid_neulozenych_navrhu).
+    db.session.query(NavrzenaStrana).filter_by(vlastnik_id=uid).update({'vlastnik_id': None})
     db.session.query(User).filter_by(id=uid).delete()
     if pred:
         zkontroluj_limity(pred)
@@ -2353,7 +2384,8 @@ def add_song_to_songbook(songbook_id):
     dalsi = len(sb.strany)
     added = 0
     for poradi_v_pisni, puvodni in enumerate(zdroj, start=1):
-        nova = Strana(songbook_id=sb.id, poradi=dalsi, image_id=puvodni.image_id)
+        nova = Strana(songbook_id=sb.id, poradi=dalsi, image_id=puvodni.image_id,
+                      navrzena_id=puvodni.navrzena_id)
         nova.pisne.append(PisenNaStrane(song_id=song.id, poradi_v_pisni=poradi_v_pisni))
         db.session.add(nova)
         dalsi += 1
@@ -3248,6 +3280,7 @@ def kopiruj_zpevnik(sb, vlastnik_id, nazev=None):
     nove_id = {}
     for st in sb.strany:
         kopie = Strana(songbook_id=nova.id, poradi=st.poradi, image_id=st.image_id,
+                       navrzena_id=st.navrzena_id,
                        popisek=st.popisek)
         for v in st.pisne:
             sid = v.song_id
@@ -3633,6 +3666,25 @@ def nacti_zpevnik_pro_editor(songbook_id):
     })
 
 
+def _uklid_neulozenych_navrhu():
+    """Smaže verze navržených stran, které nejsou v žádném zpěvníku a jsou starší než
+    den (neuložený editor, strana odebraná ze zpěvníku). Commitne. Vrací cesty jejich
+    souborů - smaže je úklid obrázků, pokud na ně nic jiného neukazuje."""
+    hranice = datetime.now() - timedelta(hours=NEULOZENA_STRANA_HODIN)
+    stare = NavrzenaStrana.query.filter(
+        NavrzenaStrana.vytvoreno < hranice,
+        ~db.session.query(Strana.id).filter(Strana.navrzena_id == NavrzenaStrana.id).exists()).all()
+    cesty = []
+    for n in stare:
+        cesty.append(n.pdf.cesta if n.pdf else None)
+        cesty += [o.cesta for o in n.obrazky]
+        n.obrazky = []
+        db.session.delete(n)
+    if stare:
+        db.session.commit()
+    return [c for c in cesty if c]
+
+
 def _uklid_neulozenych_stran():
     """Smaže nahrané strany, které nikdo neuložil a jsou starší než den.
 
@@ -3641,9 +3693,11 @@ def _uklid_neulozenych_stran():
     nepotřebuje cron; dotaz je jeden a levný.
     """
     hranice = time.time() - NEULOZENA_STRANA_HODIN * 3600
-    kandidati = []
+    kandidati = _uklid_neulozenych_navrhu()
     for obraz in Obrazek.query.filter(
             ~db.session.query(Strana.id).filter(Strana.image_id == Obrazek.id).exists(),
+            ~db.session.query(NavrzenaStrana.id).filter(NavrzenaStrana.pdf_id == Obrazek.id).exists(),
+            ~db.session.query(navrh_obrazky.c.navrzena_id).filter(navrh_obrazky.c.image_id == Obrazek.id).exists(),
             ~db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == Obrazek.id,
                 Songbook.cover_front_outer_id == Obrazek.id,
@@ -3749,6 +3803,206 @@ def nahraj_stranu():
     obraz = Obrazek.ziskej(rel)
     db.session.commit()
     return jsonify({'ok': True, 'image_id': obraz.id})
+
+
+# ---------- Navržené strany (editor stran, TODO bod 11) ----------
+# Strana navržená v editoru: zdroj (JSON) + vektorové PDF, které vyrobí prohlížeč autora
+# (static/js/strana/pdf-strany.js), + obrázky vložené do strany. Každé uložení je nová
+# neměnná verze (NavrzenaStrana); do zpěvníku se dostane uložením editoru zpěvníku
+# (strany.navrzena_id), do té doby ji úklid po dni smaže.
+
+NAVRH_MAX_ZDROJ = 2 * 1024 * 1024
+NAVRH_MAX_PDF = 5 * 1024 * 1024
+NAVRH_MAX_OBRAZEK = 8 * 1024 * 1024
+NAVRH_MAX_STYLY = 256 * 1024
+NAVRH_VERZE_ZDROJE = {2}
+RE_OBRAZEK_NAVRHU = re.compile(r'^/navrh/obrazek/(\d+)$')
+
+
+def smi_navrhovat(user) -> bool:
+    """Navrhovat strany smí jen prémiový účet (a admin) - rozhodnuto 4. 11."""
+    return (getattr(user, 'is_authenticated', False) and not is_guest(user)
+            and smi_tvorit(user) and ma_premium(user))
+
+
+def smi_videt_navrh(user, navrh) -> bool:
+    """Vidí uživatel verzi navržené strany? Autor vždy, jinak když je ve zpěvníku,
+    který vidí."""
+    if navrh is None or not getattr(user, 'is_authenticated', False):
+        return False
+    if navrh.vlastnik_id == user.id or is_admin(user):
+        return True
+    for (sb_id,) in db.session.query(Strana.songbook_id).filter_by(navrzena_id=navrh.id).distinct():
+        sb = db.session.get(Songbook, sb_id)
+        if sb is not None and can_view_songbook(user, sb):
+            return True
+    return False
+
+
+def _smi_videt_obrazek_navrhu(user, obraz) -> bool:
+    """Obrázek vložený do navržené strany: autorův, dokud není v žádné verzi; pak ho
+    vidí ten, kdo vidí některou verzi, která ho používá."""
+    if obraz is None or not getattr(user, 'is_authenticated', False):
+        return False
+    if obraz.cesta.startswith(f'uzivatele/{user.id}/navrh/'):
+        return True
+    verze = (NavrzenaStrana.query.join(navrh_obrazky, navrh_obrazky.c.navrzena_id == NavrzenaStrana.id)
+             .filter(navrh_obrazky.c.image_id == obraz.id).all())
+    return any(smi_videt_navrh(user, n) for n in verze)
+
+
+def _uloz_soubor_navrhu(data: bytes, pripona: str) -> Obrazek:
+    """Zapíše soubor navržené strany do kořene toho, kdo ukládá (nové jméno - nikdy se
+    nepřepisuje), s kontrolou limitu místa. Necommituje."""
+    uid = current_user.id
+    rel = f'uzivatele/{uid}/navrh/{uuid.uuid4().hex}{pripona}'
+    cesta = IMAGES_DIR / rel
+    zbyva = _zbyva_uzivateli(uid)
+    if max(len(data), MIN_CENA_STRANY) > zbyva:
+        raise KvotaPrekrocena(limit_uzivatele(uid) - zbyva, len(data))
+    cesta.parent.mkdir(parents=True, exist_ok=True)
+    with open(cesta, 'wb') as fh:
+        fh.write(data)
+    _zapocti(uid, max(len(data), MIN_CENA_STRANY), cesta)
+    obraz = Obrazek.ziskej(rel)
+    obraz.velikost = len(data)
+    return obraz
+
+
+@app.route('/api/navrh/obrazek', methods=['POST'])
+@login_required
+def nahraj_obrazek_navrhu():
+    """Obrázek (grafika) do navržené strany. PDF strany umí vložit jen PNG a JPEG, takže
+    ostatní formáty se převedou na PNG."""
+    if not smi_navrhovat(current_user):
+        return jsonify({'ok': False, 'error': 'Editor stran je pro prémiové účty.'}), 403
+    soubor = request.files.get('soubor')
+    if not soubor:
+        return jsonify({'ok': False, 'error': 'Chybí soubor.'}), 400
+    data = soubor.read(NAVRH_MAX_OBRAZEK + 1)
+    if len(data) > NAVRH_MAX_OBRAZEK:
+        return jsonify({'ok': False, 'error': 'Obrázek je větší než 8 MB.'}), 413
+    fmt = zkontroluj_format(data)
+    if fmt not in ('PNG', 'JPEG'):
+        with Image.open(BytesIO(data)) as im:
+            vystup = BytesIO()
+            im.convert('RGBA').save(vystup, 'PNG', optimize=True)
+            data, fmt = vystup.getvalue(), 'PNG'
+    _uklid_neulozenych_stran()
+    obraz = _uloz_soubor_navrhu(data, '.png' if fmt == 'PNG' else '.jpg')
+    db.session.commit()
+    return jsonify({'ok': True, 'id': obraz.id, 'url': url_for('obrazek_navrhu', obraz_id=obraz.id)})
+
+
+@app.route('/navrh/obrazek/<int:obraz_id>')
+@login_required
+def obrazek_navrhu(obraz_id):
+    obraz = db.session.get(Obrazek, obraz_id)
+    if obraz is None or not _smi_videt_obrazek_navrhu(current_user, obraz):
+        return ("Not Found", 404)
+    return send_from_directory(str(IMAGES_DIR), obraz.cesta)
+
+
+def _obrazky_ve_zdroji(uzel, ids):
+    """Id obrázků navržené strany, na které zdroj odkazuje (uzly `obrazek`)."""
+    if isinstance(uzel, dict):
+        if uzel.get('type') == 'obrazek':
+            m = RE_OBRAZEK_NAVRHU.match(str((uzel.get('attrs') or {}).get('src', '')))
+            if not m:
+                raise ValueError('Obrázek ve straně musí být nahraný přes /api/navrh/obrazek.')
+            ids.add(int(m.group(1)))
+        for dite in uzel.get('content') or []:
+            _obrazky_ve_zdroji(dite, ids)
+    return ids
+
+
+@app.route('/api/navrh/strana', methods=['POST'])
+@login_required
+def uloz_navrzenou_stranu():
+    """Nová verze navržené strany: `zdroj` (JSON z editoru) a `pdf` (PDF strany z
+    prohlížeče). Do zpěvníku se dostane až uložením editoru zpěvníku."""
+    if not smi_navrhovat(current_user):
+        return jsonify({'ok': False, 'error': 'Editor stran je pro prémiové účty.'}), 403
+    zdroj_text = request.form.get('zdroj') or ''
+    pdf = request.files.get('pdf')
+    if not zdroj_text or not pdf:
+        return jsonify({'ok': False, 'error': 'Chybí zdroj nebo PDF strany.'}), 400
+    if len(zdroj_text.encode('utf-8')) > NAVRH_MAX_ZDROJ:
+        return jsonify({'ok': False, 'error': 'Strana je příliš velká.'}), 413
+    try:
+        zdroj = json.loads(zdroj_text)
+        if not isinstance(zdroj, dict) or zdroj.get('verze') not in NAVRH_VERZE_ZDROJE:
+            raise ValueError('Neznámá verze zdroje strany.')
+        obsah = zdroj.get('obsah')
+        if not isinstance(obsah, dict) or obsah.get('type') != 'doc' or not isinstance(zdroj.get('nastaveni'), dict):
+            raise ValueError('Zdroj strany nemá obsah.')
+        ids = _obrazky_ve_zdroji(obsah, set())
+    except (ValueError, TypeError) as chyba:
+        return jsonify({'ok': False, 'error': f'Neplatná strana: {chyba}'}), 400
+    data_pdf = pdf.read(NAVRH_MAX_PDF + 1)
+    if len(data_pdf) > NAVRH_MAX_PDF:
+        return jsonify({'ok': False, 'error': 'PDF strany je větší než 5 MB.'}), 413
+    if not data_pdf.startswith(b'%PDF-'):
+        return jsonify({'ok': False, 'error': 'Soubor strany není PDF.'}), 400
+    obrazky = []
+    for oid in sorted(ids):
+        obraz = db.session.get(Obrazek, oid)
+        if obraz is None or not _smi_videt_obrazek_navrhu(current_user, obraz):
+            return jsonify({'ok': False, 'error': 'Strana odkazuje na obrázek, který není dostupný.'}), 400
+        obrazky.append(obraz)
+    _uklid_neulozenych_stran()
+    soubor_pdf = _uloz_soubor_navrhu(data_pdf, '.pdf')
+    velikost = (len(zdroj_text.encode('utf-8')) + len(data_pdf)
+                + sum(o.velikost or 0 for o in obrazky))
+    navrh = NavrzenaStrana(vlastnik_id=current_user.id, vytvoreno=datetime.now(),
+                           zdroj=json.dumps(zdroj, ensure_ascii=False, separators=(',', ':')),
+                           pdf=soubor_pdf, velikost=velikost)
+    navrh.obrazky = obrazky
+    db.session.add(navrh)
+    db.session.commit()
+    return jsonify({'ok': True, 'id': navrh.id, 'velikost': velikost})
+
+
+@app.route('/api/navrh/strana/<int:navrh_id>')
+@login_required
+def nacti_navrzenou_stranu(navrh_id):
+    navrh = db.session.get(NavrzenaStrana, navrh_id)
+    if not smi_videt_navrh(current_user, navrh):
+        return jsonify({'ok': False, 'error': 'Strana nenalezena.'}), 404
+    return jsonify({'ok': True, 'id': navrh.id, 'zdroj': json.loads(navrh.zdroj),
+                    'pdf': url_for('pdf_navrzene_strany', navrh_id=navrh.id)})
+
+
+@app.route('/navrh/strana/<int:navrh_id>.pdf')
+@login_required
+def pdf_navrzene_strany(navrh_id):
+    navrh = db.session.get(NavrzenaStrana, navrh_id)
+    if not smi_videt_navrh(current_user, navrh):
+        return ("Not Found", 404)
+    return send_from_directory(str(IMAGES_DIR), navrh.pdf.cesta, mimetype='application/pdf')
+
+
+@app.route('/api/navrh/styly', methods=['GET', 'PUT'])
+@login_required
+def styly_uctu():
+    """Knihovna stylů účtu (štětce editoru stran)."""
+    if request.method == 'GET':
+        k = db.session.get(KnihovnaStylu, current_user.id)
+        return jsonify({'ok': True, 'styly': json.loads(k.data) if k else None})
+    if not smi_navrhovat(current_user):
+        return jsonify({'ok': False, 'error': 'Editor stran je pro prémiové účty.'}), 403
+    styly = (request.get_json(silent=True) or {}).get('styly')
+    text_stylu = json.dumps(styly, ensure_ascii=False, separators=(',', ':')) if isinstance(styly, dict) else None
+    if text_stylu is None or len(text_stylu.encode('utf-8')) > NAVRH_MAX_STYLY:
+        return jsonify({'ok': False, 'error': 'Neplatná knihovna stylů.'}), 400
+    k = db.session.get(KnihovnaStylu, current_user.id)
+    if k is None:
+        k = KnihovnaStylu(user_id=current_user.id, data=text_stylu, zmeneno=datetime.now())
+        db.session.add(k)
+    else:
+        k.data, k.zmeneno = text_stylu, datetime.now()
+    db.session.commit()
+    return jsonify({'ok': True})
 
 
 def _smi_pouzit_obrazek(image_id, sb, koren):
