@@ -595,11 +595,12 @@ def test_prohlizece(p, base, jmeno):
       const x = c.getContext('2d'); x.drawImage(bmp, 0, 0);
       const px = x.getImageData(0, 0, c.width, c.height).data; let cervene = 0, tmave = 0;
       for (let i = 0; i < px.length; i += 4 * 13) { if (px[i] > 150 && px[i+1] < 60 && px[i+2] < 60) cervene++; if (px[i] < 80 && px[i+1] < 80 && px[i+2] < 80) tmave++; }
-      return { akordy: rozdil(ed.akordy, ct.akordy), odstavce: rozdil(ed.odstavce, ct.odstavce), znacky: ed.znacky.join() === ct.znacky.join(),
+      const lisi = ed.odstavce.map((x, i) => [i, +(ct.odstavce[i][1] - x[1]).toFixed(1), document.querySelectorAll('#stranka .ps-p')[i].textContent.slice(0, 30)]).filter(x => Math.abs(x[1]) > 0.6).slice(0, 4);
+      return { lisi, zlomy: JSON.stringify(zdroj.zlomy), akordy: rozdil(ed.akordy, ct.akordy), odstavce: rozdil(ed.odstavce, ct.odstavce), znacky: ed.znacky.join() === ct.znacky.join(),
                cislo, sirka: bmp.width, ms, cervene, tmave, dolniPolovina: (() => { const d2 = x.getImageData(0, Math.round(c.height * 0.5), c.width, Math.round(c.height * 0.4)).data; let t = 0; for (let i = 0; i < d2.length; i += 4 * 13) if (d2[i] < 80) t++; return t; })() };
     }""")
     ok('vykreslená strana: akordy přesně jako v editoru', v['akordy'] < 0.6, v['akordy'])
-    ok('vykreslená strana: odstavce přesně jako v editoru', v['odstavce'] < 0.6, v['odstavce'])
+    ok('vykreslená strana: odstavce přesně jako v editoru', v['odstavce'] < 0.6, (v['odstavce'], v['lisi'], v['zlomy']))
     ok('vykreslená strana: stejné značky slok', v['znacky'])
     ok('vykreslená strana: číslo strany z pozice', v['cislo'] == '7', v['cislo'])
     ok('obrázek strany 1748 px s textem i akordy', v['sirka'] == 1748 and v['tmave'] > 1000 and v['cervene'] > 100, {k: v[k] for k in ('sirka', 'tmave', 'cervene', 'ms')})
@@ -658,6 +659,58 @@ def test_prohlizece(p, base, jmeno):
     br.close()
 
 
+def prihlas_editor(p, base, jmeno):
+    br = getattr(p, jmeno).launch()
+    page = br.new_page(viewport={'width': 1400, 'height': 1000})
+    page.goto(base + '/login')
+    page.fill('input[name="email"]', 'admin@test.com')
+    page.fill('input[name="password"]', T.PASSWORD)
+    page.click('button[type="submit"]')
+    page.wait_for_load_state('networkidle')
+    otevri_editor(page, base)
+    return br, page
+
+
+def test_zlomy(p, base, prohlizece):
+    """Strana uložená v jednom prohlížeči se jinde zalomí stejně (WebKit by jinak třetinu
+    odstavců zalomil o slovo jinak). Zdroj vznikne v Chromiu, kontroluje se jinde."""
+    import random
+    print("\n── zlomy řádků napříč prohlížeči ──")
+    random.seed(7)
+    slova = ('večer ohně sedíme staré písně zpíváme nad lesem hvězdy rozsvítí nikomu spát nechce hraj kytaro '
+             'celý kraj ráno kamarád podá hrneček praská suchý klacek dohasíná každý začíná přes hory doly').split()
+    ramecky = []
+    for _ in range(10):
+        odst = []
+        for _ in range(12):
+            marks = [{'type': 'pismo', 'attrs': {'f': random.choice(['Noto Sans', 'Noto Serif', 'Roboto Condensed', 'Caveat'])}},
+                     {'type': 'velikost', 'attrs': {'v': random.choice([8, 9, 9.5, 10, 11, 12])}}]
+            if random.random() < 0.3:
+                marks.append({'type': 'tucne'})
+            odst.append({'type': 'odstavec', 'attrs': {'styl': 'normalni-1'},
+                         'content': [{'type': 'text', 'text': ' '.join(random.choice(slova) for _ in range(random.randint(6, 22))), 'marks': marks}]})
+        ramecky.append({'type': 'ramecek', 'attrs': {'x': 0, 'y': 0, 'w': random.randint(30, 120), 'h': 2000}, 'content': odst})
+    br, page = prihlas_editor(p, base, 'chromium')
+    page.evaluate("(o) => { const v = navrhStrany.view; v.dispatch(v.state.tr.replaceWith(0, v.state.doc.content.size, navrhStrany.schema.nodeFromJSON(o).content)); }",
+                  {'type': 'doc', 'content': ramecky})
+    page.wait_for_timeout(300)
+    zdroj = page.evaluate("navrhStrany.zdroj()")
+    br.close()
+    ok('zdroj si pamatuje zlomy řádků', len(zdroj['zlomy']) > 50, len(zdroj['zlomy']))
+    for jmeno in prohlizece:
+        br, page = prihlas_editor(p, base, jmeno)
+        v = page.evaluate("""async (zdroj) => {
+          const mer = async (z) => { const k = navrhStrany.vykresliStranu(z, {}); k.style.height = '6000mm';
+            const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;z-index:-1';
+            d.appendChild(k); document.body.appendChild(d); await document.fonts.ready; const z2 = navrhStrany.zmerZlomy(k); d.remove(); return z2; };
+          const rozdil = (a, b) => { const kl = new Set([...Object.keys(a), ...Object.keys(b)]); let n = 0;
+            for (const k of kl) if (JSON.stringify(a[k] || []) !== JSON.stringify(b[k] || [])) n++; return n; };
+          return { bez: rozdil(zdroj.zlomy, await mer({ ...zdroj, zlomy: null })), se: rozdil(zdroj.zlomy, await mer(zdroj)) };
+        }""", zdroj)
+        ok(f'{jmeno}: strana z Chromia se zalomí stejně', v['se'] == 0, f"rozdílných odstavců {v['se']} (bez zapamatovaných zlomů by jich bylo {v['bez']})")
+        br.close()
+
+
 def test_pristup(p, base):
     print("\n── přístup ──")
     br = p.chromium.launch()
@@ -710,6 +763,7 @@ def main():
             test_akordy(p, base)
             for jmeno in prohlizece:
                 test_prohlizece(p, base, jmeno)
+            test_zlomy(p, base, prohlizece)
     finally:
         server.terminate()
         shutil.rmtree(tmp, ignore_errors=True)

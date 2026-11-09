@@ -217,7 +217,12 @@
    podle šířek z písma, a tak strana vypadá stejně na obrazovce i v PDF. Editoru je
    ProseMirror vypíná taky - takhle platí i pro čtečku. */
 .stranka { font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "kern" 0; }
-.stranka-obsah { position: absolute; inset: 0; outline: none; }
+/* Zalamování přesně jako v editoru (ProseMirror má break-spaces): bez toho čtečka
+   zalamovala jinak než editor - mezera na konci řádku se chová jinak. */
+.stranka-obsah {
+  position: absolute; inset: 0; outline: none;
+  white-space: pre-wrap; white-space: break-spaces; word-wrap: break-word; overflow-wrap: break-word;
+}
 
 /* Prvky (rámečky a obrázky): poloha a rozměr v mm (inline styl). Obrys jen pod myší
    a u vybraného - na papíře nemají být vidět. Ovládací prvky mají na obrazovce stejnou

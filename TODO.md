@@ -1073,8 +1073,10 @@ kdo maže.
         naskenované strany zůstanou obrázky, číslo strany a vodoznak dopíše server.
         Shoda s prohlížečem po pixelech: Chromium 99,98 %, Firefox 99,6 %, WebKit 98 %
         (WebKit si rozmisťuje o 1-2 px jinak i sám proti sobě). Obrázek strany odpadá.
-        Pozor: Safari a Chrome lámou řádky o pixel jinak - PDF odpovídá prohlížeči, kde
-        byla strana uložena.
+        Zalomení řádků: Safari by stranu z Chromu zalomil jinak asi u třetiny odstavců
+        (simulace 168 odstavců). Zdroj si proto pamatuje zlomy z prohlížeče autora
+        (`zlomy`) a čtečka i PDF zalamují přesně tam - pak 0 rozdílů. Výjimka: odstavec
+        do bloku se zalamuje sám (ručně zalomený řádek do bloku nejde).
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
@@ -1102,3 +1104,4 @@ kdo maže.
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
 v editoru zpevniku se neda pridat prazdna stranka uplne na zacatek nebo konec. Tlacitko uplne na konci je v podstate nepouzivane, nejcasteji se pridava pluskem mezi stranami. Popremyslejme lepsi zpusob jak pridat stranu
 na konec pridat funkci u exportu - precislovani stranek. Tat ofunkce umozni pridat vlastni cislovani, ale taky moznost zakryt stare. Zaprve nove cislovani ma moznost barevneho pozadi (bile, neboli prekryje stare cislovani), ale taky pridani zaplaty (barevny/bily ctverecek umisteny na dane misto per page nebo defaultne) - aby se tim dal novy zpevnik vytvoreny z jinych pisni co uz maji baked in cisla precslovat.
+pridat tlacitko zpetne vazby - do rohu webu (treba vlevo dole) dat ikonu s komixovou bublinou, co otevre moznost zpetne vazby, kde uzivateli da moznost napsat cokoliv a pak odeslat. Tyto texty si pak admin muze otevrit v novem okne zpetne vazby a ke kazemu radku si zaskrtnout bud neco jak ovyreseno, v procesu, nepodstatne, nebo zrusit, nebo proste nejake dobre tagy. s vyhledavanim a filtry. Ikona pro uzivatele bez uctu je videt vzdy, pro prihlasene bude zaskrtavaci policko dale neukazovat na stane nebo nejak tak, a uz ikona uplne zmizi at nezavazi. Ale i tak vzdycky pujde stejne okno otevrit z nabidky pod profilem - nova radka se zpetnou vazbou. Pripadne jenom nove okno podobne vyberu tematu - ikona v horni liste s bublinou jen tam.

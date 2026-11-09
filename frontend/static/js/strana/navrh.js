@@ -190,9 +190,46 @@ function zalohuj() {
   }, 400);
 }
 
-// Zdroj strany v tom tvaru, v jakém se později uloží k obrázku.
+// Zdroj strany v tom tvaru, v jakém se uloží na server. `zlomy` jsou místa, kde řádky
+// zalomil prohlížeč autora - čtečka a PDF je převezmou (vykresleni.js), protože jiný
+// prohlížeč by asi 1 % odstavců zalomil o slovo jinak (Safari a Chrome měří text o pixel
+// jinak). Editor sám zalamuje dál živě.
 function zdrojStrany() {
-  return { verze: VERZE_SCHEMATU, nastaveni, obsah: view.state.doc.toJSON() };
+  return { verze: VERZE_SCHEMATU, nastaveni, obsah: view.state.doc.toJSON(), zlomy: zmerZlomy(view.dom) };
+}
+
+// { indexOdstavce: [počet znaků textu před začátkem každého dalšího řádku] } - jen
+// odstavce, které se zalomily samy (ne ručním zalomením Shift+Enter).
+function zmerZlomy(koren) {
+  const zlomy = {};
+  const g = document.createRange();
+  [...koren.querySelectorAll('.ps-p')].forEach((p, index) => {
+    const starty = [];
+    let predchozi = null, znak = 0, poBr = false;
+    const chodec = document.createTreeWalker(p, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let n;
+    while ((n = chodec.nextNode())) {
+      // Ruční zalomení (Shift+Enter) není zlom - zalomení převzaté ze zdroje (ps-zlom) ano.
+      if (n.nodeType === 1) {
+        if (n.nodeName === 'BR' && !n.classList.contains('ProseMirror-trailingBreak') && !n.classList.contains('ps-zlom')) poBr = true;
+        continue;
+      }
+      if (n.parentElement.closest('.akord-kotva, .ps-nabidka')) continue;
+      for (let i = 0; i < n.length; i++, znak++) {
+        g.setStart(n, i);
+        g.setEnd(n, i + 1);
+        const r = [...g.getClientRects()].find((x) => x.width > 0);
+        if (!r) continue;
+        // Nový řádek: střed znaku je pod spodkem předchozího. Porovnávat jen horní hrany
+        // nejde - menší písmo na témže řádku má horní hranu níž.
+        if (predchozi && (r.top + r.bottom) / 2 > predchozi.bottom && !poBr) starty.push(znak);
+        predchozi = r;
+        poBr = false;
+      }
+    }
+    if (starty.length) zlomy[index] = starty;
+  });
+  return zlomy;
 }
 window.zdrojStrany = () => zdrojStrany();
 
@@ -1331,6 +1368,7 @@ window.navrhStrany = {
   view, schema, TextSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
   cislo: () => cisloStrany,
   zdroj: () => zdrojStrany(),
+  zmerZlomy,
   vykresliStranu, obrazekStrany,
   nahradTextem(nazev, autor, text) {
     const f = format();

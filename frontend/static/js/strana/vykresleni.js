@@ -123,6 +123,12 @@ export function vykresliStranu(zdroj, { cislo = null, strana = 'P' } = {}) {
     if (!p.firstChild || p.lastChild.nodeName === 'BR') p.appendChild(element('br'));
   }
 
+  // Zlomy řádků z prohlížeče autora: zalomí se přesně tam a samy už ne (white-space:
+  // pre). V jiném prohlížeči tak řádek může být o pixel delší nebo kratší, ale slovo
+  // na další řádek neskočí. Odstavec do bloku se nechá zalamovat (ručně zalomený řádek
+  // by do bloku nešel) - tam riziko zůstává.
+  if (zdroj.zlomy) pouzijZlomy([...obsah.querySelectorAll('.ps-p')], zdroj.zlomy, n);
+
   // Značky slok: odstavce v DOM jsou ve stejném pořadí jako v dokumentu.
   const role = (k) => (n.styly && n.styly[k] ? n.styly[k].role : k.replace(/-\d+$/, ''));
   const { znacky } = znackySlok(doc, role);
@@ -149,6 +155,35 @@ export function vykresliStranu(zdroj, { cislo = null, strana = 'P' } = {}) {
     koren.appendChild(e);
   }
   return koren;
+}
+
+function pouzijZlomy(odstavce, zlomy, n) {
+  for (const [index, starty] of Object.entries(zlomy)) {
+    const p = odstavce[index];
+    if (!p || !starty.length) continue;
+    const st = (n.styly || {})[p.dataset.styl];
+    if (p.style.textAlign === 'justify' || (!p.style.textAlign && st && st.zarovnani === 'justify')) continue;
+    const zbyva = [...starty];
+    let znak = 0;
+    const uzly = [];
+    const chodec = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    let u;
+    while ((u = chodec.nextNode())) if (!u.parentElement.closest('.akord-kotva')) uzly.push(u);
+    for (const uzel of uzly) {
+      let t = uzel;
+      while (zbyva.length && zbyva[0] < znak + t.length) {
+        const kde = zbyva.shift() - znak;
+        const zbytek = kde > 0 ? t.splitText(kde) : t;
+        const br = document.createElement('br');
+        br.className = 'ps-zlom';
+        zbytek.parentNode.insertBefore(br, zbytek);
+        znak += kde;
+        t = zbytek;
+      }
+      znak += t.length;
+    }
+    p.style.whiteSpace = 'pre';
+  }
 }
 
 // Dokončení po připojení do stránky: písma a (volitelně) automatická mezera mezi akordy,
