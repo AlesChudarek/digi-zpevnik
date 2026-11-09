@@ -8,7 +8,7 @@
 // tvar, který se později uloží na server: { verze, nastaveni, obsah }.
 
 import {
-  EditorState, EditorView, NodeSelection, TextSelection, keymap, baseKeymap, history,
+  EditorState, EditorView, NodeSelection, TextSelection, Plugin, keymap, baseKeymap, history,
   undo, redo, undoDepth, redoDepth, toggleMark, Slice, Fragment, closeHistory,
 } from 'prosemirror';
 import { schema, ROLE, VERZE_SCHEMATU, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
@@ -39,17 +39,26 @@ const zakladStylu = {
   pismo: 'Noto Sans', velikost: 9.5, tucne: false, kurziva: false, podtrzeni: false, barva: '#000000',
   zarovnani: 'left', odsazeni: 0, pred: 0, po: 0, radkovani: 1.2,
 };
-// Styl = jméno, role (jak se odstavec chová, viz ROLE) a vzhled. Vestavěné mají id rovné
-// roli; vlastní („+ Nový styl“) mají id v1, v2…
+// Styly jsou štětce (rozhodnutí 9. 11.): knihovna stylů patří k účtu (zatím v prohlížeči,
+// na server s krokem 3) a strana si nese KOPII každé verze stylu, kterou je namalovaná.
+// Změna štětce tak nezmění už hotové strany - na této straně se změna projeví hned
+// (autor vidí, co upravuje), jinde ne. Smazaný styl na straně vypadá dál stejně, jen
+// v panelu nebude označený.
+//
+// Styl = jméno, role (jak se odstavec chová, viz ROLE), vzhled a verze. Vestavěné mají
+// id rovné roli, vlastní v1, v2… Odstavec nese klíč „id-verze“ (sloka-1, v2-3).
+const VYCHOZI_STYLY = {
+  normalni: { ...zakladStylu, nazev: 'Normální', role: 'normalni' },
+  nadpis: { ...zakladStylu, nazev: 'Název', role: 'nadpis', pismo: 'Noto Serif', velikost: 15, tucne: true, radkovani: 1.15, po: 1 },
+  autor: { ...zakladStylu, nazev: 'Autor', role: 'autor', velikost: 8.5, kurziva: true, po: 8, barva: '#444444' },
+  sloka: { ...zakladStylu, nazev: 'Sloka', role: 'sloka', odsazeni: 6 },
+  refren: { ...zakladStylu, nazev: 'Refrén', role: 'refren', odsazeni: 11 },
+};
+for (const st of Object.values(VYCHOZI_STYLY)) st.ver = 1;
+
 const VYCHOZI = {
   format: 'A5',
-  styly: {
-    normalni: { ...zakladStylu, nazev: 'Normální', role: 'normalni' },
-    nadpis: { ...zakladStylu, nazev: 'Název', role: 'nadpis', pismo: 'Noto Serif', velikost: 15, tucne: true, radkovani: 1.15, po: 1 },
-    autor: { ...zakladStylu, nazev: 'Autor', role: 'autor', velikost: 8.5, kurziva: true, po: 8, barva: '#444444' },
-    sloka: { ...zakladStylu, nazev: 'Sloka', role: 'sloka', odsazeni: 6 },
-    refren: { ...zakladStylu, nazev: 'Refrén', role: 'refren', odsazeni: 11 },
-  },
+  styly: {},                // kopie stylů použitých na straně: klíč -> vzhled
   pismoAkordu: 'Roboto Condensed', velikostAkordu: 8.5, barvaAkordu: '#b00020', tucneAkordy: true,
   automatickaMezera: false,
   notace: 'cz',
@@ -72,6 +81,11 @@ let meritkoRucne = false;
 let rezimAkordu = false;
 let rozbalenyStyl = null;     // styl, jehož úprava je v panelu rozbalená
 
+// Vygenerovaná pravidla stylů strany (.stranka .ps-<klíč>) - vzniká hned, používá ji
+// už úvodní převod stylů.
+const stylyStrany = document.createElement('style');
+document.head.appendChild(stylyStrany);
+
 const el = (id) => document.getElementById(id);
 const koren = el('navrh');
 const obal = el('stranka-obal');
@@ -80,25 +94,74 @@ const format = () => FORMATY[nastaveni.format] || FORMATY.A5;
 
 function sluc(vychozi, ulozene) {
   const v = { ...structuredClone(vychozi), ...ulozene };
-  v.styly = {};
-  for (const k of Object.keys(vychozi.styly)) v.styly[k] = { ...vychozi.styly[k], ...(ulozene.styly || {})[k] };
-  for (const [k, s] of Object.entries(ulozene.styly || {})) {
-    if (!v.styly[k] && ROLE[s.role]) v.styly[k] = { ...zakladStylu, ...s };
-  }
+  v.styly = { ...(ulozene.styly || {}) };
   v.cislo = { ...vychozi.cislo, ...(ulozene.cislo || {}) };
   return v;
 }
 
-const styl = (id) => nastaveni.styly[id] || nastaveni.styly.normalni;
-const role = (id) => styl(id).role;
+// --- knihovna stylů (štětce) ----------------------------------------------------------
 
-// Po Enteru na konci odstavce: po Názvu Autor, po Autorovi Sloka, jinak stejný styl.
-function dalsiStyl(id) {
-  if (role(id) === 'nadpis') return 'autor';
-  if (role(id) === 'autor') return 'sloka';
-  return id;
+const KLIC_KNIHOVNY = 'navrh-styly-uctu';
+let knihovna = (() => {
+  const k = structuredClone(VYCHOZI_STYLY);
+  try {
+    const ulozena = JSON.parse(localStorage.getItem(KLIC_KNIHOVNY) || 'null');
+    if (ulozena) {
+      for (const id of Object.keys(k)) if (ulozena[id]) k[id] = { ...k[id], ...ulozena[id] };
+      for (const [id, st] of Object.entries(ulozena)) if (!k[id] && ROLE[st.role]) k[id] = { ...zakladStylu, ...st };
+    }
+  } catch (_) { /* poškozená nebo nedostupná - výchozí styly */ }
+  return k;
+})();
+
+function ulozKnihovnu() {
+  try { localStorage.setItem(KLIC_KNIHOVNY, JSON.stringify(knihovna)); } catch (_) { /* jen pohodlí */ }
 }
 
+const klicStylu = (id) => `${id}-${knihovna[id].ver}`;
+const idZKlice = (klic) => klic.replace(/-\d+$/, '');
+// Klíč odstavce odpovídá aktuální verzi štětce z knihovny -> id, jinak null.
+const aktualniId = (klic) => (klic && knihovna[idZKlice(klic)] && klicStylu(idZKlice(klic)) === klic ? idZKlice(klic) : null);
+
+// Kopie stylu na straně (pro vykreslení); nový klíč se do strany zkopíruje z knihovny.
+function zajistiVeStrane(klic) {
+  if (nastaveni.styly[klic]) return;
+  const id = idZKlice(klic);
+  if (!knihovna[id]) return;
+  nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [klic]: { ...knihovna[id] } } };
+  obnovCss();
+}
+// Vzhled odstavce: kopie na straně, jinak (ještě nezkopírovaný klíč nebo holé id)
+// z knihovny, jinak Normální.
+const styl = (klic) => nastaveni.styly[klic] || knihovna[klic] || knihovna[idZKlice(klic)] || knihovna.normalni;
+const role = (klic) => styl(klic).role;
+
+// Po Enteru na konci odstavce: po Názvu Autor, po Autorovi Sloka, jinak stejný styl.
+function dalsiStyl(klic) {
+  const r = role(klic);
+  const dalsi = r === 'nadpis' ? klicStylu('autor') : r === 'autor' ? klicStylu('sloka') : klic;
+  zajistiVeStrane(dalsi);
+  return dalsi;
+}
+
+// Odstavce s holým id stylu (ukázka, vložený text, starší strana) nebo se stylem, který
+// strana nezná, dostanou klíč aktuální verze z knihovny a kopii do strany.
+function normalizujStyly(state) {
+  let tr = null;
+  state.doc.descendants((n, pos) => {
+    if (n.type !== N.odstavec) return true;
+    const k = n.attrs.styl;
+    if (nastaveni.styly[k]) return false;
+    const id = idZKlice(k);
+    if (!knihovna[id] && !knihovna[k]) return false;
+    const novy = klicStylu(knihovna[k] ? k : id);
+    zajistiVeStrane(novy);
+    tr = (tr || state.tr).setNodeMarkup(pos, null, { ...n.attrs, styl: novy });
+    return false;
+  });
+  if (tr) tr.setMeta('addToHistory', false);
+  return tr;
+}
 function nactiZalohu() {
   try {
     const data = JSON.parse(localStorage.getItem(KLIC_ZALOHY) || 'null');
@@ -192,7 +255,10 @@ const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozm
 const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   state: EditorState.create({
     doc: zaloha ? zaloha.doc : prazdnyDokument(format()),
-    plugins: [pluginAkordu(ovladac), pluginSlok({ role }), history(), klavesy, keymap(baseKeymap)],
+    plugins: [
+      pluginAkordu(ovladac), pluginSlok({ role }), history(), klavesy, keymap(baseKeymap),
+      new Plugin({ appendTransaction: (trs, _, novy) => (trs.some((t) => t.docChanged) ? normalizujStyly(novy) : null) }),
+    ],
   }),
   attributes: { class: 'stranka-obsah', spellcheck: 'false' },
   nodeViews: {
@@ -214,6 +280,7 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   },
 });
 ovladac.pripoj(view);
+
 
 const cisloStrany = new CisloStrany(stranka, el('navrh-plocha'), {
   format, nastaveni: () => nastaveni, meritko: () => meritko,
@@ -251,8 +318,6 @@ function ukazStav({ pretece, kolize }) {
 
 // --- šablona: styly odstavců a akordy -------------------------------------------------
 
-const stylyStrany = document.createElement('style');
-document.head.appendChild(stylyStrany);
 
 function cssStylu(k, s) {
   return `.stranka .ps-${k} {
@@ -261,6 +326,10 @@ function cssStylu(k, s) {
     text-decoration: ${s.podtrzeni ? 'underline' : 'none'};
     color: ${s.barva}; text-align: ${s.zarovnani}; padding-left: ${s.odsazeni}mm;
     margin: ${s.pred}pt 0 ${s.po}pt; }`;
+}
+
+function obnovCss() {
+  stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu(k, v)).join('\n');
 }
 
 function pouzijNastaveni() {
@@ -275,7 +344,7 @@ function pouzijNastaveni() {
     cil.setProperty('--barva-akordu', nastaveni.barvaAkordu);
     cil.setProperty('--vaha-akordu', nastaveni.tucneAkordy ? 700 : 400);
   }
-  stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu(k, v)).join('\n');
+  obnovCss();
   naplnVyberStylu();
   vykresliStyly();
   if (typeof cisloStrany !== 'undefined') cisloStrany.vykresli();
@@ -375,7 +444,7 @@ function napojPanel() {
     b.addEventListener('click', () => {
       if (!rozbalenyStyl) return;
       const k = b.dataset.stylPrepinac;
-      zmenStyl(rozbalenyStyl, { [k]: !nastaveni.styly[rozbalenyStyl][k] });
+      zmenStyl(rozbalenyStyl, { [k]: !knihovna[rozbalenyStyl][k] });
     });
   }
   for (const b of koren.querySelectorAll('[data-styl-zarovnani]')) {
@@ -438,7 +507,7 @@ function nactiPanel() {
   for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) b.classList.toggle('aktivni', !!nastaveni.cislo[b.dataset.cisloPrepinac]);
   for (const b of koren.querySelectorAll('[data-nahled-strany]')) b.classList.toggle('aktivni', b.dataset.nahledStrany === nastaveni.nahledStrany);
   if (!rozbalenyStyl) return;
-  const s = nastaveni.styly[rozbalenyStyl];
+  const s = knihovna[rozbalenyStyl];
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
     if (document.activeElement === prvek) continue;
     const h = s[prvek.dataset.stylPole];
@@ -447,22 +516,49 @@ function nactiPanel() {
   for (const b of koren.querySelectorAll('[data-styl-prepinac]')) b.classList.toggle('aktivni', !!s[b.dataset.stylPrepinac]);
   for (const b of koren.querySelectorAll('[data-styl-zarovnani]')) b.classList.toggle('aktivni', s.zarovnani === b.dataset.stylZarovnani);
   // Jméno, role a smazání jen u vlastních stylů - vestavěné nesou číslování a Enter.
-  const vlastni = !VYCHOZI.styly[rozbalenyStyl];
+  const vlastni = !VYCHOZI_STYLY[rozbalenyStyl];
   for (const e of koren.querySelectorAll('.jen-vlastni')) e.hidden = !vlastni;
 }
 
+// Úprava štětce: při první změně od rozbalení dostane styl novou verzi a odstavce TÉTO
+// strany s předchozí verzí přejdou na ni (autor vidí, co upravuje). Ostatní strany mají
+// svou kopii staré verze a nezmění se. Další změny téže úpravy mění už novou verzi.
+const upravovane = new Set();
 function zmenStyl(id, zmena) {
-  nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [id]: { ...nastaveni.styly[id], ...zmena } } };
+  const stary = klicStylu(id);
+  if (!upravovane.has(id)) {
+    upravovane.add(id);
+    knihovna = { ...knihovna, [id]: { ...knihovna[id], ...zmena, ver: knihovna[id].ver + 1 } };
+    const novy = klicStylu(id);
+    zajistiVeStrane(novy);
+    prevedOdstavce(stary, novy);
+  } else {
+    knihovna = { ...knihovna, [id]: { ...knihovna[id], ...zmena } };
+    nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [stary]: { ...knihovna[id] } } };
+  }
+  ulozKnihovnu();
   pouzijNastaveni();
   zalohuj();
   aktualizujListu();
 }
 
+// Odstavce strany s klíčem `z` dostanou klíč `na` (bez zápisu do Zpět - jde o úpravu
+// štětce, ne textu).
+function prevedOdstavce(z, na, tr = null) {
+  let t = tr || view.state.tr;
+  view.state.doc.descendants((n, pos) => {
+    if (n.type === N.odstavec && n.attrs.styl === z) t = t.setNodeMarkup(pos, null, { ...n.attrs, styl: na });
+    return n.type !== N.odstavec;
+  });
+  if (tr) return t;
+  if (t.docChanged) view.dispatch(t.setMeta('addToHistory', false));
+  return t;
+}
 function naplnVyberStylu() {
   const vyber = el('lista-styl');
   const hodnota = vyber.value;
   vyber.textContent = '';
-  for (const [k, s] of Object.entries(nastaveni.styly)) vyber.add(new Option(s.nazev, k));
+  for (const [k, s] of Object.entries(knihovna)) vyber.add(new Option(s.nazev, k));
   if (hodnota) vyber.value = hodnota;
 }
 
@@ -473,7 +569,7 @@ function vykresliStyly() {
   const seznam = el('seznam-stylu');
   const uprava = el('uprava-stylu');
   seznam.textContent = '';
-  for (const [k, s] of Object.entries(nastaveni.styly)) {
+  for (const [k, s] of Object.entries(knihovna)) {
     const li = document.createElement('li');
     li.dataset.styl = k;
     const nahled = document.createElement('button');
@@ -490,7 +586,7 @@ function vykresliStyly() {
     const popis = document.createElement('span');
     popis.className = 'popis';
     const casti = [`${s.pismo} ${String(s.velikost).replace('.', ',')} pt`];
-    if (!VYCHOZI.styly[k]) casti.push(ROLE[s.role].replace(/ \(.*\)/, '').toLowerCase());
+    if (!VYCHOZI_STYLY[k]) casti.push(ROLE[s.role].replace(/ \(.*\)/, '').toLowerCase());
     popis.textContent = casti.join(' · ');
     nahled.appendChild(popis);
     nahled.addEventListener('mousedown', (e) => e.preventDefault());
@@ -511,6 +607,7 @@ function vykresliStyly() {
     upravit.innerHTML = '<svg viewBox="0 0 24 24"><use href="#i-tuzka"/></svg>';
     upravit.addEventListener('click', () => {
       rozbalenyStyl = rozbalenyStyl === k ? null : k;
+      upravovane.clear();
       vykresliStyly();
     });
     li.append(nahled, ulozit, upravit);
@@ -527,7 +624,7 @@ function vykresliStyly() {
 // id: styl výběru, nebo null u výběru přes odstavce s různými styly (nic se neoznačí).
 function oznacAktivniStyl(id = souhrnVyberu(view.state).styl) {
   const p = view.state.selection.$from.parent;
-  const lisi = id && p.type === N.odstavec && p.attrs.styl === id && Object.keys(odchylky(p)).length > 0;
+  const lisi = id && p.type === N.odstavec && aktualniId(p.attrs.styl) === id && Object.keys(odchylky(p)).length > 0;
   // Jen položky stylů - mezi nimi může být vložený formulář úpravy.
   for (const li of el('seznam-stylu').querySelectorAll(':scope > li')) {
     const tento = li.dataset.styl === id;
@@ -580,51 +677,55 @@ function odeberPrevzate(tr, { node, pos }, klice) {
 
 function ulozDoStylu() {
   const o = odstavecSKurzorem();
-  if (!o) return;
+  const id = o && aktualniId(o.node.attrs.styl);
+  if (!id) return;
   const z = odchylky(o.node);
   if (!Object.keys(z).length) return;
-  nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [o.node.attrs.styl]: { ...styl(o.node.attrs.styl), ...z } } };
-  view.dispatch(odeberPrevzate(closeHistory(view.state.tr), o, Object.keys(z)));
+  // Nová verze štětce s převzatým formátováním; odstavce strany s ním přejdou na ni.
+  const stary = klicStylu(id);
+  knihovna = { ...knihovna, [id]: { ...knihovna[id], ...z, ver: knihovna[id].ver + 1 } };
+  const novy = klicStylu(id);
+  zajistiVeStrane(novy);
+  let tr = odeberPrevzate(closeHistory(view.state.tr), o, Object.keys(z));
+  tr = prevedOdstavce(stary, novy, tr);
+  view.dispatch(tr);
+  ulozKnihovnu();
   pouzijNastaveni();
   zalohuj();
   view.focus();
 }
-
 function novyStyl(nazev, r) {
   const o = odstavecSKurzorem();
   let i = 1;
-  while (nastaveni.styly['v' + i]) i += 1;
+  while (knihovna['v' + i]) i += 1;
   const id = 'v' + i;
-  const zaklad = o ? styl(o.node.attrs.styl) : styl('normalni');
+  const zaklad = o ? styl(o.node.attrs.styl) : knihovna.normalni;
   const z = o ? odchylky(o.node) : {};
-  nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [id]: { ...zaklad, ...z, nazev, role: r } } };
+  knihovna = { ...knihovna, [id]: { ...zaklad, ...z, nazev, role: r, ver: 1 } };
+  ulozKnihovnu();
+  zajistiVeStrane(klicStylu(id));
   pouzijNastaveni();
   if (o) {
     let tr = odeberPrevzate(closeHistory(view.state.tr), o, Object.keys(z));
-    tr = tr.setNodeMarkup(o.pos, null, { ...tr.doc.nodeAt(o.pos).attrs, styl: id });
+    tr = tr.setNodeMarkup(o.pos, null, { ...tr.doc.nodeAt(o.pos).attrs, styl: klicStylu(id) });
     view.dispatch(tr);
   }
   zalohuj();
   view.focus();
 }
-
 // Smazání vlastního stylu: jeho odstavce dostanou vestavěný styl se stejnou rolí.
+// Smazání štětce: jen z knihovny. Strany, které jsou jím namalované, mají svou kopii
+// a vypadají dál stejně - jen v panelu nebude označený žádný styl.
 function smazStyl(id) {
-  if (!id || VYCHOZI.styly[id]) return;
-  const nahradni = styl(id).role;
-  let tr = closeHistory(view.state.tr);
-  view.state.doc.descendants((n, pos) => {
-    if (n.type === N.odstavec && n.attrs.styl === id) tr = tr.setNodeMarkup(pos, null, { ...n.attrs, styl: nahradni });
-  });
-  const styly = { ...nastaveni.styly };
-  delete styly[id];
-  nastaveni = { ...nastaveni, styly };
+  if (!id || VYCHOZI_STYLY[id]) return;
+  const knih = { ...knihovna };
+  delete knih[id];
+  knihovna = knih;
+  ulozKnihovnu();
   rozbalenyStyl = null;
-  if (tr.docChanged) view.dispatch(tr);
   pouzijNastaveni();
-  zalohuj();
+  aktualizujListu();
 }
-
 // --- obrázky --------------------------------------------------------------------------
 
 // Soubory ze schránky, přetažení nebo výběru: obrázky se vloží na stranu. Vrací true,
@@ -672,16 +773,17 @@ function upravOdstavce(zmena) {
 // formátováním vypadá potom jednotně. Zvýraznění slov (tučné, kurzíva) zůstane.
 function nastavStyl(id) {
   const odstavce = vybraneOdstavce(view.state);
-  if (!odstavce.length) return;
+  if (!odstavce.length || !knihovna[id]) return;
+  const klic = klicStylu(id);
+  zajistiVeStrane(klic);
   let tr = closeHistory(view.state.tr);
   for (const { node, pos } of odstavce) {
-    tr = tr.setNodeMarkup(pos, null, { ...node.attrs, styl: id, zarovnani: null, odsazeni: null, znacka: null });
+    tr = tr.setNodeMarkup(pos, null, { ...node.attrs, styl: klic, zarovnani: null, odsazeni: null, znacka: null });
     for (const t of [M.pismo, M.velikost, M.barva]) tr = tr.removeMark(pos + 1, pos + node.nodeSize - 1, t);
   }
   view.dispatch(tr);
   view.focus();
 }
-
 // Přímé formátování výběru (písmo, velikost, barva). Bez výběru platí pro další psaní.
 function nastavZnacku(typ, attrs) {
   const { state } = view;
@@ -733,7 +835,7 @@ function souhrnVyberu(state) {
   const vysledek = {};
   const odstavce = vybraneOdstavce(state);
   const styly = new Set(odstavce.map((o) => o.node.attrs.styl));
-  vysledek.styl = styly.size === 1 ? [...styly][0] : null;
+  vysledek.styl = styly.size === 1 ? aktualniId([...styly][0]) : null;
   if (empty) {
     const p = $from.parent;
     const id = p.type === N.odstavec ? p.attrs.styl : 'normalni';
@@ -992,6 +1094,7 @@ function aktualizujListu() {
   for (const r of view.dom.querySelectorAll('.ps-ramecek')) r.classList.toggle('aktivni', r === aktivni);
 
   // Kontextové karty: vybraný akord, vybraný obrázek.
+  if (typeof prepniZalozku === 'function') zalozkaPodleVyberu(state);
   const sel = state.selection;
   const vybrany = sel instanceof NodeSelection && sel.node.type === N.akord ? sel : null;
   el('vybrany-akord').hidden = !vybrany;
@@ -1089,6 +1192,8 @@ function napojPanelAkordu() {
     if (!ok) return;
     nastaveni = structuredClone(VYCHOZI);
     view.updateState(EditorState.create({ doc: prazdnyDokument(format()), plugins: view.state.plugins }));
+    const tr = normalizujStyly(view.state);
+    if (tr) view.updateState(view.state.apply(tr));
     nactiPanel();
     meritkoRucne = false;
     pouzijNastaveni();
@@ -1097,12 +1202,49 @@ function napojPanelAkordu() {
   });
 }
 
+// --- záložky panelu -------------------------------------------------------------------
+
+const KLIC_ZALOZKY = 'navrh-strany-zalozka';
+function prepniZalozku(k) {
+  for (const b of koren.querySelectorAll('[data-zalozka]')) {
+    b.classList.toggle('aktivni', b.dataset.zalozka === k);
+    b.setAttribute('aria-selected', String(b.dataset.zalozka === k));
+  }
+  for (const p of koren.querySelectorAll('[data-panel]')) p.hidden = p.dataset.panel !== k;
+  try { localStorage.setItem(KLIC_ZALOZKY, k); } catch (_) { /* jen pohodlí */ }
+}
+for (const b of koren.querySelectorAll('[data-zalozka]')) {
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  b.addEventListener('click', () => prepniZalozku(b.dataset.zalozka));
+}
+// Výběr akordu nebo obrázku přepne na jeho záložku (jen při nově vybraném uzlu, ne při
+// každé změně - jinak by panel přeskakoval pod rukama).
+let posledniVybrany = null;
+function zalozkaPodleVyberu(state) {
+  const sel = state.selection;
+  const uzel = sel instanceof NodeSelection ? sel.node : null;
+  if (uzel === posledniVybrany) return;
+  posledniVybrany = uzel;
+  if (uzel && uzel.type === N.akord) prepniZalozku('akordy');
+  else if (uzel && uzel.type === N.obrazek) prepniZalozku('strana');
+}
+
 // --- start ----------------------------------------------------------------------------
+
+// Start: styly strany na verze z knihovny; kopie stylů, které strana nepoužívá, pryč.
+{
+  const tr = normalizujStyly(view.state);
+  if (tr) view.updateState(view.state.apply(tr));
+  const pouzite = new Set();
+  view.state.doc.descendants((n) => { if (n.type === N.odstavec) pouzite.add(n.attrs.styl); return true; });
+  nastaveni = { ...nastaveni, styly: Object.fromEntries(Object.entries(nastaveni.styly).filter(([k]) => pouzite.has(k))) };
+}
 
 napojPanel();
 napojListu();
 napojPanelAkordu();
 nastavVysku();
+prepniZalozku((() => { try { return localStorage.getItem(KLIC_ZALOZKY) || 'text'; } catch (_) { return 'text'; } })());
 pouzijNastaveni();
 aktualizujListu();
 window.addEventListener('resize', () => { nastavVysku(); if (!meritkoRucne) nastavMeritko(); });
@@ -1111,7 +1253,7 @@ view.focus();
 // Pro testy a ladění.
 // nahradTextem: test začíná od známého textu, ne od ukázkové písně.
 window.navrhStrany = {
-  view, schema, TextSelection, nastaveni: () => nastaveni, meritko: () => meritko, prepniRezimAkordu,
+  view, schema, TextSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
   cislo: () => cisloStrany,
   nahradTextem(nazev, autor, text) {
     const f = format();
@@ -1121,6 +1263,9 @@ window.navrhStrany = {
         N.odstavec.create({ styl: 'autor' }, schema.text(autor)), ...odstavceZTextu(text)],
     ));
     view.updateState(EditorState.create({ doc, plugins: view.state.plugins }));
+    const tr = normalizujStyly(view.state);
+    if (tr) view.updateState(view.state.apply(tr));
+    pouzijNastaveni();
     aktualizujListu();
     naplanujPrepocet();
   },

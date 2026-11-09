@@ -1058,8 +1058,13 @@ kdo maže.
         stranách). Šablony stran nebudou - nová strana má výchozí styly a ukázkový text,
         grafiku jde převzít duplikováním strany. Dnes jsou vlastní styly jen v nastavení
         pokusné strany v prohlížeči (localStorage); na server s krokem 3.
-      - **k rozhodnutí**: čtečka kreslí navržené strany z textu (obrázek jen pro PDF);
-        jak se změna stylu na účtu projeví na už hotových stranách (viz rozhovor 9. 11.).
+      - **styly jako štětce** (9. 11., varianta B): knihovna stylů u účtu, strana si nese
+        kopii verze, kterou je namalovaná (odstavec má klíč „id-verze“). Úprava stylu
+        dá stylu novou verzi; na upravované straně se projeví hned, jinde ne. Smazaný
+        styl: strana vypadá stejně, jen se v panelu neoznačí. Později možná „použít
+        novou verzi na celý zpěvník“.
+      - **panel**: záložky Text / Akordy / Strana / ?; výběr akordu či obrázku přepne.
+      - **k rozhodnutí**: čtečka kreslí navržené strany z textu (obrázek jen pro PDF).
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,

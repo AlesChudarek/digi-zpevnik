@@ -111,8 +111,15 @@
   </div>
 
   <aside class="navrh-panel" aria-label="Vzhled strany">
-    {# Styly nahoře, kontextové karty (akord, obrázek, sloka) až pod nimi - ať se seznam
-       stylů při klikání do textu neposouvá. #}
+    {# Záložky: Text (styly, značka sloky), Akordy, Strana (formát, číslo strany, obrázek),
+       Ovládání. Výběr akordu nebo obrázku přepne na jeho záložku. #}
+    <div class="panel-zalozky" role="tablist" aria-label="Panel">
+      <button type="button" role="tab" data-zalozka="text">Text</button>
+      <button type="button" role="tab" data-zalozka="akordy">Akordy</button>
+      <button type="button" role="tab" data-zalozka="strana">Strana</button>
+      <button type="button" role="tab" data-zalozka="ovladani" data-napoveda="Ovládání editoru" aria-label="Ovládání">?</button>
+    </div>
+    <div class="panel-obsah" data-panel="text" role="tabpanel">
     <section class="karta">
       <h2>Styly odstavců</h2>
       <ul class="styly" id="seznam-stylu"></ul>
@@ -155,8 +162,15 @@
         </div>
       </div>
     </section>
-
-    {# Kontextové karty: jen když je vybraný akord, obrázek nebo kurzor ve sloce. #}
+    <section class="karta kontext" id="panel-znacka" hidden>
+      <h2>Sloka</h2>
+      <label class="radek-pole">Značka
+        <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
+      </label>
+      <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
+    </section>
+    </div>
+    <div class="panel-obsah" data-panel="akordy" role="tabpanel" hidden>
     <section class="karta kontext" id="vybrany-akord" hidden>
       <h2>Vybraný akord</h2>
       <label class="radek-pole">Velikost
@@ -167,26 +181,6 @@
         <button type="button" id="akord-smazat" class="nebezpecne">Smazat</button>
       </div>
     </section>
-
-    <section class="karta kontext" id="vybrany-obrazek" hidden>
-      <h2>Obrázek</h2>
-      <div class="prepinac" role="group" aria-label="Vrstva obrázku">
-        <button type="button" data-vrstva="pred">Před textem</button>
-        <button type="button" data-vrstva="za">Za textem</button>
-      </div>
-      <div class="tlacitka">
-        <button type="button" id="obrazek-smazat" class="nebezpecne">Smazat</button>
-      </div>
-    </section>
-
-    <section class="karta kontext" id="panel-znacka" hidden>
-      <h2>Sloka</h2>
-      <label class="radek-pole">Značka
-        <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
-      </label>
-      <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
-    </section>
-
     <section class="karta">
       <h2>Akordy</h2>
       <div class="ukazka-akordu" id="ukazka-akordu"><span class="ukazka-akord">Ami</span><span class="ukazka-akord">C#7</span></div>
@@ -207,16 +201,24 @@
       <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="automatickaMezera">
         Akordy přes sebe odsunou text (ručně posunuté nikdy)</label>
     </section>
-
+    </div>
+    <div class="panel-obsah" data-panel="strana" role="tabpanel" hidden>
+    <section class="karta kontext" id="vybrany-obrazek" hidden>
+      <h2>Obrázek</h2>
+      <div class="prepinac" role="group" aria-label="Vrstva obrázku">
+        <button type="button" data-vrstva="pred">Před textem</button>
+        <button type="button" data-vrstva="za">Za textem</button>
+      </div>
+      <div class="tlacitka">
+        <button type="button" id="obrazek-smazat" class="nebezpecne">Smazat</button>
+      </div>
+    </section>
     <section class="karta">
       <h2>Strana</h2>
       <label class="radek-pole">Formát
         <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
       </label>
-    </section>
-
-    <section class="karta">
-      <h2>Číslo strany</h2>
+      <h3>Číslo strany</h3>
       <div class="nahled-dvojstrany" id="dvojstrana-panel" aria-hidden="true"></div>
       <label class="zaskrt"><input type="checkbox" data-cislo-pole="zobrazit"> Číslovat strany</label>
       <label class="zaskrt dlouhy"><input type="checkbox" data-cislo-pole="zrcadlit"> Na levé straně zrcadlově (vnější roh zůstane vnějším)</label>
@@ -239,9 +241,10 @@
       <p class="poznamka">Polohu změníš tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
         a levá/pravá doplní podle skutečné pozice strany.</p>
     </section>
-
-    <details class="karta napoveda-editoru">
-      <summary>Ovládání</summary>
+    </div>
+    <div class="panel-obsah" data-panel="ovladani" role="tabpanel" hidden>
+    <section class="karta napoveda-editoru">
+      <h2>Ovládání</h2>
       <ul>
         <li><b>Akord:</b> nástroj Akord a klik na znak, nebo znak [ u kurzoru. Enter zapíše, Tab přejde na další.</li>
         <li><b>Posun akordu:</b> přichytí se ke znaku pod sebou a k výšce sousedů. Alt drží jeho znak, Shift jen vodorovně.</li>
@@ -252,8 +255,9 @@
         <li><b>Číslo strany:</b> táhni ho na straně; přichytí se ke středu a k okrajům a ukáže se, kde bude na levé i pravé straně.</li>
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
       </ul>
-    </details>
+    </section>
     <button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>
+    </div>
   </aside>
 </div>
 

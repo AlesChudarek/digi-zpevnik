@@ -106,6 +106,23 @@
   padding-bottom: 4px;
 }
 .navrh-panel .karta { padding: 10px 14px 12px; }
+/* Záložky panelu: pevně nahoře, obsah pod nimi se posouvá. */
+.panel-zalozky {
+  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 3px;
+  background: var(--panel-bg, #fff); border-radius: 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+}
+.panel-zalozky button {
+  flex: 1 1 auto; padding: 7px 6px !important; border-radius: 7px !important; background: transparent !important;
+  color: var(--panel-text, #333) !important; font-weight: 600; font-size: 13.5px;
+}
+.panel-zalozky button[data-zalozka="ovladani"] { flex: 0 0 34px; }
+.panel-zalozky button.aktivni { background: var(--brand-dark, #1b5e20) !important; color: #fff !important; }
+.panel-obsah { display: flex; flex-direction: column; gap: 10px; }
+.panel-obsah[hidden] { display: none; }
+.navrh-panel h3 {
+  font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--panel-muted, #666); margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--panel-border, #e6e6e6);
+}
 .navrh-panel .karta[hidden] { display: none; }
 .navrh-panel .karta.kontext { box-shadow: 0 0 0 2px #1a73e8, 0 1px 4px rgba(0, 0, 0, 0.2); }
 .navrh-panel h2 {
@@ -179,8 +196,7 @@
 .navrh-panel button.hlavni { background: var(--brand-dark, #1b5e20); color: #fff; }
 .ukazka-akordu { display: flex; gap: 14px; padding: 4px 8px; border-radius: 6px; margin-bottom: 6px; background: #fff; border: 1px solid var(--panel-border, #e4e4e4); }
 
-.napoveda-editoru summary { cursor: pointer; font-weight: 600; color: var(--panel-muted, #555); }
-.napoveda-editoru ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--panel-text, #333); }
+.napoveda-editoru ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--panel-text, #333); }
 .napoveda-editoru li { margin: 3px 0; }
 .navrh-panel .zacit-znovu { align-self: flex-start; color: #b00020; background: transparent; text-decoration: underline; padding: 2px 4px; }
 

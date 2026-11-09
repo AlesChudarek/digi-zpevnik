@@ -93,6 +93,12 @@ null
 """
 
 
+def ukaz(page, selektor):
+    """Přepne panel na záložku, ve které prvek je (ostatní záložky jsou skryté)."""
+    page.evaluate("""(s) => { const e = document.querySelector(s); const p = e && e.closest('[data-panel]');
+      if (p && p.hidden) document.querySelector('[data-zalozka="' + p.dataset.panel + '"]').click(); }""", selektor)
+
+
 def zije(page):
     """Stránka odpovídá (WebKit se dřív zasekl v nekonečné smyčce)."""
     try:
@@ -146,9 +152,10 @@ def test_prohlizece(p, base, jmeno):
     ok('lišta je na jednom řádku', J("new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size") == 1)
     ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].map(s => s.getBoundingClientRect().width)")))
 
-    ok('panel: styly nahoře, kontextové karty pod nimi',
-       J("[...document.querySelectorAll('.navrh-panel > section')].map(e => e.id || 'karta')[0]") == 'karta'
-       and J("document.querySelector('.navrh-panel > section').textContent.includes('Styly odstavců')"))
+    ok('panel má záložky Text, Akordy, Strana a Ovládání',
+       J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.dataset.zalozka)") == ['text', 'akordy', 'strana', 'ovladani'])
+    ok('na záložce Text jsou nahoře styly',
+       J("document.querySelector('[data-panel=\"text\"] > section').textContent.includes('Styly odstavců')"))
 
     # Akordy podle předchozí sloky (na ukázkové písni): smazat akordy 2. sloky a doplnit.
     J('navrhStrany.prepniRezimAkordu(true)')
@@ -243,6 +250,7 @@ def test_prohlizece(p, base, jmeno):
     page.wait_for_timeout(150)
     ok('akordy přes sebe se jen označí', J("document.querySelectorAll('.akord-kotva.kolize').length") == 2)
     ok('a text se neposune', abs(J(f'T.znak({S2}, 5).x') - x_pred) < 0.5)
+    ukaz(page, '[data-nastaveni="automatickaMezera"]')
     page.check('[data-nastaveni="automatickaMezera"]')
     page.wait_for_timeout(150)
     r0, r1, z = J('T.akord(0)'), J('T.akord(1)'), J(f'T.znak({S2}, 5)')
@@ -263,6 +271,7 @@ def test_prohlizece(p, base, jmeno):
     ok('s Altem drží svůj znak a uloží posun', a[1]['znak'] == 'h' and a[1]['dy'] < 0, a)
     ok('ručně posunutý akord text neodsouvá', J("document.querySelectorAll('.akord-kotva')[1].style.marginLeft") in ('', '0px'))
     page.keyboard.press(f'{MOD}+z')
+    ukaz(page, '[data-nastaveni="automatickaMezera"]')
     page.uncheck('[data-nastaveni="automatickaMezera"]')
 
     # Vodicí čára: akord tažený kousek nad sousedy se přichytí k jejich výšce.
@@ -334,11 +343,13 @@ def test_prohlizece(p, base, jmeno):
     # Styly: styl odstavce z lišty, úprava stylu v panelu, přímé formátování.
     J(f'T.kurzor(T.pozice({S2}, 2))')
     page.select_option('#lista-styl', 'normalni')
-    ok('styl z lišty změní odstavec', J(f"document.querySelectorAll('.ps-p')[{S2}].dataset.styl") == 'normalni')
+    ok('styl z lišty změní odstavec', J(f"document.querySelectorAll('.ps-p')[{S2}].dataset.styl").startswith('normalni-'))
     ok('a bez stylu Sloka zmizí číslo druhého řádku', J("[...document.querySelectorAll('.ps-zacatek')].length") == 2)
     page.keyboard.press(f'{MOD}+z')
+    ukaz(page, '#seznam-stylu li[data-styl="sloka"] .upravit')
     page.click('#seznam-stylu li[data-styl="sloka"] .upravit')
     ok('tužka rozbalí úpravu stylu', J("!document.getElementById('uprava-stylu').hidden"))
+    ukaz(page, '[data-styl-pole="velikost"]')
     page.fill('[data-styl-pole="velikost"]', '14')
     page.wait_for_timeout(100)
     ok('úprava stylu změní všechny sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontSize")
@@ -368,23 +379,52 @@ def test_prohlizece(p, base, jmeno):
       f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
     page.click('[data-prikaz="kurziva"]')
     ok('u stylu odstavce se objeví Uložit', J("!document.querySelector('#seznam-stylu li[data-styl=\"sloka\"] .ulozit-styl').hidden"))
+    ukaz(page, '#seznam-stylu li[data-styl="sloka"] .ulozit-styl')
     page.click('#seznam-stylu li[data-styl="sloka"] .ulozit-styl')
-    ok('Uložit převezme kurzívu do stylu', J("navrhStrany.nastaveni().styly.sloka.kurziva") is True)
+    ok('Uložit převezme kurzívu do stylu', J("navrhStrany.knihovna().sloka.kurziva") is True)
     ok('a přímé formátování z odstavce zmizí', not J(f"!!document.querySelectorAll('.ps-p')[{S2}].querySelector('em')"))
     ok('kurzívu mají i ostatní sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontStyle") == 'italic')
     # Nový styl z odstavce s rolí Sloka: odstavec ho dostane a pořád se čísluje.
     J(f"T.kurzor(T.pozice({S1}, 2))")
+    ukaz(page, '#novy-styl')
     page.click('#novy-styl')
+    ukaz(page, '#novy-styl-nazev')
     page.fill('#novy-styl-nazev', 'Úzká sloka')
+    ukaz(page, '#novy-styl-role')
     page.select_option('#novy-styl-role', 'sloka')
+    ukaz(page, '#novy-styl-vytvorit')
     page.click('#novy-styl-vytvorit')
     ok('nový styl je v seznamu', J("[...document.querySelectorAll('#seznam-stylu li')].some(l => l.textContent.startsWith('Úzká sloka'))"))
-    ok('odstavec dostal nový styl', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'v1')
+    ok('odstavec dostal nový styl', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'v1-1')
     ok('sloka s vlastním stylem se čísluje', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.znacka") == '1.')
+    ukaz(page, '#seznam-stylu li[data-styl="v1"] .upravit')
     page.click('#seznam-stylu li[data-styl="v1"] .upravit')
     ok('vlastní styl jde přejmenovat a smazat', J("!document.querySelector('[data-styl-pole=\"nazev\"]').closest('label').hidden"))
+    vzhled = J(f"(() => {{ const c = getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]); return [c.fontSize, c.fontStyle, c.paddingLeft]; }})()")
+    ukaz(page, '#smazat-styl')
     page.click('#smazat-styl')
-    ok('po smazání stylu má odstavec styl Sloka', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.styl") == 'sloka')
+    ok('smazaný styl zmizí z knihovny', not J("'v1' in navrhStrany.knihovna()"))
+    ok('odstavec namalovaný smazaným stylem vypadá stejně', J(f"(() => {{ const c = getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]); return [c.fontSize, c.fontStyle, c.paddingLeft]; }})()") == vzhled)
+    J(f"T.kurzor(T.pozice({S1}, 2))")
+    ok('a v panelu ani v liště není označený žádný styl',
+       J("!document.querySelector('#seznam-stylu li.aktivni') && document.getElementById('lista-styl').value === ''"))
+    ok('sloka se smazaným stylem se pořád čísluje', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.znacka") == '1.')
+    page.select_option('#lista-styl', 'sloka')
+
+    # Štětec: upravený styl nezmění odstavec, který má kopii starší verze (jiná strana).
+    J("navrhStrany.nastaveni().styly['refren-0'] = { ...navrhStrany.knihovna().refren, velikost: 9.5 }; null")
+    J("""(() => { const v = navrhStrany.view; let p; v.state.doc.descendants((n, q) => { if (p == null && n.type.name === 'odstavec' && n.attrs.styl.startsWith('refren-')) p = q; });
+      v.dispatch(v.state.tr.setNodeMarkup(p, null, { ...v.state.doc.nodeAt(p).attrs, styl: 'refren-0' })); })()""")
+    ukaz(page, '#seznam-stylu li[data-styl="refren"] .upravit')
+    page.click('#seznam-stylu li[data-styl="refren"] .upravit')
+    ukaz(page, '[data-styl-pole="velikost"]')
+    page.fill('[data-styl-pole="velikost"]', '13')
+    page.wait_for_timeout(100)
+    velikosti = J("""[...document.querySelectorAll('.ps-p')].filter(p => p.dataset.styl.startsWith('refren')).map(p => p.dataset.styl + ':' + getComputedStyle(p).fontSize)""")
+    ok('štětec: starší verze stylu zůstane, jak byla', any(v.startswith('refren-0:') and v.endswith(f"{round(9.5 * 96 / 72, 2):g}px") for v in velikosti) or any(v.startswith('refren-0:12.66') for v in velikosti), velikosti)
+    ukaz(page, '#seznam-stylu li[data-styl="refren"] .upravit')
+    page.click('#seznam-stylu li[data-styl="refren"] .upravit')
+    page.keyboard.press(f'{MOD}+z')
 
     # Smíšený výběr (Název + sloka s jinou velikostí): lišta neukáže nic a zvolený styl
     # se použije na celý výběr jednotně.
@@ -395,7 +435,7 @@ def test_prohlizece(p, base, jmeno):
        J("[document.getElementById('lista-styl').value, document.getElementById('lista-pismo').value, document.getElementById('lista-velikost').value]"))
     ok('smíšený výběr: v panelu není označený žádný styl', J("!document.querySelector('#seznam-stylu li.aktivni')"))
     page.select_option('#lista-styl', 'sloka')
-    ok('zvolený styl dostane celý výběr', J(f"[0, 1, {S1}].map(i => document.querySelectorAll('.ps-p')[i].dataset.styl)") == ['sloka', 'sloka', 'sloka'])
+    ok('zvolený styl dostane celý výběr', J(f"[0, 1, {S1}].map(i => document.querySelectorAll('.ps-p')[i].dataset.styl.replace(/-\\d+$/, ''))") == ['sloka', 'sloka', 'sloka'])
     ok('a přímá velikost zmizí', not J(f"!!document.querySelectorAll('.ps-p')[{S1}].querySelector('[data-velikost]')"))
     ok('pak už lišta styl ukazuje', J("document.getElementById('lista-styl').value") == 'sloka')
     page.keyboard.press(f'{MOD}+z')
@@ -411,6 +451,7 @@ def test_prohlizece(p, base, jmeno):
     znacky = J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)")
     ok('sloky se číslují samy', znacky == ['1.', 'R:', '2.', '3.'], znacky)
     J("T.kurzor(T.vOdstavci('Druhá sloka', 3))")
+    ukaz(page, '#znacka-sloky')
     page.fill('#znacka-sloky', '5.')
     znacky = J("[...document.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka)")
     ok('ruční značka přepíše číslo a posune další', znacky == ['1.', 'R:', '5.', '6.'], znacky)
@@ -474,15 +515,17 @@ def test_prohlizece(p, base, jmeno):
     page.mouse.up()
     o3 = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
     ok('roh zvětší obrázek se stejným poměrem', o3['w'] > o2['w'] + 5 and abs(o3['w'] / o3['h'] - 2) < 0.05, (o3['w'], o3['h']))
+    ukaz(page, '#vybrany-obrazek [data-vrstva="za"]')
     page.click('#vybrany-obrazek [data-vrstva="za"]')
     ok('obrázek jde dát za text', J("getComputedStyle(document.querySelector('.ps-obrazek')).zIndex") == '0')
+    ukaz(page, '#obrazek-smazat')
     page.click('#obrazek-smazat')
     ok('obrázek jde smazat', J("document.querySelectorAll('.ps-obrazek').length") == 0)
 
     # Vložení textu se závorkami a prázdnými řádky.
     J("T.kurzor(navrhStrany.view.state.doc.content.size - 2)")
     J("navrhStrany.view.pasteText('\\n\\n[C]Ahoj [G]světe\\n[Ami]druhý řádek\\n\\nR: [F]refrén')")
-    odst = J("[...document.querySelectorAll('.ps-p')].slice(-5).map(p => p.dataset.styl + ':' + p.textContent.replace(/[A-H]#?(mi)?7?(?=[a-zěščřžýáíéůú ])/g, ''))")
+    odst = J("[...document.querySelectorAll('.ps-p')].slice(-5).map(p => p.dataset.styl.replace(/-\\d+$/, '') + ':' + p.textContent.replace(/[A-H]#?(mi)?7?(?=[a-zěščřžýáíéůú ])/g, ''))")
     ok('vložený text: odstavce se styly sloka a refrén',
        [o.split(':')[0] for o in odst] == ['sloka', 'sloka', 'refren', 'refren'][-4:] or [o.split(':')[0] for o in odst][-4:] == ['sloka', 'sloka', 'refren', 'refren'], odst)
     nazvy = [(x['n'], x['znak']) for x in J('T.akordy()')]
@@ -505,12 +548,16 @@ def test_prohlizece(p, base, jmeno):
     page.mouse.up()
     ok('číslo se přichytí ke středu strany', poloha()[0] == 74, poloha())
     J("navrhStrany.cislo().volby.zmen({ cislo: { ...navrhStrany.nastaveni().cislo, x: 138, y: 205 } })")
+    ukaz(page, '[data-nahled-strany="L"]')
     page.click('[data-nahled-strany="L"]')
     ok('na levé straně je zrcadlově u vnějšího okraje', poloha() == [10, 205], poloha())
+    ukaz(page, '[data-cislo-pole="zrcadlit"]')
     page.uncheck('[data-cislo-pole="zrcadlit"]')
     ok('bez zrcadlení na stejném místě', poloha() == [138, 205], poloha())
+    ukaz(page, '[data-nastaveni="cisloSkryte"]')
     page.check('[data-nastaveni="cisloSkryte"]')
     ok('na jedné straně jde číslo skrýt', J("document.querySelector('.ps-cislo-strany').classList.contains('skryte')"))
+    ukaz(page, '[data-nastaveni="cisloSkryte"]')
     page.uncheck('[data-nastaveni="cisloSkryte"]')
 
     # Záloha v prohlížeči přežije obnovení stránky.
