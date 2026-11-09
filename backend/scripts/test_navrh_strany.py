@@ -604,6 +604,43 @@ def test_prohlizece(p, base, jmeno):
     ok('vykreslená strana: číslo strany z pozice', v['cislo'] == '7', v['cislo'])
     ok('obrázek strany 1748 px s textem i akordy', v['sirka'] == 1748 and v['tmave'] > 1000 and v['cervene'] > 100, {k: v[k] for k in ('sirka', 'tmave', 'cervene', 'ms')})
     ok('obrázek strany je zvětšený celý (i spodní polovina)', v['dolniPolovina'] > 100, v['dolniPolovina'])
+    # Vektorové PDF strany: vykreslí se pdf.js a porovná po pixelech s obrázkem z prohlížeče.
+    # Měří se podíl tmavých pixelů PDF, které mají tmavý pixel obrázku do 2 px (A5 na
+    # 1748 px: 2 px = 0,17 mm). WebKit si stránku rozmístí o 1-2 px jinak i sám proti sobě
+    # (srovnávací obrázek přes foreignObject), proto má nižší práh.
+    v = J("""async () => {
+      await new Promise((ok, ch) => { const s = document.createElement('script'); s.src = '/static/vendor/pdfjs/pdf.min.js'; s.onload = ok; s.onerror = ch; document.head.appendChild(s); });
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
+      const zdroj = navrhStrany.zdroj();
+      const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+      const { bytes, ms } = await pdfStrany(zdroj, { cislo: 7 });
+      const W = 1748;
+      const str = await (await pdfjsLib.getDocument({ data: bytes.slice() }).promise).getPage(1);
+      const vp = str.getViewport({ scale: W / str.getViewport({ scale: 1 }).width });
+      const c1 = document.createElement('canvas'); c1.width = Math.round(vp.width); c1.height = Math.round(vp.height);
+      await str.render({ canvasContext: c1.getContext('2d'), viewport: vp }).promise;
+      const polozky = (await str.getTextContent()).items.map(i => i.str);
+      const { blob } = await navrhStrany.obrazekStrany(zdroj, { cislo: 7, sirkaPx: W });
+      const c2 = document.createElement('canvas'); c2.width = c1.width; c2.height = c1.height;
+      c2.getContext('2d').drawImage(await createImageBitmap(blob), 0, 0, c2.width, c2.height);
+      const w = c1.width, h = c1.height;
+      const maska = (c) => { const d = c.getContext('2d').getImageData(0, 0, w, h).data; const m = new Uint8Array(w * h);
+        for (let i = 0, j = 0; i < d.length; i += 4, j++) m[j] = (d[i] * 0.3 + d[i+1] * 0.59 + d[i+2] * 0.11) < 140 ? 1 : 0; return m; };
+      const A = maska(c1), B = maska(c2);
+      let n = 0, shoda = 0;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) { if (!A[y*w+x]) continue; n++;
+        let nasel = false; for (let dy = -2; dy <= 2 && !nasel; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x+dx, Y = y+dy; if (X >= 0 && Y >= 0 && X < w && Y < h && B[Y*w+X]) { nasel = true; break; } } if (nasel) shoda++; }
+      return { shoda: shoda / n * 100, ms, kB: bytes.length / 1024, polozky };
+    }""")
+    prah = 96 if jmeno == 'webkit' else 99
+    ok(f'PDF strany vypadá jako prohlížeč (shoda ≥ {prah} %)', v['shoda'] >= prah, round(v['shoda'], 2))
+    text = ' '.join(v['polozky'])
+    ok('text v PDF jde najít (celá slova i s akordem uprostřed a háčky)',
+       all(sl in v['polozky'] for sl in ('písně', 'napiš', 'řádek', 'pokračování,')) and 'druhý' in v['polozky'],
+       [t for t in v['polozky'] if t.strip()][:16])
+    ok('v PDF jsou akordy, značky slok i číslo strany', all(x in v['polozky'] for x in ('G', 'R:', '1.', '7')))
+    ok('PDF strany je malé a rychlé', v['kB'] < 100 and v['ms'] < 3000, (round(v['kB'], 1), v['ms']))
+
     page.click('[data-prikaz="nahled"]')
     ok('Náhled ukáže stranu tak, jak ji uvidí čtečka', J("!document.getElementById('nahled-cteni').hidden && !!document.querySelector('#nahled-cteni .stranka.ps-cteni .akord')"))
     page.keyboard.press('Escape')

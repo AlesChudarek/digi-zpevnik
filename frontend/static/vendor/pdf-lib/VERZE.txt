@@ -1,0 +1,3 @@
+pdf-lib 1.17.1 + @pdf-lib/fontkit 1.1.1 (MIT) - jeden ESM bundle pro vektorové PDF navržené strany
+(static/js/strana/pdf-strany.js). Sestaveno: esbuild vstup.js --bundle --format=esm --minify,
+vstup re-exportuje PDFDocument, rgb, StandardFonts, degrees, setCharacterSpacing z pdf-lib a fontkit.

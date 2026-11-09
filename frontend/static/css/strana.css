@@ -213,6 +213,10 @@
   --vaha-akordu: 700; --akord-x: 0em; --akord-y: -0.08em; --okraj: 10mm; --meritko: 1;
   --sirka-znacky: 6mm;
 }
+/* Bez vyrovnání párů (kerning) a ligatur: vektorové PDF (pdf-strany.js) klade znaky
+   podle šířek z písma, a tak strana vypadá stejně na obrazovce i v PDF. Editoru je
+   ProseMirror vypíná taky - takhle platí i pro čtečku. */
+.stranka { font-kerning: none; font-variant-ligatures: none; font-feature-settings: "liga" 0, "kern" 0; }
 .stranka-obsah { position: absolute; inset: 0; outline: none; }
 
 /* Prvky (rámečky a obrázky): poloha a rozměr v mm (inline styl). Obrys jen pod myší
@@ -369,6 +373,15 @@
 .ps-cteni .ps-cislo-strany { cursor: default; }
 .ps-cteni .ps-cislo-strany:hover { outline: none; }
 .ps-cteni .akord { cursor: default; }
+
+/* Kopie strany pro vektorové PDF (pdf-strany.js): názvy akordů a značky slok jsou tam
+   skutečný text místo ::before, aby šly změřit. Vypadá stejně. */
+.ps-pro-pdf .akord::before { content: none; }
+.ps-pro-pdf .ps-zacatek::before { content: none; }
+.ps-pro-pdf .ps-znacka-text {
+  display: inline-block; box-sizing: border-box; width: var(--sirka-znacky);
+  margin-left: calc(-1 * var(--sirka-znacky)); font-weight: 700; font-style: normal; white-space: nowrap;
+}
 
 /* Okno náhledu čtení. */
 .nahled-cteni {

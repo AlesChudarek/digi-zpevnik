@@ -19,7 +19,9 @@
     "{{ url_for('static', filename='js/strana/sloky.js') }}": "{{ static_bust('js/strana/sloky.js') }}",
     "{{ url_for('static', filename='js/strana/navrhy-akordu.js') }}": "{{ static_bust('js/strana/navrhy-akordu.js') }}",
     "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}",
-    "{{ url_for('static', filename='js/strana/vykresleni.js') }}": "{{ static_bust('js/strana/vykresleni.js') }}"
+    "{{ url_for('static', filename='js/strana/vykresleni.js') }}": "{{ static_bust('js/strana/vykresleni.js') }}",
+    "{{ url_for('static', filename='js/strana/pdf-strany.js') }}": "{{ static_bust('js/strana/pdf-strany.js') }}",
+    "/static/vendor/pdf-lib/pdf-lib.js": "{{ static_bust('vendor/pdf-lib/pdf-lib.js') }}"
   }
 }
 </script>
@@ -122,7 +124,8 @@
       <div class="nahled-cteni-hlava">
         <strong>Náhled čtení</strong>
         <span class="nahled-cteni-info" id="nahled-cteni-info"></span>
-        <button type="button" id="nahled-png">Obrázek pro PDF</button>
+        <button type="button" id="nahled-pdf">PDF strany</button>
+        <button type="button" id="nahled-png">Obrázek</button>
         <button type="button" id="nahled-zavrit" aria-label="Zavřít">×</button>
       </div>
       <div class="nahled-cteni-strana" id="nahled-cteni-strana"></div>

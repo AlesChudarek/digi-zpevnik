@@ -1066,8 +1066,15 @@ kdo maže.
         možná „použít novou verzi na celý zpěvník“.
       - **panel**: záložky Text / Akordy / Strana / ?; výběr akordu či obrázku přepne.
       - **čtečka kreslí navržené strany z textu** (rozhodnuto 9. 11.): ostré, malá data,
-        později transpozice ve čtečce. Obrázek strany jen jako podklad pro PDF, bez čísla
-        (dokreslí server), vyrobený až při exportu a jen u změněných stran.
+        později transpozice ve čtečce.
+      - **PDF vektorově, ne z obrázku** (rozhodnuto 9. 11.): prohlížeč stránku rozmístí
+        a `static/js/strana/pdf-strany.js` ji opíše do PDF (pdf-lib, písma TTF): text jde
+        označit a hledat, strana ~15 kB, ~60-150 ms. Server slepí zpěvník (pypdf),
+        naskenované strany zůstanou obrázky, číslo strany a vodoznak dopíše server.
+        Shoda s prohlížečem po pixelech: Chromium 99,98 %, Firefox 99,6 %, WebKit 98 %
+        (WebKit si rozmisťuje o 1-2 px jinak i sám proti sobě). Obrázek strany odpadá.
+        Pozor: Safari a Chrome lámou řádky o pixel jinak - PDF odpovídá prohlížeči, kde
+        byla strana uložena.
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
@@ -1083,8 +1090,8 @@ kdo maže.
          úklid, obrázky ve straně jako soubory (ne data: URL), práva, kontrola_zpevniku
       3b. [ ] čtečka: navržené strany z textu vedle obrázků (dvojstrany, svitek, zoom,
          sjíždění), číslo a L/P z pozice
-      3c. [ ] PDF: chybějící obrázky navržených stran doplní prohlížeč při exportu
-         (s průběhem), číslo dokreslí server
+      3c. [ ] PDF: vektorové PDF navržené strany vyrobí prohlížeč při uložení strany;
+         export skládá pypdf (vektorové i obrázkové strany, číslo, vodoznak, brožura)
       4. [ ] pohled Strany v editoru zpěvníku (svitek, L/P, dvojstrana, Navrhnout/
          Upravit stranu, Hotovo + Uložit, prémiová brána, zašedlé pro ostatní)
       5. [ ] šablona zpěvníku (styly pro celý zpěvník), číslo strany, obrázky
@@ -1093,3 +1100,5 @@ kdo maže.
       7. [ ] nasazení pro prémiové účty
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+v editoru zpevniku se neda pridat prazdna stranka uplne na zacatek nebo konec. Tlacitko uplne na konci je v podstate nepouzivane, nejcasteji se pridava pluskem mezi stranami. Popremyslejme lepsi zpusob jak pridat stranu
+na konec pridat funkci u exportu - precislovani stranek. Tat ofunkce umozni pridat vlastni cislovani, ale taky moznost zakryt stare. Zaprve nove cislovani ma moznost barevneho pozadi (bile, neboli prekryje stare cislovani), ale taky pridani zaplaty (barevny/bily ctverecek umisteny na dane misto per page nebo defaultne) - aby se tim dal novy zpevnik vytvoreny z jinych pisni co uz maji baked in cisla precslovat.

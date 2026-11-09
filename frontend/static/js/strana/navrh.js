@@ -1043,6 +1043,7 @@ function napojListu() {
   barva.addEventListener('change', () => { vyberProBarvu = null; view.focus(); });
   el('nahled-zavrit').addEventListener('click', () => { el('nahled-cteni').hidden = true; view.focus(); });
   el('nahled-png').addEventListener('click', obrazekNahledu);
+  el('nahled-pdf').addEventListener('click', pdfNahledu);
   el('nahled-cteni').addEventListener('click', (e) => { if (e.target === el('nahled-cteni')) el('nahled-zavrit').click(); });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !el('nahled-cteni').hidden) { e.stopPropagation(); el('nahled-zavrit').click(); }
@@ -1239,6 +1240,24 @@ function otevriNahled() {
   misto.appendChild(obal2);
   dokonciStranu(koren, zdroj, k);
   el('nahled-cteni-info').textContent = '';
+}
+
+async function pdfNahledu() {
+  const info = el('nahled-cteni-info');
+  info.textContent = 'Vyrábí se PDF…';
+  try {
+    const { pdfStrany } = await import(new URL('./pdf-strany.js', import.meta.url).href);
+    const { bytes, ms } = await pdfStrany(zdrojStrany(), { cislo: nastaveni.nahledCisla, strana: nastaveni.nahledStrany });
+    info.textContent = `PDF: ${ms} ms, ${Math.round(bytes.length / 1024)} kB`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+    a.download = 'strana.pdf';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (chyba) {
+    info.textContent = '';
+    window.oznam(String(chyba.message || chyba), { nadpis: 'PDF strany se nevytvořilo', druh: 'chyba' });
+  }
 }
 
 async function obrazekNahledu() {
