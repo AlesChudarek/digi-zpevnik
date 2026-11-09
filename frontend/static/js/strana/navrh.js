@@ -17,6 +17,7 @@ import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.j
 import { pluginSlok, klicSlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
 import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
+import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany } from './vykresleni.js';
 import { prepocitej } from './kolize.js';
 import { transponuj } from './akordy.js';
 
@@ -25,10 +26,6 @@ const M = schema.marks;
 const KLIC_ZALOHY = 'navrh-strany-pokus';
 const MM_NA_PX = 96 / 25.4;
 
-const FORMATY = {
-  A5: { sirka: 148, vyska: 210, okraj: 10 },
-  A4: { sirka: 210, vyska: 297, okraj: 15 },
-};
 
 const PISMA = ['Noto Sans', 'Noto Serif', 'Roboto Condensed', 'Caveat'];
 // Kroky tlačítek −/+ u velikosti písma (jako v textových editorech).
@@ -330,17 +327,9 @@ function ukazStav({ pretece, kolize }) {
 // --- šablona: styly odstavců a akordy -------------------------------------------------
 
 
-function cssStylu(k, s) {
-  return `.stranka .ps-${k} {
-    font-family: '${s.pismo}', sans-serif; font-size: ${s.velikost}pt; line-height: ${s.radkovani};
-    font-weight: ${s.tucne ? 700 : 400}; font-style: ${s.kurziva ? 'italic' : 'normal'};
-    text-decoration: ${s.podtrzeni ? 'underline' : 'none'};
-    color: ${s.barva}; text-align: ${s.zarovnani}; padding-left: ${s.odsazeni}mm;
-    margin: ${s.pred}pt 0 ${s.po}pt; }`;
-}
 
 function obnovCss() {
-  stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu(k, v)).join('\n');
+  stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu('.stranka', k, v)).join('\n');
 }
 
 function pouzijNastaveni() {
@@ -349,12 +338,7 @@ function pouzijNastaveni() {
   s.width = f.sirka + 'mm';
   s.height = f.vyska + 'mm';
   s.setProperty('--okraj', f.okraj + 'mm');
-  for (const cil of [s, el('ukazka-akordu').style]) {
-    cil.setProperty('--pismo-akordu', `'${nastaveni.pismoAkordu}'`);
-    cil.setProperty('--velikost-akordu', nastaveni.velikostAkordu + 'pt');
-    cil.setProperty('--barva-akordu', nastaveni.barvaAkordu);
-    cil.setProperty('--vaha-akordu', nastaveni.tucneAkordy ? 700 : 400);
-  }
+  for (const cil of [s, el('ukazka-akordu').style]) nastavAkordy(cil, nastaveni);
   obnovCss();
   naplnVyberStylu();
   vykresliStyly();
@@ -1009,9 +993,10 @@ const PRIKAZY = {
   mensi: () => nastavMeritko(Math.max(0.3, Math.round((meritko - 0.1) * 10) / 10)),
   vetsi: () => nastavMeritko(Math.min(3, Math.round((meritko + 0.1) * 10) / 10)),
   'cela-strana': () => { meritkoRucne = false; nastavMeritko(); },
+  nahled: otevriNahled,
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek'];
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'nahled'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1056,6 +1041,12 @@ function napojListu() {
     view.dispatch(tr);
   });
   barva.addEventListener('change', () => { vyberProBarvu = null; view.focus(); });
+  el('nahled-zavrit').addEventListener('click', () => { el('nahled-cteni').hidden = true; view.focus(); });
+  el('nahled-png').addEventListener('click', obrazekNahledu);
+  el('nahled-cteni').addEventListener('click', (e) => { if (e.target === el('nahled-cteni')) el('nahled-zavrit').click(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !el('nahled-cteni').hidden) { e.stopPropagation(); el('nahled-zavrit').click(); }
+  }, true);
   el('soubor-obrazku').addEventListener('change', (e) => {
     vlozSoubory(e.target.files);
     e.target.value = '';
@@ -1226,6 +1217,47 @@ function napojPanelAkordu() {
   });
 }
 
+// --- náhled čtení -------------------------------------------------------------------
+// Strana tak, jak ji uvidí čtečka: vykreslená mimo editor (vykresleni.js) ze zdroje,
+// s číslem strany podle náhledu. Tlačítko PNG vyrobí obrázek pro PDF a změří čas.
+
+function otevriNahled() {
+  const okno = el('nahled-cteni');
+  const misto = el('nahled-cteni-strana');
+  misto.textContent = '';
+  const zdroj = zdrojStrany();
+  const koren = vykresliStranu(zdroj, { cislo: nastaveni.nahledCisla, strana: nastaveni.nahledStrany });
+  okno.hidden = false;
+  const f = format();
+  const k = Math.min((misto.clientWidth - 8) / (f.sirka * MM_NA_PX), (misto.clientHeight - 8) / (f.vyska * MM_NA_PX));
+  const obal2 = document.createElement('div');
+  obal2.className = 'nahled-cteni-obal';
+  obal2.style.width = f.sirka * MM_NA_PX * k + 'px';
+  obal2.style.height = f.vyska * MM_NA_PX * k + 'px';
+  koren.style.transform = `scale(${k})`;
+  obal2.appendChild(koren);
+  misto.appendChild(obal2);
+  dokonciStranu(koren, zdroj, k);
+  el('nahled-cteni-info').textContent = '';
+}
+
+async function obrazekNahledu() {
+  const info = el('nahled-cteni-info');
+  info.textContent = 'Vyrábí se obrázek…';
+  try {
+    const { blob, ms } = await obrazekStrany(zdrojStrany(), { cislo: nastaveni.nahledCisla, strana: nastaveni.nahledStrany });
+    info.textContent = `Obrázek 1748 px: ${ms} ms, ${Math.round(blob.size / 1024)} kB`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'strana.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  } catch (chyba) {
+    info.textContent = '';
+    window.oznam(String(chyba.message || chyba), { nadpis: 'Obrázek strany se nevytvořil', druh: 'chyba' });
+  }
+}
+
 // --- záložky panelu -------------------------------------------------------------------
 
 const KLIC_ZALOZKY = 'navrh-strany-zalozka';
@@ -1279,6 +1311,8 @@ view.focus();
 window.navrhStrany = {
   view, schema, TextSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
   cislo: () => cisloStrany,
+  zdroj: () => zdrojStrany(),
+  vykresliStranu, obrazekStrany,
   nahradTextem(nazev, autor, text) {
     const f = format();
     const doc = N.doc.create(null, N.ramecek.create(

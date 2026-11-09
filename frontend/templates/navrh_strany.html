@@ -18,7 +18,8 @@
     "{{ url_for('static', filename='js/strana/ramecky.js') }}": "{{ static_bust('js/strana/ramecky.js') }}",
     "{{ url_for('static', filename='js/strana/sloky.js') }}": "{{ static_bust('js/strana/sloky.js') }}",
     "{{ url_for('static', filename='js/strana/navrhy-akordu.js') }}": "{{ static_bust('js/strana/navrhy-akordu.js') }}",
-    "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}"
+    "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}",
+    "{{ url_for('static', filename='js/strana/vykresleni.js') }}": "{{ static_bust('js/strana/vykresleni.js') }}"
   }
 }
 </script>
@@ -43,6 +44,7 @@
     <symbol id="i-mensi" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6"/></symbol>
     <symbol id="i-vetsi" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6M11 8v6"/></symbol>
     <symbol id="i-cela" viewBox="0 0 24 24"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></symbol>
+    <symbol id="i-nahled" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="0.6"/></symbol>
     <symbol id="i-tuzka" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
   </defs>
@@ -91,6 +93,9 @@
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
     </div>
+    <div class="skupina">
+      <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
+    </div>
   </div>
 
   <div class="navrh-plocha" id="navrh-plocha">
@@ -108,6 +113,19 @@
         <button type="button" data-prikaz="vetsi" data-napoveda="Přiblížit" aria-label="Přiblížit"><svg><use href="#i-vetsi"/></svg></button>
         <button type="button" data-prikaz="cela-strana" data-napoveda="Celá strana" aria-label="Celá strana"><svg><use href="#i-cela"/></svg></button>
       </div>
+    </div>
+  </div>
+
+  {# Náhled čtení: strana vykreslená mimo editor, stejně jako ve čtečce. #}
+  <div class="nahled-cteni" id="nahled-cteni" hidden>
+    <div class="nahled-cteni-okno" role="dialog" aria-label="Náhled čtení">
+      <div class="nahled-cteni-hlava">
+        <strong>Náhled čtení</strong>
+        <span class="nahled-cteni-info" id="nahled-cteni-info"></span>
+        <button type="button" id="nahled-png">Obrázek pro PDF</button>
+        <button type="button" id="nahled-zavrit" aria-label="Zavřít">×</button>
+      </div>
+      <div class="nahled-cteni-strana" id="nahled-cteni-strana"></div>
     </div>
   </div>
 

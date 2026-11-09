@@ -364,6 +364,37 @@
 .nahled-dvojstrany { padding-bottom: 14px; }
 .navrh-panel .cislo-nahledu { width: 64px !important; }
 
+/* Strana vykreslená mimo editor (čtečka, obrázek pro PDF): bez ovládacích prvků. */
+.stranka.ps-cteni { position: relative; left: auto; top: auto; }
+.ps-cteni .ps-cislo-strany { cursor: default; }
+.ps-cteni .ps-cislo-strany:hover { outline: none; }
+.ps-cteni .akord { cursor: default; }
+
+/* Okno náhledu čtení. */
+.nahled-cteni {
+  position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.55);
+  display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
+}
+.nahled-cteni[hidden] { display: none; }
+.nahled-cteni-okno {
+  width: min(900px, 100%); height: 100%; display: flex; flex-direction: column;
+  background: #e4e6ea; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.nahled-cteni-hlava {
+  display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+}
+.nahled-cteni-hlava strong { margin-right: auto; }
+.nahled-cteni-info { font-size: 13px; color: var(--panel-muted, #666); }
+.nahled-cteni-hlava button {
+  border: 0; border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer;
+  background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
+}
+.nahled-cteni-hlava #nahled-zavrit { font-size: 20px; line-height: 1; padding: 4px 10px; }
+.nahled-cteni-strana { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; }
+.nahled-cteni-obal { position: relative; }
+.nahled-cteni-obal > .stranka { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
+
 /* Přetažení obrázku nad stranu. */
 .navrh-plocha.pretahovani .stranka { box-shadow: 0 0 0 3px #1a73e8; }
 

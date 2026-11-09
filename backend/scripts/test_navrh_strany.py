@@ -573,6 +573,42 @@ def test_prohlizece(p, base, jmeno):
     ukaz(page, '[data-nastaveni="cisloSkryte"]')
     page.uncheck('[data-nastaveni="cisloSkryte"]')
 
+    # Vykreslení mimo editor (čtečka, obrázek pro PDF): musí vypadat přesně jako editor.
+    v = J("""async () => {
+      const mereni = (koren, meritko) => { const r0 = koren.getBoundingClientRect();
+        const m = (r) => [(r.left - r0.left) / meritko, (r.top - r0.top) / meritko];
+        return { akordy: [...koren.querySelectorAll('.akord')].map(a => m(a.getBoundingClientRect())),
+                 odstavce: [...koren.querySelectorAll('.ps-p')].map(p => m(p.getBoundingClientRect())),
+                 znacky: [...koren.querySelectorAll('.ps-zacatek')].map(p => p.dataset.znacka) }; };
+      const ed = mereni(document.getElementById('stranka'), navrhStrany.meritko());
+      const zdroj = navrhStrany.zdroj();
+      const koren = navrhStrany.vykresliStranu(zdroj, { cislo: 7, strana: 'L' });
+      const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:0;top:0;z-index:-1';
+      d.appendChild(koren); document.body.appendChild(d); await document.fonts.ready;
+      const ct = mereni(koren, 1);
+      const cislo = koren.querySelector('.ps-cislo-strany')?.textContent;
+      d.remove();
+      const rozdil = (a, b) => a.length !== b.length ? 999 : Math.max(0, ...a.map((x, i) => Math.max(Math.abs(x[0] - b[i][0]), Math.abs(x[1] - b[i][1]))));
+      const { blob, ms } = await navrhStrany.obrazekStrany(zdroj, { cislo: 7 });
+      const bmp = await createImageBitmap(blob);
+      const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height;
+      const x = c.getContext('2d'); x.drawImage(bmp, 0, 0);
+      const px = x.getImageData(0, 0, c.width, c.height).data; let cervene = 0, tmave = 0;
+      for (let i = 0; i < px.length; i += 4 * 13) { if (px[i] > 150 && px[i+1] < 60 && px[i+2] < 60) cervene++; if (px[i] < 80 && px[i+1] < 80 && px[i+2] < 80) tmave++; }
+      return { akordy: rozdil(ed.akordy, ct.akordy), odstavce: rozdil(ed.odstavce, ct.odstavce), znacky: ed.znacky.join() === ct.znacky.join(),
+               cislo, sirka: bmp.width, ms, cervene, tmave, dolniPolovina: (() => { const d2 = x.getImageData(0, Math.round(c.height * 0.5), c.width, Math.round(c.height * 0.4)).data; let t = 0; for (let i = 0; i < d2.length; i += 4 * 13) if (d2[i] < 80) t++; return t; })() };
+    }""")
+    ok('vykreslená strana: akordy přesně jako v editoru', v['akordy'] < 0.6, v['akordy'])
+    ok('vykreslená strana: odstavce přesně jako v editoru', v['odstavce'] < 0.6, v['odstavce'])
+    ok('vykreslená strana: stejné značky slok', v['znacky'])
+    ok('vykreslená strana: číslo strany z pozice', v['cislo'] == '7', v['cislo'])
+    ok('obrázek strany 1748 px s textem i akordy', v['sirka'] == 1748 and v['tmave'] > 1000 and v['cervene'] > 100, {k: v[k] for k in ('sirka', 'tmave', 'cervene', 'ms')})
+    ok('obrázek strany je zvětšený celý (i spodní polovina)', v['dolniPolovina'] > 100, v['dolniPolovina'])
+    page.click('[data-prikaz="nahled"]')
+    ok('Náhled ukáže stranu tak, jak ji uvidí čtečka', J("!document.getElementById('nahled-cteni').hidden && !!document.querySelector('#nahled-cteni .stranka.ps-cteni .akord')"))
+    page.keyboard.press('Escape')
+    ok('Esc náhled zavře', J("document.getElementById('nahled-cteni').hidden"))
+
     # Záloha v prohlížeči přežije obnovení stránky.
     page.wait_for_timeout(600)
     pocet = len(J('T.akordy()'))

@@ -1065,16 +1065,26 @@ kdo maže.
         nevypadá jako žádný styl knihovny, je to formátovaný text bez stylu. Později
         možná „použít novou verzi na celý zpěvník“.
       - **panel**: záložky Text / Akordy / Strana / ?; výběr akordu či obrázku přepne.
-      - **k rozhodnutí**: čtečka kreslí navržené strany z textu (obrázek jen pro PDF).
+      - **čtečka kreslí navržené strany z textu** (rozhodnuto 9. 11.): ostré, malá data,
+        později transpozice ve čtečce. Obrázek strany jen jako podklad pro PDF, bez čísla
+        (dokreslí server), vyrobený až při exportu a jen u změněných stran.
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
          ramecky, sloky, kolize, akordy, navrh), `css/strana.css`, písma `static/fonts/strana/`,
          ProseMirror `static/vendor/prosemirror/`. Test `test_navrh_strany.py`
          (Chromium, Firefox, WebKit).
-      2. [ ] PNG z prohlížeče (1748×2480), shoda s editorem i v Safari
-      3. [ ] server: zdroj u obrázku (verze), ukládání jako nahrávka, limit, úklid,
-         práva ke grafikám, kontrola_zpevniku, testy
+      2. [X] vykreslení strany mimo editor (`static/js/strana/vykresleni.js`): stejné
+         třídy a stavba jako editor, odchylka 0,00-0,01 px ve všech třech prohlížečích;
+         číslo strany jako vrstva; PNG 1748 px přes SVG foreignObject za 80-190 ms
+         (WebKit nezvětšuje foreignObject podle viewBox - zvětšuje se CSS transformem).
+         V editoru tlačítko Náhled (+ obrázek pro PDF ke stažení).
+      3. [ ] server: zdroj strany (verze), styly k účtu, ukládání jako nahrávka, limit,
+         úklid, obrázky ve straně jako soubory (ne data: URL), práva, kontrola_zpevniku
+      3b. [ ] čtečka: navržené strany z textu vedle obrázků (dvojstrany, svitek, zoom,
+         sjíždění), číslo a L/P z pozice
+      3c. [ ] PDF: chybějící obrázky navržených stran doplní prohlížeč při exportu
+         (s průběhem), číslo dokreslí server
       4. [ ] pohled Strany v editoru zpěvníku (svitek, L/P, dvojstrana, Navrhnout/
          Upravit stranu, Hotovo + Uložit, prémiová brána, zašedlé pro ostatní)
       5. [ ] šablona zpěvníku (styly pro celý zpěvník), číslo strany, obrázky

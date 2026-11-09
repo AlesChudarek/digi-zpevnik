@@ -18,32 +18,33 @@ export const klicSlok = new PluginKey('sloky');
 // role(styl) -> role stylu odstavce ('sloka', 'refren', 'nadpis'…); nastavuje pluginSlok.
 let role = (styl) => styl;
 
-function neprazdny(p, r) {
-  return p && role(p.attrs.styl) === r && p.content.size > 0;
+function neprazdny(p, r, roleStylu = role) {
+  return p && roleStylu(p.attrs.styl) === r && p.content.size > 0;
 }
 
-function spocitej(state) {
-  const dekorace = [];
+// Značky slok a refrénů v dokumentu - stejné pro editor (dekorace) i čtečku
+// (vykresleni.js). Vrací { znacky: [{ pos, velikost, znacka }], refreny }.
+export function znackySlok(doc, roleStylu = role) {
+  const znacky = [];
   const refreny = [];          // [{ od, odstavce: [...] }] v pořadí dokumentu
   let cislo = 0;
-  state.doc.forEach((ramecek, offR) => {
+  doc.forEach((ramecek, offR) => {
     let predchozi = null;
     let rozepsanyRefren = null;
     ramecek.forEach((p, offP) => {
       const pos = offR + 1 + offP;
-      if (role(p.attrs.styl) === 'nadpis') cislo = 0;
-      if (neprazdny(p, 'refren')) {
-        if (!neprazdny(predchozi, 'refren')) {
+      if (roleStylu(p.attrs.styl) === 'nadpis') cislo = 0;
+      if (neprazdny(p, 'refren', roleStylu)) {
+        if (!neprazdny(predchozi, 'refren', roleStylu)) {
           rozepsanyRefren = { od: pos, odstavce: [] };
           refreny.push(rozepsanyRefren);
-          dekorace.push(Decoration.node(pos, pos + p.nodeSize,
-            { class: 'ps-zacatek', 'data-znacka': p.attrs.znacka ?? 'R:' }));
+          znacky.push({ pos, velikost: p.nodeSize, znacka: p.attrs.znacka ?? 'R:' });
         }
         rozepsanyRefren.odstavce.push(p);
       } else {
         rozepsanyRefren = null;
       }
-      if (neprazdny(p, 'sloka') && !neprazdny(predchozi, 'sloka')) {
+      if (neprazdny(p, 'sloka', roleStylu) && !neprazdny(predchozi, 'sloka', roleStylu)) {
         cislo += 1;
         let znacka = `${cislo}.`;
         if (p.attrs.znacka != null) {
@@ -51,11 +52,18 @@ function spocitej(state) {
           const n = parseInt(znacka, 10);
           if (Number.isFinite(n)) cislo = n;
         }
-        dekorace.push(Decoration.node(pos, pos + p.nodeSize, { class: 'ps-zacatek', 'data-znacka': znacka }));
+        znacky.push({ pos, velikost: p.nodeSize, znacka });
       }
       predchozi = p;
     });
   });
+  return { znacky, refreny };
+}
+
+function spocitej(state) {
+  const { znacky, refreny } = znackySlok(state.doc);
+  const dekorace = znacky.map((z) => Decoration.node(z.pos, z.pos + z.velikost,
+    { class: 'ps-zacatek', 'data-znacka': z.znacka }));
 
   // Nabídka refrénu: kurzor v prázdném odstavci Refrén, který by začínal nový refrén.
   let nabidka = null;
