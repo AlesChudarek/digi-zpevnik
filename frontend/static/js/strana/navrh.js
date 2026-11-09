@@ -120,8 +120,19 @@ function ulozKnihovnu() {
 
 const klicStylu = (id) => `${id}-${knihovna[id].ver}`;
 const idZKlice = (klic) => klic.replace(/-\d+$/, '');
-// Klíč odstavce odpovídá aktuální verzi štětce z knihovny -> id, jinak null.
-const aktualniId = (klic) => (klic && knihovna[idZKlice(klic)] && klicStylu(idZKlice(klic)) === klic ? idZKlice(klic) : null);
+// Který štětec z knihovny odstavec „je“: ten, se kterým má stejný vzhled i roli (rozhodnuto
+// 9. 11.: strana si pamatuje formátování, styl se pozná podle vzhledu). Když vypadá jako
+// víc stylů, vyhraje ten, kterým byl namalovaný. Jinak null - formátovaný text bez stylu.
+const VLASTNOSTI_STYLU = ['role', 'pismo', 'velikost', 'tucne', 'kurziva', 'podtrzeni', 'barva',
+  'zarovnani', 'odsazeni', 'pred', 'po', 'radkovani'];
+const stejnyVzhled = (a, b) => VLASTNOSTI_STYLU.every((k) => (a[k] ?? null) === (b[k] ?? null));
+function aktualniId(klic) {
+  if (!klic) return null;
+  const vzhled = styl(klic);
+  const vlastni = idZKlice(klic);
+  if (knihovna[vlastni] && stejnyVzhled(vzhled, knihovna[vlastni])) return vlastni;
+  return Object.keys(knihovna).find((id) => stejnyVzhled(vzhled, knihovna[id])) || null;
+}
 
 // Kopie stylu na straně (pro vykreslení); nový klíč se do strany zkopíruje z knihovny.
 function zajistiVeStrane(klic) {
@@ -528,10 +539,12 @@ function zmenStyl(id, zmena) {
   const stary = klicStylu(id);
   if (!upravovane.has(id)) {
     upravovane.add(id);
+    // Odstavce strany, které tento styl „jsou“ (stejný vzhled), než se změní.
+    const jeho = klicyStylu(id);
     knihovna = { ...knihovna, [id]: { ...knihovna[id], ...zmena, ver: knihovna[id].ver + 1 } };
     const novy = klicStylu(id);
     zajistiVeStrane(novy);
-    prevedOdstavce(stary, novy);
+    prevedOdstavce(jeho, novy);
   } else {
     knihovna = { ...knihovna, [id]: { ...knihovna[id], ...zmena } };
     nastaveni = { ...nastaveni, styly: { ...nastaveni.styly, [stary]: { ...knihovna[id] } } };
@@ -542,12 +555,22 @@ function zmenStyl(id, zmena) {
   aktualizujListu();
 }
 
-// Odstavce strany s klíčem `z` dostanou klíč `na` (bez zápisu do Zpět - jde o úpravu
-// štětce, ne textu).
+// Klíče odstavců strany, které vypadají jako styl `id`.
+function klicyStylu(id) {
+  const klice = new Set();
+  view.state.doc.descendants((n) => {
+    if (n.type === N.odstavec && aktualniId(n.attrs.styl) === id) klice.add(n.attrs.styl);
+    return n.type !== N.odstavec;
+  });
+  return klice;
+}
+
+// Odstavce strany s klíčem z množiny `z` dostanou klíč `na` (bez zápisu do Zpět - jde
+// o úpravu štětce, ne textu).
 function prevedOdstavce(z, na, tr = null) {
   let t = tr || view.state.tr;
   view.state.doc.descendants((n, pos) => {
-    if (n.type === N.odstavec && n.attrs.styl === z) t = t.setNodeMarkup(pos, null, { ...n.attrs, styl: na });
+    if (n.type === N.odstavec && z.has(n.attrs.styl)) t = t.setNodeMarkup(pos, null, { ...n.attrs, styl: na });
     return n.type !== N.odstavec;
   });
   if (tr) return t;
@@ -682,12 +705,13 @@ function ulozDoStylu() {
   const z = odchylky(o.node);
   if (!Object.keys(z).length) return;
   // Nová verze štětce s převzatým formátováním; odstavce strany s ním přejdou na ni.
-  const stary = klicStylu(id);
+  const jeho = klicyStylu(id);
+  jeho.add(o.node.attrs.styl);
   knihovna = { ...knihovna, [id]: { ...knihovna[id], ...z, ver: knihovna[id].ver + 1 } };
   const novy = klicStylu(id);
   zajistiVeStrane(novy);
   let tr = odeberPrevzate(closeHistory(view.state.tr), o, Object.keys(z));
-  tr = prevedOdstavce(stary, novy, tr);
+  tr = prevedOdstavce(jeho, novy, tr);
   view.dispatch(tr);
   ulozKnihovnu();
   pouzijNastaveni();

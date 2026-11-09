@@ -1060,9 +1060,10 @@ kdo maže.
         pokusné strany v prohlížeči (localStorage); na server s krokem 3.
       - **styly jako štětce** (9. 11., varianta B): knihovna stylů u účtu, strana si nese
         kopii verze, kterou je namalovaná (odstavec má klíč „id-verze“). Úprava stylu
-        dá stylu novou verzi; na upravované straně se projeví hned, jinde ne. Smazaný
-        styl: strana vypadá stejně, jen se v panelu neoznačí. Později možná „použít
-        novou verzi na celý zpěvník“.
+        dá stylu novou verzi; na upravované straně se projeví hned, jinde ne. Který
+        styl odstavec „je“, se pozná podle vzhledu a role (ne podle verze); když
+        nevypadá jako žádný styl knihovny, je to formátovaný text bez stylu. Později
+        možná „použít novou verzi na celý zpěvník“.
       - **panel**: záložky Text / Akordy / Strana / ?; výběr akordu či obrázku přepne.
       - **k rozhodnutí**: čtečka kreslí navržené strany z textu (obrázek jen pro PDF).
       **Postup** (schválený 3. 11.):

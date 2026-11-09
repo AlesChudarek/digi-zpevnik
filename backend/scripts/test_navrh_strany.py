@@ -385,6 +385,10 @@ def test_prohlizece(p, base, jmeno):
     ok('a přímé formátování z odstavce zmizí', not J(f"!!document.querySelectorAll('.ps-p')[{S2}].querySelector('em')"))
     ok('kurzívu mají i ostatní sloky', J(f"getComputedStyle(document.querySelectorAll('.ps-p')[{S1}]).fontStyle") == 'italic')
     # Nový styl z odstavce s rolí Sloka: odstavec ho dostane a pořád se čísluje.
+    J(f"(() => {{ const v = navrhStrany.view; const a = T.pozice({S1}, 0); const b = a + v.state.doc.resolve(a).parent.content.size;"
+      f" v.dispatch(v.state.tr.setSelection(navrhStrany.TextSelection.create(v.state.doc, a, b))); v.focus(); }})()")
+    page.fill('#lista-velikost', '12')
+    page.press('#lista-velikost', 'Enter')
     J(f"T.kurzor(T.pozice({S1}, 2))")
     ukaz(page, '#novy-styl')
     page.click('#novy-styl')
@@ -411,8 +415,17 @@ def test_prohlizece(p, base, jmeno):
     ok('sloka se smazaným stylem se pořád čísluje', J(f"document.querySelectorAll('.ps-p')[{S1}].dataset.znacka") == '1.')
     page.select_option('#lista-styl', 'sloka')
 
+    # Styl se pozná podle vzhledu: odstavec s kopií jiné verze, která vypadá stejně jako
+    # Sloka v knihovně, je Sloka.
+    J("navrhStrany.nastaveni().styly['sloka-0'] = { ...navrhStrany.knihovna().sloka }; null")
+    J(f"""(() => {{ const v = navrhStrany.view; const p = T.pozice({S1}, 0) - 1;
+      v.dispatch(v.state.tr.setNodeMarkup(p, null, {{ ...v.state.doc.nodeAt(p).attrs, styl: 'sloka-0' }})); }})()""")
+    J(f"T.kurzor(T.pozice({S1}, 2))")
+    ok('stejně vypadající odstavec se pozná jako styl', J("document.getElementById('lista-styl').value") == 'sloka'
+       and J("document.querySelector('#seznam-stylu li.aktivni').dataset.styl") == 'sloka')
+
     # Štětec: upravený styl nezmění odstavec, který má kopii starší verze (jiná strana).
-    J("navrhStrany.nastaveni().styly['refren-0'] = { ...navrhStrany.knihovna().refren, velikost: 9.5 }; null")
+    J("navrhStrany.nastaveni().styly['refren-0'] = { ...navrhStrany.knihovna().refren, velikost: 8 }; null")
     J("""(() => { const v = navrhStrany.view; let p; v.state.doc.descendants((n, q) => { if (p == null && n.type.name === 'odstavec' && n.attrs.styl.startsWith('refren-')) p = q; });
       v.dispatch(v.state.tr.setNodeMarkup(p, null, { ...v.state.doc.nodeAt(p).attrs, styl: 'refren-0' })); })()""")
     ukaz(page, '#seznam-stylu li[data-styl="refren"] .upravit')
@@ -421,7 +434,7 @@ def test_prohlizece(p, base, jmeno):
     page.fill('[data-styl-pole="velikost"]', '13')
     page.wait_for_timeout(100)
     velikosti = J("""[...document.querySelectorAll('.ps-p')].filter(p => p.dataset.styl.startsWith('refren')).map(p => p.dataset.styl + ':' + getComputedStyle(p).fontSize)""")
-    ok('štětec: starší verze stylu zůstane, jak byla', any(v.startswith('refren-0:') and v.endswith(f"{round(9.5 * 96 / 72, 2):g}px") for v in velikosti) or any(v.startswith('refren-0:12.66') for v in velikosti), velikosti)
+    ok('štětec: starší verze stylu zůstane, jak byla', any(v.startswith('refren-0:10.66') for v in velikosti), velikosti)
     ukaz(page, '#seznam-stylu li[data-styl="refren"] .upravit')
     page.click('#seznam-stylu li[data-styl="refren"] .upravit')
     page.keyboard.press(f'{MOD}+z')

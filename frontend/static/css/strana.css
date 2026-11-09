@@ -115,7 +115,8 @@
   flex: 1 1 auto; padding: 7px 6px !important; border-radius: 7px !important; background: transparent !important;
   color: var(--panel-text, #333) !important; font-weight: 600; font-size: 13.5px;
 }
-.panel-zalozky button[data-zalozka="ovladani"] { flex: 0 0 34px; }
+.panel-zalozky button[data-zalozka="ovladani"] { flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; }
+.panel-zalozky .ikona-info { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .panel-zalozky button.aktivni { background: var(--brand-dark, #1b5e20) !important; color: #fff !important; }
 .panel-obsah { display: flex; flex-direction: column; gap: 10px; }
 .panel-obsah[hidden] { display: none; }
