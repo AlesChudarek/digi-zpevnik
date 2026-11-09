@@ -316,6 +316,37 @@
 }
 .nabidka-sloky button.smazat { background: #fff; color: #b00020; border: 1px solid #e3b3b3; }
 
+/* Číslo strany: vrstva nad obsahem, střed na poloze z nastavení. */
+.ps-cislo-strany {
+  position: absolute; z-index: 5; transform: translate(-50%, -50%); line-height: 1; white-space: nowrap;
+  cursor: move; user-select: none; -webkit-user-select: none; padding: 1px 2px; border-radius: 2px;
+}
+.ps-cislo-strany[hidden] { display: none; }
+@media (hover: hover) { .ps-cislo-strany:hover { outline: calc(1px / var(--meritko)) dashed #1a73e8; } }
+.ps-cislo-strany.tazene { outline: calc(1px / var(--meritko)) solid #1a73e8; }
+.ps-cislo-strany.skryte { opacity: 0.25; }
+.ps-voditko-cisla { position: absolute; display: none; z-index: 4; pointer-events: none; }
+.ps-voditko-cisla.svisle { top: 0; bottom: 0; border-left: calc(1px / var(--meritko)) dashed #e91e63; }
+.ps-voditko-cisla.vodorovne { left: 0; right: 0; border-top: calc(1px / var(--meritko)) dashed #e91e63; }
+
+/* Náhled dvojstrany (panel a plovoucí při tažení čísla). */
+.nahled-dvojstrany { display: flex; justify-content: center; margin: 2px 0 8px; }
+.nahled-dvojstrany[hidden] { display: none; }
+.nahled-dvojstrany.plovouci {
+  position: absolute; top: 12px; left: 12px; z-index: 6; margin: 0; padding: 8px 10px 6px;
+  background: rgba(255, 255, 255, 0.96); border-radius: 8px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+.nahled-strana { position: relative; background: #fff; border: 1px solid #c8c8c8; box-sizing: border-box; }
+.nahled-strana + .nahled-strana { border-left-color: #888; }
+.nahled-strana.aktivni { box-shadow: 0 0 0 2px #1a73e8; z-index: 1; }
+.nahled-sazba { position: absolute; border: 1px dashed #ddd; }
+.nahled-cislo {
+  position: absolute; transform: translate(-50%, -50%); font: 700 9px/1 system-ui, sans-serif; color: #1a73e8;
+}
+.nahled-popis { position: absolute; left: 0; right: 0; bottom: -15px; text-align: center; font: 10px/1 system-ui, sans-serif; color: #888; }
+.nahled-dvojstrany { padding-bottom: 14px; }
+.navrh-panel .cislo-nahledu { width: 64px !important; }
+
 /* Přetažení obrázku nad stranu. */
 .navrh-plocha.pretahovani .stranka { box-shadow: 0 0 0 3px #1a73e8; }
 

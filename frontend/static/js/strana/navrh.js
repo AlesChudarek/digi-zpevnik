@@ -16,6 +16,7 @@ import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-
 import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok, klicSlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
+import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
 import { prepocitej } from './kolize.js';
 import { transponuj } from './akordy.js';
 
@@ -52,6 +53,15 @@ const VYCHOZI = {
   pismoAkordu: 'Roboto Condensed', velikostAkordu: 8.5, barvaAkordu: '#b00020', tucneAkordy: true,
   automatickaMezera: false,
   notace: 'cz',
+  // Číslo strany (vrstva, viz cislo-strany.js): poloha středu na PRAVÉ straně v mm.
+  // Výchozí dole u vnějšího okraje, v dolním okraji strany (A5).
+  cislo: {
+    zobrazit: true, zrcadlit: true, x: 138, y: 205,
+    pismo: 'Noto Sans', velikost: 9, tucne: false, barva: '#000000',
+  },
+  cisloSkryte: false,       // jen na této straně (titulní apod.)
+  // Náhled, dokud strana není ve zpěvníku: číslo a levá/pravá.
+  nahledCisla: 12, nahledStrany: 'P',
 };
 
 // --- stav -----------------------------------------------------------------------------
@@ -75,6 +85,7 @@ function sluc(vychozi, ulozene) {
   for (const [k, s] of Object.entries(ulozene.styly || {})) {
     if (!v.styly[k] && ROLE[s.role]) v.styly[k] = { ...zakladStylu, ...s };
   }
+  v.cislo = { ...vychozi.cislo, ...(ulozene.cislo || {}) };
   return v;
 }
 
@@ -204,6 +215,11 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
 });
 ovladac.pripoj(view);
 
+const cisloStrany = new CisloStrany(stranka, el('navrh-plocha'), {
+  format, nastaveni: () => nastaveni, meritko: () => meritko,
+  zmen: (zmena) => { nastaveni = { ...nastaveni, ...zmena }; pouzijNastaveni(); zalohuj(); },
+});
+
 // --- přepočet kolizí a přetečení ------------------------------------------------------
 
 let naplanovano = false;
@@ -262,6 +278,8 @@ function pouzijNastaveni() {
   stylyStrany.textContent = Object.entries(nastaveni.styly).map(([k, v]) => cssStylu(k, v)).join('\n');
   naplnVyberStylu();
   vykresliStyly();
+  if (typeof cisloStrany !== 'undefined') cisloStrany.vykresli();
+  vykresliDvojstranu(el('dvojstrana-panel'), f, nastaveni.cislo, String(nastaveni.nahledCisla), nastaveni.nahledStrany);
   // Role stylu mohla změnit číslování slok.
   if (typeof view !== 'undefined') view.dispatch(view.state.tr.setMeta(klicSlok, true));
   nastavMeritko();
@@ -309,6 +327,8 @@ function zmenFormat(novy) {
       tr = tr.setNodeMarkup(pos, null, { ...a, x: z(a.x), y: z(a.y), w: z(a.w), h: z(a.h) });
     });
     view.dispatch(tr);
+    const c = nastaveni.cislo;
+    nastaveni = { ...nastaveni, cislo: { ...c, x: Math.round(c.x * pomer * 2) / 2, y: Math.round(c.y * pomer * 2) / 2 } };
   }
   meritkoRucne = false;
   pouzijNastaveni();
@@ -361,6 +381,28 @@ function napojPanel() {
   for (const b of koren.querySelectorAll('[data-styl-zarovnani]')) {
     b.addEventListener('click', () => { if (rozbalenyStyl) zmenStyl(rozbalenyStyl, { zarovnani: b.dataset.stylZarovnani }); });
   }
+  // Číslo strany: data-cislo-pole (vnořené nastaveni.cislo), přepínač tučně, levá/pravá.
+  const zmenCislo = (zmena) => {
+    nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, ...zmena } };
+    pouzijNastaveni();
+    zalohuj();
+  };
+  for (const prvek of koren.querySelectorAll('[data-cislo-pole]')) {
+    prvek.addEventListener(udalostPrvku(prvek), () => {
+      const h = hodnotaPrvku(prvek);
+      if (!Number.isNaN(h)) zmenCislo({ [prvek.dataset.cisloPole]: h });
+    });
+  }
+  for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) {
+    b.addEventListener('click', () => zmenCislo({ [b.dataset.cisloPrepinac]: !nastaveni.cislo[b.dataset.cisloPrepinac] }));
+  }
+  for (const b of koren.querySelectorAll('[data-nahled-strany]')) {
+    b.addEventListener('click', () => {
+      nastaveni = { ...nastaveni, nahledStrany: b.dataset.nahledStrany };
+      pouzijNastaveni();
+      zalohuj();
+    });
+  }
   el('smazat-styl').addEventListener('click', () => smazStyl(rozbalenyStyl));
   el('novy-styl').addEventListener('click', () => {
     const formular = el('novy-styl-formular');
@@ -389,6 +431,12 @@ function nactiPanel() {
     const h = nastaveni[prvek.dataset.nastaveni];
     if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
   }
+  for (const prvek of koren.querySelectorAll('[data-cislo-pole]')) {
+    const h = nastaveni.cislo[prvek.dataset.cisloPole];
+    if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
+  }
+  for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) b.classList.toggle('aktivni', !!nastaveni.cislo[b.dataset.cisloPrepinac]);
+  for (const b of koren.querySelectorAll('[data-nahled-strany]')) b.classList.toggle('aktivni', b.dataset.nahledStrany === nastaveni.nahledStrany);
   if (!rozbalenyStyl) return;
   const s = nastaveni.styly[rozbalenyStyl];
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
@@ -1064,6 +1112,7 @@ view.focus();
 // nahradTextem: test začíná od známého textu, ne od ukázkové písně.
 window.navrhStrany = {
   view, schema, TextSelection, nastaveni: () => nastaveni, meritko: () => meritko, prepniRezimAkordu,
+  cislo: () => cisloStrany,
   nahradTextem(nazev, autor, text) {
     const f = format();
     const doc = N.doc.create(null, N.ramecek.create(

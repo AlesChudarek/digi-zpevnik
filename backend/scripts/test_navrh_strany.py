@@ -488,6 +488,31 @@ def test_prohlizece(p, base, jmeno):
     nazvy = [(x['n'], x['znak']) for x in J('T.akordy()')]
     ok('vložený text: akordy u znaků', all(x in nazvy for x in [('C', 'A'), ('G', 's'), ('Ami', 'd'), ('F', 'r')]), nazvy)
 
+    # Číslo strany: vrstva nad stranou, tažení s přichycením ke středu, zrcadlení na levé.
+    poloha = lambda: J("""(() => { const c = document.querySelector('.ps-cislo-strany'), s = document.getElementById('stranka');
+      const r = c.getBoundingClientRect(), p = s.getBoundingClientRect(), k = navrhStrany.meritko() * 96 / 25.4;
+      return [Math.round(((r.left + r.width / 2) - p.left) / k * 2) / 2, Math.round(((r.top + r.height / 2) - p.top) / k * 2) / 2]; })()""")
+    ok('číslo strany je dole u vnějšího okraje pravé strany', poloha() == [138, 205], poloha())
+    ok('číslo není v textu strany', 'ps-cislo-strany' not in J("navrhStrany.view.dom.innerHTML"))
+    # Test si stranu předtím přiblížil - číslo dole může být mimo viditelnou plochu.
+    J("document.querySelector('.ps-cislo-strany').scrollIntoView({ block: 'center', inline: 'center' })")
+    c = J("document.querySelector('.ps-cislo-strany').getBoundingClientRect().toJSON()")
+    st = J("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+    page.mouse.move(c['x'] + c['width'] / 2, c['y'] + c['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(st['x'] + st['width'] / 2 + 2 * m, c['y'] + c['height'] / 2, steps=8)
+    ok('při tažení je vidět náhled dvojstrany', J("!document.querySelector('.nahled-dvojstrany.plovouci').hidden"))
+    page.mouse.up()
+    ok('číslo se přichytí ke středu strany', poloha()[0] == 74, poloha())
+    J("navrhStrany.cislo().volby.zmen({ cislo: { ...navrhStrany.nastaveni().cislo, x: 138, y: 205 } })")
+    page.click('[data-nahled-strany="L"]')
+    ok('na levé straně je zrcadlově u vnějšího okraje', poloha() == [10, 205], poloha())
+    page.uncheck('[data-cislo-pole="zrcadlit"]')
+    ok('bez zrcadlení na stejném místě', poloha() == [138, 205], poloha())
+    page.check('[data-nastaveni="cisloSkryte"]')
+    ok('na jedné straně jde číslo skrýt', J("document.querySelector('.ps-cislo-strany').classList.contains('skryte')"))
+    page.uncheck('[data-nastaveni="cisloSkryte"]')
+
     # Záloha v prohlížeči přežije obnovení stránky.
     page.wait_for_timeout(600)
     pocet = len(J('T.akordy()'))

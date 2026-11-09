@@ -16,7 +16,9 @@
     "{{ url_for('static', filename='js/strana/akord-uzel.js') }}": "{{ static_bust('js/strana/akord-uzel.js') }}",
     "{{ url_for('static', filename='js/strana/kolize.js') }}": "{{ static_bust('js/strana/kolize.js') }}",
     "{{ url_for('static', filename='js/strana/ramecky.js') }}": "{{ static_bust('js/strana/ramecky.js') }}",
-    "{{ url_for('static', filename='js/strana/sloky.js') }}": "{{ static_bust('js/strana/sloky.js') }}"
+    "{{ url_for('static', filename='js/strana/sloky.js') }}": "{{ static_bust('js/strana/sloky.js') }}",
+    "{{ url_for('static', filename='js/strana/navrhy-akordu.js') }}": "{{ static_bust('js/strana/navrhy-akordu.js') }}",
+    "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}"
   }
 }
 </script>
@@ -213,6 +215,31 @@
       </label>
     </section>
 
+    <section class="karta">
+      <h2>Číslo strany</h2>
+      <div class="nahled-dvojstrany" id="dvojstrana-panel" aria-hidden="true"></div>
+      <label class="zaskrt"><input type="checkbox" data-cislo-pole="zobrazit"> Číslovat strany</label>
+      <label class="zaskrt dlouhy"><input type="checkbox" data-cislo-pole="zrcadlit"> Na levé straně zrcadlově (vnější roh zůstane vnějším)</label>
+      <label class="radek-pole">Písmo <select data-cislo-pole="pismo" data-pisma></select></label>
+      <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-cislo-pole="velikost" min="5" max="40" step="0.5"> pt</span></label>
+      <div class="radek-pole">Řez
+        <span class="rez">
+          <button type="button" class="prepinac-rez" data-cislo-prepinac="tucne" aria-label="Tučně"><b>B</b></button>
+          <input type="color" data-cislo-pole="barva" aria-label="Barva čísla">
+        </span>
+      </div>
+      <div class="radek-pole">Ukázat jako
+        <span class="rez">
+          <input type="number" data-nastaveni="nahledCisla" min="1" max="9999" step="1" class="cislo-nahledu" aria-label="Číslo strany v náhledu">
+          <button type="button" class="prepinac-rez" data-nahled-strany="L" aria-label="Levá strana">L</button>
+          <button type="button" class="prepinac-rez" data-nahled-strany="P" aria-label="Pravá strana">P</button>
+        </span>
+      </div>
+      <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně číslo skrýt (titulní strana apod.)</label>
+      <p class="poznamka">Polohu změníš tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
+        a levá/pravá doplní podle skutečné pozice strany.</p>
+    </section>
+
     <details class="karta napoveda-editoru">
       <summary>Ovládání</summary>
       <ul>
@@ -222,6 +249,7 @@
         <li><b>Vlastní styl:</b> naformátuj odstavec a „+ Nový styl z odstavce“; u stylu, od kterého se odstavec liší, je „Uložit“.</li>
         <li><b>Refrén znovu:</b> na prázdném řádku se stylem Refrén vloží Tab kopii předchozího.</li>
         <li><b>Řádek v odstavci:</b> Shift+Enter.</li>
+        <li><b>Číslo strany:</b> táhni ho na straně; přichytí se ke středu a k okrajům a ukáže se, kde bude na levé i pravé straně.</li>
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
       </ul>
     </details>

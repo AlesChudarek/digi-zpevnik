@@ -1049,12 +1049,17 @@ kdo maže.
       - **odkaz v liště** (Aleš 3. 11.): zatím otevřené. Aleš ho chce jako lákadlo -
         hodně lidí přijde jen kvůli tvorbě vlastních zpěvníků; proti je, že by to byl
         druhý vstup vedle Mých zpěvníků. Rozhodnout, až bude editor v editoru zpěvníku.
-      - **k rozhodnutí (4. 11., návrhy v rozhovoru)**: (a) čtečka kreslí navržené strany
-        z textu, číslo strany jako vrstva podle skutečné pozice, obrázek jen pro PDF;
-        (b) poloha čísla strany v šabloně zpěvníku na náhledu dvojstrany (zrcadlení L/P);
-        (c) kde žijí styly - u zpěvníku (šablona zpěvníku, jde uložit a použít pro další
-        zpěvník) vs. u uživatele napříč zpěvníky; (d) šablony stran („Uložit stranu jako
-        šablonu“, nová strana nabídne šablony).
+      - **číslo strany** (9. 11.): vrstva nad stranou, nikdy v obsahu ani v obrázku pro PDF
+        (export ho dokreslí). Poloha středu v mm pro pravou stranu, na levé zrcadlově
+        (volitelně stejně); tažením na straně s přichycením ke středu a okrajům, při tažení
+        plovoucí náhled dvojstrany. Písmo, velikost, tučně, barva; na jedné straně skrýt.
+        V editoru zatím ukázkové číslo a L/P - ve zpěvníku ze skutečné pozice.
+      - **styly** (9. 11.): ne u zpěvníku, ale u účtu (vlastní styly k dispozici na všech
+        stranách). Šablony stran nebudou - nová strana má výchozí styly a ukázkový text,
+        grafiku jde převzít duplikováním strany. Dnes jsou vlastní styly jen v nastavení
+        pokusné strany v prohlížeči (localStorage); na server s krokem 3.
+      - **k rozhodnutí**: čtečka kreslí navržené strany z textu (obrázek jen pro PDF);
+        jak se změna stylu na účtu projeví na už hotových stranách (viz rozhovor 9. 11.).
       **Postup** (schválený 3. 11.):
       1. [X] základ editoru strany - `/editor-strany`, jen admin, odkaz v liště, bez
          ukládání (záloha v localStorage). `static/js/strana/` (schema, akord-uzel,
