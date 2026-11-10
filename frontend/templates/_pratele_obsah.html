@@ -43,10 +43,13 @@
           <button type="button" class="vedlejsi pritel-odebrat" data-jmeno="{{ jmeno(u) }}">Odebrat</button>
         </div>
       </div>
+      {# Admin limit místa nemá - volné místo se u něj neukazuje. #}
+      {% if prehled.misto %}
       <div class="pritel-misto" data-napoveda="Zabráno {{ mb(prehled.misto.zabrano) }}, volných {{ mb(prehled.misto.volne) }}">
         <span class="pritel-misto-popis">Volné místo: {{ mb(prehled.misto.volne) }}</span>
         <span class="pritel-misto-pruh"><span style="width: {{ prehled.misto.procent }}%"></span></span>
       </div>
+      {% endif %}
       {% if prehled.spolecne %}
         <div class="pritel-radek"><span class="pritel-popisek">Společné zpěvníky:</span>
           {% for sb in prehled.spolecne %}<a href="{{ url_for('songbook_detail', book_id=sb.id) }}">{{ sb.title }}</a>{% if not loop.last %}, {% endif %}{% endfor %}

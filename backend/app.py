@@ -323,10 +323,23 @@ def cena_zpevniku(knihy) -> int:
     return int((strany or 0) + (obalky or 0))
 
 
-def limit_uzivatele(kdo) -> int:
-    """Kolik místa účet smí zabrat: vlastní limit, který mu nastavil admin, jinak
-    výchozí MAX_USER_STORAGE_BYTES. `kdo` je uživatel nebo jeho id."""
+# Admin limit místa nemá (Aleš 10. 11.): nahrání ani uložení strany ho nikdy nezastaví
+# a nic se mu nezamyká. Nekonečno místo výjimek po celém kódu - porovnání a odčítání
+# s ním fungují samy; kde se limit ukazuje nebo posílá jako JSON, je potřeba bez_limitu().
+BEZ_LIMITU = float('inf')
+
+
+def bez_limitu(kdo) -> bool:
     u = db.session.get(User, kdo) if isinstance(kdo, int) else kdo
+    return getattr(u, 'role', None) == 'admin'
+
+
+def limit_uzivatele(kdo):
+    """Kolik místa účet smí zabrat: vlastní limit, který mu nastavil admin, jinak
+    výchozí MAX_USER_STORAGE_BYTES; admin BEZ_LIMITU. `kdo` je uživatel nebo jeho id."""
+    u = db.session.get(User, kdo) if isinstance(kdo, int) else kdo
+    if bez_limitu(u):
+        return BEZ_LIMITU
     return getattr(u, 'limit_mista', None) or MAX_USER_STORAGE_BYTES
 
 
@@ -2907,9 +2920,11 @@ def prehled_uzivatelu_pro_spravu():
             vlastni=sorted(vlastni.get(u.id, []), key=lambda z: z['nazev'].lower()),
             sdilene=sorted(sdilene.get(u.id, []), key=lambda z: z['nazev'].lower()),
             pratel=pratel.get(u.id, 0),
-            zabrano=zabrano, zabrano_text=mb(zabrano), limit=limit, limit_text=mb(limit),
+            zabrano=zabrano, zabrano_text=mb(zabrano),
+            limit=None if bez_limitu(u) else limit, limit_text='bez limitu' if bez_limitu(u) else mb(limit),
+            bez_limitu=bez_limitu(u),
             limit_mb=round(u.limit_mista / 1024 / 1024) if u.limit_mista else None,
-            procent=min(100, round(zabrano * 100 / limit)) if limit else 0,
+            procent=0 if bez_limitu(u) else (min(100, round(zabrano * 100 / limit)) if limit else 0),
             zamceno=len(zamcene_zpevniky(u)),
             vytvoreno=datum(u.vytvoreno), vytvoreno_ts=int(u.vytvoreno.timestamp()) if u.vytvoreno else 0,
             prihlaseni=datum(u.posledni_prihlaseni),
@@ -2971,6 +2986,8 @@ def sprava_uprav_uzivatele(user_id):
         (PROFILY_DIR / stara).unlink(missing_ok=True)
         return jsonify({'ok': True})
     elif akce == 'limit':
+        if bez_limitu(u):
+            return jsonify({'ok': False, 'error': 'Admin limit místa nemá.'}), 400
         if hodnota in (None, ''):
             novy = None
         else:
@@ -3505,7 +3522,8 @@ def prehled_pritele(ja, pritel):
     zabrano = zabrane_misto(pritel.id)
     limit = limit_uzivatele(pritel)
     return {'spolecne': spolecne, 'pozvanky': pozvanky,
-            'misto': {'zabrano': zabrano, 'volne': max(0, limit - zabrano),
+            'misto': None if bez_limitu(pritel) else
+                     {'zabrano': zabrano, 'volne': max(0, limit - zabrano),
                       'procent': min(100, round(zabrano * 100 / limit)) if limit else 0}}
 
 

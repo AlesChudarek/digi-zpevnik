@@ -110,6 +110,24 @@ def main():
     kod, _ = nahraj_obrazek(bezny)
     ok("účet bez prémia obrázek nenahraje", kod == 403, kod)
 
+    print("\n── admin bez limitu místa (Aleš 10. 11.) ──")
+    with A.app.app_context():
+        u = A.db.session.get(A.User, 1)
+        puvodni_role, puvodni_limit = u.role, u.limit_mista
+        u.role, u.limit_mista = "admin", 1024   # vlastní limit 1 kB, zabráno víc
+        A.db.session.commit()
+        ok("admin nemá zamčené zpěvníky ani s malým vlastním limitem", not A.zamcene_zpevniky(u))
+    kod, odp = uloz_navrh(admin, zdroj())
+    ok("admin s vlastním limitem 1 kB stranu uloží", kod == 200 and odp.get("id"), (kod, odp))
+    kod, odp = nahraj_obrazek(admin)
+    ok("a nahraje obrázek", kod == 200, (kod, odp))
+    r = admin.post("/api/sprava/uzivatel/1", json={"akce": "limit", "hodnota": "5"})
+    ok("limit adminu nejde nastavit", r.status_code == 400 and "nemá" in (r.get_json() or {}).get("error", ""), (r.status_code, r.get_json()))
+    with A.app.app_context():
+        u = A.db.session.get(A.User, 1)
+        u.role, u.limit_mista = puvodni_role, puvodni_limit
+        A.db.session.commit()
+
     print("\n── obrázky ve straně ──")
     misto0 = misto(3)
     kod, o1 = nahraj_obrazek(premium)

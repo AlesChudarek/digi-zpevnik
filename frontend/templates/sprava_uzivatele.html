@@ -77,8 +77,12 @@
           </div>
           <div class="su-pole">
             <label for="su-limit-{{ u.id }}">Limit místa (MB)</label>
+            {% if u.bez_limitu %}
+            <input type="text" id="su-limit-{{ u.id }}" value="" placeholder="admin limit nemá" disabled>
+            {% else %}
             <input type="text" inputmode="decimal" id="su-limit-{{ u.id }}" data-pole="limit" value="{{ u.limit_mb or '' }}" placeholder="výchozí {{ vychozi_limit_mb }}">
             <button type="button" class="btn male" data-akce="limit">Uložit</button>
+            {% endif %}
           </div>
 
           {# Akce po řádcích se stejným popiskem jako pole výš - v jedné řadě se nevešly
