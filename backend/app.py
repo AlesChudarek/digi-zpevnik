@@ -4405,6 +4405,9 @@ def build_songbook_content_pages(book_id):
         if not strana.image_path and strana.navrzena_id:
             polozka["navrh"] = strana.navrzena_id
             polozka["ma_nahled"] = bool(strana.navrzena and strana.navrzena.nahled_id)
+            # Vektorové PDF strany pro export (cesta pod IMAGES_DIR) - export běží i mimo
+            # databázi, tak ji dostane rovnou.
+            polozka["navrh_pdf"] = strana.navrzena.pdf.cesta if strana.navrzena and strana.navrzena.pdf else None
         strany.append(polozka)
     return strany
 
@@ -4630,7 +4633,8 @@ def build_songbook_export_sequence(songbook, recept=None):
     add(songbook.img_path_cover_front_inner, "cover")
 
     sequence.extend(
-        {"file": page["file"], "kind": "content", "page_number": page["page_number"]}
+        {"file": page["file"], "kind": "content", "page_number": page["page_number"],
+         **({"navrh": page["navrh"], "navrh_pdf": page["navrh_pdf"]} if page.get("navrh") else {})}
         for page in build_songbook_content_pages(songbook.id)
     )
 
@@ -4654,7 +4658,8 @@ def _uprav_sekvenci(sequence, recept):
     elif recept['obsah'] == 'jen-obalka':
         sequence = [p for p in sequence if p['kind'] == 'cover']
     if not recept['prazdne']:
-        sequence = [p for p in sequence if p['file'] != 'blank']
+        # Navržená strana má file "blank" taky, ale prázdná není.
+        sequence = [p for p in sequence if p['file'] != 'blank' or p.get('navrh')]
     if recept['strany']:
         # Rozsah vybírá z obsahu, obálku řídí volba `obsah`. Držet to odděleně je
         # předvídatelnější než hádat, jestli „strany 22-23“ znamená i bez obálky.
@@ -4730,6 +4735,9 @@ def songbook_export_key(sequence, token):
         # Barva se propisuje do pixelů průhledné obálky, takže její změna musí dát jiný
         # klíč. Bez tohohle by po přebarvení zpěvníku zůstalo viset staré PDF.
         digest.update(f"|{item.get('bg') or ''}\n".encode())
+        # Navržená strana: verze je neměnná, takže stačí její id.
+        if item.get('navrh'):
+            digest.update(f"|navrh:{item['navrh']}\n".encode())
     return digest.hexdigest()[:16]
 
 
@@ -4956,7 +4964,10 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     quality, max_edge = settings['quality'], settings['max_edge']
 
     first = True
-    for item in sequence:
+    navrzene = {}   # pořadí strany v PDF -> vektorové PDF navržené strany
+    for poradi, item in enumerate(sequence):
+        if item.get('navrh_pdf'):
+            navrzene[poradi] = IMAGES_DIR / item['navrh_pdf']
         started = time.time()
         page = _open_export_page(item, recept)
         # Doplnit dřív než zmenšit, ať doplněná strana skončí na téže výšce jako
@@ -4985,6 +4996,45 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     if first:
         # Prázdný zpěvník: PDF bez jediné strany uložit nejde, tak aspoň jednu bílou
         Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
+    elif navrzene:
+        _vloz_navrzene_strany(out_path, navrzene)
+
+
+def _vloz_navrzene_strany(out_path, navrzene):
+    """Na místo navržených stran (zatím bílé) dá jejich vektorové PDF z editoru stran.
+
+    Strana se zvětší na rozměr strany exportu (A5 → A4) a vycentruje; text zůstane
+    textem. Chybějící nebo poškozené PDF strany nechá stranu bílou, export kvůli němu
+    nespadne. Číslo strany a vodoznak na navržené straně zatím nejsou (TODO bod 11, 3c).
+    """
+    from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+    ctenar = PdfReader(str(out_path))
+    zapis = PdfWriter()
+    cache = {}
+    for poradi, strana in enumerate(ctenar.pages):
+        cesta = navrzene.get(poradi)
+        vektor = None
+        if cesta is not None:
+            try:
+                if cesta not in cache:
+                    cache[cesta] = PdfReader(str(cesta)).pages[0]
+                vektor = cache[cesta]
+            except Exception:  # noqa: BLE001 - jedna strana nesmí shodit export
+                app.logger.warning("Navržená strana %s se do exportu nedostala", cesta)
+        if vektor is None:
+            zapis.add_page(strana)
+            continue
+        sirka, vyska = float(strana.mediabox.width), float(strana.mediabox.height)
+        vs, vv = float(vektor.mediabox.width), float(vektor.mediabox.height)
+        k = min(sirka / vs, vyska / vv)
+        nova = PageObject.create_blank_page(width=sirka, height=vyska)
+        nova.merge_transformed_page(
+            vektor, Transformation().scale(k).translate((sirka - vs * k) / 2, (vyska - vv * k) / 2))
+        zapis.add_page(nova)
+    docasny = Path(str(out_path) + '.vektor')
+    with open(docasny, 'wb') as f:
+        zapis.write(f)
+    os.replace(docasny, out_path)
 
 
 def render_songbook_zip(sequence, out_path, on_page=None):
@@ -5007,6 +5057,9 @@ def render_songbook_zip(sequence, out_path, on_page=None):
         # spálil za setiny procenta.
         for index, item in enumerate(sequence, start=1):
             abs_path = None if item['file'] == 'blank' else _abs_image_path(item['file'])
+            if item.get('navrh_pdf'):
+                # Navržená strana jde do ZIPu jako své vektorové PDF.
+                abs_path = IMAGES_DIR / item['navrh_pdf']
             if item['kind'] == 'content' and item.get('page_number') is not None:
                 popis = f"strana-{item['page_number']}"
             else:

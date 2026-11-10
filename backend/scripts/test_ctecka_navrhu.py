@@ -252,8 +252,35 @@ def main():
                 obsah = A.build_songbook_content_pages(ZPEVNIK)
                 ok("obsah zpěvníku nese id verze a náhled", obsah[0].get("navrh") == a and obsah[0].get("ma_nahled"), obsah[0])
                 sekv = A.build_songbook_export_sequence(A.db.session.get(A.Songbook, ZPEVNIK), None)
-                ok("export navrženou stranu zatím bere jako prázdnou (krok 3c)",
-                   sekv[0]["file"] == "blank" and "navrh" not in sekv[0], sekv[0])
+                ok("export ví, že první strana je navržená", sekv[0].get("navrh") == a and sekv[0].get("navrh_pdf"), sekv[0])
+                kratky = A.normalizuj_recept(format="pdf", prazdne=False)
+                bez_prazdnych = A.build_songbook_export_sequence(A.db.session.get(A.Songbook, ZPEVNIK), kratky)
+                ok("bez prázdných stran navržené zůstanou (vypadne jen jedna prázdná)",
+                   len(bez_prazdnych) == len(poradi) - 1, (len(bez_prazdnych), len(poradi)))
+                klic_a = A.songbook_export_key(sekv, "x")
+                jina = [dict(sekv[0], navrh=b)] + sekv[1:]
+                ok("jiná verze strany dá jiný klíč cache exportu", A.songbook_export_key(jina, "x") != klic_a)
+
+                from pypdf import PdfReader
+                import zipfile
+                vystup = TMP / "export.pdf"
+                A.render_songbook_pdf(sekv, vystup, A.normalizuj_recept(format="pdf"))
+                pdf = PdfReader(str(vystup))
+                ok("PDF má všechny strany", len(pdf.pages) == len(poradi), len(pdf.pages))
+                text0 = " ".join((pdf.pages[0].extract_text() or "").split())
+                ok("navržená strana je v PDF jako text", "Píseň Alfa" in text0 and "alfa" in text0, text0[:60])
+                ok("a ostatní strany zůstaly obrázky (bez textu)", not (pdf.pages[1].extract_text() or "").strip())
+                r0, r1 = pdf.pages[0].mediabox, pdf.pages[1].mediabox
+                ok("navržená strana má rozměr jako ostatní (A4)",
+                   abs(float(r0.width) - float(r1.width)) < 1 and abs(float(r0.height) - float(r1.height)) < 1,
+                   (float(r0.width), float(r0.height), float(r1.width), float(r1.height)))
+                ok("střídání verzí sedí (strana 3 = Beta)", "Píseň Beta" in " ".join((pdf.pages[2].extract_text() or "").split()))
+                vystup_zip = TMP / "export.zip"
+                A.render_songbook_zip(sekv, vystup_zip)
+                with zipfile.ZipFile(vystup_zip) as z:
+                    jmena = z.namelist()
+                ok("ZIP má navržené strany jako PDF", sum(j.endswith(".pdf") for j in jmena) == 20
+                   and jmena[0] == "0001-strana-1.pdf", jmena[:3])
             for jmeno in ("chromium", "firefox", "webkit"):
                 test_prohlizec(p, jmeno, base, a, b, poradi)
     finally:

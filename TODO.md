@@ -1126,6 +1126,17 @@ kdo maže.
          (3 prohlížeče, port 5592).
       3c. [ ] PDF: vektorové PDF navržené strany vyrobí prohlížeč při uložení strany;
          export skládá pypdf (vektorové i obrázkové strany, číslo, vodoznak, brožura)
+         - [X] (10. 11.) běžné PDF: Pillow složí strany jako dřív (navržená bílá) a pypdf
+           ji pak nahradí vektorovým PDF strany zvětšeným na A4 (`_vloz_navrzene_strany`).
+           ZIP: navržená strana jako její PDF. Klíč cache nese id verze; „bez prázdných“
+           navržené nevyhodí. Nová závislost **pypdf** (requirements.txt) - na serveru
+           před nasazením `pip install`.
+         - [ ] číslo strany na navržené straně (písmo a poloha z `nastaveni.cislo`, L/P
+           z pozice) - potřebuje vložit TTF do PDF (pypdf to samo neumí; reportlab, nebo
+           nechat prohlížeč při Hotovo uložit i variantu s číslem?)
+         - [ ] vodoznak na navržené straně; černobílý export (vektor zůstane barevný)
+         - [ ] brožura: dnes rastrová, navržená strana v ní vyjde bílá - přepsat skládání
+           listů na pypdf (dvě strany na list A4 na šířku)
       4. [X] editor zpěvníku (10. 11.): plus před první, mezi a za poslední stranou
          s nabídkou Prázdná / Navrhnout stranu; u prázdné strany „✎ navrhnout“, u navržené
          náhled se značkou a klik = Upravit. Editor stran se otevře v rámu (iframe,
