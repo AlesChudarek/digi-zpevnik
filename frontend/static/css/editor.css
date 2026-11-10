@@ -215,7 +215,11 @@ html.es-navrh-otevreny { overflow: hidden; }
 /* Prázdná strana: „+ obrázek“ a „✎ navrhnout“ pod sebou (vedle sebe se do náhledu
    nevejdou a první by zmizelo za okraj). */
 .es-nahled.bez-obrazku { flex-direction: column; gap: 2px; }
-.es-navrhnout { font-size: 11px; padding: 4px; border: none; background: none; color: var(--brand-dark, #1b5e20); cursor: pointer; text-decoration: underline; }
+/* Bez odsazení po stranách a nezalomené: „✎ navrhnout“ má 61 px, náhled 64 px (s odsazením
+   69 px a ikona skončila na jiném řádku než slovo). Na telefonu je náhled 48 px, tam se
+   zalomit musí. */
+.es-navrhnout { font-size: 11px; padding: 4px 0; border: none; background: none; color: var(--brand-dark, #1b5e20); cursor: pointer; text-decoration: underline; white-space: nowrap; }
+@media (max-width: 560px) { .es-navrhnout { white-space: normal; } }
 .es-navrhnout:disabled { color: var(--muted-text, #888); cursor: not-allowed; text-decoration: none; }
 /* Plus mezi stranami (i na začátku a na konci) s nabídkou. */
 .es-mezera { position: relative; }

@@ -129,6 +129,11 @@ def main():
                page.locator(".es-nabidka-vlozeni button").all_inner_texts())
             page.click(".es-nabidka-vlozeni button:has-text('Prázdná strana')")
             ok("prázdná strana se přidá na konec", page.locator("#es-seznam .es-strana").count() == 3)
+            radky = page.evaluate("""(() => { const b = document.querySelector('#es-seznam .es-nahled.bez-obrazku .es-navrhnout');
+              const r = document.createRange(); r.selectNodeContents(b);
+              const n = b.closest('.es-nahled').getBoundingClientRect(), t = r.getBoundingClientRect();
+              return [r.getClientRects().length, Math.round(t.width), Math.round(n.width)]; })()""")
+            ok("„✎ navrhnout“ je na jednom řádku a vejde se do náhledu", radky[0] == 1 and radky[1] <= radky[2], radky)
 
             print("\n── navrhnout stranu ──")
             page.click("#es-seznam .es-mezera.prvni .es-vlozit")
@@ -137,6 +142,26 @@ def main():
             ok("editor stran se otevře v rámu přes celé okno",
                page.evaluate("(() => { const r = document.querySelector('.es-navrh-okno').getBoundingClientRect(); return r.width >= innerWidth - 1 && r.height >= innerHeight - 1; })()"))
             ok("v rámu není lišta webu", frame.evaluate("getComputedStyle(document.querySelector('.navbar')).display") == "none")
+            ok("ani její boční šipka", frame.evaluate("getComputedStyle(document.querySelector('.navbar-toggle')).display") == "none")
+            LISTA = """(() => { const l = document.querySelector('.navrh-lista').getBoundingClientRect();
+              const n = document.querySelector('.navrh-lista .nastroje').getBoundingClientRect();
+              const hz = document.querySelector('.navrh-lista .hotovo-zrusit').getBoundingClientRect();
+              const sk = [...document.querySelectorAll('.navrh-lista .nastroje .skupina')].map(e => e.getBoundingClientRect());
+              const radky = {};
+              for (const r of sk) { const k = Math.round(r.top); (radky[k] = radky[k] || []).push(r); }
+              const odchylka = Math.max(...Object.values(radky).map(rr => Math.abs((Math.min(...rr.map(r => r.left)) - n.left) - (n.right - Math.max(...rr.map(r => r.right))))));
+              return { radku: Object.keys(radky).length, odchylka: Math.round(odchylka),
+                       hotovoNahore: Math.abs(hz.top - l.top) < 20 && hz.right <= l.right + 1,
+                       stred: Math.round((n.left + n.right) / 2 - (l.left + l.right) / 2) }; })()"""
+            s1400 = frame.evaluate(LISTA)
+            ok("1400 px: nástroje se zalomí, každý řádek na střed, Hotovo zůstane nahoře vpravo",
+               s1400["odchylka"] <= 2 and s1400["hotovoNahore"], s1400)
+            page.set_viewport_size({"width": 1920, "height": 1000})
+            page.wait_for_timeout(200)
+            s1920 = frame.evaluate(LISTA)
+            ok("1920 px: nástroje na jednom řádku uprostřed lišty", s1920["radku"] == 1 and abs(s1920["stred"]) <= 2
+               and s1920["hotovoNahore"], s1920)
+            page.set_viewport_size({"width": 1400, "height": 1000})
             ok("číslo a strana podle pozice (první strana zpěvníku = 5, pravá)",
                frame.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [5, "P"],
                frame.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]"))

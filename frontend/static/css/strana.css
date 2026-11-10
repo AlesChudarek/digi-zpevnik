@@ -21,10 +21,20 @@
 
 /* Vložený do editoru zpěvníku (rám): bez lišty a pruhů webu, přes celé okno. */
 html.navrh-vlozeny .navbar, html.navrh-vlozeny .hlasky, html.navrh-vlozeny .pruh-overeni,
-html.navrh-vlozeny .pruh-spravce { display: none !important; }
+html.navrh-vlozeny .pruh-spravce, html.navrh-vlozeny .navbar-toggle { display: none !important; }
 html.navrh-vlozeny .navrh { margin-top: 8px; max-width: none; }
 html.navrh-vlozeny .jen-samostatne { display: none !important; }
 .navrh-lista .skupina.hotovo-zrusit { margin-left: auto; border-left: 0; }
+/* Ve vloženém režimu je editor přes celou šířku okna: nástroje uprostřed okna, Hotovo
+   a Zrušit vpravo. Mřížka, ne automatické okraje ve flexu - ty se při zalomení lišty
+   rozjely (nástroje doprava, Hotovo na druhý řádek). Úzká lišta zalomí jen nástroje,
+   každý řádek na střed. Samostatně se obal nástrojů nevidí (display: contents). */
+.navrh-lista .nastroje { display: contents; }
+html.navrh-vlozeny .navrh-lista { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; }
+html.navrh-vlozeny .navrh-lista .nastroje {
+  grid-column: 2; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 0;
+}
+html.navrh-vlozeny .navrh-lista .hotovo-zrusit { grid-column: 3; justify-self: end; align-self: start; margin-left: 0; }
 .navrh-lista .hotovo-zrusit .hlavni { background: var(--brand-dark, #1b5e20); color: #fff; padding: 0 16px; font-weight: 600; }
 
 /* --- lišta --------------------------------------------------------------------------- */
