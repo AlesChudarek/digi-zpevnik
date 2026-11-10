@@ -1679,6 +1679,8 @@ def mapa_stran(page_files):
         for page in pair or []:
             if not page:
                 continue
+            if isinstance(page, dict) and page.get('navrh'):
+                continue
             rel = page if isinstance(page, str) else page.get('file')
             if not rel or rel in ('none', 'blank') or rel in mapa:
                 continue
@@ -4389,16 +4391,22 @@ def build_songbook_content_pages(book_id):
     """Strany obsahu zpěvníku v pořadí: [{"file", "page_number", "kind"}].
 
     Jediný zdroj pořadí stran pro čtečku i export, ať se nerozejdou. Strana bez
-    obrázku je doslovné "blank".
+    obrázku je doslovné "blank". Navržená strana (editor stran) je pro export zatím taky
+    "blank", navíc nese "navrh" (id verze) a "ma_nahled" - čtečka ji podle nich kreslí
+    z textu. Adresy tu nejsou: export obsah skládá i na pozadí, mimo požadavek.
     """
     sb = db.session.get(Songbook, book_id)
     if sb is None:
         return []
-    return [
-        {"file": strana.image_path or "blank", "page_number": cislo_strany(sb, strana),
-         "kind": "content"}
-        for strana in sb.strany
-    ]
+    strany = []
+    for strana in sb.strany:
+        polozka = {"file": strana.image_path or "blank", "page_number": cislo_strany(sb, strana),
+                   "kind": "content"}
+        if not strana.image_path and strana.navrzena_id:
+            polozka["navrh"] = strana.navrzena_id
+            polozka["ma_nahled"] = bool(strana.navrzena and strana.navrzena.nahled_id)
+        strany.append(polozka)
+    return strany
 
 
 class ReceptChyba(ValueError):
@@ -5480,6 +5488,13 @@ def songbook_detail(book_id):
     first_page_side = getattr(songbook, 'first_page_side', 'left')
 
     pages = build_songbook_content_pages(book_id)
+    # Navržená strana má ve čtečce vlastní klíč místo "blank": čtečka strany hledá podle
+    # `file` (přechod mezi režimy, poloha ve svitku). Klíč nese i pozici - tatáž verze
+    # může být ve zpěvníku víckrát.
+    pages = [{**p, "file": f"navrh-{p['navrh']}-{i}",
+              "nahled": url_for('nahled_navrzene_strany', navrh_id=p['navrh']) if p['ma_nahled'] else None}
+             if p.get("navrh") else p for i, p in enumerate(pages)]
+    ma_navrhy = any(p.get("navrh") for p in pages)
 
     def pair_pages(pages, first_side, cover_front_outer, cover_front_inner, cover_back_inner, cover_back_outer):
         """Build double-page spreads according to simplified print-like rules.
@@ -5570,7 +5585,8 @@ def songbook_detail(book_id):
         songbook_type=book_type,
         songbook_is_private=(not is_public),
         can_manage_songbook=can_manage,
-        smi_stahovat=smi_tvorit(current_user)
+        smi_stahovat=smi_tvorit(current_user),
+        ma_navrhy=ma_navrhy
     )
     # Některá strana neměla náhled a šel místo ní originál - dopočítat na pozadí.
     if g.get('chybi_nahled'):

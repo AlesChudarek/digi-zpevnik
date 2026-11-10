@@ -230,7 +230,7 @@ async function cssProObrazek(rodiny) {
   return casti.join('\n');
 }
 
-function pouzitaPisma(zdroj) {
+export function pouzitaPisma(zdroj) {
   const n = zdroj.nastaveni;
   const rodiny = new Set([n.pismoAkordu, n.cislo && n.cislo.pismo]);
   for (const s of Object.values(n.styly || {})) rodiny.add(s.pismo);

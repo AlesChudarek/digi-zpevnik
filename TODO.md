@@ -1115,8 +1115,15 @@ kdo maže.
          kopie a přidaná píseň sdílí verzi; zrušení účtu verze zachová (vlastník NULL).
          Test `test_navrh_server.py`. Na serveru zatím nenasazeno (tabulky vzniknou
          samy při startu).
-      3b. [ ] čtečka: navržené strany z textu vedle obrázků (dvojstrany, svitek, zoom,
-         sjíždění), číslo a L/P z pozice
+      3b. [X] čtečka (10. 11.): navržená strana je rámeček `.strana-navrh` se stejným
+         rozměrem jako obrázek strany (dvojstrana, svitek, zoom, sjíždění, přechod mezi
+         režimy). Nejdřív uložený náhled 420 px, přes něj strana z textu
+         (`static/js/strana/ctecka.js`) - ukáže se až s načtenými písmy a obrázky. Kreslí
+         se líně (jen kolem místa čtení), při zoomu se jen přeškáluje. Číslo a L/P z pozice.
+         Moduly a písma editoru jen u zpěvníku s navrženými stranami (mapa importů je
+         společná: `_strana_importmap.html`). Klíč strany ve čtečce `navrh-<id>-<pozice>`
+         (tatáž verze může být ve zpěvníku víckrát). Test `test_ctecka_navrhu.py`
+         (3 prohlížeče, port 5592).
       3c. [ ] PDF: vektorové PDF navržené strany vyrobí prohlížeč při uložení strany;
          export skládá pypdf (vektorové i obrázkové strany, číslo, vodoznak, brožura)
       4. [X] editor zpěvníku (10. 11.): plus před první, mezi a za poslední stranou

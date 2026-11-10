@@ -1,0 +1,21 @@
+{# Mapa importů modulů navržené strany (editor stran i čtečka). Každý modul dostane verzi
+   podle data změny (static_bust), jinak by prohlížeč držel staré podmoduly v cache. #}
+<script type="importmap">
+{
+  "imports": {
+    "prosemirror": "{{ static_bust('vendor/prosemirror/prosemirror.js') }}",
+    "{{ url_for('static', filename='js/strana/schema.js') }}": "{{ static_bust('js/strana/schema.js') }}",
+    "{{ url_for('static', filename='js/strana/akordy.js') }}": "{{ static_bust('js/strana/akordy.js') }}",
+    "{{ url_for('static', filename='js/strana/akord-uzel.js') }}": "{{ static_bust('js/strana/akord-uzel.js') }}",
+    "{{ url_for('static', filename='js/strana/kolize.js') }}": "{{ static_bust('js/strana/kolize.js') }}",
+    "{{ url_for('static', filename='js/strana/ramecky.js') }}": "{{ static_bust('js/strana/ramecky.js') }}",
+    "{{ url_for('static', filename='js/strana/sloky.js') }}": "{{ static_bust('js/strana/sloky.js') }}",
+    "{{ url_for('static', filename='js/strana/navrhy-akordu.js') }}": "{{ static_bust('js/strana/navrhy-akordu.js') }}",
+    "{{ url_for('static', filename='js/strana/cislo-strany.js') }}": "{{ static_bust('js/strana/cislo-strany.js') }}",
+    "{{ url_for('static', filename='js/strana/vykresleni.js') }}": "{{ static_bust('js/strana/vykresleni.js') }}",
+    "{{ url_for('static', filename='js/strana/ctecka.js') }}": "{{ static_bust('js/strana/ctecka.js') }}",
+    "{{ url_for('static', filename='js/strana/pdf-strany.js') }}": "{{ static_bust('js/strana/pdf-strany.js') }}",
+    "{{ url_for('static', filename='vendor/pdf-lib/pdf-lib.js') }}": "{{ static_bust('vendor/pdf-lib/pdf-lib.js') }}"
+  }
+}
+</script>

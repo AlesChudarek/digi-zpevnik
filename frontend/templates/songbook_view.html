@@ -79,6 +79,33 @@
         box-shadow: none;
     }
 
+    /* Navržená strana (editor stran): rámeček místo <img>, rozměr mu dává applyZoom stejně
+       jako obrázkům. Uvnitř náhled a přes něj strana z textu (static/js/strana/ctecka.js);
+       náhled zmizí, až je strana hotová (třída .ostra). */
+    .strana-navrh {
+        position: relative;
+        overflow: hidden;
+        flex: none;
+        border-radius: 10px;
+        background: #fff;
+    }
+    /* Dvě třídy: .page-pair img a .scroll-mode img by jinak náhledu vnutily svou šířku
+       a polohu. */
+    .strana-navrh > .strana-navrh-nahled {
+        position: absolute; inset: 0;
+        width: 100%; height: 100%;
+        object-fit: contain; object-position: top;
+        border-radius: 0 !important;
+    }
+    .strana-navrh-text {
+        position: absolute; left: 0; top: 0;
+        visibility: hidden;
+    }
+    .strana-navrh.ostra .strana-navrh-text { visibility: visible; }
+    .strana-navrh.ostra .strana-navrh-nahled { visibility: hidden; }
+    .strana-navrh .stranka { box-shadow: none; }
+    #double-page .strana-navrh { display: none; }
+
     /* Pure color canvas used for blank cover pages (no <img> src to avoid UA borders) */
     .page-blank {
         display: none;
@@ -641,6 +668,13 @@
 <link rel="stylesheet" href="{{ static_bust('css/stahovani.css') }}">
 <script src="{{ static_bust('js/stahovani.js') }}"></script>
 
+{% if ma_navrhy %}
+{# Navržené strany se kreslí z textu stejně jako v editoru stran (TODO bod 11, 3b). #}
+<link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
+<link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
+{% include '_strana_importmap.html' %}
+{% endif %}
+
 <div class="zoom-scroll-wrapper">
   {# Double is the starting mode, but the class that trims the bottom padding was only
      added when switching modes, so a reader opened straight into the book kept the
@@ -648,7 +682,9 @@
   <div class="viewer-container double-page-mode">
   <div id="double-page" class="page-pair">
   <img id="left-page" src="">
+  <div id="left-page-navrh" class="strana-navrh"><img class="strana-navrh-nahled" alt=""></div>
   <img id="right-page" src="">
+  <div id="right-page-navrh" class="strana-navrh"><img class="strana-navrh-nahled" alt=""></div>
 </div>
 
   <div id="scroll-mode" class="scroll-mode">
@@ -660,8 +696,18 @@
           {% else %}
             {% set page_obj = page %}
           {% endif %}
-          {% if page_obj.file != 'none' and page_obj.file != 'blank' %}
-            <img src="{{ url_strany(page_obj.file) }}"
+          {% if page_obj.navrh %}
+            <div class="strana-svitku strana-navrh"
+                 data-file="{{ page_obj.file }}"
+                 data-navrh="{{ page_obj.navrh }}"
+                 data-lp="{{ 'L' if loop.index == 1 else 'P' }}"
+                 data-kind="content"
+                 {% if page_obj.page_number %}data-cislo="{{ page_obj.page_number }}" data-page-number="{{ page_obj.page_number }}"{% endif %}
+                 id="scroll-page-{{ loop.index }}">
+              {% if page_obj.nahled %}<img class="strana-navrh-nahled" src="{{ page_obj.nahled }}" alt="" loading="lazy">{% endif %}
+            </div>
+          {% elif page_obj.file != 'none' and page_obj.file != 'blank' %}
+            <img class="strana-svitku" src="{{ url_strany(page_obj.file) }}"
                  data-file="{{ page_obj.file }}"
                  data-full="/songbooks/{{ page_obj.file }}"
                  data-kind="{{ page_obj.kind or 'content' }}"
@@ -918,7 +964,33 @@
       imgEl.style.boxShadow = 'none';
     }
 
-    if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
+    // Navržená strana: rámeček s náhledem, stranu z textu do něj nakreslí ctecka.js.
+    function nastavNavrh(which, pageObj) {
+      const el = document.getElementById(`${which}-page-navrh`);
+      const nahled = el.querySelector('.strana-navrh-nahled');
+      if (!pageObj.navrh) {
+        el.style.display = 'none';
+        delete el.dataset.navrh;
+        return false;
+      }
+      el.dataset.navrh = pageObj.navrh;
+      el.dataset.lp = which === 'left' ? 'L' : 'P';
+      if (pageObj.page_number) el.dataset.cislo = pageObj.page_number; else delete el.dataset.cislo;
+      if (pageObj.nahled) nastavObrazekStrany(nahled, pageObj.nahled); else nahled.removeAttribute('src');
+      el.style.display = 'block';
+      const img = which === 'left' ? leftPage : rightPage;
+      img.style.display = 'none';
+      img.removeAttribute('src');
+      delete img.dataset.full;
+      const blank = document.getElementById(`${which}-page-blank`);
+      if (blank) blank.style.display = 'none';
+      window.StranyCtecky?.obnov(el);
+      return true;
+    }
+
+    if (nastavNavrh('left', leftPageFile)) {
+      // hotovo výš
+    } else if (leftPageFile.file && leftPageFile.file !== 'none' && leftPageFile.file !== 'blank') {
       leftPage.style.display = 'block';
       leftPage.dataset.full = `/songbooks/${leftPageFile.file}`;
       nastavObrazekStrany(leftPage, adresaStrany(leftPageFile.file));
@@ -945,7 +1017,9 @@
       if (blank) blank.style.display = 'none';
     }
 
-    if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
+    if (nastavNavrh('right', rightPageFile)) {
+      // hotovo výš
+    } else if (rightPageFile.file && rightPageFile.file !== 'none' && rightPageFile.file !== 'blank') {
       rightPage.style.display = 'block';
       rightPage.dataset.full = `/songbooks/${rightPageFile.file}`;
       nastavObrazekStrany(rightPage, adresaStrany(rightPageFile.file));
@@ -1045,9 +1119,9 @@
     // Try to restore scroll position based on lastDoublePage
     if (typeof lastDoublePage !== 'undefined') {
       const pair = pageFiles[lastDoublePage - 1];
-      const pageToScroll = pair?.find(p => p && p.file && p.file.includes('page'));
+      const pageToScroll = pair?.find(p => p && p.file && p.file !== 'none' && p.file !== 'blank');
       if (pageToScroll) {
-        const target = document.querySelector(`#scroll-mode img[data-file="${pageToScroll.file}"]`);
+        const target = document.querySelector(`#scroll-mode .strana-svitku[data-file="${pageToScroll.file}"]`);
         if (target) {
           const top = Math.max(0, target.offsetTop - SCROLL_CUSHION_PX);
           wrapper.scrollTo({ top, behavior: "instant" });
@@ -1083,7 +1157,7 @@
     }
 
     // Try to determine the current scroll image file
-    let visibleImage = Array.from(document.querySelectorAll('#scroll-mode img')).find(img => {
+    let visibleImage = Array.from(document.querySelectorAll('#scroll-mode .strana-svitku')).find(img => {
       const rect = img.getBoundingClientRect();
       return rect.top >= 0 && rect.bottom <= window.innerHeight;
     });
@@ -1094,7 +1168,7 @@
       let closestImage = null;
       let smallestDistance = Infinity;
 
-      for (let img of document.querySelectorAll('#scroll-mode img')) {
+      for (let img of document.querySelectorAll('#scroll-mode .strana-svitku')) {
         const rect = img.getBoundingClientRect();
         const imgMiddle = rect.top + rect.height / 2;
         const distance = Math.abs(imgMiddle - wrapperMiddle);
@@ -1210,12 +1284,12 @@
   function findScrollImage(entry) {
     if (!entry) return null;
     if (entry.page) {
-      const img = document.querySelector(`#scroll-mode img[data-file="${entry.page}"]`);
+      const img = document.querySelector(`#scroll-mode .strana-svitku[data-file="${entry.page}"]`);
       if (img) return img;
     }
     const firstNumber = parseFirstPageNumber(entry.page_number);
     if (firstNumber !== null) {
-      const byNumber = document.querySelector(`#scroll-mode img[data-page-number="${firstNumber}"]`);
+      const byNumber = document.querySelector(`#scroll-mode .strana-svitku[data-page-number="${firstNumber}"]`);
       if (byNumber) return byNumber;
     }
     return null;
@@ -1469,7 +1543,7 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
   // stranou a teprve hotový se nasadí do src. V ten okamžik ho prohlížeč má v paměti
   // dekódovaný, takže se překreslí ve stejném snímku. (Skládat dva <img> přes sebe by
   // fungovalo taky, ale čtečka si na několika místech sahá na strany přes
-  // querySelectorAll('#scroll-mode img') a druhý obrázek v každém rámečku by jí ty
+  // querySelectorAll('#scroll-mode .strana-svitku') a druhý obrázek v každém rámečku by jí ty
   // výběry rozbil.)
   const viditelneStrany = new Set();
 
@@ -1518,7 +1592,7 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
 
   function sledujStranySvitku() {
     if (!hlidacViditelnosti) return;
-    document.querySelectorAll('#scroll-mode img').forEach(img => {
+    document.querySelectorAll('#scroll-mode .strana-svitku').forEach(img => {
       if (img.dataset.sledovana === '1') return;
       img.dataset.sledovana = '1';
       hlidacViditelnosti.observe(img);
@@ -1526,10 +1600,12 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
   }
 
   function applyZoom() {
-    const doublePage = document.querySelectorAll('#double-page img');
-    const scrollPages = document.querySelectorAll('#scroll-mode img');
+    const doublePage = [document.getElementById('left-page'), document.getElementById('right-page')];
+    const scrollPages = document.querySelectorAll('#scroll-mode .strana-svitku');
     const blankLeft = document.getElementById('left-page-blank');
     const blankRight = document.getElementById('right-page-blank');
+    const navrhLeft = document.getElementById('left-page-navrh');
+    const navrhRight = document.getElementById('right-page-navrh');
     const doubleBase = doublePageBaseWidth();
     const scrollBase = scrollPageBaseWidth();
 
@@ -1549,8 +1625,8 @@ let initialDoubleFitDone = false; // run auto-fit exactly once on initial load
     img.style.objectFit = 'contain';
     zajistiOstrost(img);
   });
-  // Size blank canvases to match images
-  [blankLeft, blankRight].forEach(el => {
+  // Size blank canvases (and design pages) to match images
+  [blankLeft, blankRight, navrhLeft, navrhRight].forEach(el => {
     if (!el) return;
     el.style.width = `${zoomDouble * doubleBase}px`;
     const ar = 2480/1748;
@@ -1729,7 +1805,7 @@ function autoScrollSecondsPerPage(sliderValue) {
 
 function autoScrollPageHeight() {
   // Výška jedné strany tak, jak je zrovna vykreslená - tedy včetně zoomu.
-  const img = document.querySelector('#scroll-mode img');
+  const img = document.querySelector('#scroll-mode .strana-svitku');
   const measured = img ? img.getBoundingClientRect().height : 0;
   const wrapper = document.querySelector('.zoom-scroll-wrapper');
   // Než se obrázky načtou, padáme zpět na výšku okna, ať se nikdy nedělí nulou
@@ -2230,7 +2306,7 @@ function scrollToTop() {
 
 function trackScrollPage() {
   const wrapper = document.querySelector('.zoom-scroll-wrapper');
-  const scrollImages = Array.from(document.querySelectorAll('#scroll-mode img'));
+  const scrollImages = Array.from(document.querySelectorAll('#scroll-mode .strana-svitku'));
 
   wrapper.addEventListener('scroll', () => {
     const wrapperMiddle = wrapper.scrollTop + wrapper.clientHeight / 2;
@@ -2248,4 +2324,7 @@ function trackScrollPage() {
   });
 }
 </script>
+{% if ma_navrhy %}
+<script type="module" src="{{ static_bust('js/strana/ctecka.js') }}"></script>
+{% endif %}
 {% endblock %}
