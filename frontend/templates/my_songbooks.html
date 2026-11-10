@@ -1073,7 +1073,8 @@ function openCreateModal() {
   try { ['front_outer','front_inner','back_inner','back_outer'].forEach(k => { const el = document.getElementById('erem-' + k); if (el) el.value = '0'; }); } catch(_) {}
   // Strany obsluhuje static/js/editor.js; u úprav je pak naplní openEditSongbookModal.
   EditorStran.zacni({ zpevnikId: window.__editMode ? window.__editBookId : null,
-                      verejny: MANAGE_PUBLIC, naObalku: vlozObalku, poZmene: obnovUlozit });
+                      verejny: MANAGE_PUBLIC, naObalku: vlozObalku, poZmene: obnovUlozit,
+                      smiNavrhovat: {{ 'true' if smi_navrhovat(current_user) else 'false' }} });
   // Reset heading/primary only when NOT in edit mode
   if (!window.__editMode) {
     const titleEl = document.getElementById('nb-title'); if (titleEl) titleEl.textContent = 'Nový zpěvník';
@@ -1907,7 +1908,7 @@ function openCreateModal() {
           if (face) face.style.backgroundImage = `url('/songbooks/${obalka.cesta}')`;
         });
         window.__editInfo = { cizi: !!z.cizi, vlastnik: z.vlastnik, clenu: z.clenu || 0 };
-        EditorStran.nacti(z.strany, z.prvni_cislo);
+        EditorStran.nacti(z.strany, z.prvni_cislo, { prvniStrana: z.prvni_strana });
         createDirty = false;
         obnovUlozit();
       });

@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="{{ static_bust('vendor/prosemirror/prosemirror.css') }}">
 <link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
 <link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
+{% if vlozeny %}
+{# V rámu nad editorem zpěvníku: bez lišty webu, přes celou výšku. #}
+<script>document.documentElement.classList.add('navrh-vlozeny');</script>
+{% endif %}
 <script type="importmap">
 {
   "imports": {
@@ -98,6 +102,12 @@
     <div class="skupina">
       <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
     </div>
+    {% if vlozeny %}
+    <div class="skupina hotovo-zrusit">
+      <button type="button" data-prikaz="zrusit">Zrušit</button>
+      <button type="button" class="hlavni" data-prikaz="hotovo" data-napoveda="Uložit stranu do zpěvníku (projeví se po Uložit v editoru zpěvníku)">Hotovo</button>
+    </div>
+    {% endif %}
   </div>
 
   <div class="navrh-plocha" id="navrh-plocha">
@@ -252,7 +262,7 @@
           <input type="color" data-cislo-pole="barva" aria-label="Barva čísla">
         </span>
       </div>
-      <div class="radek-pole">Ukázat jako
+      <div class="radek-pole jen-samostatne">Ukázat jako
         <span class="rez">
           <input type="number" data-nastaveni="nahledCisla" min="1" max="9999" step="1" class="cislo-nahledu" aria-label="Číslo strany v náhledu">
           <button type="button" class="prepinac-rez" data-nahled-strany="L" aria-label="Levá strana">L</button>
@@ -278,7 +288,7 @@
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
       </ul>
     </section>
-    <button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>
+    {% if not vlozeny %}<button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>{% endif %}
     </div>
   </aside>
 </div>

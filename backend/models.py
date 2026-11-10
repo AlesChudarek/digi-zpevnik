@@ -221,9 +221,12 @@ class NavrzenaStrana(db.Model):
     vytvoreno = db.Column(db.DateTime, nullable=False)
     zdroj = db.Column(db.Text, nullable=False)
     pdf_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=False, index=True)
+    # Malý náhled strany (PNG ~420 px) pro seznam stran v editoru zpěvníku.
+    nahled_id = db.Column(db.Integer, db.ForeignKey("images.id"), nullable=True, index=True)
     velikost = db.Column(db.Integer, nullable=False, default=0)
 
     pdf = db.relationship("Obrazek", foreign_keys=[pdf_id])
+    nahled = db.relationship("Obrazek", foreign_keys=[nahled_id])
     obrazky = db.relationship("Obrazek", secondary=navrh_obrazky)
 
 

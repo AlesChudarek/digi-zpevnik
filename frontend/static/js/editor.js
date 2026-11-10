@@ -48,7 +48,9 @@
       klic: dalsiKlic++,
       id: z.id == null ? null : z.id,
       image_id: z.image_id == null ? null : z.image_id,
-      nahled: z.nahled || null,
+      // Strana navržená v editoru stran (místo obrázku); náhled je malý obrázek verze.
+      navrzena_id: z.navrzena_id == null ? null : z.navrzena_id,
+      nahled: z.nahled || z.nahled_navrhu || null,
       obrazek: z.obrazek || z.nahled || null,
       soubor: null,
       verze: 0,                // roste s každou změnou obrázku; viz nahravej()
@@ -79,7 +81,7 @@
     var s = strany[i];
     if (jePokracovani(i)) return 'pokracovani';
     if (s.pisne.length) return 'pisen';
-    return (s.image_id || s.soubor) ? 'bez' : 'prazdna';
+    return (s.image_id || s.soubor || s.navrzena_id) ? 'bez' : 'prazdna';
   }
 
   // Blok = strana, která nepokračuje z předchozí, a všechny k ní připojené.
@@ -98,7 +100,8 @@
       return {
         id: s.id,
         typ: t,
-        image_id: t === 'prazdna' ? null : s.image_id,
+        image_id: t === 'prazdna' || s.navrzena_id ? null : s.image_id,
+        navrzena_id: t === 'prazdna' ? null : s.navrzena_id,
         popisek: s.pisne.length ? '' : s.popisek.trim(),
         pisne: s.pisne.map(function (p) {
           return { song_id: p.song_id, nazev: p.nazev.trim(), autor: p.autor.trim() };
@@ -126,7 +129,7 @@
       var p = [];
       if (s.stav === 'chyba') p.push('Obrázek se nepodařilo nahrát.');
       var potrebujeObrazek = s.pisne.length || jePokracovani(i);
-      if (potrebujeObrazek && !s.image_id && s.stav === 'hotovo') {
+      if (potrebujeObrazek && !s.image_id && !s.navrzena_id && s.stav === 'hotovo') {
         p.push('Strana s písní potřebuje obrázek.');
       }
       if (s.pisne.some(function (x) { return !x.nazev.trim(); })) {
@@ -529,23 +532,116 @@
     return b;
   }
 
+  // Tlačítko editoru stran: jen pro prémiové účty, ostatní ho vidí zašedlé s důvodem.
+  function tlacitkoNavrhu(trida, text) {
+    var b = tlacitko(trida, text, nastaveni.smiNavrhovat ? 'Navrhnout stranu v editoru stran (text a akordy)' : null);
+    if (!nastaveni.smiNavrhovat) {
+      b.disabled = true;
+      var obal = el('span', 'napoveda-duvod');
+      obal.setAttribute('data-napoveda', 'Navrhovat strany v editoru stran mohou prémiové účty.');
+      obal.appendChild(b);
+      return obal;
+    }
+    return b;
+  }
+
+  // ---------- editor stran (navržená strana) ----------
+  // Otevře se přes celé okno v rámu (iframe), ať se jeho CSS a skripty nepotkají se
+  // stránkou Moje zpěvníky. Hotovo uloží verzi na server a pošle sem její id; do
+  // zpěvníku se dostane až Uložit, stejně jako nahraný obrázek.
+
+  function stranaLP(i) {
+    var prvniVpravo = (nastaveni.prvniStrana || 'P') === 'P';
+    return (i % 2 === 0) === prvniVpravo ? 'P' : 'L';
+  }
+
+  function otevriNavrh(s) {
+    if (!nastaveni.smiNavrhovat) return;
+    var i = strany.indexOf(s);
+    var adresa = '/editor-strany?vlozeny=1&cislo=' + (prvniCislo() + i) + '&strana=' + stranaLP(i)
+      + (s.navrzena_id ? '&navrh=' + s.navrzena_id : '');
+    var okno = el('div', 'es-navrh-okno');
+    var ram = document.createElement('iframe');
+    ram.src = adresa;
+    ram.title = 'Editor stran';
+    okno.appendChild(ram);
+    document.body.appendChild(okno);
+    document.documentElement.classList.add('es-navrh-otevreny');
+    function zavri() {
+      window.removeEventListener('message', zprava);
+      okno.remove();
+      document.documentElement.classList.remove('es-navrh-otevreny');
+    }
+    function zprava(e) {
+      if (e.origin !== location.origin || e.source !== ram.contentWindow || !e.data || e.data.zdroj !== 'editor-strany') return;
+      if (e.data.typ === 'hotovo') {
+        s.navrzena_id = e.data.navrzena_id;
+        s.nahled = e.data.nahled;
+        s.obrazek = null;
+        s.image_id = null;
+        s.soubor = null;
+        vykresli();
+        if (nastaveni.poZmene) nastaveni.poZmene();
+        zavri();
+      } else if (e.data.typ === 'zavrit') {
+        zavri();
+      }
+    }
+    window.addEventListener('message', zprava);
+  }
+
+  function pridejNavrh(kam) {
+    var s = novaStrana();
+    vlozNa(kam, [s]);
+    vykresli();
+    otevriNavrh(s);
+  }
+
+  // Plus mezi stranami (i před první a za poslední): malá nabídka - prázdná strana,
+  // nebo strana navržená v editoru stran.
+  function nabidkaVlozeni(tl) {
+    var stara = document.querySelector('.es-nabidka-vlozeni');
+    if (stara) { var bylaU = stara.dataset.pred === tl.dataset.pred; stara.remove(); if (bylaU) return; }
+    var kam = Number(tl.dataset.pred);
+    var menu = el('div', 'es-nabidka-vlozeni');
+    menu.dataset.pred = tl.dataset.pred;
+    var prazdna = tlacitko('', 'Prázdná strana');
+    prazdna.addEventListener('click', function () { menu.remove(); pridejPrazdnou(kam); });
+    menu.appendChild(prazdna);
+    var navrh = tlacitkoNavrhu('', '✎ Navrhnout stranu');
+    var b = navrh.tagName === 'BUTTON' ? navrh : navrh.querySelector('button');
+    b.addEventListener('click', function () { menu.remove(); pridejNavrh(kam); });
+    menu.appendChild(navrh);
+    tl.parentNode.appendChild(menu);
+    var zavri = function (e) {
+      if (menu.contains(e.target) || e.target === tl) return;
+      menu.remove();
+      document.removeEventListener('pointerdown', zavri, true);
+    };
+    document.addEventListener('pointerdown', zavri, true);
+  }
+
   function vykresliStranu(s, i) {
     var div = el('div', 'es-strana' + (jePokracovani(i) ? ' pripojena' : ''));
     div.dataset.klic = s.klic;
 
-    var nahled = el('div', 'es-nahled');
+    var nahled = el('div', 'es-nahled' + (s.navrzena_id ? ' navrzena' : ''));
     if (s.nahled) {
       var img = document.createElement('img');
       img.src = s.nahled;
       img.alt = '';
       img.loading = 'lazy';
       nahled.appendChild(img);
-      nahled.setAttribute('data-napoveda', 'Zvětšit nebo vyměnit obrázek');
+      nahled.setAttribute('data-napoveda', s.navrzena_id ? 'Upravit stranu v editoru stran' : 'Zvětšit nebo vyměnit obrázek');
       nahled.tabIndex = 0;
       nahled.setAttribute('role', 'button');
+      if (s.navrzena_id) nahled.appendChild(el('span', 'es-znacka-navrhu', 'navržená'));
+    } else if (s.navrzena_id) {
+      nahled.appendChild(tlacitkoNavrhu('es-navrhnout', 'Upravit stranu'));
     } else {
       nahled.classList.add('bez-obrazku');
       nahled.appendChild(tlacitko('es-nahrat-obrazek', '+ obrázek', 'Nahrát obrázek strany'));
+      nahled.appendChild(tlacitkoNavrhu('es-navrhnout', '✎ navrhnout'));
     }
     nahled.appendChild(el('div', 'es-stav'));
     div.appendChild(nahled);
@@ -556,7 +652,8 @@
     if (jePokracovani(i)) {
       hlava.appendChild(el('span', 'es-navazuje'));
     } else if (!s.pisne.length) {
-      hlava.appendChild(el('span', 'es-popis-strany', s.nahled ? 'strana bez písně' : 'prázdná strana'));
+      hlava.appendChild(el('span', 'es-popis-strany', s.navrzena_id ? 'navržená strana bez písně'
+        : s.nahled ? 'strana bez písně' : 'prázdná strana'));
     }
     hlava.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
     telo.appendChild(hlava);
@@ -629,18 +726,22 @@
     if (window.Napoveda) Napoveda.skryj();
     seznam.textContent = '';
     var i = 0;
+    var mezera = function (pred, kraj) {
+      var m = el('li', 'es-mezera' + (kraj ? ' ' + kraj : ''));
+      var vl = tlacitko('es-vlozit', '+', 'Vložit sem stranu');
+      vl.dataset.pred = pred;
+      m.appendChild(vl);
+      seznam.appendChild(m);
+    };
+    // Plus i před první a za poslední stranou (dřív šlo jen mezi stranami).
+    if (strany.length) mezera(0, 'prvni');
     while (i < strany.length) {
       var b = blok(i);
-      if (i > 0) {
-        var mezera = el('li', 'es-mezera');
-        var vl = tlacitko('es-vlozit', '+', 'Vložit sem prázdnou stranu');
-        vl.dataset.pred = i;
-        mezera.appendChild(vl);
-        seznam.appendChild(mezera);
-      }
+      if (i > 0) mezera(i);
       seznam.appendChild(vykresliBlok(b[0], b[1]));
       i = b[1] + 1;
     }
+    if (strany.length) mezera(strany.length, 'posledni');
     var prazdno = $('es-prazdno');
     if (prazdno) prazdno.hidden = strany.length > 0;
     strany.forEach(prekresliStav);
@@ -804,7 +905,7 @@
     seznam.addEventListener('click', function (e) {
       var cil = e.target;
       var vlozit = cil.closest('.es-vlozit');
-      if (vlozit) { pridejPrazdnou(Number(vlozit.dataset.pred)); return; }
+      if (vlozit) { nabidkaVlozeni(vlozit); return; }
       var i = indexZ(cil);
       if (i < 0) return;
       var s = strany[i];
@@ -829,6 +930,8 @@
         zarad(s);
       } else if (je('es-nahrat-obrazek')) {
         vyberObrazek(s);
+      } else if (je('es-navrhnout') || (cil.closest('.es-nahled') && s.navrzena_id)) {
+        otevriNavrh(s);
       } else if (cil.closest('.es-nahled') && s.nahled) {
         otevriObrazek(s);
       }
@@ -998,6 +1101,7 @@
     // je tedy od začátku změněné - zavření se zeptá a Uložit svítí.
     nacti: function (seznam, prvni, volby) {
       seznam = seznam || [];
+      if (volby && volby.prvniStrana) nastaveni.prvniStrana = volby.prvniStrana;
       strany = seznam.map(function (z, i) {
         var s = novaStrana(z);
         s.pokracuje = !!(seznam[i + 1] && seznam[i + 1].typ === 'pokracovani');

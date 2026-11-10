@@ -65,6 +65,11 @@ Značky: `[ ]` nehotové, `[X]` hotové, `(?)` nejistý nebo neověřený zápis
       s kurzorem v okně), výběr zpěvníku v hledání i čtečce a obsah ve čtečce. Editor
       se na Esc ptá `jeOknoNahore()` (dashboard_base), ať nezavře sebe místo potvrzení
       nebo nápovědy nad sebou. Hlídá `test_editor_ui.py` a `test_napovedy.py`.
+- [X] **prázdná strana na začátek nebo konec zpěvníku** (9. 11., hotovo 10. 11. s bodem 11 krok 4). V editoru zpěvníku nejde
+      přidat prázdnou stranu úplně na začátek ani na konec. Tlačítko „+ Přidat stranu“ na
+      konci seznamu se skoro nepoužívá, strany se přidávají plusem mezi stranami. Vymyslet
+      lepší způsob přidávání (plus i před první a za poslední stranou?) - spolu s pohledem
+      Strany v editoru zpěvníku (bod 11, krok 4).
 
 ## Datový model
 
@@ -607,6 +612,12 @@ kdo maže.
 - [X] ~~(debata o rolích) **propagační řádek nebo vodoznak ve stažených souborech**~~
       (Aleš 14. 10.). Odkaz na web v rohu každé stažené strany; běžný uživatel vždy,
       admin nikdy, případně prémiový účet bez něj. Není priorita.
+- [ ] **přečíslování stran při exportu** (9. 11.). Nový zpěvník složený z písní, které mají
+      čísla stran zapečená ve skenu, má čísla nesouvislá. Volba exportu „přečíslovat
+      strany“: vlastní číslování a k tomu zakrytí starých čísel - číslo s barevným (bílým)
+      podkladem, nebo „záplata“ (barevný/bílý obdélník) na zvoleném místě, výchozím pro
+      všechny strany nebo zvlášť pro stranu. Navazuje na číslo strany jako vrstvu z editoru
+      stran (bod 11) - server ho do PDF dokresluje stejně.
 
 ## Mobil a vzhled
 
@@ -884,6 +895,12 @@ kdo maže.
       `posledni_prihlaseni`, zapisuje ho i první požadavek dne (`_zapis_aktivitu`), admin
       přihlášený jako uživatel ne. Stávající účty se počítají od prvního běhu. Smazání
       jde do záznamu zásahů jako „automaticky“.
+- [ ] **zpětná vazba od uživatelů** (9. 11.). Ikona komiksové bubliny v rohu webu (vlevo
+      dole) otevře okno, kam jde napsat cokoliv a odeslat. Nepřihlášený ji vidí vždy;
+      přihlášený ji může zaškrtnutím skrýt a pak ji najde v nabídce pod profilem (nový
+      řádek „Zpětná vazba“), případně jako ikonu v horní liště vedle výběru tématu. Admin
+      má ve Správě okno se zpětnými vazbami: stav u každé (vyřešeno, v procesu,
+      nepodstatné, zrušeno) nebo štítky, hledání a filtry.
 
 ## Obsah a prezentace
 
@@ -1102,14 +1119,18 @@ kdo maže.
          sjíždění), číslo a L/P z pozice
       3c. [ ] PDF: vektorové PDF navržené strany vyrobí prohlížeč při uložení strany;
          export skládá pypdf (vektorové i obrázkové strany, číslo, vodoznak, brožura)
-      4. [ ] pohled Strany v editoru zpěvníku (svitek, L/P, dvojstrana, Navrhnout/
-         Upravit stranu, Hotovo + Uložit, prémiová brána, zašedlé pro ostatní)
+      4. [X] editor zpěvníku (10. 11.): plus před první, mezi a za poslední stranou
+         s nabídkou Prázdná / Navrhnout stranu; u prázdné strany „✎ navrhnout“, u navržené
+         náhled se značkou a klik = Upravit. Editor stran se otevře v rámu (iframe,
+         `/editor-strany?vlozeny=1&navrh=&cislo=&strana=`) - Hotovo nahraje zdroj, PDF
+         a náhled (420 px) jako novou verzi, Uložit zpěvníku ji připojí. Číslo a L/P
+         z pozice. Bez prémia zašedlé. Test `test_navrh_zpevnik.py`.
+      4b. [ ] svitek všech stran uvnitř editoru stran a přepínač dvojstrany; záloha
+         rozpracované strany v režimu vložení
       5. [ ] šablona zpěvníku (styly pro celý zpěvník), číslo strany, obrázky
          v rámečcích + obtékání vlevo/vpravo, vodítka při přesunu rámečků
       6. [ ] ChordPro tam i zpět, vložení „akordů nad textem“ z webu
       7. [ ] nasazení pro prémiové účty
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-v editoru zpevniku se neda pridat prazdna stranka uplne na zacatek nebo konec. Tlacitko uplne na konci je v podstate nepouzivane, nejcasteji se pridava pluskem mezi stranami. Popremyslejme lepsi zpusob jak pridat stranu
-na konec pridat funkci u exportu - precislovani stranek. Tat ofunkce umozni pridat vlastni cislovani, ale taky moznost zakryt stare. Zaprve nove cislovani ma moznost barevneho pozadi (bile, neboli prekryje stare cislovani), ale taky pridani zaplaty (barevny/bily ctverecek umisteny na dane misto per page nebo defaultne) - aby se tim dal novy zpevnik vytvoreny z jinych pisni co uz maji baked in cisla precslovat.
-pridat tlacitko zpetne vazby - do rohu webu (treba vlevo dole) dat ikonu s komixovou bublinou, co otevre moznost zpetne vazby, kde uzivateli da moznost napsat cokoliv a pak odeslat. Tyto texty si pak admin muze otevrit v novem okne zpetne vazby a ke kazemu radku si zaskrtnout bud neco jak ovyreseno, v procesu, nepodstatne, nebo zrusit, nebo proste nejake dobre tagy. s vyhledavanim a filtry. Ikona pro uzivatele bez uctu je videt vzdy, pro prihlasene bude zaskrtavaci policko dale neukazovat na stane nebo nejak tak, a uz ikona uplne zmizi at nezavazi. Ale i tak vzdycky pujde stejne okno otevrit z nabidky pod profilem - nova radka se zpetnou vazbou. Pripadne jenom nove okno podobne vyberu tematu - ikona v horni liste s bublinou jen tam.
+v editoru kdyz je vybranz box, ma modry okraj a hornu dragable lištičku. to je super, ale lištička ma sirku okna bez toho obrysu, takze je vizualne moc uzka o tak 2 pixely

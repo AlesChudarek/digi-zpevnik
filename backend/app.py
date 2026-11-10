@@ -283,7 +283,7 @@ def zabrane_misto(user_id: int) -> int:
           AND NOT EXISTS (SELECT 1 FROM songbooks b WHERE i.id IN (b.cover_preview_id,
               b.cover_front_outer_id, b.cover_front_inner_id, b.cover_back_inner_id,
               b.cover_back_outer_id))
-          AND NOT EXISTS (SELECT 1 FROM navrzene_strany n WHERE n.pdf_id = i.id)
+          AND NOT EXISTS (SELECT 1 FROM navrzene_strany n WHERE i.id IN (n.pdf_id, n.nahled_id))
           AND NOT EXISTS (SELECT 1 FROM navrh_obrazky o WHERE o.image_id = i.id)"""),
         {'koren': f'uzivatele/{user_id}/%', 'minimum': MIN_CENA_STRANY}).scalar()
     celkem += db.session.execute(text("""
@@ -668,6 +668,11 @@ def _dopln_chybejici_sloupce():
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
+            navrhy_sl = {r[1] for r in db.session.execute(text("PRAGMA table_info(navrzene_strany)"))}
+            if navrhy_sl and 'nahled_id' not in navrhy_sl:
+                db.session.execute(text(
+                    "ALTER TABLE navrzene_strany ADD COLUMN nahled_id INTEGER REFERENCES images(id)"))
+                db.session.commit()
             strany_sl = {r[1] for r in db.session.execute(text("PRAGMA table_info(strany)"))}
             if strany_sl and 'navrzena_id' not in strany_sl:
                 db.session.execute(text(
@@ -1076,7 +1081,8 @@ def smaz_osirele_obrazky(kandidati):
     for obraz in Obrazek.query.filter(Obrazek.cesta.in_(kandidati)).all():
         pouzity = (
             db.session.query(Strana.id).filter_by(image_id=obraz.id).first()
-            or db.session.query(NavrzenaStrana.id).filter_by(pdf_id=obraz.id).first()
+            or db.session.query(NavrzenaStrana.id).filter(db.or_(
+                NavrzenaStrana.pdf_id == obraz.id, NavrzenaStrana.nahled_id == obraz.id)).first()
             or db.session.query(navrh_obrazky.c.navrzena_id).filter(navrh_obrazky.c.image_id == obraz.id).first()
             or db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == obraz.id,
@@ -2840,14 +2846,16 @@ def prehled_zpevniku_pro_spravu():
 
 @app.route('/editor-strany')
 @login_required
-@jen_admin
 def navrh_strany():
-    """Editor navržené strany s akordy - pokusná stránka (krok 1 bodu 11 v TODO).
+    """Editor navržené strany s akordy (bod 11 v TODO), jen pro prémiové účty.
 
-    Zatím jen pro admina a bez ukládání: strana zůstává v prohlížeči. Až bude editor
-    součástí editoru zpěvníku, tahle samostatná stránka zmizí (nebo z ní bude vstup
-    z lišty - zatím otevřené)."""
-    return render_template('navrh_strany.html')
+    S `?vlozeny=1` běží v rámu nad editorem zpěvníku: `navrh` = id verze k úpravě (bez
+    něj nová strana), `cislo` a `strana` (L/P) = pozice ve zpěvníku. Hotovo uloží verzi
+    na server a předá její id editoru zpěvníku. Samostatně (odkaz v liště, zatím jen
+    admin) je to pokusná stránka bez zpěvníku."""
+    if not smi_navrhovat(current_user):
+        abort(404)
+    return render_template('navrh_strany.html', vlozeny=request.args.get('vlozeny') == '1')
 
 
 @app.route('/sprava/zpevniky')
@@ -3613,7 +3621,7 @@ def strany_pro_editor(sb):
     for strana in sb.strany:
         zacinajici = [v for v in strana.pisne if v.poradi_v_pisni == 1]
         if not strana.pisne:
-            typ = 'bez' if strana.image_id else 'prazdna'
+            typ = 'bez' if (strana.image_id or strana.navrzena_id) else 'prazdna'
         elif len(zacinajici) < len(strana.pisne):
             typ = 'pokracovani'
         else:
@@ -3621,6 +3629,8 @@ def strany_pro_editor(sb):
         vysledek.append({
             'id': strana.id,
             'image_id': strana.image_id,
+            'navrzena_id': strana.navrzena_id,
+            'nahled_navrhu': url_nahledu_navrhu(strana.navrzena),
             'nahled': url_strany(strana.image_path) if strana.image_path else None,
             'obrazek': (url_for('serve_songbook_image', filename=strana.image_path)
                         if strana.image_path else None),
@@ -3660,6 +3670,9 @@ def nacti_zpevnik_pro_editor(songbook_id):
             'nazev': sb.title,
             'barva': sb.color or '#FFFFFF',
             'prvni_cislo': sb.prvni_cislo_strany or 1,
+            # Pro editor stran: číslo a levá/pravá strana podle pozice.
+            'prvni_strana': 'L' if (sb.first_page_side or 'right') == 'left' else 'P',
+            'smi_navrhovat': smi_navrhovat(current_user),
             'obalky': obalky,
             'strany': strany_pro_editor(sb),
         },
@@ -3677,6 +3690,7 @@ def _uklid_neulozenych_navrhu():
     cesty = []
     for n in stare:
         cesty.append(n.pdf.cesta if n.pdf else None)
+        cesty.append(n.nahled.cesta if n.nahled else None)
         cesty += [o.cesta for o in n.obrazky]
         n.obrazky = []
         db.session.delete(n)
@@ -3696,7 +3710,8 @@ def _uklid_neulozenych_stran():
     kandidati = _uklid_neulozenych_navrhu()
     for obraz in Obrazek.query.filter(
             ~db.session.query(Strana.id).filter(Strana.image_id == Obrazek.id).exists(),
-            ~db.session.query(NavrzenaStrana.id).filter(NavrzenaStrana.pdf_id == Obrazek.id).exists(),
+            ~db.session.query(NavrzenaStrana.id).filter(db.or_(
+                NavrzenaStrana.pdf_id == Obrazek.id, NavrzenaStrana.nahled_id == Obrazek.id)).exists(),
             ~db.session.query(navrh_obrazky.c.navrzena_id).filter(navrh_obrazky.c.image_id == Obrazek.id).exists(),
             ~db.session.query(Songbook.id).filter(db.or_(
                 Songbook.cover_preview_id == Obrazek.id,
@@ -3742,6 +3757,8 @@ def strany_pisne_pro_editor(song_id):
         strany.append({
             'id': None,
             'image_id': strana.image_id,
+            'navrzena_id': strana.navrzena_id,
+            'nahled_navrhu': url_nahledu_navrhu(strana.navrzena),
             'nahled': url_strany(strana.image_path) if strana.image_path else None,
             'obrazek': (url_for('serve_songbook_image', filename=strana.image_path)
                         if strana.image_path else None),
@@ -3815,6 +3832,7 @@ NAVRH_MAX_ZDROJ = 2 * 1024 * 1024
 NAVRH_MAX_PDF = 5 * 1024 * 1024
 NAVRH_MAX_OBRAZEK = 8 * 1024 * 1024
 NAVRH_MAX_STYLY = 256 * 1024
+NAVRH_MAX_NAHLED = 1024 * 1024
 NAVRH_VERZE_ZDROJE = {2}
 RE_OBRAZEK_NAVRHU = re.compile(r'^/navrh/obrazek/(\d+)$')
 
@@ -3867,6 +3885,9 @@ def _uloz_soubor_navrhu(data: bytes, pripona: str) -> Obrazek:
     obraz = Obrazek.ziskej(rel)
     obraz.velikost = len(data)
     return obraz
+
+
+app.jinja_env.globals['smi_navrhovat'] = smi_navrhovat
 
 
 @app.route('/api/navrh/obrazek', methods=['POST'])
@@ -3950,17 +3971,25 @@ def uloz_navrzenou_stranu():
         if obraz is None or not _smi_videt_obrazek_navrhu(current_user, obraz):
             return jsonify({'ok': False, 'error': 'Strana odkazuje na obrázek, který není dostupný.'}), 400
         obrazky.append(obraz)
+    data_nahledu = None
+    nahled = request.files.get('nahled')
+    if nahled:
+        data_nahledu = nahled.read(NAVRH_MAX_NAHLED + 1)
+        if len(data_nahledu) > NAVRH_MAX_NAHLED or zkontroluj_format(data_nahledu) != 'PNG':
+            return jsonify({'ok': False, 'error': 'Náhled strany musí být PNG do 1 MB.'}), 400
     _uklid_neulozenych_stran()
     soubor_pdf = _uloz_soubor_navrhu(data_pdf, '.pdf')
-    velikost = (len(zdroj_text.encode('utf-8')) + len(data_pdf)
+    soubor_nahledu = _uloz_soubor_navrhu(data_nahledu, '.png') if data_nahledu else None
+    velikost = (len(zdroj_text.encode('utf-8')) + len(data_pdf) + len(data_nahledu or b'')
                 + sum(o.velikost or 0 for o in obrazky))
     navrh = NavrzenaStrana(vlastnik_id=current_user.id, vytvoreno=datetime.now(),
                            zdroj=json.dumps(zdroj, ensure_ascii=False, separators=(',', ':')),
-                           pdf=soubor_pdf, velikost=velikost)
+                           pdf=soubor_pdf, nahled=soubor_nahledu, velikost=velikost)
     navrh.obrazky = obrazky
     db.session.add(navrh)
     db.session.commit()
-    return jsonify({'ok': True, 'id': navrh.id, 'velikost': velikost})
+    return jsonify({'ok': True, 'id': navrh.id, 'velikost': velikost,
+                    'nahled': url_nahledu_navrhu(navrh)})
 
 
 @app.route('/api/navrh/strana/<int:navrh_id>')
@@ -3980,6 +4009,19 @@ def pdf_navrzene_strany(navrh_id):
     if not smi_videt_navrh(current_user, navrh):
         return ("Not Found", 404)
     return send_from_directory(str(IMAGES_DIR), navrh.pdf.cesta, mimetype='application/pdf')
+
+
+def url_nahledu_navrhu(navrh):
+    return url_for('nahled_navrzene_strany', navrh_id=navrh.id) if navrh and navrh.nahled_id else None
+
+
+@app.route('/navrh/strana/<int:navrh_id>/nahled.png')
+@login_required
+def nahled_navrzene_strany(navrh_id):
+    navrh = db.session.get(NavrzenaStrana, navrh_id)
+    if not smi_videt_navrh(current_user, navrh) or navrh.nahled is None:
+        return ("Not Found", 404)
+    return send_from_directory(str(IMAGES_DIR), navrh.nahled.cesta, mimetype='image/png')
 
 
 @app.route('/api/navrh/styly', methods=['GET', 'PUT'])
@@ -4111,14 +4153,21 @@ def _uloz_strany(sb, data, koren, ke_smazani):
             strana = Strana(songbook_id=sb.id, poradi=docasne)
             db.session.add(strana)
 
-        # Obrázek
-        if typ == 'prazdna':
-            novy_obrazek = None
-        else:
+        # Obrázek, nebo navržená strana (editor stran)
+        novy_obrazek = novy_navrh = None
+        if typ != 'prazdna':
             image_id = polozka.get('image_id')
-            if not image_id:
+            navrzena_id = polozka.get('navrzena_id')
+            if navrzena_id:
+                if navrzena_id == strana.navrzena_id:
+                    novy_navrh = strana.navrzena
+                else:
+                    novy_navrh = db.session.get(NavrzenaStrana, navrzena_id)
+                    if novy_navrh is None or not smi_videt_navrh(current_user, novy_navrh):
+                        raise ChybaEditoru(f'Navržená strana {i} nejde použít.')
+            elif not image_id:
                 raise ChybaEditoru(f'Strana {i} nemá obrázek.')
-            if image_id == strana.image_id:
+            elif image_id == strana.image_id:
                 novy_obrazek = strana.image
             else:
                 novy_obrazek = _smi_pouzit_obrazek(image_id, sb, koren)
@@ -4127,6 +4176,7 @@ def _uloz_strany(sb, data, koren, ke_smazani):
         if strana.image_path and (novy_obrazek is None or novy_obrazek.id != strana.image_id):
             ke_smazani.add(strana.image_path)
         strana.image = novy_obrazek
+        strana.navrzena = novy_navrh
         # Popisek má strana bez písně, s obrázkem i bez něj („Rejstřík“, „Poznámky“).
         strana.popisek = (((polozka.get('popisek') or '').strip() or None)
                           if typ in ('bez', 'prazdna') else None)

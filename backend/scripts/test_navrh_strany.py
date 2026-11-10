@@ -2,8 +2,8 @@
 """Přejímací test editoru navržené strany (TODO bod 11, krok 1): akordy ukotvené ke znaku.
 
 Měří v Chromiu, Firefoxu i WebKitu (Safari) - o tom, jestli se akord drží svého znaku,
-rozhoduje rozložení v prohlížeči, ne kód. Stránka nic neukládá do databáze; kopie DB je
-tu jen kvůli přihlášení.
+rozhoduje rozložení v prohlížeči, ne kód. Server běží v procesu nad kopií databáze
+a klonem obrázků - editor nahrává obrázky stran na server.
 
     python backend/scripts/test_navrh_strany.py [chromium firefox webkit]
 """
@@ -112,6 +112,10 @@ def otevri_editor(page, base):
     page.goto(base + '/editor-strany')
     page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
     page.evaluate('localStorage.clear()')
+    # Knihovna stylů je u účtu na serveru a prohlížeče se v testu střídají na jednom
+    # účtu - každý začne s výchozími styly.
+    page.evaluate("""fetch('/api/navrh/styly', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ styly: {} }) })""")
     page.reload()
     page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
     page.evaluate(POMOCNE)
@@ -750,13 +754,43 @@ def test_akordy(p, base):
 
 
 def main():
+    """Server běží v tomhle procesu nad kopií databáze a klonem obrázků: editor nahrává
+    obrázky stran na server (/api/navrh/obrazek), a to nesmí sáhnout na skutečná data."""
+    import logging
+    import os
+    import subprocess
+    import threading
     prohlizece = sys.argv[1:] or ['chromium', 'firefox', 'webkit']
     tmp = Path(tempfile.mkdtemp(prefix='navrh-'))
     db = tmp / 'navrh.db'
     with sqlite3.connect(str(PROJECT_ROOT / 'backend' / 'instance' / 'zpevnik.db')) as zdroj, \
             sqlite3.connect(str(db)) as cil:
         zdroj.backup(cil)
-    server, base = T.start_server(db)
+    os.environ['DATABASE_URL'] = f'sqlite:///{db}'
+    os.environ.setdefault('FLASK_SECRET_KEY', 'navrh-strany')
+    sys.path.insert(0, str(PROJECT_ROOT))
+    import backend.app as A
+    from werkzeug.security import generate_password_hash
+    from werkzeug.serving import make_server
+    obrazky = tmp / 'images'
+    if subprocess.run(['cp', '-cR', str(A.IMAGES_DIR), str(obrazky)], capture_output=True).returncode != 0:
+        shutil.copytree(A.IMAGES_DIR, obrazky)
+    A.IMAGES_DIR = obrazky
+    A.schedule_export_warm = lambda *a, **k: None
+    A.dopocitej_nahledy = lambda *a, **k: None
+    with A.app.app_context():
+        for e in ('admin@test.com', 'user@test.com'):
+            u = A.User.query.filter_by(email=e).first()
+            u.password = generate_password_hash(T.PASSWORD, method='pbkdf2:sha256:1000')
+            # Lokální data se mění pod rukama (vlastní limity ze zkoušení správy) - test
+            # nesmí záviset na tom, kolik má admin zrovna místa.
+            u.limit_mista = None
+            u.zablokovan = False
+        A.db.session.commit()
+    logging.getLogger('werkzeug').setLevel(logging.ERROR)
+    server = make_server('127.0.0.1', T.PORT, A.app, threaded=True)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f'http://127.0.0.1:{T.PORT}'
     try:
         with sync_playwright() as p:
             test_pristup(p, base)
@@ -765,7 +799,7 @@ def main():
                 test_prohlizece(p, base, jmeno)
             test_zlomy(p, base, prohlizece)
     finally:
-        server.terminate()
+        server.shutdown()
         shutil.rmtree(tmp, ignore_errors=True)
     if selhani:
         print(f"\n❌ Selhalo {len(selhani)}:", *selhani, sep="\n  ")

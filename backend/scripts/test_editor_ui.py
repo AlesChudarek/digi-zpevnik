@@ -191,7 +191,7 @@ def main():
         zkontroluj(navaz == "pokračuje „Píseň A1“", "a mění se s psaním názvu", navaz)
         bloky = page.locator("#es-seznam .es-blok")
         zkontroluj(bloky.nth(0).locator(".es-drzadlo").count() == 1
-                   and page.locator("#es-seznam .es-mezera").count() == 1,
+                   and page.locator("#es-seznam .es-mezera:not(.prvni):not(.posledni)").count() == 1,
                    "blok má jedno držadlo a uvnitř se nic nevkládá")
         strana(page, 2).locator(".es-odebrat-pisen").click()
         zkontroluj(strana(page, 2).locator(".es-popis-strany").inner_text() == "strana bez písně",
