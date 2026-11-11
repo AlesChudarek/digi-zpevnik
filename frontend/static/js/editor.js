@@ -226,6 +226,7 @@
     s.verze++;
     s.soubor = f;
     s.image_id = null;
+    s.navrzena_id = null;     // obrázek nahradí i navrženou stranu
     s.nahled = s.obrazek = URL.createObjectURL(f);
   }
 
@@ -540,13 +541,27 @@
   // Tlačítko editoru stran: jen pro prémiové účty, ostatní ho vidí zašedlé s důvodem.
   function tlacitkoNavrhu(trida, text) {
     var b = tlacitko(trida, text, nastaveni.smiNavrhovat ? 'Navrhnout stranu v editoru stran (text a akordy)' : null);
-    if (!nastaveni.smiNavrhovat) {
-      b.disabled = true;
-      var obal = el('span', 'napoveda-duvod');
-      obal.setAttribute('data-napoveda', 'Navrhovat strany v editoru stran mohou prémiové účty.');
-      obal.appendChild(b);
-      return obal;
-    }
+    return nastaveni.smiNavrhovat ? b : zasedle(b, 'Navrhovat strany v editoru stran mohou prémiové účty.');
+  }
+
+  // Zašedlé tlačítko s důvodem v nápovědě (na zakázaném tlačítku by se neukázala).
+  function zasedle(b, duvod) {
+    b.disabled = true;
+    b.removeAttribute('data-napoveda');
+    var obal = el('span', 'napoveda-duvod');
+    obal.setAttribute('data-napoveda', duvod);
+    obal.appendChild(b);
+    return obal;
+  }
+
+  // Ikonové tlačítko v hlavičce strany; text je v nápovědě a pro čtečky obrazovky.
+  function ikonoveTlacitko(trida, ikona, popis) {
+    var b = tlacitko(trida + ' es-ikona', null, popis);
+    b.setAttribute('aria-label', popis);
+    var obr = document.createElement('img');
+    obr.src = ikona;
+    obr.alt = '';
+    b.appendChild(obr);
     return b;
   }
 
@@ -601,6 +616,8 @@
     var div = el('div', 'es-strana' + (jePokracovani(i) ? ' pripojena' : ''));
     div.dataset.klic = s.klic;
 
+    // Náhled vlevo je jen náhled strany: klik ji zvětší (lupa ukáže celou stranu).
+    // Akce (obrázek, editor stran) jsou v hlavičce vedle ✕.
     var nahled = el('div', 'es-nahled' + (s.navrzena_id ? ' navrzena' : ''));
     if (s.nahled) {
       var img = document.createElement('img');
@@ -608,17 +625,15 @@
       img.alt = '';
       img.loading = 'lazy';
       nahled.appendChild(img);
-      nahled.setAttribute('data-napoveda', s.navrzena_id ? 'Upravit stranu v editoru stran' : 'Zvětšit nebo vyměnit obrázek');
+      nahled.setAttribute('data-napoveda', 'Zvětšit stranu');
       nahled.tabIndex = 0;
       nahled.setAttribute('role', 'button');
-      if (s.navrzena_id) nahled.appendChild(el('span', 'es-znacka-navrhu', 'navržená'));
-    } else if (s.navrzena_id) {
-      nahled.appendChild(tlacitkoNavrhu('es-navrhnout', 'Upravit stranu'));
     } else {
+      // Ikona jako pozadí, ne <img>: obrázky v náhledech jsou jen strany.
       nahled.classList.add('bez-obrazku');
-      nahled.appendChild(tlacitko('es-nahrat-obrazek', '+ obrázek', 'Nahrát obrázek strany'));
-      nahled.appendChild(tlacitkoNavrhu('es-navrhnout', '✎ navrhnout'));
+      nahled.appendChild(el('span', 'es-prazdna-ikona'));
     }
+    if (s.navrzena_id) nahled.appendChild(el('span', 'es-znacka-navrhu', 'navržená'));
     nahled.appendChild(el('div', 'es-stav'));
     div.appendChild(nahled);
 
@@ -631,7 +646,17 @@
       hlava.appendChild(el('span', 'es-popis-strany', s.navrzena_id ? 'navržená strana bez písně'
         : s.nahled ? 'strana bez písně' : 'prázdná strana'));
     }
-    hlava.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
+    var ikony = nastaveni.ikony || {};
+    var akceStrany = el('span', 'es-akce-strany');
+    akceStrany.appendChild(ikonoveTlacitko('es-nahrat-obrazek', ikony.obrazek,
+      s.nahled && !s.navrzena_id ? 'Vyměnit obrázek strany' : 'Nahrát obrázek strany'));
+    var tuzka = ikonoveTlacitko('es-navrhnout', ikony.upravit, s.navrzena_id ? 'Upravit stranu v editoru stran'
+      : 'Navrhnout stranu v editoru stran (text a akordy)');
+    if (!nastaveni.smiNavrhovat) tuzka = zasedle(tuzka, 'Navrhovat strany v editoru stran mohou prémiové účty.');
+    else if (s.image_id || s.soubor) tuzka = zasedle(tuzka, 'Stranu s nahraným obrázkem půjde v editoru stran upravit později.');
+    akceStrany.appendChild(tuzka);
+    akceStrany.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
+    hlava.appendChild(akceStrany);
     telo.appendChild(hlava);
 
     s.pisne.forEach(function (p, pi) {
@@ -790,17 +815,69 @@
 
   // ---------- zvětšení a výměna obrázku ----------
 
+  // Lupa ukáže celou stranu (list A5), ne holý obrázek - obrázek na šířku si jinak na
+  // straně nejde představit. Navržená strana se do listu nakreslí z textu stejně jako ve
+  // čtečce; do té doby je tam její malý náhled.
   function otevriObrazek(s) {
     var okno = $('es-lupa');
     if (!okno) return;
+    var list = okno.querySelector('.es-lupa-strana');
+    list.classList.remove('ostra');
+    var stary = list.querySelector('.es-lupa-text');
+    if (stary) stary.remove();
     okno.querySelector('img').src = s.obrazek || s.nahled;
     okno.dataset.klic = s.klic;
+    okno.classList.toggle('navrzena', !!s.navrzena_id);
+    okno.classList.toggle('lze-navrhovat', !!nastaveni.smiNavrhovat);
     okno.hidden = false;
+    if (s.navrzena_id) vykresliNavrhDoLupy(s.navrzena_id, list, String(s.klic));
+  }
+
+  function nactiCssStrany() {
+    (nastaveni.cssStrany || []).forEach(function (href) {
+      if (document.querySelector('link[href="' + href + '"]')) return;
+      var l = document.createElement('link');
+      l.rel = 'stylesheet';
+      l.href = href;
+      document.head.appendChild(l);
+    });
+  }
+
+  function vykresliNavrhDoLupy(id, list, klic) {
+    if (!nastaveni.modulVykresleni) return;
+    nactiCssStrany();
+    var okno = $('es-lupa');
+    Promise.all([
+      import(nastaveni.modulVykresleni),
+      fetch('/api/navrh/strana/' + id, { credentials: 'same-origin' }).then(function (r) { return r.json(); }),
+    ]).then(function (v) {
+      var m = v[0], d = v[1];
+      if (okno.hidden || okno.dataset.klic !== klic || !d.ok) return;
+      var koren = m.vykresliStranu(d.zdroj, {});
+      var drzak = el('div', 'es-lupa-text');
+      drzak.appendChild(koren);
+      list.appendChild(drzak);
+      var f = m.formatStrany(d.zdroj.nastaveni);
+      var k = list.clientWidth / (f.sirka * m.MM_NA_PX);
+      koren.style.transform = 'scale(' + k + ')';
+      // Ukázat až s načtenými písmy, ať text neposkočí.
+      void koren.offsetHeight;
+      return Promise.all(Array.from(m.pouzitaPisma(d.zdroj)).map(function (r) {
+        return document.fonts.load("12px '" + r + "'").catch(function () {});
+      })).then(function () { return m.dokonciStranu(koren, d.zdroj, k); }).then(function () {
+        if (okno.dataset.klic === klic) list.classList.add('ostra');
+      });
+    }).catch(function (chyba) { console.warn('Navržená strana se v lupě nenakreslila', chyba); });
   }
 
   function zavriObrazek() {
     var okno = $('es-lupa');
-    if (okno) { okno.hidden = true; okno.querySelector('img').removeAttribute('src'); }
+    if (okno) {
+      okno.hidden = true;
+      okno.querySelector('img').removeAttribute('src');
+      var text = okno.querySelector('.es-lupa-text');
+      if (text) text.remove();
+    }
   }
 
   // Strana přijde o obrázek a zůstane z ní prázdná (písně a popisek jí zůstanou).
@@ -871,6 +948,8 @@
     var vyber = $('es-soubory');
 
     $('es-pridat').addEventListener('click', function () { pridejPrazdnou(null); });
+    // „nebo navrhnout v editoru stran“: nová strana na konec zpěvníku, rovnou v editoru.
+    if ($('es-navrhnout-novou')) $('es-navrhnout-novou').addEventListener('click', function () { pridejNavrh(strany.length); });
     $('es-nahrat').addEventListener('click', function () { vyber.click(); });
     vyber.addEventListener('change', function () {
       if (vyber.files && vyber.files.length) pridejSoubory(vyber.files, null);
@@ -905,8 +984,10 @@
       } else if (je('es-znovu')) {
         zarad(s);
       } else if (je('es-nahrat-obrazek')) {
-        vyberObrazek(s);
-      } else if (je('es-navrhnout') || (cil.closest('.es-nahled') && s.navrzena_id)) {
+        if (!s.navrzena_id) vyberObrazek(s);
+        else window.showConfirm('Navržená strana se nahradí obrázkem (projeví se po uložení zpěvníku).', 'Vybrat obrázek')
+          .then(function (ano) { if (ano) vyberObrazek(s); });
+      } else if (je('es-navrhnout')) {
         otevriNavrh(s);
       } else if (cil.closest('.es-nahled') && s.nahled) {
         otevriObrazek(s);
@@ -1031,7 +1112,8 @@
     var lupa = $('es-lupa');
     lupa.addEventListener('click', function (e) {
       var s = najdi(Number(lupa.dataset.klic));
-      if (e.target.closest('.es-vymenit') && s) vyberObrazek(s);
+      if (e.target.closest('.es-upravit-navrh') && s) { zavriObrazek(); otevriNavrh(s); }
+      else if (e.target.closest('.es-vymenit') && s) vyberObrazek(s);
       else if (e.target.closest('.es-odebrat-obrazek') && s) odeberObrazek(s);
       else if (e.target === lupa || e.target.closest('.es-zavrit')) zavriObrazek();
     });

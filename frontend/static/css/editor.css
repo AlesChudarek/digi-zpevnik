@@ -70,7 +70,6 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 }
 .es-nahled img { width: 100%; height: 100%; object-fit: contain; display: block; }
 .es-nahled.bez-obrazku { cursor: default; box-shadow: none; border: 1px dashed var(--muted-border, #dbeadf); background: transparent; }
-.es-nahrat-obrazek { font-size: 11px; padding: 4px; border: none; background: none; color: var(--brand-dark, #1b5e20); cursor: pointer; text-decoration: underline; }
 .es-stav { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; line-height: 1.2; text-align: center; background: rgba(255, 255, 255, 0.9); color: var(--brand-dark, #1b5e20); }
 .es-stav:empty { display: none; }
 .es-strana.chyba-nahrani .es-stav { color: var(--es-chyba, #b3261e); }
@@ -78,10 +77,23 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 .es-strana.nahrava .es-nahled img { opacity: 0.55; }
 
 .es-telo { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.es-hlava-strany { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+/* Na úzkém displeji se akce (ikony a ✕) zalomí pod popis, ať se popis nemačká vedle
+   nich po písmenech. */
+.es-hlava-strany { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-height: 28px; }
 .es-cislo { font-weight: 700; min-width: 2ch; }
-.es-navazuje, .es-popis-strany { font-size: 14px; font-style: italic; opacity: 0.85; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-.es-hlava-strany .es-odebrat { margin-left: auto; }
+.es-navazuje, .es-popis-strany { font-size: 14px; font-style: italic; opacity: 0.85; flex: 1 1 8em; min-width: 0; overflow-wrap: anywhere; }
+/* Akce strany vpravo v hlavičce: obrázek, editor stran, ✕ (ikony, text v nápovědě). */
+.es-akce-strany { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; flex: 0 0 auto; }
+.es-ikona {
+  width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--muted-border, #dbeadf);
+  background: #fff; cursor: pointer; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+}
+.es-ikona img { width: 16px; height: 16px; display: block; }
+.es-ikona:disabled { cursor: not-allowed; opacity: 0.4; }
+.es-prazdna-ikona {
+  width: 28px; height: 28px; opacity: 0.35; pointer-events: none;
+  background: var(--ikona-prazdna) center / contain no-repeat;
+}
 
 .es-pisen { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; gap: 8px; align-items: center; }
 .es-pisen input, .es-popisek {
@@ -118,7 +130,9 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 .es-retez { font-size: 15px; opacity: 0.55; }
 .es-spojit.zapnuto .es-retez { opacity: 1; }
 
-.es-akce { display: flex; flex-direction: column; gap: 4px; }
+/* Šipky bloku: horní je na stejné vodorovné jako ✕ v hlavičce první strany (strana má
+   nahoře 2px odsazení). */
+.es-akce { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
 .es-akce button, .es-odebrat, .es-odebrat-pisen {
   width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--muted-border, #dbeadf);
   background: #fff; color: var(--brand-dark, #1b5e20); cursor: pointer; font-size: 14px; line-height: 1; padding: 0;
@@ -153,7 +167,20 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 
 .es-lupa { position: fixed; inset: 0; z-index: 5000; background: rgba(0, 0, 0, 0.7); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; }
 .es-lupa[hidden] { display: none; }
-.es-lupa img { max-width: min(92vw, 900px); max-height: 80vh; object-fit: contain; background: #fff; border-radius: 6px; }
+/* Lupa: celá strana jako list (poměr A5 jako ve čtečce), obrázek v ní, navržená strana
+   nakreslená z textu přes náhled. */
+.es-lupa-strana {
+  position: relative; overflow: hidden; background: #fff; border-radius: 6px;
+  height: min(80vh, calc(92vw * 2480 / 1748)); aspect-ratio: 1748 / 2480;
+}
+.es-lupa-strana > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.es-lupa-text { position: absolute; left: 0; top: 0; visibility: hidden; }
+.es-lupa-text .stranka { box-shadow: none; }
+.es-lupa-strana.ostra .es-lupa-text { visibility: visible; }
+.es-lupa-strana.ostra > img { visibility: hidden; }
+.es-lupa .es-upravit-navrh { display: none; }
+.es-lupa.navrzena.lze-navrhovat .es-upravit-navrh { display: inline-block; }
+.es-lupa.navrzena .es-vymenit, .es-lupa.navrzena .es-odebrat-obrazek { display: none; }
 .es-lupa-akce { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
 /* Dialog importu PDF a ZIP. Leží na <body> nad oknem zpěvníku. */
@@ -197,32 +224,18 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
   .es-odebrat, .es-odebrat-pisen { width: 36px; height: 36px; }
   .es-mezera { height: 36px; }
   .es-vlozit { width: 32px; height: 32px; }
-  .es-dalsi-pisen, .es-nahrat, .es-nahrat-obrazek { padding: 10px 0; }
+  .es-dalsi-pisen, .es-nahrat { padding: 10px 0; }
   .es-pridat-stranu { padding: 10px 8px; }
   .es-prvni input { padding: 9px 8px; }
 }
 
 /* --- Editor stran (navržená strana) - TODO bod 11 ------------------------------------- */
-/* Navržená strana se klikem otevře k úpravě, ne ke zvětšení: kurzor tužka (tatáž ikona
-   jako v editoru stran), kde vlastní kurzor nejde, aspoň ruka. Hrot tužky je vlevo dole. */
-.es-nahled.navrzena {
-  position: relative;
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linejoin='round' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='4'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3C/g%3E%3Cg stroke='%23000' stroke-width='1.6'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3Cpath d='m13 7 4 4'/%3E%3C/g%3E%3C/svg%3E") 4 20, pointer;
-}
+.es-nahled.navrzena { position: relative; }
 .es-znacka-navrhu {
   position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
   padding: 1px 5px; border-radius: 999px; white-space: nowrap; line-height: 1.35;
   background: #1a73e8; color: #fff; font-size: 11px; font-weight: 600; pointer-events: none;
 }
-/* Prázdná strana: „+ obrázek“ a „✎ navrhnout“ pod sebou (vedle sebe se do náhledu
-   nevejdou a první by zmizelo za okraj). */
-.es-nahled.bez-obrazku { flex-direction: column; gap: 2px; }
-/* Bez odsazení po stranách a nezalomené: „✎ navrhnout“ má 61 px, náhled 64 px (s odsazením
-   69 px a ikona skončila na jiném řádku než slovo). Na telefonu je náhled 48 px, tam se
-   zalomit musí. */
-.es-navrhnout { font-size: 11px; padding: 4px 0; border: none; background: none; color: var(--brand-dark, #1b5e20); cursor: pointer; text-decoration: underline; white-space: nowrap; }
-@media (max-width: 560px) { .es-navrhnout { white-space: normal; } }
-.es-navrhnout:disabled { color: var(--muted-text, #888); cursor: not-allowed; text-decoration: none; }
 /* Plus mezi stranami (i na začátku a na konci) s nabídkou. */
 .es-mezera { position: relative; }
 .es-nabidka-vlozeni {

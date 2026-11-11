@@ -142,11 +142,21 @@ def main():
                page.locator(".es-nabidka-vlozeni button").all_inner_texts())
             page.click(".es-nabidka-vlozeni button:has-text('Prázdná strana')")
             ok("prázdná strana se přidá na konec", page.locator("#es-seznam .es-strana").count() == 3)
-            radky = page.evaluate("""(() => { const b = document.querySelector('#es-seznam .es-nahled.bez-obrazku .es-navrhnout');
-              const r = document.createRange(); r.selectNodeContents(b);
-              const n = b.closest('.es-nahled').getBoundingClientRect(), t = r.getBoundingClientRect();
-              return [r.getClientRects().length, Math.round(t.width), Math.round(n.width)]; })()""")
-            ok("„✎ navrhnout“ je na jednom řádku a vejde se do náhledu", radky[0] == 1 and radky[1] <= radky[2], radky)
+            radek = page.evaluate("""(() => { const st = document.querySelector('#es-seznam .es-strana');
+              const r = (sel) => st.querySelector(sel).getBoundingClientRect();
+              const blok = st.closest('.es-blok'), nahoru = blok.querySelector('.es-nahoru').getBoundingClientRect();
+              const x = r('.es-odebrat'), o = r('.es-nahrat-obrazek'), t = r('.es-navrhnout');
+              return { ikony: [o.top, t.top, x.top].map(Math.round), poradi: o.right <= t.left && t.right <= x.left,
+                       nahoruVsKriz: Math.round((nahoru.top - x.top) * 10) / 10,
+                       prazdnaIkona: !!st.querySelector('.es-nahled .es-prazdna-ikona'),
+                       obrazkuVNahledu: st.querySelectorAll('.es-nahled img').length,
+                       popisky: [...st.querySelectorAll('.es-akce-strany button')].map(b => b.getAttribute('aria-label') || b.textContent) }; })()""")
+            ok("u strany jsou vpravo ikony obrázek a tužka a pak ✕, v jedné řadě",
+               len(set(radek["ikony"])) == 1 and radek["poradi"], radek)
+            ok("šipka výš je na stejné vodorovné jako ✕", abs(radek["nahoruVsKriz"]) <= 0.5, radek["nahoruVsKriz"])
+            ok("prázdná strana má v náhledu ikonu, ne obrázek", radek["prazdnaIkona"] and radek["obrazkuVNahledu"] == 0, radek)
+            ok("ikony mají popisek", radek["popisky"][:2] == ["Nahrát obrázek strany", "Navrhnout stranu v editoru stran (text a akordy)"],
+               radek["popisky"])
 
             print("\n── navrhnout novou stranu (zpěvník má neuložené změny) ──")
             page.click("#es-seznam .es-mezera.prvni .es-vlozit")
@@ -216,8 +226,23 @@ def main():
               const z = n.querySelector('.es-znacka-navrhu').getBoundingClientRect(), b = n.getBoundingClientRect();
               return [Math.round(((z.left + z.right) / 2 - (b.left + b.right) / 2) * 10) / 10, Math.round(z.width), Math.round(b.width)]; })()""")
             ok("štítek „navržená“ je na středu náhledu a vejde se", abs(znacka[0]) <= 0.5 and znacka[1] <= znacka[2], znacka)
-
             page.locator("#es-seznam .es-strana").first.locator(".es-nahled").click()
+            page.wait_for_selector("#es-lupa:not([hidden])")
+            page.wait_for_selector("#es-lupa .es-lupa-strana.ostra", timeout=20000)
+            lupa = page.evaluate("""(() => { const l = document.querySelector('#es-lupa .es-lupa-strana').getBoundingClientRect();
+              const t = document.querySelector('#es-lupa .es-lupa-text .stranka');
+              const vid = (sel) => getComputedStyle(document.querySelector('#es-lupa ' + sel)).display !== 'none';
+              return { pomer: Math.round(l.height / l.width * 1000) / 1000, text: t ? t.innerText : '',
+                       sirka: Math.round(t.getBoundingClientRect().width - l.width),
+                       upravit: vid('.es-upravit-navrh'), vymenit: vid('.es-vymenit') }; })()""")
+            ok("náhled navržené strany otevře lupu se stranou (A5), ne editor", "/my-songbooks" in page.url
+               and abs(lupa["pomer"] - 2480 / 1748) < 0.01, lupa)
+            ok("v lupě je strana nakreslená z textu přes celou šířku listu",
+               "Testovací píseň" in lupa["text"] and abs(lupa["sirka"]) <= 1, lupa)
+            ok("lupa nabídne Upravit v editoru stran, ne výměnu obrázku", lupa["upravit"] and not lupa["vymenit"], lupa)
+            page.click("#es-lupa .es-zavrit")
+
+            page.locator("#es-seznam .es-strana").first.locator(".es-navrhnout").click()
             editor_stran(page)
             ok("úprava otevře uloženou verzi", "Testovací píseň" in page.evaluate("navrhStrany.view.state.doc.textContent"))
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Nový ', 2)); })()")
@@ -230,7 +255,7 @@ def main():
             ok("bez uložení zůstane stará verze", strany_db()[0][1] == prvni_verze, strany_db())
             otevri_editor_zpevniku(page)
 
-            page.locator("#es-seznam .es-strana").first.locator(".es-nahled").click()
+            page.locator("#es-seznam .es-strana").first.locator(".es-navrhnout").click()
             editor_stran(page)
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Nový ', 2)); })()")
             page.click("#zpet-do-zpevniku")
@@ -248,6 +273,15 @@ def main():
                 strana1 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=1).first().id
             ok("prázdná strana se otevře rovnou na své adrese, bez ptaní", page.url.endswith(f"/editor-strany/{strana1}"), page.url)
             ok("číslo 6, levá", page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [6, "L"])
+            page.click("#zpet-do-zpevniku")
+            page.wait_for_url("**/my-songbooks**")
+            otevri_editor_zpevniku(page)
+            page.click("#es-navrhnout-novou")
+            editor_stran(page)
+            with A.app.app_context():
+                posledni = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi.desc()).first().id
+            ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
+               page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
             ok("bez chyb JavaScriptu", not chyby, chyby[:3])
             page.close()
 
@@ -255,8 +289,11 @@ def main():
             page, chyby = prihlas(br, base, EMAIL4)
             ok("Navrhnout je zašedlé", page.locator("#es-seznam .es-navrhnout").first.is_disabled())
             page.locator("#es-seznam .es-strana").first.locator(".es-nahled").click()
-            page.wait_for_timeout(300)
-            ok("navrženou stranu neotevře", "/my-songbooks" in page.url, page.url)
+            page.wait_for_selector("#es-lupa:not([hidden])")
+            ok("náhled navržené strany jen zvětší, Upravit v editoru stran nenabídne",
+               "/my-songbooks" in page.url and page.evaluate("getComputedStyle(document.querySelector('#es-lupa .es-upravit-navrh')).display") == "none")
+            page.click("#es-lupa .es-zavrit")
+            ok("„nebo navrhnout v editoru stran“ je zašedlé", page.locator("#es-navrhnout-novou").is_disabled())
             for adresa in (f"/editor-strany/{strana1}", f"/editor-strany/nova?zpevnik={ZPEVNIK}&za=0", "/editor-strany"):
                 odpoved = page.goto(base + adresa)
                 ok(f"editor stran mu neodpoví ({adresa})", odpoved.status == 404, odpoved.status)

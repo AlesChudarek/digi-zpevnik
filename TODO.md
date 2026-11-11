@@ -1180,6 +1180,10 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
         do té doby zástupné.
+      Hotovo: 3. řádek strany (11. 11.: náhled jen zvětší, lupa = list A5 s obrázkem nebo
+      stranou z textu; ikony obrázek/tužka vedle ✕ - ikony zatím ZÁSTUPNÉ edit_page.svg
+      a image_add.svg, empty_page.svg z nepouzite/; tužka u obrázkové strany zašedlá do
+      kroku 5; na telefonu se akce zalomí pod popis; „nebo navrhnout v editoru stran“).
       Hotovo: 1. pojistka (11. 11.), 2. stránka editoru stran (11. 11.: `/editor-strany/<id>`
       a `/nova?zpevnik=&za=`, Uložit přes `/api/navrh/strana` se `strana_id` nebo
       `zpevnik`+`za` - verzi rovnou připojí, novou stranu vloží; doprostřed pokračující
