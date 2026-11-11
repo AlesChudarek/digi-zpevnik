@@ -377,6 +377,25 @@ def main():
             ok("strana 7 bez rámečku dostala prázdný rámeček", "Sedmá" not in json.dumps(z7, ensure_ascii=False)
                and len(z7["obsah"]["content"]) == 1, z7["obsah"]["content"][:1])
 
+            # Náplast přes hřbet: na každé straně její část.
+            page.evaluate("""(() => { const v = navrhStrany.view, N = v.state.schema.nodes;
+              v.dispatch(v.state.tr.insert(v.state.doc.content.size, N.tvar.create({ x: 140, y: 50, w: 20, h: 6, barva: '#ff0000' }))); })()""")
+            TVARY = "['L', 'P'].map(lp => navrhStrany.zdroj(lp).obsah.content.filter(n => n.type === 'tvar').map(n => n.attrs.x))"
+            ok("náplast přes hřbet patří oběma stranám (levá od 140 mm, pravá od −8 mm)", page.evaluate(TVARY) == [[140], [-8]],
+               page.evaluate(TVARY))
+            page.click('[data-prikaz="ulozit"]')
+            page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+            s4 = strany_db()
+            with A.app.app_context():
+                xs = [[n["attrs"]["x"] for n in json.loads(A.db.session.get(A.NavrzenaStrana, s4[i][1]).zdroj)["obsah"]["content"]
+                       if n["type"] == "tvar"] for i in (1, 2)]
+            ok("uložená strana 6 i 7 má svou část náplasti", xs == [[140], [-8]], xs)
+            page.reload()
+            editor_stran(page)
+            na_platne = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').map(n => n.attrs.x)")
+            ok("po znovuotevření je na plátně jedna celá náplast (dá se táhnout vcelku)", na_platne == [140], na_platne)
+            ok("a nic není rozdělané", page.is_hidden("#neulozene-jinde") and not page.evaluate("Object.keys(localStorage).some(k => k.startsWith('navrh-koncept:'))"))
+
             # Rozdělané obě strany: přežijí přelistování a odchod je vyjmenuje.
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('X', 2)); })()")
             page.click('[data-prikaz="ramecek"]')
@@ -399,7 +418,7 @@ def main():
             page.click("#app-confirm-ok")       # Odejít bez uložení
             page.wait_for_url("**/my-songbooks**")
             ok("odejít bez uložení koncepty zahodí", page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('navrh-koncept:')).length") == 0)
-            ok("a uložené strany zůstanou", strany_db()[1][1] == s3[1][1] and strany_db()[2][1] == s3[2][1], strany_db())
+            ok("a uložené strany zůstanou", strany_db()[1][1] == s4[1][1] and strany_db()[2][1] == s4[2][1], strany_db())
             page.evaluate("localStorage.setItem('navrh-rezim-stran', 'jedna')")
             otevri_editor_zpevniku(page)
             page.locator("#es-seznam .es-strana").nth(1).locator(".es-navrhnout").click()

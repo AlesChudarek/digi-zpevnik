@@ -1183,7 +1183,9 @@ kdo maže.
       Hotovo 11. 11.: **dvojstrana s úpravou obou stran** - jedno plátno (jeden dokument,
       prvky pravé strany s x + šířka strany), přesun prvků přes hřbet, text vyjmout/vložit,
       společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku
-      (prázdná strana dostane prázdný rámeček), ukládá se jen změněná strana. Sloky se
+      (prázdná strana dostane prázdný rámeček), ukládá se jen změněná strana. Obrázek
+      a náplast přes hřbet se uloží na obě strany (každá ořízne svou část), při
+      otevření dvojstrany se spojí zpět v jeden prvek; rámeček s textem podle středu. Sloky se
       číslují po stranách. Jen u uložené strany s protější stranou stejného formátu (jinak
       protější strana k náhledu jako dřív); přepnutí režimu stránku znovu načte. Panel
       (styly, akordy, formát) platí pro obě strany, číslo strany má každá své. Listování

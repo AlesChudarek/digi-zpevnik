@@ -33,6 +33,20 @@ function stranaUzlu(n) {
   if (!spoj) return KONTEXT ? KONTEXT.lp : 'P';
   return n.attrs.x + (n.attrs.w || 0) / 2 >= format().sirka ? 'P' : 'L';
 }
+// Obrázek nebo náplast přes hřbet patří oběma stranám: každá si z něj ořízne svou část
+// (levá s přesahem doprava, pravá se záporným x). Textový rámeček se dělit nedá - ten
+// patří straně podle středu.
+function presHrbet(n) {
+  if (!spoj || (n.type !== N.obrazek && n.type !== N.tvar)) return false;
+  const s = format().sirka;
+  return n.attrs.x < s - 0.05 && n.attrs.x + n.attrs.w > s + 0.05;
+}
+// Tentýž prvek přes hřbet uložený na obou stranách: na plátně jen jednou.
+function stejnyPresHrbet(a, b) {
+  if (a.type !== b.type || (a.type !== N.obrazek && a.type !== N.tvar)) return false;
+  const { x: xa, ...ra } = a.attrs, { x: xb, ...rb } = b.attrs;
+  return Math.abs(xa - xb) < 0.05 && JSON.stringify(ra) === JSON.stringify(rb);
+}
 function posunUzel(n, dx) {
   return dx ? n.type.create({ ...n.attrs, x: Math.round((n.attrs.x + dx) * 100) / 100 }, n.content, n.marks) : n;
 }
@@ -277,7 +291,7 @@ function castStrany(lp) {
   doc.forEach((n) => {
     let pocet = 0;
     n.descendants((d) => { if (d.type === N.odstavec) pocet += 1; return true; });
-    if (stranaUzlu(n) === lp) {
+    if (stranaUzlu(n) === lp || presHrbet(n)) {
       uzly.push(posunUzel(n, -posunStrany(lp)));
       for (let i = 0; i < pocet; i++) indexy.push(odst + i);
     }
@@ -490,7 +504,11 @@ if (dvojstrana && KONTEXT && KONTEXT.strana) {
     // Styly obou stran na plátně (klíč „id-verze“ je u stejné verze stejný).
     nastaveni = { ...nastaveni, styly: { ...druha.nastaveni.styly, ...nastaveni.styly } };
     const uzly = [];
-    const pridej = (d, lp) => d.forEach((n) => uzly.push(posunUzel(n, lp === 'P' ? format().sirka : 0)));
+    const pridej = (d, lp) => d.forEach((n) => {
+      const u = posunUzel(n, lp === 'P' ? format().sirka : 0);
+      // Prvek přes hřbet je uložený na obou stranách - podruhé se nepřidá.
+      if (!uzly.some((v) => stejnyPresHrbet(v, u))) uzly.push(u);
+    });
     if (spoj.druha.lp === 'L') { pridej(druha.doc, 'L'); pridej(docStart, 'P'); }
     else { pridej(docStart, 'L'); pridej(druha.doc, 'P'); }
     docStart = N.doc.create(null, uzly);
