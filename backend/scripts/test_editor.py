@@ -598,7 +598,8 @@ def main():
         z = nacti(admin, b)
         kod, _ = uloz(admin, b, nazev=z["nazev"], barva=z["barva"],
                       prvni_cislo=str(z["prvni_cislo"]), strany=[
-                          {k: st[k] for k in ("id", "typ", "image_id", "popisek", "pisne")}
+                          dict({k: st[k] for k in ("id", "typ", "image_id", "navrzena_id", "popisek", "pisne")},
+                               nacteno=[st["image_id"], st["navrzena_id"]])
                           for st in z["strany"]])
         if kod != 200 or strany_db(b) != pred:
             zmenene.append(b)

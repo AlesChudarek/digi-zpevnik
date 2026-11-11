@@ -1149,14 +1149,40 @@ kdo maže.
          v rámečcích + obtékání vlevo/vpravo, vodítka při přesunu rámečků
       6. [ ] ChordPro tam i zpět, vložení „akordů nad textem“ z webu
       7. [ ] nasazení pro prémiové účty
-      **Otevřené rozhodnutí - kde editor žije** (Aleš 11. 11.): editor zpěvníku je dnes
-      okno nad Mými zpěvníky a editor stran rám přes celé okno nad ním - zmizí lišta webu,
-      adresa zůstane `/my-songbooks` a co se upravuje, není nikde vidět. Chová se spíš
-      jako nová záložka než jako okno přes stránku. Návrh: editor jako vlastní stránka
-      s adresou (jako Moje zpěvníky, Naše zpěvníky, nebo jako první pokusný
-      `/editor-strany`) - vybere se existující nebo nová píseň a Uložit ji uloží do
-      daného nebo vybraného zpěvníku. Promyslet spolu: adresy (zpěvník, strana), zpět
-      v prohlížeči, rozdělaná práce při odchodu, a jestli přejde i editor zpěvníku.
+      **Editor stran jako samostatná stránka** (rozhodnuto s Alešem 11. 11.; nahrazuje
+      rám nad editorem zpěvníku - mizela lišta, adresa se neměnila):
+      - Editor zpěvníku zůstává oknem v Mých zpěvnících. Editor stran je vlastní stránka
+        s lištou webu a vlastním Uložit, které ukládá rovnou do zpěvníku.
+      - Místo strany se určí PŘED úpravou: `/editor-strany/<id strany>` (existující),
+        `/editor-strany/nova?zpevnik=&za=<id strany>` (nová; strana vznikne až uložením,
+        zavření bez uložení nenechá prázdnou stranu). Nezařazená strana není.
+      - Přechod z editoru zpěvníku s neuloženými změnami: okno Uložit a přejít / Přejít
+        bez uložení / Zůstat. Odchod z editoru stran s neuloženou stranou upozorní stejně.
+      - Listování zpěvníkem v editoru stran (později svitek a dvojstrana). Rozdělané strany
+        se zálohují v prohlížeči, při listování se nikdo neptá. U Uložit ikona (výstraha),
+        když jsou neuložené i jiné strany - hover je vypíše. Uložit pak otevře okno se
+        seznamem neuložených stran a aktuální stranou: Uložit aktuální / Uložit všechny /
+        Zrušit.
+      - Pojistka: uložení zpěvníku nepřepíše navrženou stranu, kterou klient neměnil
+        (jinak by člen společného zpěvníku tiše vrátil cizí úpravu strany).
+      - Obrázková (naskenovaná) strana jde otevřít v editoru stran: sken jako podkladová
+        vrstva, dopsat text a akordy; uložením z ní je navržená strana. Nový nástroj
+        **náplast** (tvar s výplní - zakryje vypálené číslo strany, chybu ve skenu).
+      - Stejná strana = jen ve společném zpěvníku (tentýž řádek strany). Kopie (duplikát
+        zpěvníku, přidaná píseň, píseň z Našich zpěvníků) sdílí soubor do první úpravy,
+        pak je vlastní. Později při uložení nabídka „Tato strana je i ve zpěvnících X a Y
+        - použít úpravu i tam?“
+      - Řádek strany v editoru zpěvníku: náhled vlevo je jen náhled STRANY (lupa ukáže
+        stranu, ne holý obrázek - na šířku si ji jinak nejde představit), i u navržené;
+        prázdná strana ikona prázdné strany. Vpravo vedle ✕ ikonová tlačítka (text
+        v nápovědě): obrázek (nahrát/vyměnit) a tužka (upravit v editoru stran), u všech
+        stran. Šipka výš na stejné vodorovné jako ✕. Pod seznamem „+ Přidat stranu“
+        a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
+        Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
+        do té doby zástupné.
+      **Postup**: 1. pojistka na serveru, 2. stránka editoru stran (bez rámu), 3. řádek
+      strany v editoru zpěvníku, 4. listování a záloha, 5. obrázková strana + náplast,
+      6. dokončení exportu a nasazení, 7. „použít i v ostatních zpěvnících“, odkaz v liště.
       **Nálezy z používání** (11. 11.):
       - [X] editor stran: lištička pro tažení vybraného rámečku je o ~2 px užší než jeho
         modrý obrys (má šířku rámečku bez obrysu)

@@ -4173,9 +4173,20 @@ def _uloz_strany(sb, data, koren, ke_smazani):
             strana = Strana(songbook_id=sb.id, poradi=docasne)
             db.session.add(strana)
 
-        # Obrázek, nebo navržená strana (editor stran)
+        # Obrázek, nebo navržená strana (editor stran). Pojistka: obsah strany, který
+        # klient neměnil (pošle stejný, jaký načetl), se nepřepisuje - mezitím ho mohl
+        # uložit editor stran nebo jiný člen společného zpěvníku a uložení zbytku
+        # zpěvníku by ho tiše vrátilo.
+        poslano = ((polozka.get('image_id') or None, polozka.get('navrzena_id') or None)
+                   if typ != 'prazdna' else (None, None))
+        nacteno = polozka.get('nacteno')
+        neprepisovat = (strana_id is not None and isinstance(nacteno, list) and len(nacteno) == 2
+                        and (nacteno[0] or None, nacteno[1] or None) == poslano
+                        and (strana.image_id, strana.navrzena_id) != poslano)
         novy_obrazek = novy_navrh = None
-        if typ != 'prazdna':
+        if neprepisovat:
+            novy_obrazek, novy_navrh = strana.image, strana.navrzena
+        elif typ != 'prazdna':
             image_id = polozka.get('image_id')
             navrzena_id = polozka.get('navrzena_id')
             if navrzena_id:

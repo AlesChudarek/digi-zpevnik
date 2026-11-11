@@ -177,6 +177,28 @@ def main():
        and bezny.get(f"/navrh/strana/{n1['id']}.pdf").status_code == 200)
     ok("host verzi nevidí", klient(7).get(f"/api/navrh/strana/{n1['id']}").status_code in (302, 401, 404))
 
+    print("\n── pojistka: uložení zpěvníku nepřepíše cizí úpravu strany ──")
+    nacteno = premium.get("/api/zpevnik/test-navrh").get_json()["zpevnik"]["strany"][0]
+    ok("editor zpěvníku dostane id strany a verzi", nacteno.get("id") and nacteno.get("navrzena_id") == n1["id"], nacteno)
+    kod, n2 = uloz_navrh(premium, zdroj())
+    with A.app.app_context():                     # mezitím uloží stranu editor stran
+        A.db.session.get(A.Strana, nacteno["id"]).navrzena_id = n2["id"]
+        A.db.session.commit()
+
+    def uloz_zpevnik(polozka):
+        r = premium.post("/api/zpevnik/test-navrh", data={"strany": json.dumps([polozka])},
+                         content_type="multipart/form-data")
+        with A.app.app_context():
+            return r.status_code, A.db.session.get(A.Strana, nacteno["id"]).navrzena_id
+    zaklad = {"id": nacteno["id"], "typ": "bez", "image_id": None, "popisek": "Zkouška", "pisne": [],
+              "nacteno": [None, n1["id"]]}
+    kod, nyni = uloz_zpevnik(dict(zaklad, navrzena_id=n1["id"]))
+    ok("strana, kterou editor zpěvníku neměnil, zůstane v novější verzi", kod == 200 and nyni == n2["id"], (kod, nyni))
+    kod, nyni = uloz_zpevnik(dict(zaklad, typ="prazdna", navrzena_id=None, nacteno=[None, n2["id"]]))
+    ok("změnu, kterou klient opravdu udělal (vyprázdnění), server provede", kod == 200 and nyni is None, (kod, nyni))
+    kod, nyni = uloz_zpevnik(dict(zaklad, navrzena_id=n1["id"], nacteno=[None, None]))
+    ok("a stejně tak vrácení strany", kod == 200 and nyni == n1["id"], (kod, nyni))
+
     print("\n── úklid ──")
     kod, n3 = uloz_navrh(premium, zdroj())                  # neuložená verze (žádný zpěvník)
     with A.app.app_context():

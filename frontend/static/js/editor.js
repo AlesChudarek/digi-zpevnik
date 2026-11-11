@@ -50,6 +50,10 @@
       image_id: z.image_id == null ? null : z.image_id,
       // Strana navržená v editoru stran (místo obrázku); náhled je malý obrázek verze.
       navrzena_id: z.navrzena_id == null ? null : z.navrzena_id,
+      // Obsah strany, jak přišel ze serveru. Server podle něj pozná, že obsah strany
+      // klient neměnil, a nepřepíše ho, když ho mezitím uložil někdo jiný (editor stran).
+      nacteno: z.id == null ? null : [z.image_id == null ? null : z.image_id,
+                                     z.navrzena_id == null ? null : z.navrzena_id],
       nahled: z.nahled || z.nahled_navrhu || null,
       obrazek: z.obrazek || z.nahled || null,
       soubor: null,
@@ -102,6 +106,7 @@
         typ: t,
         image_id: t === 'prazdna' || s.navrzena_id ? null : s.image_id,
         navrzena_id: t === 'prazdna' ? null : s.navrzena_id,
+        nacteno: s.nacteno,
         popisek: s.pisne.length ? '' : s.popisek.trim(),
         pisne: s.pisne.map(function (p) {
           return { song_id: p.song_id, nazev: p.nazev.trim(), autor: p.autor.trim() };
