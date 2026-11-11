@@ -69,6 +69,23 @@ export const schema = new Schema({
       }],
     },
 
+    // Tvar (náplast): obdélník s výplní nad obrázky za textem a pod textem - zakryje
+    // třeba vypálené číslo strany nebo chybu ve skenu. Barva jako #rrggbb.
+    tvar: {
+      group: 'prvek', atom: true, selectable: true, draggable: false,
+      attrs: { x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 }, barva: { default: '#ffffff' } },
+      toDOM: (n) => ['div', {
+        class: 'ps-tvar', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
+        'data-barva': n.attrs.barva,
+        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)};background:${n.attrs.barva}`,
+      }],
+      parseDOM: [{
+        tag: 'div.ps-tvar',
+        getAttrs: (d) => ({ x: +d.dataset.x || 20, y: +d.dataset.y || 20, w: +d.dataset.w || 30, h: +d.dataset.h || 10,
+          barva: d.dataset.barva || '#ffffff' }),
+      }],
+    },
+
     // znacka: ruční přepis automatického čísla sloky („3.“, „R2:“); null = automaticky.
     odstavec: {
       content: 'inline*',

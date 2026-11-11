@@ -36,6 +36,7 @@
     <symbol id="i-cela" viewBox="0 0 24 24"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"/></symbol>
     <symbol id="i-nahled" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="0.6"/></symbol>
+    <symbol id="i-naplast" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M10 10.5v3M14 10.5v3" transform="rotate(-35 12 12)"/></symbol>
     <symbol id="i-tuzka" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
   </defs>
 </svg>
@@ -97,6 +98,7 @@
     <div class="skupina">
       <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček"><svg><use href="#i-ramecek"/></svg>Text</button>
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
+      <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: obdélník s barvou, zakryje část obrázku (třeba vypálené číslo strany)"><svg><use href="#i-naplast"/></svg>Náplast</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
     </div>
     <div class="skupina">
@@ -236,6 +238,15 @@
     </section>
     </div>
     <div class="panel-obsah" data-panel="strana" role="tabpanel" hidden>
+    <section class="karta kontext" id="vybrany-tvar" hidden>
+      <h2>Náplast</h2>
+      <div class="radek-pole">Barva
+        <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti">
+      </div>
+      <div class="tlacitka">
+        <button type="button" id="tvar-smazat" class="nebezpecne">Smazat</button>
+      </div>
+    </section>
     <section class="karta kontext" id="vybrany-obrazek" hidden>
       <h2>Obrázek</h2>
       <div class="prepinac" role="group" aria-label="Vrstva obrázku">

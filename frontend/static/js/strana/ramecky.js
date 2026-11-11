@@ -24,19 +24,24 @@ export class PrvekView {
     this.volby = volby;
     this.tah = null;
     this.jeObrazek = node.type.name === 'obrazek';
+    // Tvar (náplast): barevný obdélník - chová se jako obrázek (vybírá se klikem, smí
+    // přesahovat okraj), jen bez obrázku a s volným poměrem stran.
+    this.jeTvar = node.type.name === 'tvar';
+    this.jeAtom = this.jeObrazek || this.jeTvar;
+    const nazev = this.jeObrazek ? 'obrázek' : this.jeTvar ? 'náplast' : 'rámeček';
 
     this.dom = document.createElement('div');
-    this.dom.className = this.jeObrazek ? 'ps-obrazek' : 'ps-ramecek';
+    this.dom.className = this.jeObrazek ? 'ps-obrazek' : this.jeTvar ? 'ps-tvar' : 'ps-ramecek';
 
     this.lista = document.createElement('div');
     this.lista.className = 'ps-prvek-lista';
     this.lista.contentEditable = 'false';
-    this.lista.title = this.jeObrazek ? 'Přesunout obrázek' : 'Přesunout rámeček';
+    this.lista.title = `Přesunout ${nazev}`;
     this.smazat = document.createElement('button');
     this.smazat.type = 'button';
     this.smazat.className = 'ps-prvek-smazat';
     this.smazat.textContent = '×';
-    this.smazat.title = this.jeObrazek ? 'Smazat obrázek' : 'Smazat rámeček';
+    this.smazat.title = `Smazat ${nazev}`;
     this.lista.appendChild(this.smazat);
 
     this.roh = document.createElement('div');
@@ -51,6 +56,10 @@ export class PrvekView {
       this.dom.contentEditable = 'false';
       this.dom.append(this.lista, this.img, this.roh);
       this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
+    } else if (this.jeTvar) {
+      this.dom.contentEditable = 'false';
+      this.dom.append(this.lista, this.roh);
+      this.dom.addEventListener('pointerdown', (e) => { if (e.target === this.dom) this.zacni(e, 'presun'); });
     } else {
       this.contentDOM = document.createElement('div');
       this.contentDOM.className = 'ps-ramecek-obsah';
@@ -77,6 +86,7 @@ export class PrvekView {
       this.dom.classList.toggle('ps-vrstva-za', a.vrstva === 'za');
       this.dom.classList.toggle('ps-vrstva-pred', a.vrstva !== 'za');
     }
+    if (this.jeTvar) s.background = a.barva;
   }
 
   update(node) {
@@ -124,7 +134,7 @@ export class PrvekView {
     const p = t.puvodni;
     if (t.druh === 'presun') {
       // Obrázek smí přesahovat přes okraj strany (ořízne se), rámeček ne.
-      const presah = this.jeObrazek ? Math.min(p.w, p.h) * 0.8 : 0;
+      const presah = this.jeAtom ? Math.min(p.w, p.h) * 0.8 : 0;
       t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -presah), sirka - p.w + presah);
       t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -presah), vyska - p.h + presah);
     } else {
@@ -136,8 +146,8 @@ export class PrvekView {
         if (Math.abs(dx) * p.h >= Math.abs(dy) * p.w) h = zaokrouhli(w / pomer);
         else w = zaokrouhli(h * pomer);
       }
-      t.nove.w = this.jeObrazek ? w : Math.min(w, sirka - p.x);
-      t.nove.h = this.jeObrazek ? h : Math.min(h, vyska - p.y);
+      t.nove.w = this.jeAtom ? w : Math.min(w, sirka - p.x);
+      t.nove.h = this.jeAtom ? h : Math.min(h, vyska - p.y);
     }
     this.nastav(t.nove);
   }
@@ -147,7 +157,7 @@ export class PrvekView {
     this.uklid();
     if (!t) return;
     if (!t.posunuto) {
-      if (this.jeObrazek) {
+      if (this.jeAtom) {
         this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, this.getPos())));
       } else {
         // Klik na lištu rámečku: kurzor na konec jeho textu.
@@ -158,7 +168,7 @@ export class PrvekView {
       return;
     }
     const tr = closeHistory(this.view.state.tr).setNodeMarkup(this.getPos(), null, t.nove);
-    if (this.jeObrazek) tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
+    if (this.jeAtom) tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
     this.view.dispatch(tr);
   }
 
@@ -178,7 +188,7 @@ export class PrvekView {
 
   odstran() {
     const { state } = this.view;
-    if (!this.jeObrazek) {
+    if (!this.jeAtom) {
       let ramecku = 0;
       state.doc.forEach((n) => { if (n.type === this.node.type) ramecku += 1; });
       if (ramecku < 2) {

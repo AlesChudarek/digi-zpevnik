@@ -2885,6 +2885,9 @@ def _kontext_editoru(sb, strana=None, za=None):
         'zpevnik': sb.id, 'nazev': sb.title or '', 'strana': strana.id if strana else None,
         'za': (za.id if za else 0) if strana is None else None,
         'navrh': strana.navrzena_id if strana else None,
+        # Strana s nahraným obrázkem (sken): v editoru je obrázek podkladem přes celou stranu.
+        'obrazek': (url_for('obrazek_navrhu', obraz_id=strana.image_id)
+                    if strana is not None and strana.image_id else None),
         'cislo': (sb.prvni_cislo_strany or 1) + index, 'lp': strana_lp(sb, index),
         'zpet': url_for('my_songbooks', upravit=sb.id),
         # Pro listování zpěvníkem v editoru: obrázkovou stranu zatím upravit nejde.
@@ -2920,10 +2923,6 @@ def strana_ve_zpevniku(strana_id):
     sb = strana.songbook if strana else None
     if strana is None or not _smi_navrhovat_ve_zpevniku(sb):
         abort(404)
-    if strana.image_id:
-        # Obrázková strana jako podklad v editoru stran přijde v kroku 5 (TODO bod 11).
-        flash('Stranu s nahraným obrázkem zatím v editoru stran upravit nejde.', 'error')
-        return redirect(url_for('my_songbooks', upravit=sb.id))
     return render_template('navrh_strany.html', kontext=_kontext_editoru(sb, strana=strana))
 
 
@@ -3950,6 +3949,9 @@ def _smi_videt_obrazek_navrhu(user, obraz) -> bool:
         return False
     if obraz.cesta.startswith(f'uzivatele/{user.id}/navrh/'):
         return True
+    # Obrázek strany zpěvníku (sken) jako podklad navržené strany: vidí ho, kdo vidí zpěvník.
+    if smi_videt_obrazek(user, obraz.cesta):
+        return True
     verze = (NavrzenaStrana.query.join(navrh_obrazky, navrh_obrazky.c.navrzena_id == NavrzenaStrana.id)
              .filter(navrh_obrazky.c.image_id == obraz.id).all())
     return any(smi_videt_navrh(user, n) for n in verze)
@@ -4065,7 +4067,7 @@ def uloz_navrzenou_stranu():
             return jsonify({'ok': False, 'error': 'Náhled strany musí být PNG do 1 MB.'}), 400
     # Strana zpěvníku (editor stran nad zpěvníkem): verze se rovnou připojí na místo -
     # buď existující strana (`strana_id`), nebo nová za stranou `za` ve zpěvníku `zpevnik`.
-    strana = sb = za = None
+    strana = sb = za = puvodni_obrazek = None
     if request.form.get('strana_id') or request.form.get('zpevnik'):
         if request.form.get('strana_id'):
             strana = db.session.get(Strana, request.form.get('strana_id', type=int))
@@ -4076,8 +4078,6 @@ def uloz_navrzenou_stranu():
             sb = db.session.get(Songbook, request.form.get('zpevnik'))
         if not _smi_navrhovat_ve_zpevniku(sb):
             return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
-        if strana is not None and strana.image_id:
-            return jsonify({'ok': False, 'error': 'Stranu s nahraným obrázkem zatím v editoru stran upravit nejde.'}), 400
         if strana is None:
             za, chyba = _za_stranou(sb, request.form.get('za', type=int) or 0)
             if chyba:
@@ -4101,8 +4101,15 @@ def uloz_navrzenou_stranu():
             strany.insert(za.poradi + 1 if za is not None else 0, strana)
             prerovnej_strany(sb, strany)
         strana.navrzena = navrh
+        # Ze strany s obrázkem je navržená; obrázek zůstává jejím podkladem (navrh_obrazky),
+        # takže ho úklid nesmaže. Když ho v editoru smazali, po commitu se uklidí.
+        if strana.image_path:
+            puvodni_obrazek = strana.image_path
+        strana.image = None
         zkontroluj_limity(pred)
     db.session.commit()
+    if puvodni_obrazek:
+        smaz_osirele_obrazky({puvodni_obrazek})
     if sb is not None:
         dopocitej_nahledy(sb.id)
         schedule_export_warm(sb.id)

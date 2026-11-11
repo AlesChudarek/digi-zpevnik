@@ -237,6 +237,62 @@ def test_prohlizec(p, jmeno, base, a, b, poradi):
     br.close()
 
 
+def test_skenu(p, base):
+    """Strana s nahraným obrázkem v editoru stran: sken jako podklad, náplast, uložení;
+    pak ji čtečka i PDF ukážou jako navrženou stranu se skenem a náplastí."""
+    print("\n══ obrázková strana v editoru stran (sken + náplast) ══")
+    with A.app.app_context():
+        strana_id = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=1).first().id
+    br = p.chromium.launch()
+    page, chyby = prihlas(br, base)
+    page.goto(f"{base}/editor-strany/{strana_id}")
+    page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
+    doc = page.evaluate("navrhStrany.view.state.doc.toJSON()")
+    sken = doc["content"][0]
+    ok("sken je první prvek strany: obrázek za textem", sken["type"] == "obrazek" and sken["attrs"]["vrstva"] == "za"
+       and sken["attrs"]["src"] == f"/navrh/obrazek/{OBRAZEK_ID}", sken)
+    a = sken["attrs"]
+    ok("a vyplní stranu A5 (na šířku nebo na výšku, vystředěný)",
+       (abs(a["w"] - 148) < 0.2 or abs(a["h"] - 210) < 0.2) and abs(a["x"] * 2 + a["w"] - 148) < 0.3 and abs(a["y"] * 2 + a["h"] - 210) < 0.3, a)
+    ok("má i textový rámeček", any(n["type"] == "ramecek" for n in doc["content"]))
+    page.click('[data-prikaz="naplast"]')
+    ok("Náplast vloží vybraný obdélník a ukáže jeho kartu", page.evaluate("navrhStrany.view.state.selection.node?.type.name") == "tvar"
+       and page.is_visible("#vybrany-tvar"))
+    page.evaluate("(() => { const i = document.getElementById('tvar-barva'); i.value = '#ff0000'; i.dispatchEvent(new Event('change')); })()")
+    ok("barva náplasti se nastaví", page.evaluate("navrhStrany.view.state.doc.lastChild.attrs.barva") == "#ff0000")
+    page.click('[data-prikaz="ulozit"]')
+    page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+    with A.app.app_context():
+        st = A.db.session.get(A.Strana, strana_id)
+        navrh_id, obrazky = st.navrzena_id, [o.id for o in (st.navrzena.obrazky if st.navrzena else [])]
+        ok("strana je teď navržená a sken je její součástí", st.image_id is None and navrh_id and obrazky == [OBRAZEK_ID],
+           (st.image_id, navrh_id, obrazky))
+        cesta_skenu = A.db.session.get(A.Obrazek, OBRAZEK_ID).cesta
+    ok("soubor skenu zůstal", (OBRAZKY / cesta_skenu).is_file())
+
+    page.goto(f"{base}/songbook/{ZPEVNIK}")
+    page.wait_for_load_state("domcontentloaded")
+    page.evaluate("enableDoublePageMode(); nextPage()")     # strana 2 vlevo
+    cekej_na_ostrou(page, "#left-page-navrh")
+    ctecka = page.evaluate("""(() => { const e = document.querySelector('#left-page-navrh');
+      const t = e.querySelector('.ps-tvar'), i = e.querySelector('.ps-obrazek img');
+      return [t ? getComputedStyle(t).backgroundColor : null, i ? i.naturalWidth > 0 : false]; })()""")
+    ok("čtečka ukáže sken i náplast", ctecka == ["rgb(255, 0, 0)", True], ctecka)
+    ok("bez chyb JavaScriptu", not chyby, chyby[:3])
+    br.close()
+
+    from pypdf import PdfReader
+    with A.app.app_context():
+        sekv = A.build_songbook_export_sequence(A.db.session.get(A.Songbook, ZPEVNIK), None)
+        vystup = TMP / "export-sken.pdf"
+        A.render_songbook_pdf(sekv, vystup, A.normalizuj_recept(format="pdf"))
+    strana2 = PdfReader(str(vystup)).pages[1]
+    obsah = strana2.get_contents().get_data()
+    xobj = strana2["/Resources"].get("/XObject")
+    ok("v PDF je sken jako obrázek a náplast jako červený obdélník (vektor)",
+       xobj is not None and b"1 0 0 rg" in obsah and b" re" in obsah, (bool(xobj), obsah[:120]))
+
+
 def main():
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
     server = make_server("127.0.0.1", PORT, A.app, threaded=True)
@@ -283,6 +339,7 @@ def main():
                    and jmena[0] == "0001-strana-1.pdf", jmena[:3])
             for jmeno in ("chromium", "firefox", "webkit"):
                 test_prohlizec(p, jmeno, base, a, b, poradi)
+            test_skenu(p, base)
     finally:
         server.shutdown()
     shutil.rmtree(TMP, ignore_errors=True)

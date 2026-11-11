@@ -258,14 +258,16 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* Prvky (rámečky a obrázky): poloha a rozměr v mm (inline styl). Obrys jen pod myší
    a u vybraného - na papíře nemají být vidět. Ovládací prvky mají na obrazovce stejnou
    velikost při každém přiblížení (dělí se měřítkem). */
-.ps-ramecek, .ps-obrazek { position: absolute; box-sizing: border-box; z-index: 1; }
+.ps-ramecek, .ps-obrazek, .ps-tvar { position: absolute; box-sizing: border-box; z-index: 1; }
 .ps-obrazek.ps-vrstva-za { z-index: 0; }
+/* Náplast leží s obrázky za textem (nad skenem, který je ve straně první) a pod textem. */
+.ps-tvar { z-index: 0; cursor: move; }
 .ps-obrazek.ps-vrstva-pred { z-index: 2; }
-.ps-ramecek.aktivni, .ps-obrazek.vybrany, .ps-ramecek.tazeny, .ps-obrazek.tazeny {
+.ps-ramecek.aktivni, .ps-obrazek.vybrany, .ps-ramecek.tazeny, .ps-obrazek.tazeny, .ps-tvar.vybrany, .ps-tvar.tazeny {
   outline: calc(1.5px / var(--meritko)) solid #1a73e8;
 }
 @media (hover: hover) {
-  .ps-ramecek:hover:not(.aktivni), .ps-obrazek:hover:not(.vybrany) {
+  .ps-ramecek:hover:not(.aktivni), .ps-obrazek:hover:not(.vybrany), .ps-tvar:hover:not(.vybrany) {
     outline: calc(1px / var(--meritko)) solid rgba(26, 115, 232, 0.45);
   }
 }
@@ -292,10 +294,12 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 }
 .ps-ramecek.aktivni > .ps-prvek-lista, .ps-ramecek.aktivni > .ps-prvek-roh,
 .ps-obrazek.vybrany > .ps-prvek-lista, .ps-obrazek.vybrany > .ps-prvek-roh,
+.ps-tvar.vybrany > .ps-prvek-lista, .ps-tvar.vybrany > .ps-prvek-roh,
 .tazeny > .ps-prvek-lista, .tazeny > .ps-prvek-roh { opacity: 1; }
 @media (hover: hover) {
   .ps-ramecek:hover > .ps-prvek-lista, .ps-ramecek:hover > .ps-prvek-roh,
-  .ps-obrazek:hover > .ps-prvek-lista, .ps-obrazek:hover > .ps-prvek-roh { opacity: 1; }
+  .ps-obrazek:hover > .ps-prvek-lista, .ps-obrazek:hover > .ps-prvek-roh,
+  .ps-tvar:hover > .ps-prvek-lista, .ps-tvar:hover > .ps-prvek-roh { opacity: 1; }
 }
 .ProseMirror-selectednode.ps-obrazek { outline-offset: 0; }
 
@@ -411,6 +415,7 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 .ps-cteni .ps-cislo-strany { cursor: default; }
 .ps-cteni .ps-cislo-strany:hover { outline: none; }
 .ps-cteni .akord { cursor: default; }
+.ps-cteni .ps-tvar { cursor: default; }
 
 /* Kopie strany pro vektorové PDF (pdf-strany.js): názvy akordů a značky slok jsou tam
    skutečný text místo ::before, aby šly změřit. Vypadá stejně. */

@@ -1180,6 +1180,11 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
         do té doby zástupné.
+      Hotovo: 5. obrázková strana a náplast (11. 11.): sken se otevře jako obrázek za textem
+      přes celou stranu (vystředěný) + malý textový rámeček; uložením je z ní navržená strana,
+      sken zůstává v `navrh_obrazky` (smazaný sken se po uložení uklidí). Uzel `tvar`
+      (náplast: x, y, w, h, barva) - nad obrázky za textem, pod textem; v PDF vektorový
+      obdélník. PDF pozná typ obrázku z obsahu, WEBP/GIF převede na PNG.
       Hotovo: 4. listování a koncepty (11. 11.): vlevo v liště zpěvník a ‹ výběr strany ›
       (obrázkové strany zašedlé), rozdělané strany v localStorage (`navrh-koncept:<zpěvník>:
       s<id>|n<za>`, s verzí, ke které vznikly - jiná verze → otázka), označené „•“;

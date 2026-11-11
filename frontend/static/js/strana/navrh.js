@@ -366,6 +366,16 @@ if (KONTEXT) {
     else smazKoncept(klicKonceptu(KONTEXT));
   }
 }
+// Strana s nahraným obrázkem (sken), dosud nenavržená: obrázek je podkladem přes celou
+// stranu (za textem), aby šlo dopsat text a akordy. Plus malý textový rámeček nahoře -
+// strana ho mít musí a přes celou stranu by zakrýval sken pro klikání.
+if (KONTEXT && KONTEXT.obrazek && !KONTEXT.navrh && !pouzitKoncept) {
+  try {
+    zaloha = { nastaveni, doc: await dokumentSeSkenem(KONTEXT.obrazek) };
+  } catch (chyba) {
+    window.oznam('Obrázek strany se nenačetl.', { nadpis: 'Strana se nenačetla', druh: 'chyba' });
+  }
+}
 if (zaloha) nastaveni = zaloha.nastaveni;
 if (KONTEXT) {
   // Číslo a levá/pravá podle skutečné pozice ve zpěvníku.
@@ -373,6 +383,31 @@ if (KONTEXT) {
 }
 
 const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: format });
+
+async function dokumentSeSkenem(src) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const f = format();
+  const k = Math.min(f.sirka / img.naturalWidth, f.vyska / img.naturalHeight);
+  const w = Math.round(img.naturalWidth * k * 10) / 10, h = Math.round(img.naturalHeight * k * 10) / 10;
+  return N.doc.create(null, [
+    N.obrazek.create({ src, x: Math.round((f.sirka - w) * 5) / 10, y: Math.round((f.vyska - h) * 5) / 10, w, h, vrstva: 'za' }),
+    N.ramecek.create({ x: f.okraj, y: f.okraj, w: 60, h: 20 }, N.odstavec.create()),
+  ]);
+}
+
+// Náplast: bílý obdélník uprostřed strany, vybraný (barva v kartě vpravo). Na konec
+// dokumentu, takže leží nad skenem (ten je na začátku).
+function pridejNaplast() {
+  const f = format();
+  const n = N.tvar.create({ x: Math.round(f.sirka / 2 - 15), y: Math.round(f.vyska / 2 - 5), w: 30, h: 10, barva: '#ffffff' });
+  const pos = view.state.doc.content.size;
+  const tr = closeHistory(view.state.tr).insert(pos, n);
+  tr.setSelection(NodeSelection.create(tr.doc, pos));
+  view.dispatch(tr);
+  view.focus();
+}
 
 const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   state: EditorState.create({
@@ -387,6 +422,7 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
     akord: (n, v, g) => new AkordView(n, v, g),
     ramecek: prvek,
     obrazek: prvek,
+    tvar: prvek,
   },
   clipboardTextSerializer: (slice) => textZUzlu(slice.content),
   clipboardTextParser: vlozenyText,
@@ -1027,7 +1063,7 @@ async function ulozit() {
 
 // --- listování zpěvníkem ----------------------------------------------------------------
 
-const DRUHY = { navrh: 'navržená', prazdna: 'prázdná', obrazek: 'obrázek, zatím nejde' };
+const DRUHY = { navrh: 'navržená', prazdna: 'prázdná', obrazek: 'obrázek' };
 
 function obnovListovani() {
   if (!KONTEXT) return;
@@ -1043,7 +1079,6 @@ function obnovListovani() {
       const o = document.createElement('option');
       o.value = st.id;
       o.textContent = `${rozdelane.has(st.klic) ? '• ' : ''}${st.cislo} – ${st.druh === 'nova' ? 'nová strana' : DRUHY[st.druh]}`;
-      o.disabled = st.druh === 'obrazek';
       o.selected = KONTEXT.strana ? st.id === KONTEXT.strana : st.druh === 'nova';
       vyber.appendChild(o);
     }
@@ -1060,12 +1095,11 @@ function obnovListovani() {
   }
 }
 
-// Nejbližší upravitelná strana před (-1) / za (1) touto. Nová strana ještě v seznamu
+// Nejbližší strana před (-1) / za (1) touto. Nová strana ještě v seznamu
 // není a její číslo má teď strana, která bude za ní.
 function sousedniStrana(smer) {
   const ja = KONTEXT.cislo;
-  const kandidati = KONTEXT.strany.filter((st) => st.druh !== 'obrazek'
-    && (smer < 0 ? st.cislo < ja : (KONTEXT.strana ? st.cislo > ja : st.cislo >= ja)));
+  const kandidati = KONTEXT.strany.filter((st) => (smer < 0 ? st.cislo < ja : (KONTEXT.strana ? st.cislo > ja : st.cislo >= ja)));
   if (!kandidati.length) return null;
   return smer < 0 ? kandidati[kandidati.length - 1] : kandidati[0];
 }
@@ -1339,6 +1373,7 @@ const PRIKAZY = {
   'transp-nahoru': () => transponujVse(1),
   ramecek: () => pridejRamecek(view, format()),
   obrazek: () => el('soubor-obrazku').click(),
+  naplast: pridejNaplast,
   'pismo-mensi': () => krokVelikosti(-1),
   'pismo-vetsi': () => krokVelikosti(1),
   zpet: () => undo(view.state, view.dispatch),
@@ -1352,7 +1387,7 @@ const PRIKAZY = {
   'dalsi-strana': () => jdiNaStranu(sousedniStrana(1)),
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana'];
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1473,6 +1508,9 @@ function aktualizujListu() {
   if (vybrany) el('akord-velikost').value = vybrany.node.attrs.vel || 100;
   const obrazek = sel instanceof NodeSelection && sel.node.type === N.obrazek ? sel.node : null;
   el('vybrany-obrazek').hidden = !obrazek;
+  const tvar = sel instanceof NodeSelection && sel.node.type === N.tvar ? sel.node : null;
+  el('vybrany-tvar').hidden = !tvar;
+  if (tvar && el('tvar-barva').value !== tvar.attrs.barva) el('tvar-barva').value = tvar.attrs.barva;
   if (obrazek) {
     for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
       b.classList.toggle('aktivni', b.dataset.vrstva === obrazek.attrs.vrstva);
@@ -1542,6 +1580,22 @@ function napojPanelAkordu() {
       view.dispatch(tr);
     });
   }
+  // Náplast: barva (input při tahu jen ukazuje, change uloží jedním krokem zpět).
+  const upravTvar = (barva, zapsat) => {
+    const sel = view.state.selection;
+    if (!(sel instanceof NodeSelection) || sel.node.type !== N.tvar) return;
+    if (!zapsat) { view.nodeDOM(sel.from).style.background = barva; return; }
+    const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, barva });
+    tr.setSelection(NodeSelection.create(tr.doc, sel.from));
+    view.dispatch(tr);
+  };
+  el('tvar-barva').addEventListener('input', (e) => upravTvar(e.target.value, false));
+  el('tvar-barva').addEventListener('change', (e) => upravTvar(e.target.value, true));
+  el('tvar-smazat').addEventListener('click', () => {
+    const sel = view.state.selection;
+    if (sel instanceof NodeSelection && sel.node.type === N.tvar) view.dispatch(view.state.tr.deleteSelection());
+    view.focus();
+  });
   el('obrazek-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
     if (sel instanceof NodeSelection && sel.node.type === N.obrazek) view.dispatch(view.state.tr.deleteSelection());
@@ -1657,7 +1711,7 @@ function zalozkaPodleVyberu(state) {
   if (uzel === posledniVybrany) return;
   posledniVybrany = uzel;
   if (uzel && uzel.type === N.akord) prepniZalozku('akordy');
-  else if (uzel && uzel.type === N.obrazek) prepniZalozku('strana');
+  else if (uzel && (uzel.type === N.obrazek || uzel.type === N.tvar)) prepniZalozku('strana');
 }
 
 // --- start ----------------------------------------------------------------------------

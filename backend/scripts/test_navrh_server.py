@@ -223,8 +223,25 @@ def main():
     kod, d2 = uloz_do(premium, strana_id=d["strana"])
     ok("další uložení přepíše tutéž stranu (nová verze)", kod == 200 and d2.get("strana") == d["strana"]
        and rada()[1][1] == d2["id"] and len(rada()) == len(po_r), (kod, d2, rada()))
-    kod, d3 = uloz_do(premium, strana_id=po_r[-1][0])
-    ok("stranu s nahraným obrázkem zatím nepřepíše", kod == 400, (kod, d3))
+    with A.app.app_context():
+        # Sken z jiného (veřejného) zpěvníku jako obrázek strany - podklad navržené strany.
+        sken = (A.Obrazek.query.join(A.Strana, A.Strana.image_id == A.Obrazek.id)
+                .join(A.Songbook, A.Songbook.id == A.Strana.songbook_id).filter(A.Songbook.is_public == 1).first())
+        sken_id, sken_cesta = sken.id, sken.cesta
+        A.db.session.get(A.Strana, po_r[-1][0]).image_id = sken_id
+        A.db.session.commit()
+    ok("sken strany jde načíst jako obrázek navržené strany", premium.get(f"/navrh/obrazek/{sken_id}").status_code == 200)
+    r = premium.post("/api/navrh/strana", data={"zdroj": json.dumps(zdroj([f"/navrh/obrazek/{sken_id}"])),
+                                                "pdf": (io.BytesIO(PDF), "strana.pdf"), "strana_id": str(po_r[-1][0])},
+                     content_type="multipart/form-data")
+    d3 = r.get_json() or {}
+    with A.app.app_context():
+        st = A.db.session.get(A.Strana, po_r[-1][0])
+        navrh3 = A.db.session.get(A.NavrzenaStrana, d3.get("id"))
+        ok("ze strany s obrázkem je uložením navržená strana", r.status_code == 200 and st.image_id is None
+           and st.navrzena_id == d3.get("id"), (r.status_code, d3, st.image_id, st.navrzena_id))
+        ok("sken je podkladem verze (navrh_obrazky) a soubor zůstal",
+           [o.id for o in navrh3.obrazky] == [sken_id] and (OBRAZKY / sken_cesta).is_file())
     kod, _ = uloz_do(bezny, zpevnik="test-navrh-ed", za=0)
     ok("účet bez prémia do zpěvníku nic neuloží", kod == 403, kod)
     with A.app.app_context():

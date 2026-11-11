@@ -86,6 +86,22 @@ function ucari(top, vyska, styl) {
   return top + (vyska - (nad + pod)) / 2 + nad;
 }
 
+// Obrázek do PDF. pdf-lib umí jen PNG a JPEG; typ se pozná z obsahu (adresa nahraného
+// obrázku /navrh/obrazek/<id> příponu nemá). Jiný formát (sken stránky bývá i WEBP
+// nebo GIF) se převede na PNG přes plátno.
+async function vlozObrazek(doc, src) {
+  const data = new Uint8Array(await fetch(src).then((x) => x.arrayBuffer()));
+  if (data[0] === 0x89 && data[1] === 0x50 && data[2] === 0x4e && data[3] === 0x47) return doc.embedPng(data);
+  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return doc.embedJpg(data);
+  const bitmapa = await createImageBitmap(new Blob([data]));
+  const platno = document.createElement('canvas');
+  platno.width = bitmapa.width;
+  platno.height = bitmapa.height;
+  platno.getContext('2d').drawImage(bitmapa, 0, 0);
+  const png = await new Promise((ok) => platno.toBlob(ok, 'image/png'));
+  return doc.embedPng(new Uint8Array(await png.arrayBuffer()));
+}
+
 function barva(css) {
   const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(css);
   return m ? [m[1] / 255, m[2] / 255, m[3] / 255] : [0, 0, 0];
@@ -209,20 +225,28 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
       return xKusu;
     };
 
-    // Obrázky (pod textem nebo nad ním podle vrstvy - pořadí kreslení).
+    // Obrázky (pod textem nebo nad ním podle vrstvy - pořadí kreslení) a náplasti (pod
+    // textem, v pořadí stránky spolu s obrázky za textem - náplast nad skenem).
     const obrazky = [...koren.querySelectorAll('.ps-obrazek')];
     const kresliObrazek = async (o) => {
       const img = o.querySelector('img');
       const r = o.getBoundingClientRect();
-      const data = await fetch(img.src).then((x) => x.arrayBuffer());
-      const png = /^data:image\/png|\.png($|\?)/i.test(img.src);
-      const emb = png ? await doc.embedPng(data) : await doc.embedJpg(data);
+      const emb = await vlozObrazek(doc, img.src);
       stranka.drawImage(emb, {
         x: (r.left - r0.left) * PT_NA_PX, y: H - (r.bottom - r0.top) * PT_NA_PX,
         width: r.width * PT_NA_PX, height: r.height * PT_NA_PX,
       });
     };
-    for (const o of obrazky.filter((x) => x.classList.contains('ps-vrstva-za'))) await kresliObrazek(o);
+    const kresliTvar = (t) => {
+      const r = t.getBoundingClientRect();
+      stranka.drawRectangle({
+        x: (r.left - r0.left) * PT_NA_PX, y: H - (r.bottom - r0.top) * PT_NA_PX,
+        width: r.width * PT_NA_PX, height: r.height * PT_NA_PX, color: rgb(...barva(getComputedStyle(t).backgroundColor)),
+      });
+    };
+    for (const o of koren.querySelectorAll('.ps-obrazek.ps-vrstva-za, .ps-tvar')) {
+      if (o.classList.contains('ps-tvar')) kresliTvar(o); else await kresliObrazek(o);
+    }
 
     // Text odstavců.
     for (const u of useckyTextu(koren.querySelector('.stranka-obsah'), r0)) {

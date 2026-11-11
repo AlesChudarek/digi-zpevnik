@@ -651,9 +651,9 @@
     akceStrany.appendChild(ikonoveTlacitko('es-nahrat-obrazek', ikony.obrazek,
       s.nahled && !s.navrzena_id ? 'Vyměnit obrázek strany' : 'Nahrát obrázek strany'));
     var tuzka = ikonoveTlacitko('es-navrhnout', ikony.upravit, s.navrzena_id ? 'Upravit stranu v editoru stran'
+      : (s.image_id || s.soubor) ? 'Upravit v editoru stran (dopsat text a akordy do obrázku)'
       : 'Navrhnout stranu v editoru stran (text a akordy)');
     if (!nastaveni.smiNavrhovat) tuzka = zasedle(tuzka, 'Navrhovat strany v editoru stran mohou prémiové účty.');
-    else if (s.image_id || s.soubor) tuzka = zasedle(tuzka, 'Stranu s nahraným obrázkem půjde v editoru stran upravit později.');
     akceStrany.appendChild(tuzka);
     akceStrany.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
     hlava.appendChild(akceStrany);
