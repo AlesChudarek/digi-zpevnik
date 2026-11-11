@@ -96,7 +96,7 @@
     <div class="skupina">
       <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček"><svg><use href="#i-ramecek"/></svg>Text</button>
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
-      <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: obdélník s barvou, zakryje část obrázku (třeba vypálené číslo strany)"><svg><use href="#i-naplast"/></svg>Náplast</button>
+      <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany). Esc vypne"><svg><use href="#i-naplast"/></svg>Náplast</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
     </div>
     <div class="skupina">
@@ -256,6 +256,14 @@
     <div class="panel-obsah" data-panel="strana" role="tabpanel" hidden>
     <section class="karta kontext" id="vybrany-tvar" hidden>
       <h2>Náplast</h2>
+      <div id="tvar-druh">
+        <div class="prepinac" role="group" aria-label="Druh náplasti">
+          <button type="button" data-prikaz="naplast-obdelnik">Obdélník</button>
+          <button type="button" data-prikaz="naplast-volny">Volný tvar</button>
+        </div>
+        <p class="napoveda-karty">Obdélník: klik vloží malý, tažení větší. Volný tvar: klikáním body,
+          uzavře klik na první bod, dvojklik nebo Enter. Esc nástroj vypne.</p>
+      </div>
       <div class="radek-pole">Barva
         <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti">
       </div>

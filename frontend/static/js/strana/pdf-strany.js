@@ -103,6 +103,8 @@ async function vlozObrazek(doc, src) {
 }
 
 function barva(css) {
+  const hex = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(css || '');
+  if (hex) return hex.slice(1).map((x) => parseInt(x, 16) / 255);
   const m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)/.exec(css);
   return m ? [m[1] / 255, m[2] / 255, m[3] / 255] : [0, 0, 0];
 }
@@ -237,11 +239,16 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
         width: r.width * PT_NA_PX, height: r.height * PT_NA_PX,
       });
     };
+    // Náplast: mnohoúhelník (body v podílech obdélníku kolem, viz schema.js) jako
+    // vektorová cesta; SVG cesta v pdf-lib má osu y dolů od zadaného počátku.
     const kresliTvar = (t) => {
       const r = t.getBoundingClientRect();
-      stranka.drawRectangle({
-        x: (r.left - r0.left) * PT_NA_PX, y: H - (r.bottom - r0.top) * PT_NA_PX,
-        width: r.width * PT_NA_PX, height: r.height * PT_NA_PX, color: rgb(...barva(getComputedStyle(t).backgroundColor)),
+      const body = (t.dataset.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map(Number));
+      const w = r.width * PT_NA_PX, h = r.height * PT_NA_PX;
+      const cesta = body.map(([fx, fy], i) => `${i ? 'L' : 'M'}${fx * w} ${fy * h}`).join(' ') + ' Z';
+      stranka.drawSvgPath(cesta, {
+        x: (r.left - r0.left) * PT_NA_PX, y: H - (r.top - r0.top) * PT_NA_PX,
+        color: rgb(...barva(t.dataset.barva || '#ffffff')), borderWidth: 0,
       });
     };
     for (const o of koren.querySelectorAll('.ps-obrazek.ps-vrstva-za, .ps-tvar')) {

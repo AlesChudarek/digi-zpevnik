@@ -19,6 +19,7 @@ import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-
 import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
 import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany, formatStrany } from './vykresleni.js';
 import { prepocitej } from './kolize.js';
+import { NastrojNaplasti } from './naplast.js';
 import { transponuj } from './akordy.js';
 
 const N = schema.nodes;
@@ -33,6 +34,7 @@ const KLIC_ZALOHY = 'navrh-strany-pokus';
 // Režim plochy u strany zpěvníku: jedna strana, nebo dvojstrana s protější stranou.
 // Tady nahoře - nastavMeritko ho čte už při startu.
 const KLIC_REZIMU = 'navrh-rezim-stran';
+let naplast = null;          // nástroj Náplast (naplast.js), vznikne po editoru
 let protejsekVerze = 0;      // novější vykreslení protějšku přebije starší
 let dvojstrana = (() => { try { return localStorage.getItem(KLIC_REZIMU) === 'dvojstrana'; } catch (_) { return false; } })();
 
@@ -400,18 +402,6 @@ async function dokumentSeSkenem(src) {
     N.obrazek.create({ src, x: Math.round((f.sirka - w) * 5) / 10, y: Math.round((f.vyska - h) * 5) / 10, w, h, vrstva: 'za' }),
     N.ramecek.create({ x: f.okraj, y: f.okraj, w: 60, h: 20 }, N.odstavec.create()),
   ]);
-}
-
-// Náplast: bílý obdélník uprostřed strany, vybraný (barva v kartě vpravo). Na konec
-// dokumentu, takže leží nad skenem (ten je na začátku).
-function pridejNaplast() {
-  const f = format();
-  const n = N.tvar.create({ x: Math.round(f.sirka / 2 - 15), y: Math.round(f.vyska / 2 - 5), w: 30, h: 10, barva: '#ffffff' });
-  const pos = view.state.doc.content.size;
-  const tr = closeHistory(view.state.tr).insert(pos, n);
-  tr.setSelection(NodeSelection.create(tr.doc, pos));
-  view.dispatch(tr);
-  view.focus();
 }
 
 const view = new EditorView(stranka.querySelector('.stranka-mount'), {
@@ -1354,6 +1344,7 @@ function transponujVse(pultony) {
 
 function prepniRezimAkordu(zapnout = !rezimAkordu) {
   rezimAkordu = zapnout;
+  if (zapnout && naplast?.aktivni) naplast.prepni(false);
   koren.classList.toggle('rezim-akordu', rezimAkordu);
   if (!rezimAkordu) skryjNabidkuSloky();
   aktualizujListu();
@@ -1442,7 +1433,11 @@ const PRIKAZY = {
   'transp-nahoru': () => transponujVse(1),
   ramecek: () => pridejRamecek(view, format()),
   obrazek: () => el('soubor-obrazku').click(),
-  naplast: pridejNaplast,
+  naplast: () => {
+    if (rezimAkordu) prepniRezimAkordu(false);
+    naplast.prepni();
+    if (naplast.aktivni) prepniZalozku('strana');
+  },
   'pismo-mensi': () => krokVelikosti(-1),
   'pismo-vetsi': () => krokVelikosti(1),
   zpet: () => undo(view.state, view.dispatch),
@@ -1456,9 +1451,11 @@ const PRIKAZY = {
   'dalsi-strana': () => jdiNaStranu(sousedniStrana(1)),
   'jedna-strana': () => nastavRezim(false),
   dvojstrana: () => nastavRezim(true),
+  'naplast-obdelnik': () => naplast.nastavDruh('obdelnik'),
+  'naplast-volny': () => naplast.nastavDruh('volny'),
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1559,6 +1556,8 @@ function aktualizujListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
     const c = b.dataset.prikaz;
     if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
+    else if (c === 'naplast') b.classList.toggle('aktivni', !!naplast?.aktivni);
+    else if (c === 'naplast-obdelnik' || c === 'naplast-volny') b.classList.toggle('aktivni', naplast?.druh === c.slice(8));
     else if (c === 'tucne') b.classList.toggle('aktivni', souhrn.tucne === true);
     else if (c === 'kurziva') b.classList.toggle('aktivni', souhrn.kurziva === true);
     else if (c === 'podtrzeni') b.classList.toggle('aktivni', souhrn.podtrzeni === true);
@@ -1580,8 +1579,13 @@ function aktualizujListu() {
   const obrazek = sel instanceof NodeSelection && sel.node.type === N.obrazek ? sel.node : null;
   el('vybrany-obrazek').hidden = !obrazek;
   const tvar = sel instanceof NodeSelection && sel.node.type === N.tvar ? sel.node : null;
-  el('vybrany-tvar').hidden = !tvar;
-  if (tvar && el('tvar-barva').value !== tvar.attrs.barva) el('tvar-barva').value = tvar.attrs.barva;
+  // Karta náplasti: u vybrané náplasti, nebo když je nástroj zapnutý (druh a barva
+  // nových náplastí).
+  const nastroj = !!naplast?.aktivni;
+  el('vybrany-tvar').hidden = !tvar && !nastroj;
+  el('tvar-druh').hidden = !nastroj;
+  el('tvar-smazat').hidden = !tvar;
+  if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
   if (obrazek) {
     for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
       b.classList.toggle('aktivni', b.dataset.vrstva === obrazek.attrs.vrstva);
@@ -1655,13 +1659,13 @@ function napojPanelAkordu() {
   const upravTvar = (barva, zapsat) => {
     const sel = view.state.selection;
     if (!(sel instanceof NodeSelection) || sel.node.type !== N.tvar) return;
-    if (!zapsat) { view.nodeDOM(sel.from).style.background = barva; return; }
+    if (!zapsat) { view.nodeDOM(sel.from).querySelector('polygon')?.setAttribute('fill', barva); return; }
     const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, barva });
     tr.setSelection(NodeSelection.create(tr.doc, sel.from));
     view.dispatch(tr);
   };
-  el('tvar-barva').addEventListener('input', (e) => upravTvar(e.target.value, false));
-  el('tvar-barva').addEventListener('change', (e) => upravTvar(e.target.value, true));
+  el('tvar-barva').addEventListener('input', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, false); });
+  el('tvar-barva').addEventListener('change', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, true); });
   el('tvar-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
     if (sel instanceof NodeSelection && sel.node.type === N.tvar) view.dispatch(view.state.tr.deleteSelection());
@@ -1796,6 +1800,16 @@ function zalozkaPodleVyberu(state) {
   nastaveni = { ...nastaveni, styly: Object.fromEntries(Object.entries(nastaveni.styly).filter(([k]) => pouzite.has(k))) };
 }
 
+// Nástroj Náplast (naplast.js): kreslí do strany, dokud je zapnutý.
+naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
+// Esc a Enter i mimo editor textu (po kliknutí do strany fokus v textu být nemusí).
+window.addEventListener('keydown', (e) => {
+  if (!naplast.aktivni) return;
+  if ((e.key === 'Escape' && naplast.esc()) || (e.key === 'Enter' && naplast.enter())) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+}, true);
 napojPanel();
 napojListu();
 napojPanelAkordu();

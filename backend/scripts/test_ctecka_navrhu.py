@@ -256,10 +256,49 @@ def test_skenu(p, base):
        (abs(a["w"] - 148) < 0.2 or abs(a["h"] - 210) < 0.2) and abs(a["x"] * 2 + a["w"] - 148) < 0.3 and abs(a["y"] * 2 + a["h"] - 210) < 0.3, a)
     ok("má i textový rámeček", any(n["type"] == "ramecek" for n in doc["content"]))
     page.click('[data-prikaz="naplast"]')
-    ok("Náplast vloží vybraný obdélník a ukáže jeho kartu", page.evaluate("navrhStrany.view.state.selection.node?.type.name") == "tvar"
-       and page.is_visible("#vybrany-tvar"))
+    ok("Náplast zapne nástroj (nic nevloží) a ukáže kartu s druhem",
+       page.evaluate("navrhStrany.view.state.doc.lastChild.type.name") != "tvar" and page.is_visible("#vybrany-tvar")
+       and page.is_visible("#tvar-druh") and page.evaluate("document.querySelector('.navrh').classList.contains('rezim-naplasti')"))
     page.evaluate("(() => { const i = document.getElementById('tvar-barva'); i.value = '#ff0000'; i.dispatchEvent(new Event('change')); })()")
-    ok("barva náplasti se nastaví", page.evaluate("navrhStrany.view.state.doc.lastChild.attrs.barva") == "#ff0000")
+    r = page.evaluate("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+    k = r["width"] / 148            # px na mm
+    PRVKY = "navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').map(n => n.attrs)"
+    page.mouse.click(r["x"] + 40 * k, r["y"] + 50 * k)
+    t = page.evaluate(PRVKY)
+    ok("klik vloží malý obdélník v barvě nástroje", len(t) == 1 and t[0]["w"] == 8 and t[0]["h"] == 4
+       and abs(t[0]["x"] - 36) < 0.3 and t[0]["barva"] == "#ff0000" and not t[0]["body"], t)
+    page.mouse.move(r["x"] + 60 * k, r["y"] + 100 * k)
+    page.mouse.down()
+    page.mouse.move(r["x"] + 61.5 * k, r["y"] + 101 * k, steps=4)
+    page.mouse.up()
+    t = page.evaluate(PRVKY)
+    ok("tažení vloží obdélník podle tahu, i velmi malý (1,5 × 1 mm)", len(t) == 2 and abs(t[1]["w"] - 1.5) < 0.25
+       and abs(t[1]["h"] - 1) < 0.25, t[-1:])
+    page.click('[data-prikaz="naplast-volny"]')
+    for (x, y) in ((90, 20), (110, 25), (100, 45)):
+        page.mouse.click(r["x"] + x * k, r["y"] + y * k)
+    page.mouse.click(r["x"] + 90.3 * k, r["y"] + 20.2 * k)       # klik na první bod uzavře
+    t = page.evaluate(PRVKY)
+    ok("volný tvar: klikání body, klik na první bod ho uzavře", len(t) == 3 and t[2]["body"]
+       and len(t[2]["body"].split()) == 3 and abs(t[2]["x"] - 90) < 0.3 and abs(t[2]["w"] - 20) < 0.3, t[-1:])
+    obrys = page.evaluate("[...document.querySelectorAll('.ps-tvar polygon')].map(p => getComputedStyle(p).stroke)")
+    ok("při zapnutém nástroji mají všechny náplasti obrys", all(o != "none" for o in obrys), obrys)
+    ok("náplast nemá horní lištu", page.locator(".ps-tvar .ps-prvek-lista").count() == 0)
+    page.click('[data-prikaz="naplast-obdelnik"]')
+    page.mouse.click(r["x"] + 40 * k, r["y"] + 50 * k)
+    ok("klik na existující náplast ji vybere, novou nevytvoří", len(page.evaluate(PRVKY)) == 3
+       and page.evaluate("navrhStrany.view.state.selection.node?.attrs.w") == 8)
+    page.keyboard.press("Escape")
+    ok("Esc nástroj vypne a obrysy nevybraných náplastí zmizí", not page.evaluate("document.querySelector('.navrh').classList.contains('rezim-naplasti')")
+       and page.evaluate("getComputedStyle(document.querySelectorAll('.ps-tvar polygon')[2]).stroke") == "none")
+    page.click('[data-prikaz="naplast"]')
+    page.click('[data-prikaz="naplast-volny"]')
+    page.mouse.click(r["x"] + 20 * k, r["y"] + 150 * k)
+    page.mouse.click(r["x"] + 30 * k, r["y"] + 150 * k)
+    page.keyboard.press("Escape")
+    ok("Esc při kreslení zahodí jen rozkreslený tvar", len(page.evaluate(PRVKY)) == 3
+       and page.evaluate("document.querySelector('.navrh').classList.contains('rezim-naplasti')"))
+    page.keyboard.press("Escape")
     page.click('[data-prikaz="ulozit"]')
     page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
     with A.app.app_context():
@@ -275,9 +314,9 @@ def test_skenu(p, base):
     page.evaluate("enableDoublePageMode(); nextPage()")     # strana 2 vlevo
     cekej_na_ostrou(page, "#left-page-navrh")
     ctecka = page.evaluate("""(() => { const e = document.querySelector('#left-page-navrh');
-      const t = e.querySelector('.ps-tvar'), i = e.querySelector('.ps-obrazek img');
-      return [t ? getComputedStyle(t).backgroundColor : null, i ? i.naturalWidth > 0 : false]; })()""")
-    ok("čtečka ukáže sken i náplast", ctecka == ["rgb(255, 0, 0)", True], ctecka)
+      const t = e.querySelectorAll('.ps-tvar polygon'), i = e.querySelector('.ps-obrazek img');
+      return [[...t].map(p => p.getAttribute('fill')), i ? i.naturalWidth > 0 : false]; })()""")
+    ok("čtečka ukáže sken i náplasti", ctecka == [["#ff0000"] * 3, True], ctecka)
     ok("bez chyb JavaScriptu", not chyby, chyby[:3])
     br.close()
 
@@ -289,8 +328,8 @@ def test_skenu(p, base):
     strana2 = PdfReader(str(vystup)).pages[1]
     obsah = strana2.get_contents().get_data()
     xobj = strana2["/Resources"].get("/XObject")
-    ok("v PDF je sken jako obrázek a náplast jako červený obdélník (vektor)",
-       xobj is not None and b"1 0 0 rg" in obsah and b" re" in obsah, (bool(xobj), obsah[:120]))
+    ok("v PDF je sken jako obrázek a náplasti jako červené vektorové tvary",
+       xobj is not None and obsah.count(b"1 0 0 rg") >= 3 and b" l" in obsah, (bool(xobj), obsah.count(b"1 0 0 rg")))
 
 
 def main():

@@ -14,6 +14,12 @@ import { Schema } from 'prosemirror';
 
 export const VERZE_SCHEMATU = 2;
 
+// Body náplasti pro SVG polygon v souřadnicích 0-100 (viewBox), bez bodů obdélník.
+export function bodyTvaru(body) {
+  if (!body) return '0,0 100,0 100,100 0,100';
+  return body.trim().split(/\s+/).map((b) => b.split(',').map((x) => Math.round(parseFloat(x) * 10000) / 100).join(',')).join(' ');
+}
+
 // Role stylu říká, jak se odstavec chová: sloka se čísluje, refrén dostane R:, název
 // písně začíná číslování znovu. Vestavěné styly mají id stejné jako roli; vlastní styly
 // („Úzká sloka“) mají id v1, v2… a jednu z těchto rolí.
@@ -69,20 +75,26 @@ export const schema = new Schema({
       }],
     },
 
-    // Tvar (náplast): obdélník s výplní nad obrázky za textem a pod textem - zakryje
-    // třeba vypálené číslo strany nebo chybu ve skenu. Barva jako #rrggbb.
+    // Tvar (náplast): plocha s výplní nad obrázky za textem a pod textem - zakryje třeba
+    // vypálené číslo strany nebo chybu ve skenu. x, y, w, h je obdélník kolem v mm,
+    // body mnohoúhelník uvnitř v podílech šířky a výšky („0,0 1,0 1,1 0,1“); bez nich
+    // je to obdélník. Kreslí se jako SVG, ať jde vidět i obrys volného tvaru.
     tvar: {
       group: 'prvek', atom: true, selectable: true, draggable: false,
-      attrs: { x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 }, barva: { default: '#ffffff' } },
+      attrs: {
+        x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 },
+        barva: { default: '#ffffff' }, body: { default: null },
+      },
       toDOM: (n) => ['div', {
         class: 'ps-tvar', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
-        'data-barva': n.attrs.barva,
-        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)};background:${n.attrs.barva}`,
-      }],
+        'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '',
+        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
+      }, ['http://www.w3.org/2000/svg svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none' },
+        ['http://www.w3.org/2000/svg polygon', { points: bodyTvaru(n.attrs.body), fill: n.attrs.barva }]]],
       parseDOM: [{
         tag: 'div.ps-tvar',
         getAttrs: (d) => ({ x: +d.dataset.x || 20, y: +d.dataset.y || 20, w: +d.dataset.w || 30, h: +d.dataset.h || 10,
-          barva: d.dataset.barva || '#ffffff' }),
+          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null }),
       }],
     },
 

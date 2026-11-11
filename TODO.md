@@ -1180,6 +1180,11 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
+      Hotovo: 5b. náplast jako nástroj (11. 11., `static/js/strana/naplast.js`): tlačítko
+      zapne/vypne (Esc), obdélník (klik = 8×4 mm, tah = podle tahu, bez nejmenší velikosti)
+      a volný tvar (klikání body; uzavře klik na první bod, dvojklik nebo Enter). Uzel tvar
+      má `body` (mnohoúhelník v podílech obdélníku kolem), kreslí se SVG; bez lišty, jen
+      obrys - při zapnutém nástroji obrys všech náplastí. PDF: vektorová cesta.
       Hotovo: 4b. listování dole vpravo vedle přiblížení (‹ číslo strany ›, číslo jde napsat
       jako ve čtečce) a přepínač jedna strana / dvojstrana (11. 11.). Dvojstrana ukáže
       protější stranu (rozdělanou z prohlížeče, uloženou, obrázek nebo prázdnou), klik ji
@@ -1221,3 +1226,5 @@ kdo maže.
       - [X] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+v editoru zpevniku mi prijde slovo "navrzena" zbytecne. bud jen nejakou inkonkou nebo vubec. ted to takryje zbytecne 20% nahledu.
+ikony pro jednotlive strany v editoru zpevniku jsem ti upravil, akorat image_add je vyrobeno zvlastne z vrstev s bilou barvou. muze to predelat tak, aby to byla ikona bez pozadi jako vsechno ostatni, jen uprav co se prekryva. Edit page ma stejnou ikonu jako edit zpevnik. Muzes pak pridat i dalsi tlacitko s ikonou stejnou jak duplikovat zpevnik pro duplikaci strany

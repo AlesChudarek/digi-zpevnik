@@ -8,12 +8,13 @@
 // puštění jde jedna transakce - celý přesun vrátí jedno „Zpět“.
 
 import { closeHistory, TextSelection, NodeSelection } from 'prosemirror';
+import { bodyTvaru } from './schema.js';
 
 const MM_NA_PX = 96 / 25.4;
 const MIN_MM = 8;
 const KROK_MM = 0.5;
 
-const zaokrouhli = (x) => Math.round(x / KROK_MM) * KROK_MM;
+const zaokrouhliMm = (x) => Math.round(x / KROK_MM) * KROK_MM;
 
 export class PrvekView {
   // volby: meritko() a rozmer() -> { sirka, vyska } strany v mm
@@ -57,9 +58,17 @@ export class PrvekView {
       this.dom.append(this.lista, this.img, this.roh);
       this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
     } else if (this.jeTvar) {
+      // Náplast bez lišty: táhne se za samotný tvar (klikat jde jen na jeho plochu, ne na
+      // prázdné rohy obdélníku kolem volného tvaru), obrys kreslí SVG.
       this.dom.contentEditable = 'false';
-      this.dom.append(this.lista, this.roh);
-      this.dom.addEventListener('pointerdown', (e) => { if (e.target === this.dom) this.zacni(e, 'presun'); });
+      const NS = 'http://www.w3.org/2000/svg';
+      this.svg = document.createElementNS(NS, 'svg');
+      this.svg.setAttribute('viewBox', '0 0 100 100');
+      this.svg.setAttribute('preserveAspectRatio', 'none');
+      this.polygon = document.createElementNS(NS, 'polygon');
+      this.svg.appendChild(this.polygon);
+      this.dom.append(this.svg, this.roh);
+      this.polygon.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
     } else {
       this.contentDOM = document.createElement('div');
       this.contentDOM.className = 'ps-ramecek-obsah';
@@ -86,7 +95,10 @@ export class PrvekView {
       this.dom.classList.toggle('ps-vrstva-za', a.vrstva === 'za');
       this.dom.classList.toggle('ps-vrstva-pred', a.vrstva !== 'za');
     }
-    if (this.jeTvar) s.background = a.barva;
+    if (this.jeTvar) {
+      this.polygon.setAttribute('points', bodyTvaru(a.body));
+      this.polygon.setAttribute('fill', a.barva);
+    }
   }
 
   update(node) {
@@ -132,6 +144,8 @@ export class PrvekView {
     t.posunuto = true;
     const { sirka, vyska } = this.volby.rozmer();
     const p = t.puvodni;
+    // Náplast se ladí jemněji (0,1 mm) - zakrývá i malé věci.
+    const zaokrouhli = this.jeTvar ? (x) => Math.round(x * 10) / 10 : zaokrouhliMm;
     if (t.druh === 'presun') {
       // Obrázek smí přesahovat přes okraj strany (ořízne se), rámeček ne.
       const presah = this.jeAtom ? Math.min(p.w, p.h) * 0.8 : 0;
@@ -140,7 +154,11 @@ export class PrvekView {
     } else {
       let w = Math.max(zaokrouhli(p.w + dx), MIN_MM);
       let h = Math.max(zaokrouhli(p.h + dy), MIN_MM);
-      if (this.jeObrazek && !e.shiftKey) {
+      if (this.jeTvar) {
+        // Náplast nemá nejmenší velikost - i malá ploška je potřeba.
+        w = Math.max(zaokrouhli(p.w + dx), 0.2);
+        h = Math.max(zaokrouhli(p.h + dy), 0.2);
+      } else if (this.jeObrazek && !e.shiftKey) {
         // Poměr stran: rozhoduje větší z obou změn.
         const pomer = p.w / p.h;
         if (Math.abs(dx) * p.h >= Math.abs(dy) * p.w) h = zaokrouhli(w / pomer);
@@ -257,10 +275,10 @@ export function vlozObrazek(view, format, { src, w, h }, kam = null) {
   const sirkaSazby = format.sirka - 2 * format.okraj, vyskaSazby = format.vyska - 2 * format.okraj;
   let sirka = sirkaSazby / 2, vyska = sirka * h / w;
   if (vyska > vyskaSazby) { vyska = vyskaSazby; sirka = vyska * w / h; }
-  sirka = zaokrouhli(sirka);
-  vyska = zaokrouhli(vyska);
-  const x = kam ? zaokrouhli(kam.x - sirka / 2) : zaokrouhli((format.sirka - sirka) / 2);
-  const y = kam ? zaokrouhli(kam.y - vyska / 2) : zaokrouhli((format.vyska - vyska) / 2);
+  sirka = zaokrouhliMm(sirka);
+  vyska = zaokrouhliMm(vyska);
+  const x = kam ? zaokrouhliMm(kam.x - sirka / 2) : zaokrouhliMm((format.sirka - sirka) / 2);
+  const y = kam ? zaokrouhliMm(kam.y - vyska / 2) : zaokrouhliMm((format.vyska - vyska) / 2);
   const uzel = view.state.schema.nodes.obrazek.create({ src, x, y, w: sirka, h: vyska });
   const konec = view.state.doc.content.size;
   const tr = closeHistory(view.state.tr).insert(konec, uzel);
