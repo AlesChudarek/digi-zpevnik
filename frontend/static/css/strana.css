@@ -19,22 +19,31 @@
   border-radius: 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
 }
 
-/* Vložený do editoru zpěvníku (rám): bez lišty a pruhů webu, přes celé okno. */
-html.navrh-vlozeny .navbar, html.navrh-vlozeny .hlasky, html.navrh-vlozeny .pruh-overeni,
-html.navrh-vlozeny .pruh-spravce, html.navrh-vlozeny .navbar-toggle { display: none !important; }
-html.navrh-vlozeny .navrh { margin-top: 8px; max-width: none; }
-html.navrh-vlozeny .jen-samostatne { display: none !important; }
+/* Strana zpěvníku (/editor-strany/<id>): přes celou šířku okna, vlevo v liště kde
+   strana je, nástroje uprostřed, Uložit vpravo. Mřížka, ne automatické okraje ve flexu -
+   ty se při zalomení lišty rozjely. Úzká lišta zalomí jen nástroje, každý řádek na střed.
+   Samostatně se obal nástrojů nevidí (display: contents). */
+html.navrh-ve-zpevniku .navrh { max-width: none; }
+html.navrh-ve-zpevniku .jen-samostatne { display: none !important; }
 .navrh-lista .skupina.hotovo-zrusit { margin-left: auto; border-left: 0; }
-/* Ve vloženém režimu je editor přes celou šířku okna: nástroje uprostřed okna, Hotovo
-   a Zrušit vpravo. Mřížka, ne automatické okraje ve flexu - ty se při zalomení lišty
-   rozjely (nástroje doprava, Hotovo na druhý řádek). Úzká lišta zalomí jen nástroje,
-   každý řádek na střed. Samostatně se obal nástrojů nevidí (display: contents). */
 .navrh-lista .nastroje { display: contents; }
-html.navrh-vlozeny .navrh-lista { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; }
-html.navrh-vlozeny .navrh-lista .nastroje {
+html.navrh-ve-zpevniku .navrh-lista { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; column-gap: 8px; }
+html.navrh-ve-zpevniku .navrh-lista .nastroje {
   grid-column: 2; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 0;
 }
-html.navrh-vlozeny .navrh-lista .hotovo-zrusit { grid-column: 3; justify-self: end; align-self: start; margin-left: 0; }
+html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-self: end; align-self: start; margin-left: 0; }
+/* Bez min-width: 0 - sloupec mřížky se pak nesmrskne pod popisek (dlouhý název se
+   zkrátí třemi tečkami, max-width) a popisek nevleze pod nástroje. */
+.navrh-lista .kde-strana {
+  grid-column: 1; justify-self: start; align-self: start;
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px;
+  border-radius: 6px; color: var(--panel-text, #333); text-decoration: none; font-size: 14px;
+}
+.navrh-lista .kde-strana:hover { background: var(--panel-btn-bg, #f0f0f0); }
+.navrh-lista .kde-sipka { font-size: 20px; line-height: 1; }
+.navrh-lista .kde-nazev { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
+.navrh-lista .kde-cislo { color: var(--muted-text, #777); white-space: nowrap; }
+.navrh-lista .kde-cislo::before { content: "· "; }
 .navrh-lista .hotovo-zrusit .hlavni { background: var(--brand-dark, #1b5e20); color: #fff; padding: 0 16px; font-weight: 600; }
 
 /* --- lišta --------------------------------------------------------------------------- */

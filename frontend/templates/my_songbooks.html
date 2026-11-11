@@ -1074,6 +1074,7 @@ function openCreateModal() {
   // Strany obsluhuje static/js/editor.js; u úprav je pak naplní openEditSongbookModal.
   EditorStran.zacni({ zpevnikId: window.__editMode ? window.__editBookId : null,
                       verejny: MANAGE_PUBLIC, naObalku: vlozObalku, poZmene: obnovUlozit,
+                      doEditoruStran: (cesta) => window.doEditoruStran(cesta),
                       smiNavrhovat: {{ 'true' if smi_navrhovat(current_user) else 'false' }} });
   // Reset heading/primary only when NOT in edit mode
   if (!window.__editMode) {
@@ -1376,63 +1377,100 @@ function openCreateModal() {
       modal.addEventListener(udalost, () => setTimeout(obnovUlozit, 0));
     });
 
+    // Uložení okna. Vrací id zpěvníku, nebo null (chyba, nebo ho uživatel nepotvrdil).
+    // Po úspěchu nechá tlačítka ve stavu „ukládá se“ - vždycky následuje odchod ze stránky.
+    async function ulozZpevnik() {
+      if (nbCreateBtn.dataset.loading === '1') return null;
+      const popisek = EditorStran.nahrava() ? 'Nahrávám strany…' : 'Ukládám…';
+      toggleButtonLoading(nbCreateBtn, null, true, popisek);
+      toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, popisek);
+      let resetLoading = true;
+      try {
+        // Admin ukládá cizí zpěvník: změnu uvidí vlastník a ti, kdo ho upravují společně.
+        const info = window.__editMode ? window.__editInfo : null;
+        if (info && info.cizi) {
+          const zprava = `Zpěvník patří uživateli ${info.vlastnik}`
+            + (info.clenu ? ` a upravují ho společně další (${info.clenu})` : '')
+            + '. Změna se projeví u nich.';
+          if (!(await window.showConfirm(zprava, 'Uložit cizí zpěvník'))) return null;
+        }
+        const pripraveno = await EditorStran.pripravKUlozeni();
+        if (!pripraveno.ok) {
+          oznam(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.',
+                { druh: 'varovani', nadpis: 'Zpěvník zatím nejde uložit' });
+          return null;
+        }
+        const fd = new FormData();
+        fd.append('nazev', (document.getElementById('nb-name')?.value || '').trim());
+        const hex = document.getElementById('hex-col')?.value;
+        if (hex) fd.append('barva', hex);
+        fd.append('prvni_cislo', String(EditorStran.prvniCislo()));
+        fd.append('strany', JSON.stringify(EditorStran.data()));
+        if (!window.__editMode && MANAGE_PUBLIC) fd.append('verejny', '1');
+        ['front_outer', 'front_inner', 'back_inner', 'back_outer'].forEach(role => {
+          const soubor = document.getElementById('file-' + role.replace('_', '-'))?.files?.[0];
+          if (soubor) fd.append(role, soubor);
+          if (document.getElementById('erem-' + role)?.value === '1') fd.append('remove_' + role, '1');
+        });
+        const url = window.__editMode
+          ? `/api/zpevnik/${encodeURIComponent(window.__editBookId)}` : '/api/zpevnik';
+        const res = await fetch(url, { method: 'POST', body: fd });
+        const odpoved = await res.json().catch(() => ({}));
+        if (!res.ok || !odpoved.ok) {
+          oznam(odpoved.error || `Chyba serveru ${res.status}.`, { nadpis: 'Uložení se nepovedlo' });
+          return null;
+        }
+        createDirty = false;
+        resetLoading = false;
+        return odpoved.id;
+      } catch (e) {
+        oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+        return null;
+      } finally {
+        if (resetLoading) {
+          toggleButtonLoading(nbCreateBtn, null, false);
+          toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, false);
+        }
+      }
+    }
+
     if (nbCreateBtn) {
       nbCreateBtn.addEventListener('click', async () => {
-        if (nbCreateBtn.dataset.loading === '1') return;
         if (!zmenyOkna()) return;
-        const popisek = EditorStran.nahrava() ? 'Nahrávám strany…' : 'Ukládám…';
-        toggleButtonLoading(nbCreateBtn, null, true, popisek);
-        toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, true, popisek);
-        let resetLoading = true;
-        try {
-          // Admin ukládá cizí zpěvník: změnu uvidí vlastník a ti, kdo ho upravují společně.
-          const info = window.__editMode ? window.__editInfo : null;
-          if (info && info.cizi) {
-            const zprava = `Zpěvník patří uživateli ${info.vlastnik}`
-              + (info.clenu ? ` a upravují ho společně další (${info.clenu})` : '')
-              + '. Změna se projeví u nich.';
-            if (!(await window.showConfirm(zprava, 'Uložit cizí zpěvník'))) return;
-          }
-          const pripraveno = await EditorStran.pripravKUlozeni();
-          if (!pripraveno.ok) {
-            oznam(pripraveno.chyba + ' Chybějící údaje jsou u stran vyznačené červeně.',
-                  { druh: 'varovani', nadpis: 'Zpěvník zatím nejde uložit' });
-            return;
-          }
-          const fd = new FormData();
-          fd.append('nazev', (document.getElementById('nb-name')?.value || '').trim());
-          const hex = document.getElementById('hex-col')?.value;
-          if (hex) fd.append('barva', hex);
-          fd.append('prvni_cislo', String(EditorStran.prvniCislo()));
-          fd.append('strany', JSON.stringify(EditorStran.data()));
-          if (!window.__editMode && MANAGE_PUBLIC) fd.append('verejny', '1');
-          ['front_outer', 'front_inner', 'back_inner', 'back_outer'].forEach(role => {
-            const soubor = document.getElementById('file-' + role.replace('_', '-'))?.files?.[0];
-            if (soubor) fd.append(role, soubor);
-            if (document.getElementById('erem-' + role)?.value === '1') fd.append('remove_' + role, '1');
-          });
-          const url = window.__editMode
-            ? `/api/zpevnik/${encodeURIComponent(window.__editBookId)}` : '/api/zpevnik';
-          const res = await fetch(url, { method: 'POST', body: fd });
-          const odpoved = await res.json().catch(() => ({}));
-          if (!res.ok || !odpoved.ok) {
-            oznam(odpoved.error || `Chyba serveru ${res.status}.`, { nadpis: 'Uložení se nepovedlo' });
-            return;
-          }
-          createDirty = false;
-          if (window.__zpetPoEditoru) window.location.href = window.__zpetPoEditoru;
-          else window.location.reload();
-          resetLoading = false;
-        } catch (e) {
-          oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
-        } finally {
-          if (resetLoading) {
-            toggleButtonLoading(nbCreateBtn, null, false);
-            toggleButtonLoading(nbSaveTopBtn, nbSaveTopSpinner, false);
-          }
-        }
+        const id = await ulozZpevnik();
+        if (!id) return;
+        if (window.__zpetPoEditoru) window.location.href = window.__zpetPoEditoru;
+        else window.location.reload();
       });
     }
+
+    // Přechod do editoru stran (samostatná stránka, ukládá rovnou do zpěvníku).
+    // `cesta(idStran, idZpevniku)` složí adresu, nebo vrátí null, když strana ještě není
+    // uložená. Neuložené změny zpěvníku: Uložit a přejít / Přejít bez uložení / Zůstat;
+    // když cíl bez uložení neexistuje (nová strana, nový zpěvník), jen Uložit a přejít.
+    window.doEditoruStran = async (cesta) => {
+      const bezUlozeni = window.__editMode ? cesta(EditorStran.idStran(), window.__editBookId) : null;
+      if (bezUlozeni && !zmenyOkna()) { window.location.href = bezUlozeni; return; }
+      let volba;
+      if (bezUlozeni) {
+        volba = await window.showUnsavedConfirm('Zpěvník má neuložené změny. Editor stran ukládá jen stranu.',
+          { save: 'Uložit a přejít do editoru', discard: 'Přejít bez uložení' });
+      } else {
+        volba = (await window.showConfirm('Strana ještě není ve zpěvníku uložená. Před přechodem do editoru stran se zpěvník uloží.',
+          'Uložit a přejít do editoru')) ? 'save' : 'cancel';
+      }
+      if (volba === 'cancel') return;
+      if (volba === 'discard') { createDirty = false; window.location.href = bezUlozeni; return; }
+      const id = await ulozZpevnik();
+      if (!id) return;
+      try {
+        const data = await (await fetch(`/api/zpevnik/${encodeURIComponent(id)}`)).json();
+        const adresa = cesta(data.zpevnik.strany.map(z => z.id), id);
+        window.location.href = adresa || window.location.pathname;
+      } catch (_) {
+        window.location.reload();
+      }
+    };
 
     // Top-right Save triggers same action as nb-create
     if (nbSaveTopBtn && nbCreateBtn) {
@@ -1908,7 +1946,7 @@ function openCreateModal() {
           if (face) face.style.backgroundImage = `url('/songbooks/${obalka.cesta}')`;
         });
         window.__editInfo = { cizi: !!z.cizi, vlastnik: z.vlastnik, clenu: z.clenu || 0 };
-        EditorStran.nacti(z.strany, z.prvni_cislo, { prvniStrana: z.prvni_strana });
+        EditorStran.nacti(z.strany, z.prvni_cislo);
         createDirty = false;
         obnovUlozit();
       });

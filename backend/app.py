@@ -2864,13 +2864,78 @@ def prehled_zpevniku_pro_spravu():
 def navrh_strany():
     """Editor navržené strany s akordy (bod 11 v TODO), jen pro prémiové účty.
 
-    S `?vlozeny=1` běží v rámu nad editorem zpěvníku: `navrh` = id verze k úpravě (bez
-    něj nová strana), `cislo` a `strana` (L/P) = pozice ve zpěvníku. Hotovo uloží verzi
-    na server a předá její id editoru zpěvníku. Samostatně (odkaz v liště, zatím jen
-    admin) je to pokusná stránka bez zpěvníku."""
+    Bez zpěvníku (odkaz v liště, zatím jen admin) je to pokusná stránka se zálohou
+    v prohlížeči. Strana zpěvníku má vlastní adresy (strana_ve_zpevniku, nova_strana)."""
     if not smi_navrhovat(current_user):
         abort(404)
-    return render_template('navrh_strany.html', vlozeny=request.args.get('vlozeny') == '1')
+    return render_template('navrh_strany.html', kontext=None)
+
+
+def strana_lp(sb, index) -> str:
+    """Levá/pravá strana podle pozice v obsahu (od nuly) - stejně jako čtečka."""
+    prvni_vpravo = (sb.first_page_side or 'right') != 'left'
+    return 'P' if (index % 2 == 0) == prvni_vpravo else 'L'
+
+
+def _kontext_editoru(sb, strana=None, za=None):
+    """Co editor stran potřebuje vědět o místě strany ve zpěvníku. U nové strany
+    (`strana` None) pozice za stranou `za` (None = na začátek)."""
+    index = strana.poradi if strana is not None else (za.poradi + 1 if za is not None else 0)
+    return {
+        'zpevnik': sb.id, 'nazev': sb.title or '', 'strana': strana.id if strana else None,
+        'za': (za.id if za else 0) if strana is None else None,
+        'navrh': strana.navrzena_id if strana else None,
+        'cislo': (sb.prvni_cislo_strany or 1) + index, 'lp': strana_lp(sb, index),
+        'zpet': url_for('my_songbooks', upravit=sb.id),
+    }
+
+
+def _smi_navrhovat_ve_zpevniku(sb) -> bool:
+    return sb is not None and smi_navrhovat(current_user) and can_edit_songbook(current_user, sb)
+
+
+def _za_stranou(sb, za_id):
+    """Strana, za kterou se vloží nová (0 = na začátek). Nová strana nesmí rozdělit
+    píseň, která pokračuje na další stranu. Vrací (strana nebo None, chyba)."""
+    za = None
+    if za_id:
+        za = db.session.get(Strana, za_id)
+        if za is None or za.songbook_id != sb.id:
+            return None, 'Strana, za kterou se má nová vložit, ve zpěvníku už není.'
+    dalsi = Strana.query.filter_by(songbook_id=sb.id, poradi=(za.poradi + 1 if za else 0)).first()
+    if dalsi is not None and any(v.poradi_v_pisni > 1 for v in dalsi.pisne):
+        return None, 'Sem nová strana nejde: píseň tu pokračuje na další stranu.'
+    return za, None
+
+
+@app.route('/editor-strany/<int:strana_id>')
+@login_required
+def strana_ve_zpevniku(strana_id):
+    """Editor stran nad stranou zpěvníku. Uložit ji uloží rovnou na její místo."""
+    strana = db.session.get(Strana, strana_id)
+    sb = strana.songbook if strana else None
+    if strana is None or not _smi_navrhovat_ve_zpevniku(sb):
+        abort(404)
+    if strana.image_id:
+        # Obrázková strana jako podklad v editoru stran přijde v kroku 5 (TODO bod 11).
+        flash('Stranu s nahraným obrázkem zatím v editoru stran upravit nejde.', 'error')
+        return redirect(url_for('my_songbooks', upravit=sb.id))
+    return render_template('navrh_strany.html', kontext=_kontext_editoru(sb, strana=strana))
+
+
+@app.route('/editor-strany/nova')
+@login_required
+def nova_strana():
+    """Editor stran pro novou stranu zpěvníku za stranou `za` (0 = na začátek). Strana
+    vznikne až uložením - zavření bez uložení ve zpěvníku nic nenechá."""
+    sb = db.session.get(Songbook, request.args.get('zpevnik') or '')
+    if not _smi_navrhovat_ve_zpevniku(sb):
+        abort(404)
+    za, chyba = _za_stranou(sb, request.args.get('za', type=int) or 0)
+    if chyba:
+        flash(chyba, 'error')
+        return redirect(url_for('my_songbooks', upravit=sb.id))
+    return render_template('navrh_strany.html', kontext=_kontext_editoru(sb, za=za))
 
 
 @app.route('/sprava/zpevniky')
@@ -3690,9 +3755,6 @@ def nacti_zpevnik_pro_editor(songbook_id):
             'nazev': sb.title,
             'barva': sb.color or '#FFFFFF',
             'prvni_cislo': sb.prvni_cislo_strany or 1,
-            # Pro editor stran: číslo a levá/pravá strana podle pozice.
-            'prvni_strana': 'L' if (sb.first_page_side or 'right') == 'left' else 'P',
-            'smi_navrhovat': smi_navrhovat(current_user),
             'obalky': obalky,
             'strany': strany_pro_editor(sb),
         },
@@ -3997,6 +4059,26 @@ def uloz_navrzenou_stranu():
         data_nahledu = nahled.read(NAVRH_MAX_NAHLED + 1)
         if len(data_nahledu) > NAVRH_MAX_NAHLED or zkontroluj_format(data_nahledu) != 'PNG':
             return jsonify({'ok': False, 'error': 'Náhled strany musí být PNG do 1 MB.'}), 400
+    # Strana zpěvníku (editor stran nad zpěvníkem): verze se rovnou připojí na místo -
+    # buď existující strana (`strana_id`), nebo nová za stranou `za` ve zpěvníku `zpevnik`.
+    strana = sb = za = None
+    if request.form.get('strana_id') or request.form.get('zpevnik'):
+        if request.form.get('strana_id'):
+            strana = db.session.get(Strana, request.form.get('strana_id', type=int))
+            sb = strana.songbook if strana else None
+            if strana is None:
+                return jsonify({'ok': False, 'error': 'Strana už ve zpěvníku není.'}), 404
+        else:
+            sb = db.session.get(Songbook, request.form.get('zpevnik'))
+        if not _smi_navrhovat_ve_zpevniku(sb):
+            return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+        if strana is not None and strana.image_id:
+            return jsonify({'ok': False, 'error': 'Stranu s nahraným obrázkem zatím v editoru stran upravit nejde.'}), 400
+        if strana is None:
+            za, chyba = _za_stranou(sb, request.form.get('za', type=int) or 0)
+            if chyba:
+                return jsonify({'ok': False, 'error': chyba}), 409
+    pred = zjisti_mista(kontrolovani_pri_uprave(sb)) if sb is not None else None
     _uklid_neulozenych_stran()
     soubor_pdf = _uloz_soubor_navrhu(data_pdf, '.pdf')
     soubor_nahledu = _uloz_soubor_navrhu(data_nahledu, '.png') if data_nahledu else None
@@ -4007,9 +4089,22 @@ def uloz_navrzenou_stranu():
                            pdf=soubor_pdf, nahled=soubor_nahledu, velikost=velikost)
     navrh.obrazky = obrazky
     db.session.add(navrh)
+    if sb is not None:
+        if strana is None:
+            strany = list(sb.strany)
+            strana = Strana(songbook_id=sb.id, poradi=-1)
+            db.session.add(strana)
+            strany.insert(za.poradi + 1 if za is not None else 0, strana)
+            prerovnej_strany(sb, strany)
+        strana.navrzena = navrh
+        zkontroluj_limity(pred)
     db.session.commit()
+    if sb is not None:
+        dopocitej_nahledy(sb.id)
+        schedule_export_warm(sb.id)
     return jsonify({'ok': True, 'id': navrh.id, 'velikost': velikost,
-                    'nahled': url_nahledu_navrhu(navrh)})
+                    'nahled': url_nahledu_navrhu(navrh),
+                    'strana': strana.id if strana is not None else None})
 
 
 @app.route('/api/navrh/strana/<int:navrh_id>')

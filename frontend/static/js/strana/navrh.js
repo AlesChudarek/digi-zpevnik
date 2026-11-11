@@ -23,10 +23,12 @@ import { transponuj } from './akordy.js';
 
 const N = schema.nodes;
 const M = schema.marks;
-// Režim vložení do editoru zpěvníku (rám nad ním): ?vlozeny=1&navrh=<id>&cislo=&strana=L|P
-const PARAMETRY = new URLSearchParams(location.search);
-const VLOZENY = PARAMETRY.get('vlozeny') === '1';
-const NAVRH_ID = parseInt(PARAMETRY.get('navrh'), 10) || null;
+// Strana zpěvníku (/editor-strany/<id strany> nebo /nova?zpevnik=&za=): kde strana je
+// a kam se uloží - { zpevnik, nazev, strana, za, navrh, cislo, lp, zpet }. Bez něj je to
+// samostatná pokusná stránka se zálohou v prohlížeči.
+const KONTEXT = (() => {
+  try { return JSON.parse(document.getElementById('kontext-strany')?.textContent || 'null'); } catch (_) { return null; }
+})();
 const KLIC_ZALOHY = 'navrh-strany-pokus';
 const MM_NA_PX = 96 / 25.4;
 
@@ -181,7 +183,7 @@ function normalizujStyly(state) {
   if (tr) tr.setMeta('addToHistory', false);
   return tr;
 }
-// Strana z editoru zpěvníku (?vlozeny=1&navrh=<id>): zdroj verze ze serveru. Bez id
+// Strana zpěvníku s navrženou verzí: zdroj verze ze serveru. Bez verze
 // nová strana. Zálohu v prohlížeči má jen samostatná pokusná stránka.
 async function nactiVerzi(id) {
   const r = await fetch(`/api/navrh/strana/${id}`, { credentials: 'same-origin' });
@@ -191,7 +193,7 @@ async function nactiVerzi(id) {
 }
 
 function nactiZalohu() {
-  if (VLOZENY) return null;
+  if (KONTEXT) return null;
   try {
     const data = JSON.parse(localStorage.getItem(KLIC_ZALOHY) || 'null');
     if (data && data.verze === VERZE_SCHEMATU && data.obsah) {
@@ -203,7 +205,7 @@ function nactiZalohu() {
 
 let casovacZalohy = null;
 function zalohuj() {
-  if (VLOZENY) return;
+  if (KONTEXT) return;
   clearTimeout(casovacZalohy);
   casovacZalohy = setTimeout(() => {
     try {
@@ -319,19 +321,17 @@ const ovladac = new OvladacAkordu(obal, {
 });
 
 let zaloha = nactiZalohu();
-if (VLOZENY && NAVRH_ID) {
+if (KONTEXT && KONTEXT.navrh) {
   try {
-    zaloha = await nactiVerzi(NAVRH_ID);
+    zaloha = await nactiVerzi(KONTEXT.navrh);
   } catch (chyba) {
     window.oznam(String(chyba.message || chyba), { nadpis: 'Strana se nenačetla', druh: 'chyba' });
   }
 }
 if (zaloha) nastaveni = zaloha.nastaveni;
-if (VLOZENY) {
+if (KONTEXT) {
   // Číslo a levá/pravá podle skutečné pozice ve zpěvníku.
-  const cislo = parseInt(PARAMETRY.get('cislo'), 10);
-  nastaveni = { ...nastaveni, nahledCisla: Number.isFinite(cislo) ? cislo : nastaveni.nahledCisla,
-    nahledStrany: PARAMETRY.get('strana') === 'L' ? 'L' : 'P' };
+  nastaveni = { ...nastaveni, nahledCisla: KONTEXT.cislo, nahledStrany: KONTEXT.lp === 'L' ? 'L' : 'P' };
 }
 
 const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: format });
@@ -854,21 +854,21 @@ async function nahrajDataObrazky() {
   view.dispatch(tr.setMeta('addToHistory', false));
 }
 
-// --- Hotovo a Zrušit (režim vložení do editoru zpěvníku) -----------------------------
+// --- Uložit (strana zpěvníku) ----------------------------------------------------------
+// Uložit nahraje novou verzi strany (zdroj, PDF, náhled) a server ji rovnou připojí na
+// místo ve zpěvníku; nová strana tím teprve ve zpěvníku vznikne. Editor zůstane otevřený.
 
 let otiskPriNacteni = null;
 const otiskStrany = () => JSON.stringify({ o: view.state.doc.toJSON(), n: { ...nastaveni, nahledCisla: 0, nahledStrany: '' } });
-
-function zprava(data) {
-  window.parent.postMessage({ zdroj: 'editor-strany', ...data }, location.origin);
-}
+const neulozeno = () => !!KONTEXT && otiskStrany() !== otiskPriNacteni;
 
 let ulozitSe = false;
-async function hotovo() {
-  if (ulozitSe) return;
+async function ulozit() {
+  if (!KONTEXT || ulozitSe) return false;
   ulozitSe = true;
-  const tlacitko = koren.querySelector('[data-prikaz="hotovo"]');
+  const tlacitko = koren.querySelector('[data-prikaz="ulozit"]');
   if (tlacitko) { tlacitko.disabled = true; tlacitko.textContent = 'Ukládá se…'; }
+  let povedlo = false;
   try {
     await nahrajDataObrazky();
     const zdroj = zdrojStrany();
@@ -880,25 +880,55 @@ async function hotovo() {
     fd.append('zdroj', JSON.stringify(zdroj));
     fd.append('pdf', new Blob([bytes], { type: 'application/pdf' }), 'strana.pdf');
     fd.append('nahled', nahled, 'nahled.png');
+    if (KONTEXT.strana) fd.append('strana_id', String(KONTEXT.strana));
+    else { fd.append('zpevnik', KONTEXT.zpevnik); fd.append('za', String(KONTEXT.za || 0)); }
     const r = await fetch('/api/navrh/strana', { method: 'POST', body: fd, credentials: 'same-origin' });
     const d = await r.json().catch(() => ({}));
     if (!d.ok) throw new Error(d.error || 'Stranu se nepodařilo uložit.');
     otiskPriNacteni = otiskStrany();
-    zprava({ typ: 'hotovo', navrzena_id: d.id, nahled: d.nahled });
+    KONTEXT.navrh = d.id;
+    if (!KONTEXT.strana && d.strana) {
+      // Nová strana teď ve zpěvníku je: další Uložit už ji jen přepíše.
+      KONTEXT.strana = d.strana;
+      KONTEXT.za = null;
+      // window.: `history` je tu plugin historie úprav z ProseMirroru.
+      window.history.replaceState(null, '', `/editor-strany/${d.strana}`);
+      const cislo = koren.querySelector('.kde-cislo');
+      if (cislo) cislo.textContent = String(KONTEXT.cislo);
+    }
+    povedlo = true;
   } catch (chyba) {
     window.oznam(String(chyba.message || chyba), { nadpis: 'Strana se neuložila', druh: 'chyba' });
   } finally {
     ulozitSe = false;
-    if (tlacitko) { tlacitko.disabled = false; tlacitko.textContent = 'Hotovo'; }
+    if (tlacitko) {
+      tlacitko.disabled = false;
+      tlacitko.textContent = povedlo ? 'Uloženo' : 'Uložit';
+      if (povedlo) setTimeout(() => { if (!ulozitSe) tlacitko.textContent = 'Uložit'; }, 1500);
+    }
   }
+  return povedlo;
 }
 
-async function zrusit() {
-  if (otiskStrany() !== otiskPriNacteni) {
-    const ok = await window.showConfirm('Změny na straně se zahodí.', 'Zahodit změny', { nebezpecne: true });
-    if (!ok) return;
-  }
-  zprava({ typ: 'zavrit' });
+// Odchod s neuloženou stranou: odkaz zpět do zpěvníku se zeptá stejně jako editor
+// zpěvníku; zavření záložky nebo jiný odkaz webu ohlídá prohlížeč (beforeunload).
+let odchazi = false;
+if (KONTEXT) {
+  window.addEventListener('beforeunload', (e) => {
+    if (odchazi || !neulozeno()) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+  document.getElementById('zpet-do-zpevniku')?.addEventListener('click', async (e) => {
+    if (!neulozeno()) return;
+    e.preventDefault();
+    const volba = await window.showUnsavedConfirm('Strana má neuložené změny.',
+      { save: 'Uložit a odejít', discard: 'Odejít bez uložení' });
+    if (volba === 'cancel') return;
+    if (volba === 'save' && !(await ulozit())) return;
+    odchazi = true;
+    location.href = KONTEXT.zpet;
+  });
 }
 
 // --- příkazy lišty --------------------------------------------------------------------
@@ -1140,11 +1170,10 @@ const PRIKAZY = {
   vetsi: () => nastavMeritko(Math.min(3, Math.round((meritko + 0.1) * 10) / 10)),
   'cela-strana': () => { meritkoRucne = false; nastavMeritko(); },
   nahled: otevriNahled,
-  hotovo,
-  zrusit,
+  ulozit,
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'nahled', 'hotovo', 'zrusit'];
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'nahled', 'ulozit'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1473,7 +1502,6 @@ aktualizujListu();
 window.addEventListener('resize', () => { nastavVysku(); if (!meritkoRucne) nastavMeritko(); });
 view.focus();
 otiskPriNacteni = otiskStrany();
-if (VLOZENY) zprava({ typ: 'nacteno' });
 
 // Pro testy a ladění.
 // nahradTextem: test začíná od známého textu, ne od ukázkové písně.

@@ -7,9 +7,10 @@
 <link rel="stylesheet" href="{{ static_bust('vendor/prosemirror/prosemirror.css') }}">
 <link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
 <link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
-{% if vlozeny %}
-{# V rámu nad editorem zpěvníku: bez lišty webu, přes celou výšku. #}
-<script>document.documentElement.classList.add('navrh-vlozeny');</script>
+{% if kontext %}
+{# Strana zpěvníku: kde strana je (zpěvník, číslo, L/P) a kam se uloží. #}
+<script type="application/json" id="kontext-strany">{{ kontext | tojson }}</script>
+<script>document.documentElement.classList.add('navrh-ve-zpevniku');</script>
 {% endif %}
 {% include '_strana_importmap.html' %}
 
@@ -41,6 +42,14 @@
 
 <div class="navrh" id="navrh">
   <div class="navrh-lista" role="toolbar" aria-label="Úpravy strany">
+    {% if kontext %}
+    {# Kde strana je; odkaz vede zpátky do editoru zpěvníku (s upozorněním na neuložené). #}
+    <a class="kde-strana" id="zpet-do-zpevniku" href="{{ kontext.zpet }}" data-napoveda="Zpět do editoru zpěvníku">
+      <span class="kde-sipka" aria-hidden="true">‹</span>
+      <span class="kde-nazev">{{ kontext.nazev }}</span>
+      <span class="kde-cislo">{{ 'nová strana ' if not kontext.strana }}{{ kontext.cislo }}</span>
+    </a>
+    {% endif %}
     <div class="nastroje">
     <div class="skupina">
       <button type="button" class="ikona" data-prikaz="zpet" data-napoveda="Zpět (Ctrl+Z)" aria-label="Zpět"><svg><use href="#i-zpet"/></svg></button>
@@ -87,10 +96,9 @@
       <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
     </div>
     </div>
-    {% if vlozeny %}
+    {% if kontext %}
     <div class="skupina hotovo-zrusit">
-      <button type="button" data-prikaz="zrusit">Zrušit</button>
-      <button type="button" class="hlavni" data-prikaz="hotovo" data-napoveda="Uložit stranu do zpěvníku (projeví se po Uložit v editoru zpěvníku)">Hotovo</button>
+      <button type="button" class="hlavni" data-prikaz="ulozit" data-napoveda="Uložit stranu do zpěvníku">Uložit</button>
     </div>
     {% endif %}
   </div>
@@ -273,7 +281,7 @@
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
       </ul>
     </section>
-    {% if not vlozeny %}<button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>{% endif %}
+    {% if not kontext %}<button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>{% endif %}
     </div>
   </aside>
 </div>

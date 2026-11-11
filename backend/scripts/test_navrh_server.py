@@ -199,6 +199,56 @@ def main():
     kod, nyni = uloz_zpevnik(dict(zaklad, navrzena_id=n1["id"], nacteno=[None, None]))
     ok("a stejně tak vrácení strany", kod == 200 and nyni == n1["id"], (kod, nyni))
 
+    print("\n── editor stran ukládá rovnou do zpěvníku ──")
+    def uloz_do(c, **pole):
+        r = c.post("/api/navrh/strana", data={"zdroj": json.dumps(zdroj()), "pdf": (io.BytesIO(PDF), "strana.pdf"),
+                                             **{k: str(v) for k, v in pole.items()}},
+                   content_type="multipart/form-data")
+        return r.status_code, (r.get_json() or {})
+
+    def rada():
+        with A.app.app_context():
+            return [(st.id, st.navrzena_id, st.image_id) for st in A.db.session.get(A.Songbook, "test-navrh-ed").strany]
+    with A.app.app_context():
+        # Vlastní zpěvník téhle části: prázdná strana a strana s obrázkem.
+        A.db.session.add(A.Songbook(id="test-navrh-ed", title="Editor stran", owner_id=3, is_public=0))
+        A.db.session.add(A.Strana(songbook_id="test-navrh-ed", poradi=0))
+        A.db.session.add(A.Strana(songbook_id="test-navrh-ed", poradi=1, image_id=o1["id"]))
+        A.db.session.commit()
+    pred_r = rada()
+    kod, d = uloz_do(premium, zpevnik="test-navrh-ed", za=pred_r[0][0])
+    po_r = rada()
+    ok("nová strana se vloží za danou stranu", kod == 200 and len(po_r) == len(pred_r) + 1
+       and po_r[1][0] == d.get("strana") and po_r[1][1] == d.get("id"), (kod, d, po_r))
+    kod, d2 = uloz_do(premium, strana_id=d["strana"])
+    ok("další uložení přepíše tutéž stranu (nová verze)", kod == 200 and d2.get("strana") == d["strana"]
+       and rada()[1][1] == d2["id"] and len(rada()) == len(po_r), (kod, d2, rada()))
+    kod, d3 = uloz_do(premium, strana_id=po_r[-1][0])
+    ok("stranu s nahraným obrázkem zatím nepřepíše", kod == 400, (kod, d3))
+    kod, _ = uloz_do(bezny, zpevnik="test-navrh-ed", za=0)
+    ok("účet bez prémia do zpěvníku nic neuloží", kod == 403, kod)
+    with A.app.app_context():
+        cizi = A.Songbook(id="test-navrh-cizi", title="Cizí", owner_id=4, is_public=0)
+        A.db.session.add(cizi)
+        A.db.session.add(A.Strana(songbook_id="test-navrh-cizi", poradi=0))
+        A.db.session.commit()
+        cizi_strana = A.Strana.query.filter_by(songbook_id="test-navrh-cizi").first().id
+    kod, _ = uloz_do(premium, strana_id=cizi_strana)
+    ok("do cizího zpěvníku, který neupravuje, neuloží", kod == 404, kod)
+    with A.app.app_context():
+        # Píseň přes strany 1-2: mezi ně nová strana nesmí.
+        s0, s1 = A.db.session.get(A.Songbook, "test-navrh-ed").strany[:2]
+        pisen = A.Song(id="test-navrh-pisen", title="Dlouhá", author_id=1)
+        A.db.session.add(pisen)
+        A.db.session.add_all([A.PisenNaStrane(strana_id=s0.id, song_id=pisen.id, poradi_v_pisni=1),
+                              A.PisenNaStrane(strana_id=s1.id, song_id=pisen.id, poradi_v_pisni=2)])
+        A.db.session.commit()
+        s0_id = s0.id
+    kod, d4 = uloz_do(premium, zpevnik="test-navrh-ed", za=s0_id)
+    ok("doprostřed písně, která pokračuje na další stranu, nová strana nejde", kod == 409, (kod, d4))
+    ok("a stránka editoru pro takové místo vrátí do zpěvníku",
+       premium.get(f"/editor-strany/nova?zpevnik=test-navrh-ed&za={s0_id}").status_code == 302)
+
     print("\n── úklid ──")
     kod, n3 = uloz_navrh(premium, zdroj())                  # neuložená verze (žádný zpěvník)
     with A.app.app_context():

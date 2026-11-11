@@ -1180,6 +1180,10 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
         do té doby zástupné.
+      Hotovo: 1. pojistka (11. 11.), 2. stránka editoru stran (11. 11.: `/editor-strany/<id>`
+      a `/nova?zpevnik=&za=`, Uložit přes `/api/navrh/strana` se `strana_id` nebo
+      `zpevnik`+`za` - verzi rovnou připojí, novou stranu vloží; doprostřed pokračující
+      písně ne; obrázková strana zatím 400 / přesměrování). Rám (iframe) je pryč.
       **Postup**: 1. pojistka na serveru, 2. stránka editoru stran (bez rámu), 3. řádek
       strany v editoru zpěvníku, 4. listování a záloha, 5. obrázková strana + náplast,
       6. dokončení exportu a nasazení, 7. „použít i v ostatních zpěvnících“, odkaz v liště.

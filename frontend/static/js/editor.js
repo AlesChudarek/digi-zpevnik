@@ -551,55 +551,26 @@
   }
 
   // ---------- editor stran (navržená strana) ----------
-  // Otevře se přes celé okno v rámu (iframe), ať se jeho CSS a skripty nepotkají se
-  // stránkou Moje zpěvníky. Hotovo uloží verzi na server a pošle sem její id; do
-  // zpěvníku se dostane až Uložit, stejně jako nahraný obrázek.
-
-  function stranaLP(i) {
-    var prvniVpravo = (nastaveni.prvniStrana || 'P') === 'P';
-    return (i % 2 === 0) === prvniVpravo ? 'P' : 'L';
-  }
+  // Editor stran je samostatná stránka a ukládá stranu rovnou do zpěvníku. Odsud se do
+  // něj jen přejde: na existující stranu (/editor-strany/<id>), nebo na novou za danou
+  // stranou (/editor-strany/nova?zpevnik=&za=). Neuložené změny zpěvníku (a strany, které
+  // ještě nejsou na serveru) ohlídá okno v Mých zpěvnících - nastaveni.doEditoruStran.
+  // Adresa se skládá až z uložených id stran, proto funkce, ne hotový řetězec.
 
   function otevriNavrh(s) {
-    if (!nastaveni.smiNavrhovat) return;
+    if (!nastaveni.smiNavrhovat || !nastaveni.doEditoruStran) return;
     var i = strany.indexOf(s);
-    var adresa = '/editor-strany?vlozeny=1&cislo=' + (prvniCislo() + i) + '&strana=' + stranaLP(i)
-      + (s.navrzena_id ? '&navrh=' + s.navrzena_id : '');
-    var okno = el('div', 'es-navrh-okno');
-    var ram = document.createElement('iframe');
-    ram.src = adresa;
-    ram.title = 'Editor stran';
-    okno.appendChild(ram);
-    document.body.appendChild(okno);
-    document.documentElement.classList.add('es-navrh-otevreny');
-    function zavri() {
-      window.removeEventListener('message', zprava);
-      okno.remove();
-      document.documentElement.classList.remove('es-navrh-otevreny');
-    }
-    function zprava(e) {
-      if (e.origin !== location.origin || e.source !== ram.contentWindow || !e.data || e.data.zdroj !== 'editor-strany') return;
-      if (e.data.typ === 'hotovo') {
-        s.navrzena_id = e.data.navrzena_id;
-        s.nahled = e.data.nahled;
-        s.obrazek = null;
-        s.image_id = null;
-        s.soubor = null;
-        vykresli();
-        if (nastaveni.poZmene) nastaveni.poZmene();
-        zavri();
-      } else if (e.data.typ === 'zavrit') {
-        zavri();
-      }
-    }
-    window.addEventListener('message', zprava);
+    nastaveni.doEditoruStran(function (ids) {
+      return ids[i] ? '/editor-strany/' + ids[i] : null;
+    });
   }
 
   function pridejNavrh(kam) {
-    var s = novaStrana();
-    vlozNa(kam, [s]);
-    vykresli();
-    otevriNavrh(s);
+    if (!nastaveni.smiNavrhovat || !nastaveni.doEditoruStran) return;
+    nastaveni.doEditoruStran(function (ids, zpevnik) {
+      if (kam > 0 && !ids[kam - 1]) return null;
+      return '/editor-strany/nova?zpevnik=' + encodeURIComponent(zpevnik) + '&za=' + (kam > 0 ? ids[kam - 1] : 0);
+    });
   }
 
   // Plus mezi stranami (i před první a za poslední): malá nabídka - prázdná strana,
@@ -1086,6 +1057,8 @@
   // ---------- veřejné rozhraní ----------
 
   window.EditorStran = {
+    // Id stran v pořadí (null = strana ještě není uložená) - pro adresu editoru stran.
+    idStran: function () { return strany.map(function (s) { return s.id; }); },
     zacni: function (volby) {
       nastaveni = volby || {};
       navaz();
@@ -1106,7 +1079,6 @@
     // je tedy od začátku změněné - zavření se zeptá a Uložit svítí.
     nacti: function (seznam, prvni, volby) {
       seznam = seznam || [];
-      if (volby && volby.prvniStrana) nastaveni.prvniStrana = volby.prvniStrana;
       strany = seznam.map(function (z, i) {
         var s = novaStrana(z);
         s.pokracuje = !!(seznam[i + 1] && seznam[i + 1].typ === 'pokracovani');
