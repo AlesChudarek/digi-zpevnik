@@ -207,9 +207,15 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 .es-navrh-okno { position: fixed; inset: 0; z-index: 3000; background: var(--bg-grad-start, #f3f3f3); }
 .es-navrh-okno iframe { width: 100%; height: 100%; border: 0; display: block; }
 html.es-navrh-otevreny { overflow: hidden; }
-.es-nahled.navrzena { position: relative; }
+/* Navržená strana se klikem otevře k úpravě, ne ke zvětšení: kurzor tužka (tatáž ikona
+   jako v editoru stran), kde vlastní kurzor nejde, aspoň ruka. Hrot tužky je vlevo dole. */
+.es-nahled.navrzena {
+  position: relative;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke-linejoin='round' stroke-linecap='round'%3E%3Cg stroke='%23fff' stroke-width='4'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3C/g%3E%3Cg stroke='%23000' stroke-width='1.6'%3E%3Cpath d='M4 20h4L19 9l-4-4L4 16z'/%3E%3Cpath d='m13 7 4 4'/%3E%3C/g%3E%3C/svg%3E") 4 20, pointer;
+}
 .es-znacka-navrhu {
-  position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 999px;
+  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
+  padding: 1px 5px; border-radius: 999px; white-space: nowrap; line-height: 1.35;
   background: #1a73e8; color: #fff; font-size: 11px; font-weight: 600; pointer-events: none;
 }
 /* Prázdná strana: „+ obrázek“ a „✎ navrhnout“ pod sebou (vedle sebe se do náhledu

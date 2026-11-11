@@ -174,6 +174,12 @@ def main():
               if (!img) return ok(0); if (img.complete) return ok(img.naturalWidth); img.onload = () => ok(img.naturalWidth); img.onerror = () => ok(-1); })""")
             ok("karta ukáže náhled navržené strany", nahled_w == 420, nahled_w)
             ok("a značku „navržená“", page.locator("#es-seznam .es-strana").first.locator(".es-znacka-navrhu").count() == 1)
+            znacka = page.evaluate("""(() => { const n = document.querySelector('#es-seznam .es-nahled.navrzena');
+              const z = n.querySelector('.es-znacka-navrhu').getBoundingClientRect(), b = n.getBoundingClientRect();
+              return [Math.round(((z.left + z.right) / 2 - (b.left + b.right) / 2) * 10) / 10, Math.round(z.width), Math.round(b.width),
+                      getComputedStyle(n).cursor.slice(0, 40)]; })()""")
+            ok("štítek „navržená“ je na středu náhledu a vejde se", abs(znacka[0]) <= 0.5 and znacka[1] <= znacka[2], znacka)
+            ok("nad navrženou stranou je kurzor tužka (úprava), ne lupa", znacka[3].startswith('url("data:image/svg+xml'), znacka[3])
             ok("do zpěvníku se zatím nic neuložilo", strany_db()[0][1] is None, strany_db())
             page.click("#nb-save-top")
             page.wait_for_function("!document.getElementById('editor-stran') || !document.getElementById('editor-stran').offsetParent", timeout=20000)

@@ -1158,15 +1158,15 @@ kdo maže.
       daného nebo vybraného zpěvníku. Promyslet spolu: adresy (zpěvník, strana), zpět
       v prohlížeči, rozdělaná práce při odchodu, a jestli přejde i editor zpěvníku.
       **Nálezy z používání** (11. 11.):
-      - [ ] editor stran: lištička pro tažení vybraného rámečku je o ~2 px užší než jeho
+      - [X] editor stran: lištička pro tažení vybraného rámečku je o ~2 px užší než jeho
         modrý obrys (má šířku rámečku bez obrysu)
       - [ ] číslování slok se nastavuje u každé strany zvlášť - po úpravě u jedné písně má
         další jiné. Uložitelné „modely“ číslování (jako styly v knihovně účtu), ať jde
         číslování v celém zpěvníku sjednotit
       - [ ] duplikovat navrženou stranu (novou píseň ve stejném formátu) - s tím počítá
         i rozhodnutí o stylech (grafika se převezme duplikováním)
-      - [ ] editor zpěvníku: nad navrženou stranou je kurzor lupa (náhled), má být
+      - [X] editor zpěvníku: nad navrženou stranou je kurzor lupa (náhled), má být
         tužka / úprava - klik ji otevře k úpravě, ne ke zvětšení
-      - [ ] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
+      - [X] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie

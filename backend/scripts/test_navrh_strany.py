@@ -495,6 +495,12 @@ def test_prohlizece(p, base, jmeno):
     page.click('[data-prikaz="ramecek"]')
     ok('+ Rámeček přidá rámeček', J("document.querySelectorAll('.ps-ramecek').length") == 2)
     page.keyboard.type('Poznámka')
+    # Na obrazovce: obrys (CSS px, prohlížeč ho zaokrouhlí) krát zvětšení strany.
+    sirky = J("""(() => { const r = document.querySelectorAll('.ps-ramecek')[1];
+      const l = r.querySelector('.ps-prvek-lista').getBoundingClientRect(), b = r.getBoundingClientRect();
+      const o = parseFloat(getComputedStyle(r).outlineWidth) * b.width / r.offsetWidth;
+      return [Math.round((b.left - l.left - o) * 100) / 100, Math.round((l.right - b.right - o) * 100) / 100, o]; })()""")
+    ok('lištička vybraného rámečku je široká jako jeho obrys (±0,5 px)', abs(sirky[0]) <= 0.5 and abs(sirky[1]) <= 0.5 and sirky[2] > 0, sirky)
     pred = J("navrhStrany.view.state.doc.child(1).attrs")
     l = J("document.querySelectorAll('.ps-ramecek .ps-prvek-lista')[1].getBoundingClientRect().toJSON()")
     page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
