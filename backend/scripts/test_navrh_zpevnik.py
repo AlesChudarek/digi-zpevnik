@@ -235,8 +235,9 @@ def main():
             ok("karta ukáže náhled navržené strany", nahled_w == 420, nahled_w)
             znacka = page.evaluate("""(() => { const n = document.querySelector('#es-seznam .es-nahled.navrzena');
               const z = n.querySelector('.es-znacka-navrhu').getBoundingClientRect(), b = n.getBoundingClientRect();
-              return [Math.round(((z.left + z.right) / 2 - (b.left + b.right) / 2) * 10) / 10, Math.round(z.width), Math.round(b.width)]; })()""")
-            ok("štítek „navržená“ je na středu náhledu a vejde se", abs(znacka[0]) <= 0.5 and znacka[1] <= znacka[2], znacka)
+              return { sirka: Math.round(z.width), podil: Math.round(z.width * z.height / (b.width * b.height) * 100), text: n.querySelector('.es-znacka-navrhu').textContent }; })()""")
+            ok("navržená strana má v náhledu jen malou ikonu (bez textu, do 5 % plochy)",
+               znacka["text"] == "" and znacka["podil"] <= 5, znacka)
             page.locator("#es-seznam .es-strana").first.locator(".es-nahled").click()
             page.wait_for_selector("#es-lupa:not([hidden])")
             page.wait_for_selector("#es-lupa .es-lupa-strana.ostra", timeout=20000)
@@ -372,6 +373,30 @@ def main():
                 posledni = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi.desc()).first().id
             ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
                page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
+
+            print("\n── duplikovat stranu ──")
+            page.click("#zpet-do-zpevniku")
+            page.wait_for_url("**/my-songbooks**")
+            otevri_editor_zpevniku(page)
+            pred = strany_db()
+            pocet = page.locator("#es-seznam .es-strana").count()
+            page.locator("#es-seznam .es-strana").first.locator(".es-duplikovat").click()
+            ok("duplikovat vloží kopii hned za stranu", page.locator("#es-seznam .es-strana").count() == pocet + 1
+               and page.evaluate("EditorStran.data()[1].navrzena_id") == pred[0][1]
+               and page.evaluate("EditorStran.data()[1].pisne.length") == 0, page.evaluate("EditorStran.data().slice(0, 2)"))
+            page.click("#nb-save-top")
+            page.wait_for_function("!document.getElementById('editor-stran') || !document.getElementById('editor-stran').offsetParent", timeout=20000)
+            po = strany_db()
+            ok("po uložení mají obě strany tutéž (neměnnou) verzi", len(po) == len(pred) + 1 and po[0][1] == po[1][1] == pred[0][1], po)
+            with A.app.app_context():
+                kopie = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=1).first().id
+            page.goto(f"{base}/editor-strany/{kopie}")
+            editor_stran(page)
+            page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Kopie ', 2)); })()")
+            page.click('[data-prikaz="ulozit"]')
+            page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+            po2 = strany_db()
+            ok("úprava kopie dá novou verzi jen jí, originál zůstane", po2[0][1] == pred[0][1] and po2[1][1] != pred[0][1], po2)
             ok("bez chyb JavaScriptu", not chyby, chyby[:3])
             page.close()
 

@@ -232,9 +232,9 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 /* --- Editor stran (navržená strana) - TODO bod 11 ------------------------------------- */
 .es-nahled.navrzena { position: relative; }
 .es-znacka-navrhu {
-  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%);
-  padding: 1px 5px; border-radius: 999px; white-space: nowrap; line-height: 1.35;
-  background: #1a73e8; color: #fff; font-size: 11px; font-weight: 600; pointer-events: none;
+  position: absolute; right: 3px; bottom: 3px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff var(--ikona-navrhu) center / 11px no-repeat; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+  pointer-events: none;
 }
 /* Plus mezi stranami (i na začátku a na konci) s nabídkou. */
 .es-mezera { position: relative; }

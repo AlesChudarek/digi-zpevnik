@@ -270,6 +270,21 @@
     dalsiImport();
   }
 
+  // Kopie strany za její blok (doprostřed písně přes víc stran ne): stejný obrázek nebo
+  // navržená strana a popisek, bez písní. Navržená verze je neměnná, takže ji obě strany
+  // můžou sdílet; úprava jedné z nich v editoru stran dá jen jí novou verzi.
+  function duplikujStranu(i) {
+    var s = strany[i];
+    var k = novaStrana({ image_id: s.image_id, navrzena_id: s.navrzena_id, nahled: s.nahled,
+                         obrazek: s.obrazek, popisek: s.popisek });
+    if (s.soubor && !s.image_id) nastavObrazek(k, s.soubor);   // ještě se nahrává - nahraje se znovu
+    vlozNa(blok(i)[1] + 1, [k]);
+    vykresli();
+    if (k.soubor) zarad(k);
+    var div = prvekStrany(k);
+    if (div) div.scrollIntoView({ block: 'nearest' });
+  }
+
   function pridejPrazdnou(kam) {
     var s = novaStrana();
     vlozNa(kam, [s]);
@@ -633,7 +648,13 @@
       nahled.classList.add('bez-obrazku');
       nahled.appendChild(el('span', 'es-prazdna-ikona'));
     }
-    if (s.navrzena_id) nahled.appendChild(el('span', 'es-znacka-navrhu', 'navržená'));
+    if (s.navrzena_id) {
+      // Navržená strana: jen malá ikona v rohu (štítek s textem zakrýval pětinu náhledu).
+      var znacka = el('span', 'es-znacka-navrhu');
+      znacka.setAttribute('aria-label', 'navržená strana');
+      znacka.title = 'Navržená strana (editor stran)';
+      nahled.appendChild(znacka);
+    }
     nahled.appendChild(el('div', 'es-stav'));
     div.appendChild(nahled);
 
@@ -655,6 +676,8 @@
       : 'Navrhnout stranu v editoru stran (text a akordy)');
     if (!nastaveni.smiNavrhovat) tuzka = zasedle(tuzka, 'Navrhovat strany v editoru stran mohou prémiové účty.');
     akceStrany.appendChild(tuzka);
+    akceStrany.appendChild(ikonoveTlacitko('es-duplikovat', ikony.duplikovat,
+      'Duplikovat stranu (kopie bez písní, třeba jako základ další písně ve stejném formátu)'));
     akceStrany.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
     hlava.appendChild(akceStrany);
     telo.appendChild(hlava);
@@ -1017,6 +1040,8 @@
         if (!s.navrzena_id) vyberObrazek(s);
         else window.showConfirm('Navržená strana se nahradí obrázkem (projeví se po uložení zpěvníku).', 'Vybrat obrázek')
           .then(function (ano) { if (ano) vyberObrazek(s); });
+      } else if (je('es-duplikovat')) {
+        duplikujStranu(i);
       } else if (je('es-navrhnout')) {
         otevriNavrh(s);
       } else if (cil.closest('.es-nahled') && s.nahled) {

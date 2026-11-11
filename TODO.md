@@ -1180,6 +1180,16 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
+      **Dvojstrana - úpravy přes obě strany** (Aleš 11. 11.): přesouvat rámečky, obrázky,
+      náplasti a bloky textu mezi levou a pravou stranou dvojstrany. Potřebuje upravovat obě
+      strany naráz (dva editory na jedné stránce, společné Zpět a přenos uzlů mezi nimi).
+      Dnešní dvojstrana (protější strana k náhledu, klik ji otevře) se Alešovi líbí.
+      Hotovo 11. 11. (ze schránky): duplikovat stranu (ikona clone vedle tužky - kopie za
+      blok, bez písní, sdílí neměnnou verzi; úprava jedné dá novou verzi jen jí); místo
+      štítku „navržená“ jen malá ikona tužky v rohu náhledu; s nástrojem Náplast všude
+      křížek (nad obrázkem nehýbe); u vybrané náplasti i „Smazat všechny (N)“; image_add
+      bez bílých vrstev (Aleš ji předělal). Edit_page má záměrně stejnou ikonu jako
+      Upravit zpěvník.
       Hotovo: 5b. náplast jako nástroj (11. 11., `static/js/strana/naplast.js`): tlačítko
       zapne/vypne (Esc), obdélník (klik = 8×4 mm, tah = podle tahu, bez nejmenší velikosti)
       a volný tvar (klikání body; uzavře klik na první bod, dvojklik nebo Enter). Uzel tvar
@@ -1226,5 +1236,3 @@ kdo maže.
       - [X] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-v editoru zpevniku mi prijde slovo "navrzena" zbytecne. bud jen nejakou inkonkou nebo vubec. ted to takryje zbytecne 20% nahledu.
-ikony pro jednotlive strany v editoru zpevniku jsem ti upravil, akorat image_add je vyrobeno zvlastne z vrstev s bilou barvou. muze to predelat tak, aby to byla ikona bez pozadi jako vsechno ostatni, jen uprav co se prekryva. Edit page ma stejnou ikonu jako edit zpevnik. Muzes pak pridat i dalsi tlacitko s ikonou stejnou jak duplikovat zpevnik pro duplikaci strany

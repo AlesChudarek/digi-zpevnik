@@ -1585,6 +1585,10 @@ function aktualizujListu() {
   el('vybrany-tvar').hidden = !tvar && !nastroj;
   el('tvar-druh').hidden = !nastroj;
   el('tvar-smazat').hidden = !tvar;
+  let naplasti = 0;
+  state.doc.forEach((n) => { if (n.type === N.tvar) naplasti += 1; });
+  el('tvar-smazat-vse').hidden = naplasti < 1 || (!!tvar && naplasti < 2);
+  el('tvar-smazat-vse').textContent = `Smazat všechny (${naplasti})`;
   if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
   if (obrazek) {
     for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
@@ -1666,6 +1670,15 @@ function napojPanelAkordu() {
   };
   el('tvar-barva').addEventListener('input', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, false); });
   el('tvar-barva').addEventListener('change', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, true); });
+  // Všechny náplasti strany jedním krokem (Ctrl+Z je vrátí).
+  el('tvar-smazat-vse').addEventListener('click', () => {
+    const pozice = [];
+    view.state.doc.forEach((n, pos) => { if (n.type === N.tvar) pozice.push([pos, n.nodeSize]); });
+    let tr = closeHistory(view.state.tr);
+    for (const [pos, size] of pozice.reverse()) tr = tr.delete(pos, pos + size);
+    if (pozice.length) view.dispatch(tr);
+    view.focus();
+  });
   el('tvar-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
     if (sel instanceof NodeSelection && sel.node.type === N.tvar) view.dispatch(view.state.tr.deleteSelection());

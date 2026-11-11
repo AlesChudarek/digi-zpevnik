@@ -750,7 +750,7 @@
       </div>
 
       <section class="editor-stran" id="editor-stran"
-               style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}')"
+               style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}'); --ikona-navrhu: url('{{ static_bust('img/icons/edit_page.svg') }}')"
                data-pdfjs="{{ static_bust('vendor/pdfjs/pdf.min.js') }}"
                data-pdfjs-worker="{{ static_bust('vendor/pdfjs/pdf.worker.min.js') }}"
                data-jszip="{{ static_bust('vendor/jszip/jszip.min.js') }}">
@@ -1083,7 +1083,8 @@ function openCreateModal() {
                       verejny: MANAGE_PUBLIC, naObalku: vlozObalku, poZmene: obnovUlozit,
                       doEditoruStran: (cesta) => window.doEditoruStran(cesta),
                       ikony: { obrazek: {{ static_bust('img/icons/image_add.svg') | tojson }},
-                               upravit: {{ static_bust('img/icons/edit_page.svg') | tojson }} },
+                               upravit: {{ static_bust('img/icons/edit_page.svg') | tojson }},
+                               duplikovat: {{ static_bust('img/icons/clone.svg') | tojson }} },
                       // Lupa kreslí navrženou stranu z textu (moduly z _strana_importmap).
                       modulVykresleni: {{ url_for('static', filename='js/strana/vykresleni.js') | tojson }},
                       cssStrany: [{{ static_bust('fonts/strana/pisma.css') | tojson }}, {{ static_bust('css/strana.css') | tojson }}],
