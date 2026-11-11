@@ -359,7 +359,8 @@ def main():
             page.mouse.up()
             STRANY = "['L', 'P'].map(lp => JSON.stringify(navrhStrany.zdroj(lp).obsah))"
             z = page.evaluate(STRANY)
-            ok("rámeček přetažený přes hřbet patří levé straně", "Sedmá" in z[0] and "Sedmá" not in z[1], [x[:80] for x in z])
+            ok("rámeček přetažený přes hřbet patří levé straně, pravá má jen jeho kopii (přesah)",
+               "Sedmá" in z[0] and '"presah":true' not in z[0] and "Sedmá" in z[1] and '"presah":true' in z[1], [x[:80] for x in z])
             page.keyboard.press("ControlOrMeta+z")
             z = page.evaluate(STRANY)
             ok("Zpět ho vrátí na pravou stranu", "Sedmá" not in z[0] and "Sedmá" in z[1])
@@ -367,20 +368,37 @@ def main():
             page.click('[data-prikaz="ulozit"]')
             page.wait_for_selector("#app-confirm-overlay", state="visible")
             zprava = page.inner_text("#app-confirm-message")
-            ok("rámeček přes hřbet: při uložení upozornění, že text zůstane na jedné straně",
-               zprava.startswith("Přes hřbet dvojstrany přesahuje textový rámeček.") and "zůstane jen na straně" in zprava, zprava)
-            page.click("#app-confirm-ok")
+            ok("rámeček přes hřbet: při uložení volba, text zůstane obsahem jen jedné strany",
+               zprava.startswith("Přes hřbet dvojstrany přesahují prvky (1).") and "zůstane jen na straně, kde má rámeček střed" in zprava, zprava)
+            page.click("#app-confirm-save")     # Zachovat na obou stranách
             page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
             s3 = strany_db()
             with A.app.app_context():
                 z6 = json.loads(A.db.session.get(A.NavrzenaStrana, s3[1][1]).zdroj)
                 z7 = json.loads(A.db.session.get(A.NavrzenaStrana, s3[2][1]).zdroj)
             ram7 = [r for r in z6["obsah"]["content"] if "Sedmá" in json.dumps(r, ensure_ascii=False)]
+            kopie7 = [r for r in z7["obsah"]["content"] if "Sedmá" in json.dumps(r, ensure_ascii=False)]
+            ok("strana 7 má kopii rámečku (přesah, x −90 mm) s pevnou značkou sloky 1.",
+               len(kopie7) == 1 and kopie7[0]["attrs"]["presah"] is True and kopie7[0]["attrs"]["x"] == -90
+               and [p["attrs"]["znacka"] for p in kopie7[0]["content"] if p["attrs"]["znacka"]] == ["1."],
+               kopie7[0]["attrs"] if kopie7 else z7["obsah"]["content"])
             ok("Uložit uloží obě strany: rámeček je teď ve straně 6 (na jejích souřadnicích)",
                s3[1][1] != s2[1][1] and s3[2][1] != s2[2][1] and ram7 and 0 <= ram7[0]["attrs"]["x"] < 148,
                (s3, ram7[0]["attrs"] if ram7 else None))
-            ok("strana 7 bez rámečku dostala prázdný rámeček", "Sedmá" not in json.dumps(z7, ensure_ascii=False)
-               and len(z7["obsah"]["content"]) == 1, z7["obsah"]["content"][:1])
+            with A.app.app_context():
+                strana7 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=2).first().id
+            page.evaluate("localStorage.setItem('navrh-rezim-stran', 'jedna')")
+            page.goto(f"{base}/editor-strany/{strana7}")
+            editor_stran(page)
+            jedna = page.evaluate("""(() => { const r = document.querySelector('.ps-ramecek.ps-presah');
+              return r ? { upravitelny: r.querySelector('.ps-ramecek-obsah').isContentEditable, lista: getComputedStyle(r.querySelector('.ps-prvek-lista')).display,
+                           znacka: r.querySelector('.ps-zacatek') && r.querySelector('.ps-zacatek').dataset.znacka } : null; })()""")
+            ok("samotná strana 7: kopie přes hřbet je jen k vidění, se značkou 1.", jedna == {"upravitelny": False, "lista": "none", "znacka": "1."}, jedna)
+            page.evaluate("localStorage.setItem('navrh-rezim-stran', 'dvojstrana')")
+            page.goto(f"{base}/editor-strany/{strana7}")
+            editor_stran(page)
+            ram = page.evaluate("[...document.querySelectorAll('.ps-ramecek')].filter(r => r.textContent.includes('Sedmá')).map(r => r.classList.contains('ps-presah'))")
+            ok("ve dvojstraně je rámeček zase jen jednou a upravitelný", ram == [False], ram)
 
             # Náplast přes hřbet: na každé straně její část.
             page.evaluate("""(() => { const v = navrhStrany.view, N = v.state.schema.nodes;

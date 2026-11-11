@@ -75,6 +75,7 @@ export class PrvekView {
       this.dom.append(this.lista, this.contentDOM, this.roh);
     }
     this.nastav();
+    this.oznacPresah();
 
     this.lista.addEventListener('pointerdown', (e) => {
       if (e.target === this.smazat) return;
@@ -101,8 +102,21 @@ export class PrvekView {
     }
   }
 
+  // Kopie rámečku přes hřbet (presah) jde upravit jen ve dvojstraně, kde je rámeček celý -
+  // jinak by se kopie a originál rozešly. Tady je jen k vidění.
+  oznacPresah() {
+    if (this.jeAtom) return;
+    const presah = !!this.node.attrs.presah;
+    this.dom.classList.toggle('ps-presah', presah);
+    if (presah) this.contentDOM.contentEditable = 'false';
+    else this.contentDOM.removeAttribute('contenteditable');
+    if (presah) this.dom.title = 'Část textu přes hřbet z vedlejší strany - upravit ve dvojstraně';
+    else this.dom.removeAttribute('title');
+  }
+
   update(node) {
     if (node.type !== this.node.type) return false;
+    if (!this.jeAtom && !!node.attrs.presah !== !!this.node.attrs.presah) { this.node = node; this.oznacPresah(); }
     this.node = node;
     if (!this.tah) this.nastav();
     return true;

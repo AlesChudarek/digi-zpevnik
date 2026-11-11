@@ -14,7 +14,7 @@ import {
 import { schema, ROLE, VERZE_SCHEMATU, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
 import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-uzel.js';
 import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.js';
-import { pluginSlok, klicSlok } from './sloky.js';
+import { pluginSlok, klicSlok, znackySlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
 import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
 import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany, formatStrany } from './vykresleni.js';
@@ -45,15 +45,30 @@ function prekracujeHrbet(n) {
   return !!spoj && n.attrs.x < s - 0.05 && n.attrs.x + n.attrs.w > s + 0.05;
 }
 function presHrbet(n) {
-  if (!spoj || orezatPresahy || (n.type !== N.obrazek && n.type !== N.tvar)) return false;
+  if (!spoj || orezatPresahy || (n.type !== N.obrazek && n.type !== N.tvar && n.type !== N.ramecek)) return false;
   const s = format().sirka;
   return n.attrs.x < s - 0.05 && n.attrs.x + n.attrs.w > s + 0.05;
 }
-// Tentýž prvek přes hřbet uložený na obou stranách: na plátně jen jednou.
+// Tentýž prvek přes hřbet uložený na obou stranách: na plátně jen jednou. U rámečku
+// stačí stejný text (kopie má v odstavcích navíc pevné značky slok).
 function stejnyPresHrbet(a, b) {
-  if (a.type !== b.type || (a.type !== N.obrazek && a.type !== N.tvar)) return false;
-  const { x: xa, ...ra } = a.attrs, { x: xb, ...rb } = b.attrs;
-  return Math.abs(xa - xb) < 0.05 && JSON.stringify(ra) === JSON.stringify(rb);
+  if (a.type !== b.type) return false;
+  const bez = ({ x, presah, ...r }) => JSON.stringify(r);
+  if (Math.abs(a.attrs.x - b.attrs.x) >= 0.05 || bez(a.attrs) !== bez(b.attrs)) return false;
+  if (a.type === N.ramecek) return a.childCount === b.childCount && a.textContent === b.textContent;
+  return a.type === N.obrazek || a.type === N.tvar;
+}
+
+// Kopie rámečku přes hřbet pro stranu, kde nemá střed: presah a značky slok z plátna
+// (na téhle straně by se jinak číslovaly jinak - viz znackySlok).
+function kopiePresahu(u, off) {
+  const znacky = new Map(znackySlok(view.state.doc, role, stranaUzlu).znacky.map((z) => [z.pos, z.znacka]));
+  const odstavce = [];
+  u.forEach((p, offP) => {
+    const z = znacky.get(off + 1 + offP);
+    odstavce.push(z != null ? p.type.create({ ...p.attrs, znacka: z }, p.content, p.marks) : p);
+  });
+  return u.type.create({ ...u.attrs, presah: true }, odstavce, u.marks);
 }
 function posunUzel(n, dx) {
   return dx ? n.type.create({ ...n.attrs, x: Math.round((n.attrs.x + dx) * 100) / 100 }, n.content, n.marks) : n;
@@ -296,11 +311,13 @@ function castStrany(lp) {
   if (!spoj) return { doc, indexy: null };
   const uzly = [], indexy = [];
   let odst = 0;
-  doc.forEach((n) => {
+  doc.forEach((n, off) => {
     let pocet = 0;
     n.descendants((d) => { if (d.type === N.odstavec) pocet += 1; return true; });
-    if (stranaUzlu(n) === lp || presHrbet(n)) {
-      uzly.push(posunUzel(n, -posunStrany(lp)));
+    const moje = stranaUzlu(n) === lp;
+    if (moje || presHrbet(n)) {
+      const u = posunUzel(n, -posunStrany(lp));
+      uzly.push(!moje && n.type === N.ramecek ? kopiePresahu(u, off) : u);
       for (let i = 0; i < pocet; i++) indexy.push(odst + i);
     }
     odst += pocet;
@@ -514,12 +531,17 @@ if (dvojstrana && KONTEXT && KONTEXT.strana) {
     const uzly = [];
     const pridej = (d, lp) => d.forEach((n) => {
       const u = posunUzel(n, lp === 'P' ? format().sirka : 0);
-      // Prvek přes hřbet je uložený na obou stranách - podruhé se nepřidá.
-      if (!uzly.some((v) => stejnyPresHrbet(v, u))) uzly.push(u);
+      // Prvek přes hřbet je uložený na obou stranách - na plátně jen jednou (originál,
+      // ne kopie s pevnými značkami).
+      const i = uzly.findIndex((v) => stejnyPresHrbet(v, u));
+      if (i < 0) uzly.push(u);
+      else if (uzly[i].attrs.presah && !u.attrs.presah) uzly[i] = u;
     });
     if (spoj.druha.lp === 'L') { pridej(druha.doc, 'L'); pridej(docStart, 'P'); }
     else { pridej(docStart, 'L'); pridej(druha.doc, 'P'); }
-    docStart = N.doc.create(null, uzly);
+    // Na plátně je každý rámeček celý a upravitelný (i kopie, ke které se originál nenašel).
+    docStart = N.doc.create(null, uzly.map((u) => (u.type === N.ramecek && u.attrs.presah
+      ? u.type.create({ ...u.attrs, presah: false }, u.content, u.marks) : u)));
   }
 }
 
@@ -1191,18 +1213,19 @@ async function ulozKoncepty(seznam) {
 // straně podle středu. Vrací false, když autor uložení zrušil.
 async function potvrdPresahy() {
   if (!spoj) return true;
-  let prvku = 0, ramecku = 0;
+  let prvku = 0, textu = 0;
   view.state.doc.forEach((n) => {
     if (!prekracujeHrbet(n)) return;
-    if (n.type === N.ramecek) ramecku += 1; else prvku += 1;
+    prvku += 1;
+    if (n.type === N.ramecek) textu += 1;
   });
-  if (!prvku && !ramecku) return true;
-  const text = ramecku
-    ? ` Text v rámečku přes hřbet (${ramecku}) zůstane jen na straně, kde má rámeček střed; na druhé se ořízne.` : '';
-  if (!prvku) return window.showConfirm(`Přes hřbet dvojstrany přesahuje textový rámeček.${text}`, 'Uložit');
+  if (!prvku) return true;
+  const text = textu
+    ? ' Text přes hřbet se vytiskne přes obě strany, obsahem zpěvníku (hledání, číslování slok) zůstane jen na straně, kde má rámeček střed.'
+    : '';
   const volba = await window.showUnsavedConfirm(
-    `Přes hřbet dvojstrany přesahují obrázky nebo náplasti (${prvku}). Můžou zůstat na obou stranách `
-    + `(každá strana ukáže svou část), nebo se oříznout - pak zůstanou jen na straně, kde mají střed.${text}`,
+    `Přes hřbet dvojstrany přesahují prvky (${prvku}). Můžou zůstat na obou stranách (každá strana ukáže svou `
+    + `část), nebo se oříznout - pak zůstanou jen na straně, kde mají střed.${text}`,
     { save: 'Zachovat na obou stranách', discard: 'Oříznout', discardStyl: 'neutralni' });
   if (volba === 'cancel') return false;
   orezatPresahy = volba === 'discard';

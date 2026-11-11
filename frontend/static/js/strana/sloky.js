@@ -31,6 +31,13 @@ export function znackySlok(doc, roleStylu = role, stranaPrvku = () => 0) {
   const refreny = [];          // [{ od, odstavce: [...] }] v pořadí dokumentu
   const citace = new Map();
   doc.forEach((ramecek, offR) => {
+    // Kopie rámečku přes hřbet (presah): značky má pevně v odstavcích, počítadlo nemění.
+    if (ramecek.attrs && ramecek.attrs.presah) {
+      ramecek.forEach((p, offP) => {
+        if (p.attrs.znacka != null) znacky.push({ pos: offR + 1 + offP, velikost: p.nodeSize, znacka: p.attrs.znacka });
+      });
+      return;
+    }
     const strana = stranaPrvku(ramecek);
     let cislo = citace.get(strana) || 0;
     let predchozi = null;

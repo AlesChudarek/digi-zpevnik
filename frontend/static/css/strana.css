@@ -314,6 +314,10 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
     outline: calc(1px / var(--meritko)) solid rgba(26, 115, 232, 0.45);
   }
 }
+/* Kopie rámečku přes hřbet z vedlejší strany: jen k vidění (upravuje se ve dvojstraně). */
+.ps-ramecek.ps-presah { outline: calc(1px / var(--meritko)) dashed rgba(0, 0, 0, 0.35) !important; cursor: default; }
+.ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-prvek-roh { display: none; }
+.ps-cteni .ps-ramecek.ps-presah { outline: none !important; }
 .ps-ramecek.pretece { outline: calc(2px / var(--meritko)) solid #d00 !important; }
 .ps-ramecek-obsah { position: relative; width: 100%; height: 100%; }
 .ps-obrazek img { display: block; width: 100%; height: 100%; object-fit: fill; user-select: none; -webkit-user-select: none; cursor: move; }

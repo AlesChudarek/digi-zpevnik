@@ -40,14 +40,19 @@ export const schema = new Schema({
     // Rámeček: poloha a rozměr v mm od levého horního rohu strany.
     ramecek: {
       group: 'prvek', content: 'odstavec+', isolating: true, defining: true,
-      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 } },
+      // presah: kopie rámečku přes hřbet dvojstrany na straně, kde nemá střed - vykreslí
+      // se (každá strana ukáže svou část), ale nepočítá se do slok (značky nese pevně
+      // v odstavcích) a obsahem zpěvníku (hledání, export) je jen originál.
+      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 }, presah: { default: false } },
       toDOM: (n) => ['div', {
         class: 'ps-ramecek', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
+        ...(n.attrs.presah ? { 'data-presah': '1' } : {}),
         style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
       }, ['div', { class: 'ps-ramecek-obsah' }, 0]],
       parseDOM: [{
         tag: 'div.ps-ramecek', contentElement: '.ps-ramecek-obsah',
-        getAttrs: (d) => ({ x: +d.dataset.x || 12, y: +d.dataset.y || 12, w: +d.dataset.w || 124, h: +d.dataset.h || 186 }),
+        getAttrs: (d) => ({ x: +d.dataset.x || 12, y: +d.dataset.y || 12, w: +d.dataset.w || 124, h: +d.dataset.h || 186,
+          presah: d.dataset.presah === '1' }),
       }],
     },
 

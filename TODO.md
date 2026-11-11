@@ -1186,9 +1186,13 @@ kdo maže.
       (prázdná strana dostane prázdný rámeček), ukládá se jen změněná strana. Obrázek
       a náplast přes hřbet se uloží na obě strany (každá ořízne svou část), při
       otevření dvojstrany se spojí zpět v jeden prvek; rámeček s textem podle středu.
-      Při uložení dvojstrany s přesahy přes hřbet okno: obrázky/náplasti Zachovat na obou
-      stranách / Oříznout (jen strana podle středu) / Zrušit; textový rámeček jen upozorní,
-      že text zůstane na jedné straně. V režimu jedné strany se přesah jen ořízne. Sloky se
+      Při uložení dvojstrany s přesahy přes hřbet okno: Zachovat na obou stranách / Oříznout
+      (jen strana podle středu) / Zrušit - pro obrázky, náplasti i textové rámečky. Kopie
+      rámečku na straně, kde nemá střed, má `presah: true`: vykreslí se, sloky nepočítá
+      (značky nese pevně v `znacka` odstavců), v samotné straně je jen k vidění (upravuje
+      se ve dvojstraně). **Až bude hledání v textech a export do ChordPro: rámečky
+      s `presah` přeskočit** (jinak je text dvakrát). Ve vektorovém PDF je text kopie
+      zatím obyčejný text - hledání v PDF ho najde na obou stranách. Sloky se
       číslují po stranách. Jen u uložené strany s protější stranou stejného formátu (jinak
       protější strana k náhledu jako dřív); přepnutí režimu stránku znovu načte. Panel
       (styly, akordy, formát) platí pro obě strany, číslo strany má každá své. Listování
@@ -1245,4 +1249,5 @@ kdo maže.
       - [X] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
-Duplikovat
+Duplikovat stranku nekopiruje pisen? mozna by melo. tak jako tak ten hover popis je zbytecne dlouhy. dej tam jen duplikovat stranu
+popis pri pokusu ulozeni s presahy mimo stranku je zbytecne dlouhy. jen zminit ze se bud zachovaji na obou stranach nebo jen na jedne s vetsinou.
