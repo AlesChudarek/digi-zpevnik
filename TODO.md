@@ -1180,6 +1180,12 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
+      Hotovo: 4b. listování dole vpravo vedle přiblížení (‹ číslo strany ›, číslo jde napsat
+      jako ve čtečce) a přepínač jedna strana / dvojstrana (11. 11.). Dvojstrana ukáže
+      protější stranu (rozdělanou z prohlížeče, uloženou, obrázek nebo prázdnou), klik ji
+      otevře k úpravě. **Otevřené:** upravovat obě strany dvojstrany naráz (dva editory
+      na jedné stránce - větší přestavba navrh.js). Uložit vpravo nahoře je nenápadné -
+      zvýraznit později.
       Hotovo: 5. obrázková strana a náplast (11. 11.): sken se otevře jako obrázek za textem
       přes celou stranu (vystředěný) + malý textový rámeček; uložením je z ní navržená strana,
       sken zůstává v `navrh_obrazky` (smazaný sken se po uložení uklidí). Uzel `tvar`

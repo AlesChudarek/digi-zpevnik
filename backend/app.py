@@ -2890,9 +2890,11 @@ def _kontext_editoru(sb, strana=None, za=None):
                     if strana is not None and strana.image_id else None),
         'cislo': (sb.prvni_cislo_strany or 1) + index, 'lp': strana_lp(sb, index),
         'zpet': url_for('my_songbooks', upravit=sb.id),
-        # Pro listování zpěvníkem v editoru: obrázkovou stranu zatím upravit nejde.
+        # Pro listování zpěvníkem v editoru a protější stranu ve dvojstraně.
         'strany': [{'id': st.id, 'cislo': (sb.prvni_cislo_strany or 1) + st.poradi,
-                    'druh': 'obrazek' if st.image_id else ('navrh' if st.navrzena_id else 'prazdna')}
+                    'druh': 'obrazek' if st.image_id else ('navrh' if st.navrzena_id else 'prazdna'),
+                    'navrh': st.navrzena_id,
+                    'obrazek': url_for('obrazek_navrhu', obraz_id=st.image_id) if st.image_id else None}
                    for st in sb.strany],
     }
 

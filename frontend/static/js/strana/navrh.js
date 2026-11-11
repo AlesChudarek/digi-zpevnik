@@ -17,7 +17,7 @@ import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.j
 import { pluginSlok, klicSlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
 import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
-import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany } from './vykresleni.js';
+import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany, formatStrany } from './vykresleni.js';
 import { prepocitej } from './kolize.js';
 import { transponuj } from './akordy.js';
 
@@ -30,6 +30,11 @@ const KONTEXT = (() => {
   try { return JSON.parse(document.getElementById('kontext-strany')?.textContent || 'null'); } catch (_) { return null; }
 })();
 const KLIC_ZALOHY = 'navrh-strany-pokus';
+// Režim plochy u strany zpěvníku: jedna strana, nebo dvojstrana s protější stranou.
+// Tady nahoře - nastavMeritko ho čte už při startu.
+const KLIC_REZIMU = 'navrh-rezim-stran';
+let protejsekVerze = 0;      // novější vykreslení protějšku přebije starší
+let dvojstrana = (() => { try { return localStorage.getItem(KLIC_REZIMU) === 'dvojstrana'; } catch (_) { return false; } })();
 
 // Koncepty: rozdělané (neuložené) strany zpěvníku v prohlížeči, jeden na stranu -
 // listování zpěvníkem se tak nikoho neptá a nic se neztratí. Klíč podle zpěvníku a
@@ -517,7 +522,8 @@ function nastavMeritko(nove) {
     const plocha = el('navrh-plocha');
     // Okraj plochy (24 px kolem) a spodní pruh se stavem a přiblížením.
     const volnoX = plocha.clientWidth - 48, volnoY = plocha.clientHeight - 48 - 44;
-    meritko = Math.max(0.3, Math.min(3, volnoX / sirka, volnoY / vyska));
+    const stran = dvojstrana && KONTEXT ? 2 : 1;      // ve dvojstraně se vejdou obě
+    meritko = Math.max(0.3, Math.min(3, (volnoX - (stran - 1) * 6) / (sirka * stran), volnoY / vyska));
   }
   meritko = Math.round(meritko * 100) / 100;
   stranka.style.transform = `scale(${meritko})`;
@@ -526,6 +532,7 @@ function nastavMeritko(nove) {
   obal.style.height = vyska * meritko + 'px';
   el('meritko-text').textContent = Math.round(meritko * 100) + ' %';
   naplanujPrepocet();
+  if (KONTEXT) vykresliProtejsek();
 }
 
 // Změna formátu: rámečky se zvětší/zmenší ve stejném poměru (A5 a A4 mají stejný tvar).
@@ -1063,26 +1070,12 @@ async function ulozit() {
 
 // --- listování zpěvníkem ----------------------------------------------------------------
 
-const DRUHY = { navrh: 'navržená', prazdna: 'prázdná', obrazek: 'obrázek' };
-
+// Spodní lišta: ‹ číslo strany › a režim jedna strana / dvojstrana. Rozdělané strany
+// ukazuje výstraha u Uložit.
 function obnovListovani() {
   if (!KONTEXT) return;
-  const rozdelane = new Set(koncepty().map((k) => k.klic));
-  if (neulozeno()) rozdelane.add(klicKonceptu(KONTEXT));
-  const vyber = el('vyber-strany');
-  if (vyber) {
-    vyber.textContent = '';
-    const polozky = KONTEXT.strany.map((st) => ({ ...st, klic: klicKonceptu({ strana: st.id }) }));
-    if (!KONTEXT.strana) polozky.push({ id: '', cislo: KONTEXT.cislo, druh: 'nova', klic: klicKonceptu(KONTEXT) });
-    polozky.sort((a, b) => a.cislo - b.cislo || (a.druh === 'nova' ? -1 : 1));
-    for (const st of polozky) {
-      const o = document.createElement('option');
-      o.value = st.id;
-      o.textContent = `${rozdelane.has(st.klic) ? '• ' : ''}${st.cislo} – ${st.druh === 'nova' ? 'nová strana' : DRUHY[st.druh]}`;
-      o.selected = KONTEXT.strana ? st.id === KONTEXT.strana : st.druh === 'nova';
-      vyber.appendChild(o);
-    }
-  }
+  const pole = el('cislo-strany-zpevniku');
+  if (pole && document.activeElement !== pole) pole.value = String(KONTEXT.cislo);
   const jine = jineKoncepty();
   const znak = el('neulozene-jinde');
   if (znak) {
@@ -1093,6 +1086,75 @@ function obnovListovani() {
     const b = koren.querySelector(`[data-prikaz="${prikaz}"]`);
     if (b) b.disabled = !sousedniStrana(smer);
   }
+}
+
+// --- dvojstrana -------------------------------------------------------------------------
+// Vedle upravované strany protější strana zpěvníku (levá vlevo, pravá vpravo), jen
+// k náhledu: rozdělaná úprava z prohlížeče, jinak uložená verze, obrázek, nebo prázdná.
+// Klik ji otevře k úpravě. Obě strany naráz upravovat zatím nejde.
+
+function protejsiStrana() {
+  if (!KONTEXT) return null;
+  const vlevo = KONTEXT.lp === 'P';          // pravá strana má protějšek vlevo
+  // Nová strana v seznamu ještě není: číslo, které dostane, má teď strana za ní.
+  const cislo = vlevo ? KONTEXT.cislo - 1 : (KONTEXT.strana ? KONTEXT.cislo + 1 : KONTEXT.cislo);
+  const st = KONTEXT.strany.find((x) => x.cislo === cislo && x.id !== KONTEXT.strana);
+  return { st, vlevo, cislo: vlevo ? KONTEXT.cislo - 1 : KONTEXT.cislo + 1 };
+}
+
+async function vykresliProtejsek() {
+  const dvoj = el('dvojstrana');
+  if (!dvoj) return;
+  dvoj.querySelector('.protejsek')?.remove();
+  for (const b of koren.querySelectorAll('[data-prikaz="jedna-strana"], [data-prikaz="dvojstrana"]')) {
+    b.classList.toggle('aktivni', (b.dataset.prikaz === 'dvojstrana') === dvojstrana);
+  }
+  if (!dvojstrana || !KONTEXT) return;
+  const verze = ++protejsekVerze;
+  const p = protejsiStrana();
+  const f = format();
+  const sirka = f.sirka * MM_NA_PX, vyska = f.vyska * MM_NA_PX;
+  const box = document.createElement('div');
+  box.className = 'protejsek' + (p.st ? '' : ' zadna');
+  box.style.width = sirka * meritko + 'px';
+  box.style.height = vyska * meritko + 'px';
+  if (p.vlevo) dvoj.insertBefore(box, dvoj.firstChild); else dvoj.appendChild(box);
+  if (!p.st) return;
+  box.dataset.napoveda = `Upravit stranu ${p.st.cislo}`;
+  box.addEventListener('click', () => jdiNaStranu(p.st));
+  const koncept = prectiKoncept(klicKonceptu({ strana: p.st.id }));
+  let zdroj = koncept && koncept.zdroj;
+  try {
+    if (!zdroj && p.st.navrh) {
+      const r = await fetch(`/api/navrh/strana/${p.st.navrh}`, { credentials: 'same-origin' });
+      const d = await r.json();
+      if (d.ok) zdroj = d.zdroj;
+    }
+  } catch (_) { /* protějšek je jen náhled - bez něj se dá pracovat dál */ }
+  if (verze !== protejsekVerze) return;
+  if (zdroj) {
+    const k = vykresliStranu(zdroj, { cislo: p.st.cislo, strana: p.vlevo ? 'L' : 'P' });
+    const fz = formatStrany(zdroj.nastaveni);
+    k.style.transform = `scale(${(sirka * meritko) / (fz.sirka * MM_NA_PX)})`;
+    k.style.transformOrigin = '0 0';
+    box.appendChild(k);
+    dokonciStranu(k, zdroj, meritko);
+  } else if (p.st.obrazek) {
+    const img = document.createElement('img');
+    img.src = p.st.obrazek;
+    img.alt = '';
+    box.appendChild(img);
+  }
+  const c = document.createElement('span');
+  c.className = 'protejsek-cislo';
+  c.textContent = `${p.st.cislo}${koncept ? ' • rozdělaná' : ''}`;
+  box.appendChild(c);
+}
+
+function nastavRezim(dvoj) {
+  dvojstrana = dvoj;
+  try { localStorage.setItem(KLIC_REZIMU, dvoj ? 'dvojstrana' : 'jedna'); } catch (_) { /* jen pohodlí */ }
+  if (!meritkoRucne) nastavMeritko(); else vykresliProtejsek();
 }
 
 // Nejbližší strana před (-1) / za (1) touto. Nová strana ještě v seznamu
@@ -1136,10 +1198,17 @@ if (KONTEXT) {
     odchazi = true;
     location.href = KONTEXT.zpet;
   });
-  el('vyber-strany')?.addEventListener('change', (e) => {
-    const st = KONTEXT.strany.find((x) => String(x.id) === e.target.value);
-    if (st) jdiNaStranu(st);
-  });
+  // Číslo strany jako ve čtečce: napsat a Enter (nebo odejít z pole).
+  const pole = el('cislo-strany-zpevniku');
+  const skoc = () => {
+    const n = parseInt(pole.value, 10);
+    const st = KONTEXT.strany.find((x) => x.cislo === n);
+    if (st && st.id !== KONTEXT.strana) jdiNaStranu(st);
+    else pole.value = String(KONTEXT.cislo);
+  };
+  pole?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); skoc(); } });
+  pole?.addEventListener('change', skoc);
+  pole?.addEventListener('focus', () => pole.select());
 }
 
 // --- příkazy lišty --------------------------------------------------------------------
@@ -1385,9 +1454,11 @@ const PRIKAZY = {
   ulozit,
   'predchozi-strana': () => jdiNaStranu(sousedniStrana(-1)),
   'dalsi-strana': () => jdiNaStranu(sousedniStrana(1)),
+  'jedna-strana': () => nastavRezim(false),
+  dvojstrana: () => nastavRezim(true),
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana'];
+const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {

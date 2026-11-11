@@ -35,9 +35,6 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* Bez min-width: 0 - sloupec mřížky se pak nesmrskne pod popisek (dlouhý název se
    zkrátí třemi tečkami, max-width) a popisek nevleze pod nástroje. */
 .navrh-lista .kde { grid-column: 1; justify-self: start; align-self: start; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-.navrh-lista .listovani { display: inline-flex; align-items: center; gap: 2px; }
-.navrh-lista .listovani select { width: auto; max-width: 11em; }
-.navrh-lista .listovani .ikona { font-size: 20px; }
 .navrh-lista .neulozene-jinde { display: inline-flex; align-items: center; padding: 0 6px; cursor: help; }
 .navrh-lista .neulozene-jinde[hidden] { display: none; }
 .navrh-lista .neulozene-jinde img { width: 18px; height: 18px; }
@@ -114,8 +111,10 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
   border-radius: 999px; padding: 4px 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 .navrh-stav:empty { visibility: hidden; }
+.navrh-vpravo { grid-column: 3; justify-self: end; display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+@media (max-width: 700px) { .navrh-vpravo { flex-wrap: wrap; } }
 .navrh-zoom {
-  grid-column: 3; justify-self: end; display: inline-flex; align-items: center; gap: 2px;
+  display: inline-flex; align-items: center; gap: 2px;
   background: rgba(255, 255, 255, 0.96); border-radius: 999px; padding: 2px 6px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
 }
@@ -128,6 +127,13 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
   width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8;
   stroke-linecap: round; stroke-linejoin: round;
 }
+.navrh-listovani input {
+  width: 3.4em; height: 26px; box-sizing: border-box; text-align: center; font: inherit; font-size: 13px;
+  border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #222;
+}
+.navrh-listovani .oddelovac { width: 1px; height: 18px; background: #ddd; margin: 0 2px; }
+.navrh-zoom button.aktivni { background: #1a73e8; color: #fff; }
+.navrh-zoom button:disabled { opacity: 0.35; cursor: default; }
 .navrh-zoom .meritko-text { font-size: 13px; min-width: 44px; text-align: center; color: #444; }
 .navrh-stav .varovani { color: #b00020; font-weight: 600; }
 
@@ -235,7 +241,18 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* --- strana (papír) --------------------------------------------------------------- */
 /* Rozměr strany a proměnné akordů nastavuje skript z šablony; styly odstavců (.ps-normalni,
    .ps-sloka…) generuje do vlastního <style>. */
-.stranka-obal { position: relative; margin: 0 auto; }
+.stranka-obal { position: relative; flex: none; }
+/* Dvojstrana: upravovaná strana a vedle ní protější (levá vlevo, pravá vpravo). */
+.dvojstrana { display: flex; gap: 6px; width: max-content; margin: 0 auto; align-items: flex-start; }
+.protejsek { position: relative; flex: none; overflow: hidden; background: #fff; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 6px 18px rgba(0, 0, 0, 0.12); }
+.protejsek .stranka { position: absolute; left: 0; top: 0; box-shadow: none; }
+.protejsek > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.protejsek .protejsek-cislo { position: absolute; left: 0; right: 0; bottom: 6px; text-align: center; font-size: 12px; color: #888; }
+.protejsek::after { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.25); transition: background 0.12s; }
+@media (hover: hover) { .protejsek:hover::after { background: rgba(26, 115, 232, 0.08); } }
+.protejsek.zadna { background: transparent; box-shadow: none; cursor: default; }
+.protejsek.zadna::after { content: none; }
 .stranka {
   position: absolute; left: 0; top: 0; transform-origin: 0 0;
   background: #fff; color: #000; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), 0 6px 18px rgba(0, 0, 0, 0.12);

@@ -37,6 +37,10 @@
     <symbol id="i-nahled" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6"/><circle cx="12" cy="7.6" r="0.6"/></symbol>
     <symbol id="i-naplast" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M10 10.5v3M14 10.5v3" transform="rotate(-35 12 12)"/></symbol>
+    <symbol id="i-vlevo-sipka" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+    <symbol id="i-vpravo-sipka" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-jedna-strana" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="1.5"/></symbol>
+    <symbol id="i-dvojstrana" viewBox="0 0 24 24"><rect x="2.5" y="4" width="9" height="16" rx="1.5"/><rect x="12.5" y="4" width="9" height="16" rx="1.5"/></symbol>
     <symbol id="i-tuzka" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
   </defs>
 </svg>
@@ -50,12 +54,6 @@
         <span class="kde-sipka" aria-hidden="true">‹</span>
         <span class="kde-nazev">{{ kontext.nazev }}</span>
       </a>
-      {# Listování zpěvníkem: rozdělaná strana se zálohuje v prohlížeči, nikdo se neptá. #}
-      <span class="listovani" role="group" aria-label="Strana zpěvníku">
-        <button type="button" class="ikona" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana">‹</button>
-        <select id="vyber-strany" data-napoveda="Strana zpěvníku" aria-label="Strana zpěvníku"></select>
-        <button type="button" class="ikona" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana">›</button>
-      </span>
     </div>
     {% endif %}
     <div class="nastroje">
@@ -114,19 +112,37 @@
   </div>
 
   <div class="navrh-plocha" id="navrh-plocha">
-    <div class="stranka-obal" id="stranka-obal">
-      <div class="stranka" id="stranka">
-        <div class="stranka-mount"></div>
+    {# Dvojstrana: vedle upravované strany protější strana zpěvníku (jen k náhledu, klik ji
+       otevře k úpravě). #}
+    <div class="dvojstrana" id="dvojstrana">
+      <div class="stranka-obal" id="stranka-obal">
+        <div class="stranka" id="stranka">
+          <div class="stranka-mount"></div>
+        </div>
       </div>
     </div>
     {# Spodní pruh plochy: stav uprostřed, přiblížení vpravo (jako v grafických editorech). #}
     <div class="navrh-dole">
       <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+      <div class="navrh-vpravo">
+      {% if kontext %}
+      {# Listování zpěvníkem jako ve čtečce: rozdělaná strana se zálohuje v prohlížeči,
+         nikdo se neptá. Číslo strany jde napsat. #}
+      <div class="navrh-zoom navrh-listovani" role="group" aria-label="Strana zpěvníku">
+        <button type="button" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
+        <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
+        <button type="button" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
+        <span class="oddelovac" aria-hidden="true"></span>
+        <button type="button" data-prikaz="jedna-strana" data-napoveda="Jedna strana" aria-label="Jedna strana"><svg><use href="#i-jedna-strana"/></svg></button>
+        <button type="button" data-prikaz="dvojstrana" data-napoveda="Dvojstrana (protější strana vedle)" aria-label="Dvojstrana"><svg><use href="#i-dvojstrana"/></svg></button>
+      </div>
+      {% endif %}
       <div class="navrh-zoom" role="group" aria-label="Přiblížení">
         <button type="button" data-prikaz="mensi" data-napoveda="Oddálit" aria-label="Oddálit"><svg><use href="#i-mensi"/></svg></button>
         <span class="meritko-text" id="meritko-text">100 %</span>
         <button type="button" data-prikaz="vetsi" data-napoveda="Přiblížit" aria-label="Přiblížit"><svg><use href="#i-vetsi"/></svg></button>
         <button type="button" data-prikaz="cela-strana" data-napoveda="Celá strana" aria-label="Celá strana"><svg><use href="#i-cela"/></svg></button>
+      </div>
       </div>
     </div>
   </div>
