@@ -9,6 +9,7 @@ a obrázky stran), takže se skutečných dat nedotkne. Měří se čísly, ne s
     python backend/scripts/test_navrh_zpevnik.py
 """
 
+import json
 import logging
 import re
 import os
@@ -291,20 +292,6 @@ def main():
             page.evaluate("navrhStrany.nahradTextem('Šestá', 'Autor', '[G]řádek šesté')")
             page.wait_for_timeout(700)
 
-            print("\n── dvojstrana ──")
-            page.click('[data-prikaz="dvojstrana"]')
-            page.wait_for_selector(".protejsek .protejsek-cislo", timeout=20000)
-            dv = page.evaluate("""(() => { const p = document.querySelector('.protejsek').getBoundingClientRect();
-              const s = document.querySelector('#stranka-obal').getBoundingClientRect();
-              const pl = document.querySelector('#navrh-plocha');
-              return { vpravo: p.left >= s.right, stejnaVelikost: Math.abs(p.width - s.width) < 1 && Math.abs(p.height - s.height) < 1,
-                       cislo: document.querySelector('.protejsek-cislo').textContent,
-                       vejdeSe: pl.scrollWidth <= pl.clientWidth + 1 }; })()""")
-            ok("strana 6 je levá: protější (prázdná) 7 je vpravo, stejně velká", dv["vpravo"] and dv["stejnaVelikost"] and dv["cislo"] == "7", dv)
-            ok("celá dvojstrana se vejde na plochu", dv["vejdeSe"], dv)
-            page.click('[data-prikaz="jedna-strana"]')
-            ok("jedna strana protějšek schová", page.locator(".protejsek").count() == 0)
-            page.click('[data-prikaz="dvojstrana"]')
             ok("výstraha u Uložit zatím není (jiné strany rozdělané nejsou)", page.is_hidden("#neulozene-jinde"))
             page.click('[data-prikaz="dalsi-strana"]')
             editor_stran(page)
@@ -314,25 +301,18 @@ def main():
             ok("u Uložit je výstraha s rozdělanou stranou 6", page.is_visible("#neulozene-jinde")
                and page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6",
                page.get_attribute("#neulozene-jinde", "data-napoveda"))
-            page.wait_for_selector(".protejsek .stranka", timeout=20000)
-            ok("dvojstrana zůstala zapnutá a vlevo je rozdělaná strana 6",
-               "Šestá" in page.inner_text(".protejsek .stranka") and page.inner_text(".protejsek-cislo") == "6 • rozdělaná"
-               and page.evaluate("document.querySelector('.protejsek').getBoundingClientRect().right <= document.querySelector('#stranka-obal').getBoundingClientRect().left"),
-               page.inner_text(".protejsek-cislo"))
             page.fill("#cislo-strany-zpevniku", "5")
             page.press("#cislo-strany-zpevniku", "Enter")
             editor_stran(page)
             ok("napsané číslo strany otevře stranu 5", page.input_value("#cislo-strany-zpevniku") == "5"
                and "Testovací" in page.evaluate("navrhStrany.view.state.doc.textContent"))
-            ok("první strana (pravá) protější stranu nemá", page.locator(".protejsek.zadna").count() == 1)
             page.click('[data-prikaz="dalsi-strana"]')
             editor_stran(page)
             ok("rozdělaná strana 6 se po návratu obnoví z prohlížeče",
                "Šestá" in page.evaluate("navrhStrany.view.state.doc.textContent") and page.is_hidden("#neulozene-jinde"))
             ok("a do zpěvníku se zatím nic neuložilo", strany_db()[1][1] is None, strany_db())
-            page.click(".protejsek")
+            page.click('[data-prikaz="dalsi-strana"]')
             editor_stran(page)
-            ok("klik na protější stranu ji otevře k úpravě (7)", page.input_value("#cislo-strany-zpevniku") == "7")
             page.evaluate("navrhStrany.nahradTextem('Sedmá', 'Autor', '[D]řádek sedmé')")
             page.click('[data-prikaz="ulozit"]')
             page.wait_for_selector("#app-confirm-overlay", state="visible")
@@ -349,17 +329,77 @@ def main():
                 zdroj6 = A.db.session.get(A.NavrzenaStrana, s2[1][1]).zdroj
             ok("strana 6 se uložila z rozdělané úpravy", "Šestá" in zdroj6)
 
+
+            print("\n── dvojstrana: obě strany upravitelné ──")
+            page.click('[data-prikaz="dvojstrana"]')
+            editor_stran(page)
+            DV = """(() => { const s = document.getElementById('stranka'), r = s.getBoundingClientRect();
+              const pl = document.getElementById('navrh-plocha');
+              return { trida: s.classList.contains('dvojstrana-uprava'), pomer: Math.round(r.width / r.height * 1000) / 1000,
+                       text: navrhStrany.view.state.doc.textContent, vejdeSe: pl.scrollWidth <= pl.clientWidth + 1,
+                       cisla: [...document.querySelectorAll('#stranka .ps-cislo-strany')].filter(e => !e.hidden).map(e => e.textContent).sort(),
+                       znacky: [...document.querySelectorAll('#stranka .ps-zacatek')].map(e => e.dataset.znacka),
+                       protejsek: document.querySelectorAll('.protejsek').length }; })()"""
+            dv = page.evaluate(DV)
+            ok("dvojstrana 6–7 je jedno plátno přes obě strany (2 × A5), bez náhledu protějšku",
+               dv["trida"] and abs(dv["pomer"] - 2 * 148 / 210) < 0.01 and dv["protejsek"] == 0, dv)
+            ok("na plátně jsou obě strany (Šestá i Sedmá) a vejde se", "Šestá" in dv["text"] and "Sedmá" in dv["text"] and dv["vejdeSe"], dv)
+            ok("obě čísla stran", dv["cisla"] == ["6", "7"], dv["cisla"])
+            ok("sloky se číslují na každé straně zvlášť (jako ve čtečce)", dv["znacky"] == ["1.", "1."], dv["znacky"])
+            ok("listování přeskakuje celou dvojstranu", page.evaluate("[...['predchozi-strana', 'dalsi-strana']].map(p => document.querySelector(`[data-prikaz=${p}]`).disabled)") == [False, False])
+
+            # Rámeček strany 7 (vpravo) přetáhnout za lištu na levou stranu.
+            RAM = """(() => { const r = [...document.querySelectorAll('.ps-ramecek')].find(e => e.textContent.includes('Sedmá'));
+              const l = r.querySelector('.ps-prvek-lista').getBoundingClientRect(); return [l.left, l.top, l.height]; })()"""
+            l = page.evaluate(RAM)
+            k = page.evaluate("document.getElementById('stranka').getBoundingClientRect().width / 296")
+            page.mouse.move(l[0] + 20, l[1] + l[2] / 2)
+            page.mouse.down()
+            page.mouse.move(l[0] + 20 - 100 * k, l[1] + l[2] / 2, steps=8)
+            page.mouse.up()
+            STRANY = "['L', 'P'].map(lp => JSON.stringify(navrhStrany.zdroj(lp).obsah))"
+            z = page.evaluate(STRANY)
+            ok("rámeček přetažený přes hřbet patří levé straně", "Sedmá" in z[0] and "Sedmá" not in z[1], [x[:80] for x in z])
+            page.keyboard.press("ControlOrMeta+z")
+            z = page.evaluate(STRANY)
+            ok("Zpět ho vrátí na pravou stranu", "Sedmá" not in z[0] and "Sedmá" in z[1])
+            page.keyboard.press("ControlOrMeta+y")
+            page.click('[data-prikaz="ulozit"]')
+            page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+            s3 = strany_db()
+            with A.app.app_context():
+                z6 = json.loads(A.db.session.get(A.NavrzenaStrana, s3[1][1]).zdroj)
+                z7 = json.loads(A.db.session.get(A.NavrzenaStrana, s3[2][1]).zdroj)
+            ram7 = [r for r in z6["obsah"]["content"] if "Sedmá" in json.dumps(r, ensure_ascii=False)]
+            ok("Uložit uloží obě strany: rámeček je teď ve straně 6 (na jejích souřadnicích)",
+               s3[1][1] != s2[1][1] and s3[2][1] != s2[2][1] and ram7 and 0 <= ram7[0]["attrs"]["x"] < 148,
+               (s3, ram7[0]["attrs"] if ram7 else None))
+            ok("strana 7 bez rámečku dostala prázdný rámeček", "Sedmá" not in json.dumps(z7, ensure_ascii=False)
+               and len(z7["obsah"]["content"]) == 1, z7["obsah"]["content"][:1])
+
+            # Rozdělané obě strany: přežijí přelistování a odchod je vyjmenuje.
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('X', 2)); })()")
+            page.click('[data-prikaz="ramecek"]')
+            page.keyboard.type("Y")
+            ok("nový rámeček (Text) vznikne na upravované straně 7, vpravo",
+               "Y" in page.evaluate("JSON.stringify(navrhStrany.zdroj('P').obsah)") and "Y" not in page.evaluate("JSON.stringify(navrhStrany.zdroj('L').obsah)"))
+            page.click('[data-prikaz="dalsi-strana"]')
+            editor_stran(page)
+            ok("po přelistování na 8 je výstraha s rozdělanými 6, 7",
+               page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6, 7",
+               page.get_attribute("#neulozene-jinde", "data-napoveda"))
             page.click('[data-prikaz="predchozi-strana"]')
             editor_stran(page)
+            ok("zpátky na 6–7 jsou obě rozdělané úpravy", page.evaluate("navrhStrany.view.state.doc.textContent").count("X") >= 1
+               and "Y" in page.evaluate("navrhStrany.view.state.doc.textContent") and page.is_hidden("#neulozene-jinde"))
             page.click("#zpet-do-zpevniku")
             page.wait_for_selector("#app-confirm-overlay", state="visible")
             zprava = page.inner_text("#app-confirm-message")
-            ok("odchod z editoru vyjmenuje rozdělané strany i z jiné strany", zprava == "Neuložené změny jsou na stranách 7." or zprava == "Strana 7 má neuložené změny.", zprava)
+            ok("odchod z dvojstrany vyjmenuje obě rozdělané strany", zprava == "Neuložené změny jsou na stranách 6, 7.", zprava)
             page.click("#app-confirm-ok")       # Odejít bez uložení
             page.wait_for_url("**/my-songbooks**")
             ok("odejít bez uložení koncepty zahodí", page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('navrh-koncept:')).length") == 0)
-            ok("a uložené strany zůstanou", strany_db()[2][1] == s2[2][1], strany_db())
+            ok("a uložené strany zůstanou", strany_db()[1][1] == s3[1][1] and strany_db()[2][1] == s3[2][1], strany_db())
             page.evaluate("localStorage.setItem('navrh-rezim-stran', 'jedna')")
             otevri_editor_zpevniku(page)
             page.locator("#es-seznam .es-strana").nth(1).locator(".es-navrhnout").click()

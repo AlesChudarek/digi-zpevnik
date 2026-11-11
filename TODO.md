@@ -1180,10 +1180,14 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
-      **Dvojstrana - úpravy přes obě strany** (Aleš 11. 11.): přesouvat rámečky, obrázky,
-      náplasti a bloky textu mezi levou a pravou stranou dvojstrany. Potřebuje upravovat obě
-      strany naráz (dva editory na jedné stránce, společné Zpět a přenos uzlů mezi nimi).
-      Dnešní dvojstrana (protější strana k náhledu, klik ji otevře) se Alešovi líbí.
+      Hotovo 11. 11.: **dvojstrana s úpravou obou stran** - jedno plátno (jeden dokument,
+      prvky pravé strany s x + šířka strany), přesun prvků přes hřbet, text vyjmout/vložit,
+      společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku
+      (prázdná strana dostane prázdný rámeček), ukládá se jen změněná strana. Sloky se
+      číslují po stranách. Jen u uložené strany s protější stranou stejného formátu (jinak
+      protější strana k náhledu jako dřív); přepnutí režimu stránku znovu načte. Panel
+      (styly, akordy, formát) platí pro obě strany, číslo strany má každá své. Listování
+      po dvojstranách.
       Hotovo 11. 11. (ze schránky): duplikovat stranu (ikona clone vedle tužky - kopie za
       blok, bez písní, sdílí neměnnou verzi; úprava jedné dá novou verzi jen jí); místo
       štítku „navržená“ jen malá ikona tužky v rohu náhledu; s nástrojem Náplast všude

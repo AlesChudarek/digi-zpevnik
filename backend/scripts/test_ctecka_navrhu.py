@@ -325,6 +325,28 @@ def test_skenu(p, base):
       const t = e.querySelectorAll('.ps-tvar polygon'), i = e.querySelector('.ps-obrazek img');
       return [[...t].map(p => p.getAttribute('fill')), i ? i.naturalWidth > 0 : false]; })()""")
     ok("čtečka ukáže sken i náplasti", ctecka == [["#ff0000"] * 3, True], ctecka)
+    print("── dvojstrana se skenem vpravo ──")
+    with A.app.app_context():
+        leva = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=21).first()       # 22, levá
+        prava = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=22).first()      # 23, obrázek
+        leva_id, leva_navrh, prava_id = leva.id, leva.navrzena_id, prava.id
+    page.goto(f"{base}/editor-strany/{leva_id}")
+    page.evaluate("localStorage.setItem('navrh-rezim-stran', 'dvojstrana')")
+    page.goto(f"{base}/editor-strany/{leva_id}")
+    page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
+    sken = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'obrazek').map(n => n.attrs)")
+    ok("protější strana se skenem je na plátně vpravo jako podklad", len(sken) == 1 and sken[0]["x"] >= 148
+       and sken[0]["vrstva"] == "za", sken)
+    page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Z', 2)); })()")
+    page.click('[data-prikaz="ulozit"]')
+    page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+    with A.app.app_context():
+        A.db.session.expire_all()
+        l2, p2 = A.db.session.get(A.Strana, leva_id), A.db.session.get(A.Strana, prava_id)
+        ok("uloží se jen změněná levá strana, nedotčený sken zůstane obrázkovou stranou",
+           l2.navrzena_id != leva_navrh and p2.image_id == OBRAZEK_ID and p2.navrzena_id is None,
+           (l2.navrzena_id, leva_navrh, p2.image_id, p2.navrzena_id))
+    page.evaluate("localStorage.setItem('navrh-rezim-stran', 'jedna')")
     ok("bez chyb JavaScriptu", not chyby, chyby[:3])
     br.close()
 

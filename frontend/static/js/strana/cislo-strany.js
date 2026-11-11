@@ -48,7 +48,7 @@ export class CisloStrany {
     const { x, y } = CisloStrany.poloha(c, f, n.nahledStrany);
     const s = this.el.style;
     this.el.textContent = String(n.nahledCisla);
-    s.left = x + 'mm';
+    s.left = x + this.posun() + 'mm';
     s.top = y + 'mm';
     s.fontFamily = `'${c.pismo}', sans-serif`;
     s.fontSize = c.velikost + 'pt';
@@ -72,11 +72,14 @@ export class CisloStrany {
     window.addEventListener('pointerup', this._konec);
   }
 
+  // Ve dvojstraně levý okraj upravované strany na plátně (mm).
+  posun() { return this.volby.posun ? this.volby.posun() : 0; }
+
   pohyb(e) {
     const f = this.volby.format();
     const r = this.stranka.getBoundingClientRect();
     const pxNaMm = MM_NA_PX * this.volby.meritko();
-    let x = (e.clientX - r.left) / pxNaMm, y = (e.clientY - r.top) / pxNaMm;
+    let x = (e.clientX - r.left) / pxNaMm - this.posun(), y = (e.clientY - r.top) / pxNaMm;
     x = Math.min(Math.max(x, 2), f.sirka - 2);
     y = Math.min(Math.max(y, 2), f.vyska - 2);
     // Přichycení: střed strany, okraje sazby, polovina okraje (číslo v okraji).
@@ -95,7 +98,7 @@ export class CisloStrany {
     this.tah.nove = { ...n.cislo, x: pravaX, y };
     this.tah.posun = true;
     const { x: vx, y: vy } = CisloStrany.poloha(this.tah.nove, f, this.tah.strana);
-    this.el.style.left = vx + 'mm';
+    this.el.style.left = vx + this.posun() + 'mm';
     this.el.style.top = vy + 'mm';
     this.nahled.hidden = false;
     vykresliDvojstranu(this.nahled, f, this.tah.nove, String(n.nahledCisla), this.tah.strana);
@@ -104,7 +107,7 @@ export class CisloStrany {
   ukazVoditka(x, y) {
     this.voditkoX.style.display = x != null ? 'block' : 'none';
     this.voditkoY.style.display = y != null ? 'block' : 'none';
-    if (x != null) this.voditkoX.style.left = x + 'mm';
+    if (x != null) this.voditkoX.style.left = x + this.posun() + 'mm';
     if (y != null) this.voditkoY.style.top = y + 'mm';
   }
 

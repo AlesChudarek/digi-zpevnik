@@ -227,7 +227,7 @@ export function pridejRamecek(view, format) {
   const { schema } = view.state;
   const n = view.state.doc.childCount;
   const ramecek = schema.nodes.ramecek.create(
-    { x: format.okraj + 6 * n, y: format.okraj + 6 * n, w: Math.round((format.sirka - 2 * format.okraj) / 2), h: 30 },
+    { x: (format.posun || 0) + format.okraj + 6 * n, y: format.okraj + 6 * n, w: Math.round((format.sirka - 2 * format.okraj) / 2), h: 30 },
     schema.nodes.odstavec.create({ styl: 'normalni' }),
   );
   const konec = view.state.doc.content.size;
@@ -277,7 +277,8 @@ export function vlozObrazek(view, format, { src, w, h }, kam = null) {
   if (vyska > vyskaSazby) { vyska = vyskaSazby; sirka = vyska * w / h; }
   sirka = zaokrouhliMm(sirka);
   vyska = zaokrouhliMm(vyska);
-  const x = kam ? zaokrouhliMm(kam.x - sirka / 2) : zaokrouhliMm((format.sirka - sirka) / 2);
+  // format.posun: ve dvojstraně levý okraj upravované strany (mm).
+  const x = kam ? zaokrouhliMm(kam.x - sirka / 2) : zaokrouhliMm((format.posun || 0) + (format.sirka - sirka) / 2);
   const y = kam ? zaokrouhliMm(kam.y - vyska / 2) : zaokrouhliMm((format.vyska - vyska) / 2);
   const uzel = view.state.schema.nodes.obrazek.create({ src, x, y, w: sirka, h: vyska });
   const konec = view.state.doc.content.size;

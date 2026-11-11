@@ -24,11 +24,15 @@ function neprazdny(p, r, roleStylu = role) {
 
 // Značky slok a refrénů v dokumentu - stejné pro editor (dekorace) i čtečku
 // (vykresleni.js). Vrací { znacky: [{ pos, velikost, znacka }], refreny }.
-export function znackySlok(doc, roleStylu = role) {
+// stranaPrvku(uzel): ve dvojstraně, na které straně prvek leží - každá strana čísluje
+// sloky sama, stejně jako čtečka, která kreslí strany zvlášť.
+export function znackySlok(doc, roleStylu = role, stranaPrvku = () => 0) {
   const znacky = [];
   const refreny = [];          // [{ od, odstavce: [...] }] v pořadí dokumentu
-  let cislo = 0;
+  const citace = new Map();
   doc.forEach((ramecek, offR) => {
+    const strana = stranaPrvku(ramecek);
+    let cislo = citace.get(strana) || 0;
     let predchozi = null;
     let rozepsanyRefren = null;
     ramecek.forEach((p, offP) => {
@@ -56,12 +60,15 @@ export function znackySlok(doc, roleStylu = role) {
       }
       predchozi = p;
     });
+    citace.set(strana, cislo);
   });
   return { znacky, refreny };
 }
 
+let stranaPrvku = () => 0;
+
 function spocitej(state) {
-  const { znacky, refreny } = znackySlok(state.doc);
+  const { znacky, refreny } = znackySlok(state.doc, role, stranaPrvku);
   const dekorace = znacky.map((z) => Decoration.node(z.pos, z.pos + z.velikost,
     { class: 'ps-zacatek', 'data-znacka': z.znacka }));
 
@@ -96,6 +103,7 @@ function spocitej(state) {
 
 export function pluginSlok(volby = {}) {
   if (volby.role) role = volby.role;
+  if (volby.stranaPrvku) stranaPrvku = volby.stranaPrvku;
   return new Plugin({
     key: klicSlok,
     state: {
