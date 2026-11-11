@@ -36,8 +36,16 @@ function stranaUzlu(n) {
 // Obrázek nebo náplast přes hřbet patří oběma stranám: každá si z něj ořízne svou část
 // (levá s přesahem doprava, pravá se záporným x). Textový rámeček se dělit nedá - ten
 // patří straně podle středu.
+// orezatPresahy: autor při uložení zvolil Oříznout - prvek přes hřbet zůstane jen na
+// straně podle středu (druhá část se ořízne). Platí, dokud se při dalším uložení
+// nerozhodne jinak.
+let orezatPresahy = false;
+function prekracujeHrbet(n) {
+  const s = format().sirka;
+  return !!spoj && n.attrs.x < s - 0.05 && n.attrs.x + n.attrs.w > s + 0.05;
+}
 function presHrbet(n) {
-  if (!spoj || (n.type !== N.obrazek && n.type !== N.tvar)) return false;
+  if (!spoj || orezatPresahy || (n.type !== N.obrazek && n.type !== N.tvar)) return false;
   const s = format().sirka;
   return n.attrs.x < s - 0.05 && n.attrs.x + n.attrs.w > s + 0.05;
 }
@@ -1178,10 +1186,34 @@ async function ulozKoncepty(seznam) {
   if (chyby.length) throw new Error(chyby.join('; '));
 }
 
+// Před uložením dvojstrany: prvky přes hřbet. Obrázek a náplast jde zachovat na obou
+// stranách (každá ořízne svou část), nebo oříznout; text v rámečku zůstane jen na
+// straně podle středu. Vrací false, když autor uložení zrušil.
+async function potvrdPresahy() {
+  if (!spoj) return true;
+  let prvku = 0, ramecku = 0;
+  view.state.doc.forEach((n) => {
+    if (!prekracujeHrbet(n)) return;
+    if (n.type === N.ramecek) ramecku += 1; else prvku += 1;
+  });
+  if (!prvku && !ramecku) return true;
+  const text = ramecku
+    ? ` Text v rámečku přes hřbet (${ramecku}) zůstane jen na straně, kde má rámeček střed; na druhé se ořízne.` : '';
+  if (!prvku) return window.showConfirm(`Přes hřbet dvojstrany přesahuje textový rámeček.${text}`, 'Uložit');
+  const volba = await window.showUnsavedConfirm(
+    `Přes hřbet dvojstrany přesahují obrázky nebo náplasti (${prvku}). Můžou zůstat na obou stranách `
+    + `(každá strana ukáže svou část), nebo se oříznout - pak zůstanou jen na straně, kde mají střed.${text}`,
+    { save: 'Zachovat na obou stranách', discard: 'Oříznout', discardStyl: 'neutralni' });
+  if (volba === 'cancel') return false;
+  orezatPresahy = volba === 'discard';
+  return true;
+}
+
 let ulozitSe = false;
 // vse: uložit i ostatní rozdělané strany. Vrací true, když se všechno povedlo.
 async function ulozitStranu(vse) {
   if (!KONTEXT || ulozitSe) return false;
+  if (neulozeno() && !(await potvrdPresahy())) return false;
   ulozitSe = true;
   clearTimeout(casovacKonceptu);
   const tlacitko = koren.querySelector('[data-prikaz="ulozit"]');

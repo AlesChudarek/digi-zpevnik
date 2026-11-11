@@ -1185,7 +1185,10 @@ kdo maže.
       společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku
       (prázdná strana dostane prázdný rámeček), ukládá se jen změněná strana. Obrázek
       a náplast přes hřbet se uloží na obě strany (každá ořízne svou část), při
-      otevření dvojstrany se spojí zpět v jeden prvek; rámeček s textem podle středu. Sloky se
+      otevření dvojstrany se spojí zpět v jeden prvek; rámeček s textem podle středu.
+      Při uložení dvojstrany s přesahy přes hřbet okno: obrázky/náplasti Zachovat na obou
+      stranách / Oříznout (jen strana podle středu) / Zrušit; textový rámeček jen upozorní,
+      že text zůstane na jedné straně. V režimu jedné strany se přesah jen ořízne. Sloky se
       číslují po stranách. Jen u uložené strany s protější stranou stejného formátu (jinak
       protější strana k náhledu jako dřív); přepnutí režimu stránku znovu načte. Panel
       (styly, akordy, formát) platí pro obě strany, číslo strany má každá své. Listování
@@ -1242,3 +1245,4 @@ kdo maže.
       - [X] editor zpěvníku: štítek „navržená“ na náhledu strany je mírně mimo střed
 
 ## Rucne pridane - pokud tohle cte llm, prepis todo pod timto nadpisem do spravne kategorie
+Duplikovat

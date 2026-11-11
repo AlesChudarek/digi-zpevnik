@@ -365,6 +365,11 @@ def main():
             ok("Zpět ho vrátí na pravou stranu", "Sedmá" not in z[0] and "Sedmá" in z[1])
             page.keyboard.press("ControlOrMeta+y")
             page.click('[data-prikaz="ulozit"]')
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            zprava = page.inner_text("#app-confirm-message")
+            ok("rámeček přes hřbet: při uložení upozornění, že text zůstane na jedné straně",
+               zprava.startswith("Přes hřbet dvojstrany přesahuje textový rámeček.") and "zůstane jen na straně" in zprava, zprava)
+            page.click("#app-confirm-ok")
             page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
             s3 = strany_db()
             with A.app.app_context():
@@ -384,6 +389,11 @@ def main():
             ok("náplast přes hřbet patří oběma stranám (levá od 140 mm, pravá od −8 mm)", page.evaluate(TVARY) == [[140], [-8]],
                page.evaluate(TVARY))
             page.click('[data-prikaz="ulozit"]')
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            tlacitka = page.locator("#app-confirm-overlay button:visible").all_inner_texts()
+            ok("náplast přes hřbet: Zachovat na obou stranách / Oříznout / Zrušit",
+               tlacitka == ["Zachovat na obou stranách", "Oříznout", "Zrušit"], tlacitka)
+            page.click("#app-confirm-save")
             page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
             s4 = strany_db()
             with A.app.app_context():
@@ -395,6 +405,18 @@ def main():
             na_platne = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').map(n => n.attrs.x)")
             ok("po znovuotevření je na plátně jedna celá náplast (dá se táhnout vcelku)", na_platne == [140], na_platne)
             ok("a nic není rozdělané", page.is_hidden("#neulozene-jinde") and not page.evaluate("Object.keys(localStorage).some(k => k.startsWith('navrh-koncept:'))"))
+            page.evaluate("""(() => { const v = navrhStrany.view, N = v.state.schema.nodes;
+              v.dispatch(v.state.tr.insert(v.state.doc.content.size, N.tvar.create({ x: 145, y: 80, w: 20, h: 6, barva: '#00ff00' }))); })()""")
+            page.click('[data-prikaz="ulozit"]')
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            page.click("#app-confirm-ok")       # Oříznout
+            page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+            s4 = strany_db()
+            with A.app.app_context():
+                xs = [[n["attrs"]["x"] for n in json.loads(A.db.session.get(A.NavrzenaStrana, s4[i][1]).zdroj)["obsah"]["content"]
+                       if n["type"] == "tvar"] for i in (1, 2)]
+            ok("Oříznout: náplasti přes hřbet zůstanou jen na straně podle středu (obě vpravo)", xs == [[], [-8, -3]], xs)
+            ok("a po uložení není nic rozdělané", page.is_hidden("#neulozene-jinde") and not page.evaluate("Object.keys(localStorage).some(k => k.startsWith('navrh-koncept:'))"))
 
             # Rozdělané obě strany: přežijí přelistování a odchod je vyjmenuje.
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('X', 2)); })()")
