@@ -1178,8 +1178,8 @@ kdo maže.
         v nápovědě): obrázek (nahrát/vyměnit) a tužka (upravit v editoru stran), u všech
         stran. Šipka výš na stejné vodorovné jako ✕. Pod seznamem „+ Přidat stranu“
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
-        Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
-        do té doby zástupné.
+        Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
+        zatím text - až budou move_up/down a remove_page, vyměnit.
       Hotovo: 5. obrázková strana a náplast (11. 11.): sken se otevře jako obrázek za textem
       přes celou stranu (vystředěný) + malý textový rámeček; uložením je z ní navržená strana,
       sken zůstává v `navrh_obrazky` (smazaný sken se po uložení uklidí). Uzel `tvar`

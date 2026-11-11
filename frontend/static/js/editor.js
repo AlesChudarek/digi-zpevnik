@@ -748,6 +748,29 @@
     strany.forEach(prekresliStav);
     obnovPopisy();
     ukazProblemy(ukazovatChyby);
+    zarovnejSipky();
+  }
+
+  // Šipky bloku: výš na vodorovné ✕ první strany, níž na horní hraně prvního psacího pole
+  // (název písně nebo popisek). Měří se, protože hlavička strany se na úzkém displeji
+  // zalamuje a její výška se mění. Volá se po vykreslení a při změně šířky seznamu.
+  function zarovnejSipky() {
+    var seznam = $('es-seznam');
+    if (!seznam || !seznam.offsetParent) return;
+    seznam.querySelectorAll('.es-blok').forEach(function (b) {
+      var akce = b.querySelector('.es-akce'), nahoru = b.querySelector('.es-nahoru'), dolu = b.querySelector('.es-dolu');
+      var st = b.querySelector('.es-strana');
+      var x = st && st.querySelector('.es-odebrat'), pole = st && st.querySelector('.es-pisen input, .es-popisek');
+      if (!akce || !nahoru || !dolu || !x) return;
+      akce.style.paddingTop = '0px';
+      dolu.style.marginTop = '0px';
+      var p1 = Math.max(0, x.getBoundingClientRect().top - nahoru.getBoundingClientRect().top);
+      akce.style.paddingTop = p1 + 'px';
+      if (pole) {
+        var p2 = pole.getBoundingClientRect().top - dolu.getBoundingClientRect().top;
+        if (p2 > 0) dolu.style.marginTop = p2 + 'px';
+      }
+    });
   }
 
   function prvekStrany(s) {
@@ -946,6 +969,13 @@
     sekce.dataset.navazano = '1';
     var seznam = $('es-seznam');
     var vyber = $('es-soubory');
+    if (window.ResizeObserver) {
+      var sirka = 0;
+      new ResizeObserver(function (z) {
+        var w = Math.round(z[0].contentRect.width);
+        if (w && w !== sirka) { sirka = w; zarovnejSipky(); }
+      }).observe(seznam);
+    }
 
     $('es-pridat').addEventListener('click', function () { pridejPrazdnou(null); });
     // „nebo navrhnout v editoru stran“: nová strana na konec zpěvníku, rovnou v editoru.

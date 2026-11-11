@@ -148,12 +148,15 @@ def main():
               const x = r('.es-odebrat'), o = r('.es-nahrat-obrazek'), t = r('.es-navrhnout');
               return { ikony: [o.top, t.top, x.top].map(Math.round), poradi: o.right <= t.left && t.right <= x.left,
                        nahoruVsKriz: Math.round((nahoru.top - x.top) * 10) / 10,
+                       doluVsPole: Math.round((blok.querySelector('.es-dolu').getBoundingClientRect().top
+                                    - st.querySelector('.es-pisen input, .es-popisek').getBoundingClientRect().top) * 10) / 10,
                        prazdnaIkona: !!st.querySelector('.es-nahled .es-prazdna-ikona'),
                        obrazkuVNahledu: st.querySelectorAll('.es-nahled img').length,
                        popisky: [...st.querySelectorAll('.es-akce-strany button')].map(b => b.getAttribute('aria-label') || b.textContent) }; })()""")
             ok("u strany jsou vpravo ikony obrázek a tužka a pak ✕, v jedné řadě",
                len(set(radek["ikony"])) == 1 and radek["poradi"], radek)
             ok("šipka výš je na stejné vodorovné jako ✕", abs(radek["nahoruVsKriz"]) <= 0.5, radek["nahoruVsKriz"])
+            ok("šipka níž začíná na horní hraně psacího pole", abs(radek["doluVsPole"]) <= 0.5, radek["doluVsPole"])
             ok("prázdná strana má v náhledu ikonu, ne obrázek", radek["prazdnaIkona"] and radek["obrazkuVNahledu"] == 0, radek)
             ok("ikony mají popisek", radek["popisky"][:2] == ["Nahrát obrázek strany", "Navrhnout stranu v editoru stran (text a akordy)"],
                radek["popisky"])

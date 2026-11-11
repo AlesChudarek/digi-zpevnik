@@ -750,7 +750,7 @@
       </div>
 
       <section class="editor-stran" id="editor-stran"
-               style="--ikona-prazdna: url('{{ static_bust('img/icons/empty_page.svg') }}')"
+               style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}')"
                data-pdfjs="{{ static_bust('vendor/pdfjs/pdf.min.js') }}"
                data-pdfjs-worker="{{ static_bust('vendor/pdfjs/pdf.worker.min.js') }}"
                data-jszip="{{ static_bust('vendor/jszip/jszip.min.js') }}">
@@ -767,14 +767,11 @@
         <ol class="es-seznam" id="es-seznam"></ol>
         <div class="es-pridavani">
           <button type="button" class="es-pridat-stranu" id="es-pridat">+ Přidat stranu</button>
-          {% if smi_navrhovat(current_user) %}
-          <span class="es-tip">nebo <button type="button" class="es-nahrat" id="es-navrhnout-novou">navrhnout v editoru stran</button>.</span>
-          {% else %}
-          <span class="es-tip napoveda-duvod" data-napoveda="Navrhovat strany v editoru stran mohou prémiové účty.">nebo
-            <button type="button" class="es-nahrat" id="es-navrhnout-novou" disabled>navrhnout v editoru stran</button>.</span>
-          {% endif %}
           <span class="es-tip">Obrázky, PDF a ZIP jde sem přetáhnout, nebo
-            <button type="button" class="es-nahrat" id="es-nahrat">vybrat ze souborů</button>.</span>
+            <button type="button" class="es-nahrat" id="es-nahrat">vybrat ze souborů</button>,
+            {% if smi_navrhovat(current_user) %}nebo <button type="button" class="es-nahrat" id="es-navrhnout-novou">navrhnout v editoru stran</button>.
+            {% else %}<span class="napoveda-duvod" data-napoveda="Navrhovat strany v editoru stran mohou prémiové účty.">nebo
+              <button type="button" class="es-nahrat" id="es-navrhnout-novou" disabled>navrhnout v editoru stran</button></span>.{% endif %}</span>
           <input type="file" id="es-soubory" accept="image/*,.pdf,application/pdf,.zip,application/zip" multiple hidden>
         </div>
         <p class="es-stav-nahravani" id="es-stav-importu" role="status" hidden></p>

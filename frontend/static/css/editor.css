@@ -130,8 +130,8 @@ body.tahne-se, body.tahne-se * { cursor: grabbing !important; user-select: none;
 .es-retez { font-size: 15px; opacity: 0.55; }
 .es-spojit.zapnuto .es-retez { opacity: 1; }
 
-/* Šipky bloku: horní je na stejné vodorovné jako ✕ v hlavičce první strany (strana má
-   nahoře 2px odsazení). */
+/* Šipky bloku: výš na vodorovné ✕ první strany, níž na horní hraně prvního psacího
+   pole - dorovnává editor.js (zarovnejSipky), hlavička se na telefonu zalamuje. */
 .es-akce { display: flex; flex-direction: column; gap: 4px; padding-top: 2px; }
 .es-akce button, .es-odebrat, .es-odebrat-pisen {
   width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--muted-border, #dbeadf);
