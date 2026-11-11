@@ -2887,6 +2887,10 @@ def _kontext_editoru(sb, strana=None, za=None):
         'navrh': strana.navrzena_id if strana else None,
         'cislo': (sb.prvni_cislo_strany or 1) + index, 'lp': strana_lp(sb, index),
         'zpet': url_for('my_songbooks', upravit=sb.id),
+        # Pro listování zpěvníkem v editoru: obrázkovou stranu zatím upravit nejde.
+        'strany': [{'id': st.id, 'cislo': (sb.prvni_cislo_strany or 1) + st.poradi,
+                    'druh': 'obrazek' if st.image_id else ('navrh' if st.navrzena_id else 'prazdna')}
+                   for st in sb.strany],
     }
 
 

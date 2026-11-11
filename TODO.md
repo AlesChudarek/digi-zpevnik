@@ -1180,6 +1180,12 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony dodá Aleš (edit_page, image_add, empty_page, move_up/down, remove_page),
         do té doby zástupné.
+      Hotovo: 4. listování a koncepty (11. 11.): vlevo v liště zpěvník a ‹ výběr strany ›
+      (obrázkové strany zašedlé), rozdělané strany v localStorage (`navrh-koncept:<zpěvník>:
+      s<id>|n<za>`, s verzí, ke které vznikly - jiná verze → otázka), označené „•“;
+      výstraha u Uložit s nápovědou; Uložit → Uložit všechny / Uložit jen tuto / Zrušit
+      (ostatní se uloží ze zdroje, bez otevírání); odchod → Uložit vše a odejít / Odejít bez
+      uložení (koncepty zahodí). Později: svitek a dvojstrana.
       Hotovo: 3. řádek strany (11. 11.: náhled jen zvětší, lupa = list A5 s obrázkem nebo
       stranou z textu; ikony obrázek/tužka vedle ✕ - ikony zatím ZÁSTUPNÉ edit_page.svg
       a image_add.svg, empty_page.svg z nepouzite/; tužka u obrázkové strany zašedlá do

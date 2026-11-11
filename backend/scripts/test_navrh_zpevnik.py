@@ -172,9 +172,10 @@ def main():
             ok("zpěvník se před přechodem uložil (3 strany), nová strana zatím nevznikla",
                len(strany_db()) == 3 and all(n is None for _, n, _ in strany_db()), strany_db())
             ok("lišta webu je vidět", page.evaluate("getComputedStyle(document.querySelector('.navbar')).display") != "none")
-            ok("v liště editoru je zpěvník a číslo nové strany",
-               page.inner_text(".kde-strana").replace("\n", " ").split() == ["‹", "Navržené", "strany", "UI", "nová", "strana", "5"],
-               page.inner_text(".kde-strana"))
+            ok("v liště editoru je zpěvník a ve výběru nová strana 5",
+               page.inner_text(".kde-strana").split() == ["‹", "Navržené", "strany", "UI"]
+               and page.evaluate("document.querySelector('#vyber-strany').selectedOptions[0].textContent") == "5 – nová strana",
+               (page.inner_text(".kde-strana"), page.evaluate("document.querySelector('#vyber-strany').selectedOptions[0].textContent")))
             ok("číslo a strana podle pozice (první strana zpěvníku = 5, pravá)",
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [5, "P"],
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]"))
@@ -197,7 +198,7 @@ def main():
             try:
                 page.wait_for_url(re.compile(r"/editor-strany/\d+$"), timeout=30000)
             except Exception:
-                print("    ladění:", page.evaluate("location.href"), page.inner_text(".kde-cislo"), page.url, page.inner_text('[data-prikaz="ulozit"]'),
+                print("    ladění:", page.evaluate("location.href"), page.url, page.inner_text('[data-prikaz="ulozit"]'),
                       page.evaluate("[...document.querySelectorAll('.oznameni-zaclona')].map(e => e.innerText).join(' | ')"),
                       strany_db(), chyby[:3], [ (r.status, r.text()[:200]) for r in odpovedi], konzole[-5:])
                 raise
@@ -210,7 +211,8 @@ def main():
                 ok("adresa je teď adresa té strany", page.url.endswith(f"/editor-strany/{strana0.id}"), page.url)
                 ok("verze má PDF a náhled na disku", (OBRAZKY / navrh.pdf.cesta).is_file() and (OBRAZKY / navrh.nahled.cesta).is_file())
                 ok("PDF je skutečné PDF", (OBRAZKY / navrh.pdf.cesta).read_bytes().startswith(b"%PDF-"))
-            ok("v liště je číslo strany bez „nová“", page.inner_text(".kde-cislo").strip() == "5", page.inner_text(".kde-cislo"))
+            vybrana = page.evaluate("document.querySelector('#vyber-strany').selectedOptions[0].textContent")
+            ok("ve výběru strany je teď uložená strana 5", vybrana == "5 – navržená", vybrana)
             prvni_verze = s[0][1]
 
             print("\n── zpět do zpěvníku a znovu upravit ──")
@@ -273,6 +275,62 @@ def main():
                 strana1 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=1).first().id
             ok("prázdná strana se otevře rovnou na své adrese, bez ptaní", page.url.endswith(f"/editor-strany/{strana1}"), page.url)
             ok("číslo 6, levá", page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [6, "L"])
+
+            print("\n── listování zpěvníkem a rozdělané strany ──")
+            MOZNOSTI = "[...document.querySelectorAll('#vyber-strany option')].map(o => o.textContent)"
+            ok("výběr strany ukáže celý zpěvník", page.evaluate(MOZNOSTI) == ["5 – navržená", "6 – prázdná", "7 – prázdná", "8 – prázdná"],
+               page.evaluate(MOZNOSTI))
+            ok("předchozí i další strana jdou", page.evaluate("[...document.querySelectorAll('.listovani button')].map(b => b.disabled)") == [False, False])
+            page.evaluate("navrhStrany.nahradTextem('Šestá', 'Autor', '[G]řádek šesté')")
+            page.wait_for_timeout(700)
+            ok("rozdělaná strana je ve výběru označená", "• 6 – prázdná" in page.evaluate(MOZNOSTI), page.evaluate(MOZNOSTI))
+            ok("výstraha u Uložit zatím není (jiné strany rozdělané nejsou)", page.is_hidden("#neulozene-jinde"))
+            page.click('[data-prikaz="dalsi-strana"]')
+            editor_stran(page)
+            with A.app.app_context():
+                strana2 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=2).first().id
+            ok("další strana se otevře bez ptaní", page.url.endswith(f"/editor-strany/{strana2}"), page.url)
+            ok("u Uložit je výstraha s rozdělanou stranou 6", page.is_visible("#neulozene-jinde")
+               and page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6",
+               page.get_attribute("#neulozene-jinde", "data-napoveda"))
+            page.click('[data-prikaz="predchozi-strana"]')
+            editor_stran(page)
+            ok("rozdělaná strana 6 se po návratu obnoví z prohlížeče",
+               "Šestá" in page.evaluate("navrhStrany.view.state.doc.textContent") and page.is_hidden("#neulozene-jinde"))
+            ok("a do zpěvníku se zatím nic neuložilo", strany_db()[1][1] is None, strany_db())
+            page.click('[data-prikaz="dalsi-strana"]')
+            editor_stran(page)
+            page.evaluate("navrhStrany.nahradTextem('Sedmá', 'Autor', '[D]řádek sedmé')")
+            page.click('[data-prikaz="ulozit"]')
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            tlacitka = page.locator("#app-confirm-overlay button:visible").all_inner_texts()
+            zprava = page.inner_text("#app-confirm-message")
+            ok("Uložit se zeptá: všechny / jen tuto / zrušit", tlacitka == ["Uložit všechny", "Uložit jen tuto", "Zrušit"]
+               and zprava == "Neuložené změny jsou i na stranách 6. Tato strana: 7.", (tlacitka, zprava))
+            page.click("#app-confirm-save")
+            page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
+            s2 = strany_db()
+            ok("Uložit všechny uloží obě rozdělané strany do zpěvníku", s2[1][1] and s2[2][1], s2)
+            ok("výstraha zmizí a výběr nic neoznačuje", page.is_hidden("#neulozene-jinde")
+               and not any(m.startswith("•") for m in page.evaluate(MOZNOSTI)), page.evaluate(MOZNOSTI))
+            with A.app.app_context():
+                zdroj6 = A.db.session.get(A.NavrzenaStrana, s2[1][1]).zdroj
+            ok("strana 6 se uložila z rozdělané úpravy", "Šestá" in zdroj6)
+
+            page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('X', 2)); })()")
+            page.click('[data-prikaz="predchozi-strana"]')
+            editor_stran(page)
+            page.click("#zpet-do-zpevniku")
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            zprava = page.inner_text("#app-confirm-message")
+            ok("odchod z editoru vyjmenuje rozdělané strany i z jiné strany", zprava == "Neuložené změny jsou na stranách 7." or zprava == "Strana 7 má neuložené změny.", zprava)
+            page.click("#app-confirm-ok")       # Odejít bez uložení
+            page.wait_for_url("**/my-songbooks**")
+            ok("odejít bez uložení koncepty zahodí", page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('navrh-koncept:')).length") == 0)
+            ok("a uložené strany zůstanou", strany_db()[2][1] == s2[2][1], strany_db())
+            otevri_editor_zpevniku(page)
+            page.locator("#es-seznam .es-strana").nth(1).locator(".es-navrhnout").click()
+            editor_stran(page)
             page.click("#zpet-do-zpevniku")
             page.wait_for_url("**/my-songbooks**")
             otevri_editor_zpevniku(page)

@@ -740,7 +740,8 @@
         btnSave.textContent = (popisky && popisky.save) || 'Uložit';
         // Pořadí shora: Uložit, Zahodit, Zrušit. Výchozí styly pro neuložené změny,
         // jinak podle popisky (u odebrání obě volby červené, jedna bez výplně).
-        const STYLY = ['primary', 'nebezpecne', 'mekke-nebezpecne'];
+        // neutralni = obyčejné tlačítko (třeba „Uložit jen tuto“ vedle „Uložit všechny“)
+        const STYLY = ['primary', 'nebezpecne', 'mekke-nebezpecne', 'neutralni'];
         btnSave.style.display = '';
         btnSave.classList.remove(...STYLY);
         btnOk.classList.remove(...STYLY);
@@ -763,7 +764,7 @@
           document.removeEventListener('keydown', onKey);
           // Zpátky do výchozího stavu: vedle sebe Zrušit a hlavní potvrzení
           btnSave.style.display = 'none';
-          ['primary', 'nebezpecne', 'mekke-nebezpecne'].forEach(c => { btnSave.classList.remove(c); btnOk.classList.remove(c); });
+          ['primary', 'nebezpecne', 'mekke-nebezpecne', 'neutralni'].forEach(c => { btnSave.classList.remove(c); btnOk.classList.remove(c); });
           btnOk.classList.add('primary');
           btnCancel.classList.remove('primary');
           const akce = btnOk.parentElement;
