@@ -474,21 +474,43 @@ def main():
             ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
                page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
 
-            print("\n── Editor strany z lišty: výběr, co upravovat ──")
-            page.goto(base + "/editor-strany")
-            page.wait_for_load_state("domcontentloaded")
-            page.click(f".vs-zpevniky a[href$='zpevnik={ZPEVNIK}']")
-            page.wait_for_load_state("domcontentloaded")
+            print("\n── Editor strany z lišty: okno, co upravovat ──")
             with A.app.app_context():
                 ids = [st.id for st in A.db.session.get(A.Songbook, ZPEVNIK).strany]
+                verejne = {sb.id for sb in A.Songbook.query.filter_by(is_public=1)}
+            page.goto(base + "/my-songbooks")
+            page.wait_for_load_state("domcontentloaded")
+            # Odkaz v liště má zatím jen admin (test_navrh_strany); okno samo je pro prémiové.
+            page.evaluate("VyberStrany.otevri()")
+            page.wait_for_selector(".vs-zaclona:not([hidden]) .vs-zpevniky button")
+            zpevniky = page.evaluate("[...document.querySelectorAll('.vs-zpevniky button')].map(b => b.dataset.zpevnik)")
+            ok("okno se otevře bez přechodu se zpěvníky jen z Mých zpěvníků",
+               "/my-songbooks" in page.url and ZPEVNIK in zpevniky and not (set(zpevniky) & verejne), (page.url, len(zpevniky)))
+            page.click(f".vs-zpevniky button[data-zpevnik='{ZPEVNIK}']")
+            page.wait_for_selector(".vs-strany .vs-strana")
             dlazdice = page.evaluate("[...document.querySelectorAll('.vs-strana')].map(a => [a.getAttribute('href'), a.querySelector('.vs-popis b')?.textContent])")
-            ok("vybraný zpěvník ukáže všechny strany s čísly a dlaždici Nová strana",
+            ok("po výběru zpěvníku strany s čísly a dlaždice Nová strana",
                [d[0] for d in dlazdice[:-1]] == [f"/editor-strany/{i}" for i in ids]
                and [d[1] for d in dlazdice[:-1]] == [str(5 + i) for i in range(len(ids))]
                and dlazdice[-1][0] == f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={ids[-1]}", dlazdice)
+            page.click(".vs-zpet")
+            page.wait_for_selector(".vs-zpevniky button")
+            ok("šipka zpět vrátí seznam zpěvníků", page.locator(".vs-zpevniky button").count() == len(zpevniky))
+            page.keyboard.press("Escape")
+            ok("Esc okno zavře", page.locator(".vs-zaclona").is_hidden())
+            odpoved = page.goto(base + "/editor-strany")
+            page.wait_for_selector(".vs-zaclona:not([hidden]) .vs-zpevniky button")
+            ok("přímá adresa /editor-strany rovnou otevře okno", odpoved.status == 200)
+            page.click(f".vs-zpevniky button[data-zpevnik='{ZPEVNIK}']")
+            page.wait_for_selector(".vs-strany .vs-strana")
             page.click(f".vs-strana[data-strana='{ids[1]}']")
             editor_stran(page)
             ok("klik na stranu ji otevře v editoru", page.url.endswith(f"/editor-strany/{ids[1]}"), page.url)
+            page.click(".jina-strana")
+            page.wait_for_selector(".vs-strany .vs-strana")
+            ok("v editoru Jiná strana… otevře okno rovnou se stranami tohoto zpěvníku",
+               page.inner_text("#vs-nadpis") == "Navržené strany UI" and page.locator(".vs-strana").count() == len(ids) + 1)
+            page.keyboard.press("Escape")
 
             print("\n── odchod z editoru stran přes lištu webu ──")
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Q', 2)); })()")

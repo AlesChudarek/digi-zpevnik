@@ -1180,9 +1180,10 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
-      Hotovo 16. 11.: `/editor-strany` (odkaz v liště) je výběr, co upravovat - zpěvník
-      (vlastní, sdílené, u admina Naše zpěvníky) a jeho strana, nebo Nová strana na konec
-      (`vyber_strany.html`); pokusná stránka bez zpěvníku jen `?pokus=1` (kvůli
+      Hotovo 16. 11.: výběr, co upravovat, je okno „Upravit stranu“ (`static/js/vyber-strany.js`,
+      vzhled v `okna.css`): zpěvník jen z Mých zpěvníků (ani admin ne Naše zpěvníky - ty
+      upraví z editoru zpěvníku), pak mřížka stran a Nová strana. Otevírá ho odkaz v liště
+      (bez přechodu), „Jiná strana…“ v editoru stran a adresa `/editor-strany`; pokusná stránka bez zpěvníku jen `?pokus=1` (kvůli
       test_navrh_strany - **mrtvá pro uživatele, smazat až se test přepíše na stranu
       zpěvníku**). Odchod z editorů sjednocený: odkaz uvnitř webu = okno aplikace (editor
       stran nově pro všechny odkazy, ne jen „‹ zpěvník“), odchod z webu = upozornění

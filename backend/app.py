@@ -2871,23 +2871,49 @@ def navrh_strany():
         abort(404)
     if request.args.get('pokus') == '1':
         return render_template('navrh_strany.html', kontext=None)
-    # Zpěvníky jako v Mých zpěvnících (vlastní a sdílené), u admina i veřejné.
-    sdilene = [r.songbook_id for r in UserSongbookAccess.query.filter_by(user_id=current_user.id)]
-    podminka = (Songbook.owner_id == current_user.id) | (Songbook.id.in_(sdilene))
-    if is_admin(current_user):
-        podminka = podminka | (Songbook.is_public == 1)
-    zpevniky = [sb for sb in Songbook.query.filter(podminka).all()
-                if can_edit_songbook(current_user, sb) and not je_zamceny(current_user, sb)]
-    zpevniky.sort(key=lambda sb: (1 if sb.is_public else 0, (sb.title or '').lower()))
-    sb = next((z for z in zpevniky if z.id == request.args.get('zpevnik')), None)
-    if sb is None and len(zpevniky) == 1:
-        sb = zpevniky[0]
+    # Výběr je okno (static/js/vyber-strany.js); stránka ho jen rovnou otevře.
+    return render_template('vyber_strany.html')
+
+
+def zpevniky_k_navrhu(user):
+    """Zpěvníky, ve kterých smí uživatel navrhovat strany: jen z Mých zpěvníků (vlastní
+    a sdílené, ne zamčené). Naše zpěvníky ne ani u admina - ten je upraví z editoru
+    zpěvníku."""
+    sdilene = [r.songbook_id for r in UserSongbookAccess.query.filter_by(user_id=user.id)]
+    zpevniky = [sb for sb in Songbook.query.filter(
+                    ((Songbook.owner_id == user.id) | (Songbook.id.in_(sdilene))) & (Songbook.is_public != 1)).all()
+                if can_edit_songbook(user, sb) and not je_zamceny(user, sb)]
+    return sorted(zpevniky, key=lambda sb: (sb.title or '').lower())
+
+
+@app.route('/api/navrh/vyber')
+@login_required
+def vyber_strany_api():
+    """Data okna „co upravovat“: bez parametru zpěvníky, se `zpevnik` jeho strany."""
+    if not smi_navrhovat(current_user):
+        return jsonify({'ok': False, 'error': 'Editor stran je pro prémiové účty.'}), 403
+    zpevniky = zpevniky_k_navrhu(current_user)
+    sb_id = request.args.get('zpevnik')
+    if not sb_id:
+        return jsonify({'ok': True, 'zpevniky': [
+            {'id': sb.id, 'nazev': sb.title or 'Bez názvu', 'barva': sb.color or '#FFFFFF', 'stran': len(sb.strany)}
+            for sb in zpevniky]})
+    sb = next((z for z in zpevniky if z.id == sb_id), None)
+    if sb is None:
+        return jsonify({'ok': False, 'error': 'Zpěvník nenalezen.'}), 404
+    prvni = sb.prvni_cislo_strany or 1
     strany = []
-    if sb is not None:
-        prvni = sb.prvni_cislo_strany or 1
-        for i, st in enumerate(strany_pro_editor(sb)):
-            strany.append({**st, 'cislo': prvni + i, 'lp': strana_lp(sb, i)})
-    return render_template('vyber_strany.html', zpevniky=zpevniky, sb=sb, strany=strany)
+    for i, st in enumerate(strany_pro_editor(sb)):
+        if st['pisne']:
+            popis = ', '.join(p['nazev'] for p in st['pisne'])
+        else:
+            popis = st['popisek'] or ('pokračování' if st['typ'] == 'pokracovani'
+                                      else 'bez písně' if (st['image_id'] or st['navrzena_id']) else 'prázdná')
+        strany.append({'id': st['id'], 'cislo': prvni + i, 'popis': popis, 'navrzena': bool(st['navrzena_id']),
+                       'nahled': st['nahled_navrhu'] if st['navrzena_id'] else st['nahled'],
+                       'adresa': url_for('strana_ve_zpevniku', strana_id=st['id'])})
+    nova = url_for('nova_strana', zpevnik=sb.id, za=strany[-1]['id'] if strany else 0)
+    return jsonify({'ok': True, 'zpevnik': {'id': sb.id, 'nazev': sb.title or 'Bez názvu'}, 'strany': strany, 'nova': nova})
 
 
 def strana_lp(sb, index) -> str:
