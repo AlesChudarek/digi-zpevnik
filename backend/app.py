@@ -2864,11 +2864,30 @@ def prehled_zpevniku_pro_spravu():
 def navrh_strany():
     """Editor navržené strany s akordy (bod 11 v TODO), jen pro prémiové účty.
 
-    Bez zpěvníku (odkaz v liště, zatím jen admin) je to pokusná stránka se zálohou
-    v prohlížeči. Strana zpěvníku má vlastní adresy (strana_ve_zpevniku, nova_strana)."""
+    Bez zpěvníku výběr, co upravovat: zpěvník a jeho strana, nebo nová strana na konec
+    (strana zpěvníku má vlastní adresy - strana_ve_zpevniku, nova_strana). `?pokus=1` je
+    pokusná stránka bez zpěvníku se zálohou v prohlížeči (pro testy editoru)."""
     if not smi_navrhovat(current_user):
         abort(404)
-    return render_template('navrh_strany.html', kontext=None)
+    if request.args.get('pokus') == '1':
+        return render_template('navrh_strany.html', kontext=None)
+    # Zpěvníky jako v Mých zpěvnících (vlastní a sdílené), u admina i veřejné.
+    sdilene = [r.songbook_id for r in UserSongbookAccess.query.filter_by(user_id=current_user.id)]
+    podminka = (Songbook.owner_id == current_user.id) | (Songbook.id.in_(sdilene))
+    if is_admin(current_user):
+        podminka = podminka | (Songbook.is_public == 1)
+    zpevniky = [sb for sb in Songbook.query.filter(podminka).all()
+                if can_edit_songbook(current_user, sb) and not je_zamceny(current_user, sb)]
+    zpevniky.sort(key=lambda sb: (1 if sb.is_public else 0, (sb.title or '').lower()))
+    sb = next((z for z in zpevniky if z.id == request.args.get('zpevnik')), None)
+    if sb is None and len(zpevniky) == 1:
+        sb = zpevniky[0]
+    strany = []
+    if sb is not None:
+        prvni = sb.prvni_cislo_strany or 1
+        for i, st in enumerate(strany_pro_editor(sb)):
+            strany.append({**st, 'cislo': prvni + i, 'lp': strana_lp(sb, i)})
+    return render_template('vyber_strany.html', zpevniky=zpevniky, sb=sb, strany=strany)
 
 
 def strana_lp(sb, index) -> str:

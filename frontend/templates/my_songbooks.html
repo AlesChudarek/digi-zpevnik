@@ -1376,6 +1376,15 @@ function openCreateModal() {
     // struktura a obálky.
     function zmenyOkna() { return !!createDirty || EditorStran.zmeneno(); }
 
+    // Odchod z webu (zavření záložky, jiná adresa, obnovení) s neuloženým editorem
+    // zpěvníku: upozornění prohlížeče - vlastní okno tam prohlížeč nedovolí. Odchody, které
+    // dělá editor sám (po uložení, do editoru stran), nastaví __odchaziSe.
+    window.addEventListener('beforeunload', (e) => {
+      if (window.__odchaziSe || modal.style.display !== 'flex' || !zmenyOkna()) return;
+      e.preventDefault();
+      e.returnValue = '';
+    });
+
     function obnovUlozit() {
       if (!nbSaveTopBtn) return;
       const zmeny = zmenyOkna();
@@ -1452,6 +1461,7 @@ function openCreateModal() {
         if (!zmenyOkna()) return;
         const id = await ulozZpevnik();
         if (!id) return;
+        window.__odchaziSe = true;
         if (window.__zpetPoEditoru) window.location.href = window.__zpetPoEditoru;
         else window.location.reload();
       });
@@ -1473,9 +1483,10 @@ function openCreateModal() {
           'Uložit a přejít do editoru')) ? 'save' : 'cancel';
       }
       if (volba === 'cancel') return;
-      if (volba === 'discard') { createDirty = false; window.location.href = bezUlozeni; return; }
+      if (volba === 'discard') { window.__odchaziSe = true; window.location.href = bezUlozeni; return; }
       const id = await ulozZpevnik();
       if (!id) return;
+      window.__odchaziSe = true;
       try {
         const data = await (await fetch(`/api/zpevnik/${encodeURIComponent(id)}`)).json();
         const adresa = cesta(data.zpevnik.strany.map(z => z.id), id);

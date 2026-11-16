@@ -13,6 +13,7 @@ import { bodyTvaru } from './schema.js';
 const MM_NA_PX = 96 / 25.4;
 const MIN_MM = 8;
 const KROK_MM = 0.5;
+const VIDET_MM = 1;       // kolik z obrázku či náplasti musí zůstat na straně
 
 const zaokrouhliMm = (x) => Math.round(x / KROK_MM) * KROK_MM;
 
@@ -162,9 +163,15 @@ export class PrvekView {
     const zaokrouhli = this.jeTvar ? (x) => Math.round(x * 10) / 10 : zaokrouhliMm;
     if (t.druh === 'presun') {
       // Obrázek smí přesahovat přes okraj strany (ořízne se), rámeček ne.
-      const presah = this.jeAtom ? Math.min(p.w, p.h) * 0.8 : 0;
-      t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -presah), sirka - p.w + presah);
-      t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -presah), vyska - p.h + presah);
+      // Obrázek a náplast smí skoro celé mimo stranu (ořízne se) - stačí, když z nich
+      // zůstane vidět kousek (VIDET_MM), ať jdou zase chytit. Rámeček s textem ne.
+      if (this.jeAtom) {
+        t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), VIDET_MM - p.w), sirka - VIDET_MM);
+        t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), VIDET_MM - p.h), vyska - VIDET_MM);
+      } else {
+        t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), 0), sirka - p.w);
+        t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), 0), vyska - p.h);
+      }
     } else {
       let w = Math.max(zaokrouhli(p.w + dx), MIN_MM);
       let h = Math.max(zaokrouhli(p.h + dy), MIN_MM);

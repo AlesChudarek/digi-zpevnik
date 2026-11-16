@@ -1,0 +1,94 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Editor strany - DigiZpěvník{% endblock %}
+{% block content %}
+{# Editor strany bez zadané strany: výběr, co upravovat - zpěvník a jeho strana, nebo nová
+   strana na konec. Strana se tak vždycky upravuje na svém místě ve zpěvníku. Třídy mají
+   předponu vs-, ať se nepotkají s obecnými styly webu; seznam je <aside>, ne <nav> -
+   dashboard_base všechny <nav> schovává. #}
+<style>
+  .vs { max-width: 1200px; margin: 16px auto; padding: 0 16px; box-sizing: border-box;
+        display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .vs-karta { background: var(--panel-bg, #fff); color: var(--panel-text, #222); border-radius: 10px;
+              box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); padding: 14px; }
+  .vs h1 { grid-column: 1 / -1; font-size: 22px; margin: 0; }
+  .vs h2 { font-size: 15px; margin: 0 0 10px; }
+  .vs-zpevniky { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .vs-zpevniky a { display: block; padding: 7px 10px; border-radius: 6px; color: inherit; text-decoration: none;
+                   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vs-zpevniky a:hover { background: var(--panel-btn-bg, #f0f0f0); }
+  .vs-zpevniky a.vybrany { background: var(--brand-dark, #1b5e20); color: #fff; }
+  .vs-skupina { font-size: 12px; color: var(--muted-text, #777); margin: 10px 10px 2px; }
+  .vs-novy { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--brand-dark, #1b5e20); }
+  .vs-strany { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 14px; }
+  .vs-strana { display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none; min-width: 0; }
+  .vs-nahled { position: relative; aspect-ratio: 1748 / 2480; background: #fff; border-radius: 4px; overflow: hidden;
+               box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25); display: flex; align-items: center; justify-content: center; }
+  .vs-nahled img { width: 100%; height: 100%; object-fit: contain; }
+  .vs-strana:hover .vs-nahled { box-shadow: 0 0 0 2px #1a73e8; }
+  .vs-prazdna { width: 34px; height: 34px; opacity: 0.35; background: var(--ikona-prazdna) center / contain no-repeat; }
+  .vs-tuzka { position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; border-radius: 50%;
+              background: #fff var(--ikona-navrhu) center / 11px no-repeat; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18); }
+  .vs-popis { font-size: 13px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .vs-popis b { margin-right: 4px; }
+  .vs-popis .vs-sede { color: var(--muted-text, #777); font-style: italic; }
+  .vs-nova .vs-nahled { background: transparent; border: 2px dashed var(--muted-border, #c9d6cc); box-shadow: none;
+                        font-size: 30px; color: var(--brand-dark, #1b5e20); }
+  .vs-prazdno { color: var(--muted-text, #777); margin: 0; }
+  @media (max-width: 700px) {
+    .vs { grid-template-columns: minmax(0, 1fr); }
+    .vs-strany { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 10px; }
+  }
+</style>
+
+<div class="vs" style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}'); --ikona-navrhu: url('{{ static_bust('img/icons/edit_page.svg') }}')">
+  <h1>Editor strany</h1>
+
+  <aside class="vs-karta" aria-label="Zpěvníky">
+    <h2>Zpěvník</h2>
+    {% if zpevniky %}
+    <ul class="vs-zpevniky">
+      {% set ns = namespace(verejne=false) %}
+      {% for z in zpevniky %}
+        {% if z.is_public and not ns.verejne %}{% set ns.verejne = true %}<li class="vs-skupina">Naše zpěvníky</li>{% endif %}
+        <li><a href="{{ url_for('navrh_strany', zpevnik=z.id) }}" class="{{ 'vybrany' if sb and sb.id == z.id }}"
+               {% if sb and sb.id == z.id %}aria-current="page"{% endif %}>{{ z.title or 'Bez názvu' }}</a></li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="vs-prazdno">Zatím žádný zpěvník k úpravě.</p>
+    {% endif %}
+    <a class="vs-novy" href="{{ url_for('my_songbooks', create=1) }}">+ Nový zpěvník</a>
+  </aside>
+
+  <section class="vs-karta" aria-label="Strany zpěvníku">
+    {% if sb %}
+    <h2>{{ sb.title or 'Bez názvu' }} - vyberte stranu</h2>
+    <div class="vs-strany">
+      {% for st in strany %}
+      <a class="vs-strana" href="{{ url_for('strana_ve_zpevniku', strana_id=st.id) }}" data-strana="{{ st.id }}"
+         data-napoveda="{{ 'Upravit' if st.navrzena_id else ('Dopsat do obrázku' if st.image_id else 'Navrhnout') }} stranu {{ st.cislo }}">
+        <span class="vs-nahled">
+          {% set nahled = st.nahled_navrhu if st.navrzena_id else st.nahled %}
+          {% if nahled %}<img src="{{ nahled }}" alt="" loading="lazy">{% else %}<span class="vs-prazdna"></span>{% endif %}
+          {% if st.navrzena_id %}<span class="vs-tuzka" title="Navržená strana"></span>{% endif %}
+        </span>
+        <span class="vs-popis"><b>{{ st.cislo }}</b>
+          {%- if st.pisne %}{{ st.pisne | map(attribute='nazev') | join(', ') }}
+          {%- elif st.popisek %}{{ st.popisek }}
+          {%- elif st.typ == 'pokracovani' %}<span class="vs-sede">pokračování</span>
+          {%- else %}<span class="vs-sede">{{ 'strana bez písně' if (st.image_id or st.navrzena_id) else 'prázdná' }}</span>{% endif %}</span>
+      </a>
+      {% endfor %}
+      <a class="vs-strana vs-nova" href="{{ url_for('nova_strana', zpevnik=sb.id, za=(strany[-1].id if strany else 0)) }}"
+         data-napoveda="Nová strana na konec zpěvníku">
+        <span class="vs-nahled">+</span>
+        <span class="vs-popis">Nová strana</span>
+      </a>
+    </div>
+    {% else %}
+    <p class="vs-prazdno">Vyberte zpěvník vlevo. Strana se upravuje na svém místě ve zpěvníku - s číslem a levou
+      nebo pravou stranou podle pozice.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

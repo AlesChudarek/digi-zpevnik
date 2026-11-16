@@ -109,7 +109,7 @@ def zije(page):
 
 
 def otevri_editor(page, base):
-    page.goto(base + '/editor-strany')
+    page.goto(base + '/editor-strany?pokus=1')
     page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
     page.evaluate('localStorage.clear()')
     # Knihovna stylů je u účtu na serveru a prohlížeče se v testu střídají na jednom

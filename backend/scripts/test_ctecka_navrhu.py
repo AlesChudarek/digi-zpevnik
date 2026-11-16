@@ -105,7 +105,7 @@ VYROB_VERZI = """async ([nazev, radky]) => {
 
 def vyrob_zpevnik(br, base):
     page, _ = prihlas(br, base)
-    page.goto(base + "/editor-strany")
+    page.goto(base + "/editor-strany?pokus=1")
     page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
     a = page.evaluate(VYROB_VERZI, ["Píseň Alfa", "[Ami]První řádek alfa\n[C]druhý řádek"])
     b = page.evaluate(VYROB_VERZI, ["Píseň Beta", "[G]První řádek beta\n[D]druhý řádek"])
@@ -288,6 +288,13 @@ def test_skenu(p, base):
     page.mouse.click(r["x"] + 40 * k, r["y"] + 50 * k)
     ok("klik na existující náplast ji vybere, novou nevytvoří", len(page.evaluate(PRVKY)) == 3
        and page.evaluate("navrhStrany.view.state.selection.node?.attrs.w") == 8)
+    page.mouse.move(r["x"] + 40 * k, r["y"] + 50 * k)
+    page.mouse.down()
+    page.mouse.move(r["x"] - 60 * k, r["y"] + 50 * k, steps=6)
+    page.mouse.up()
+    x = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar')[0].attrs.x")
+    ok("náplast jde odsunout skoro celou mimo stranu (zůstane 1 mm)", x == -7, x)
+    page.keyboard.press("ControlOrMeta+z")
     kurzor = page.evaluate("getComputedStyle(document.querySelector('.ps-obrazek img')).cursor")
     ok("s nástrojem je nad obrázkem křížek, ne přesun", kurzor == "crosshair", kurzor)
     ok("u vybrané náplasti je i Smazat všechny (3)", page.is_visible("#tvar-smazat-vse")

@@ -1394,11 +1394,20 @@ if (KONTEXT) {
     e.preventDefault();
     e.returnValue = '';
   });
-  document.getElementById('zpet-do-zpevniku')?.addEventListener('click', async (e) => {
+  // Odkaz uvnitř webu (zpět do zpěvníku, lišta webu…) s rozdělanými stranami: stejné
+  // okno jako editor zpěvníku. Zavření záložky nebo jiná adresa umí jen upozornění
+  // prohlížeče (beforeunload výš).
+  document.addEventListener('click', async (e) => {
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target === '_blank') return;
+    const href = a.getAttribute('href') || '';
+    if (href.startsWith('#') || href.startsWith('javascript:')) return;
+    const cil = new URL(a.href, location.href);
+    if (cil.origin !== location.origin) return;
     const jine = jineKoncepty();
     if (!neulozeno() && !jine.length) return;
     e.preventDefault();
-    const strany = rozdelaneZde().concat(jine).sort((a, b) => a.cislo - b.cislo);
+    const strany = rozdelaneZde().concat(jine).sort((x, y) => x.cislo - y.cislo);
     const volba = await window.showUnsavedConfirm(
       strany.length === 1 ? `Strana ${strany[0].cislo} má neuložené změny.` : `Neuložené změny jsou na stranách ${cislaStran(strany)}.`,
       { save: strany.length === 1 ? 'Uložit a odejít' : 'Uložit vše a odejít',
@@ -1407,8 +1416,8 @@ if (KONTEXT) {
     if (volba === 'save' && !(await ulozitStranu(true))) return;
     if (volba === 'discard') for (const k of koncepty()) smazKoncept(k.klic);
     odchazi = true;
-    location.href = KONTEXT.zpet;
-  });
+    location.href = cil.href;
+  }, true);
   // Číslo strany jako ve čtečce: napsat a Enter (nebo odejít z pole).
   const pole = el('cislo-strany-zpevniku');
   const skoc = () => {

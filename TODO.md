@@ -1180,6 +1180,15 @@ kdo maže.
         a „nebo navrhnout v editoru“ (nová strana na konec, rovnou do editoru).
         Ikony od Aleše: edit_page, image_add, image_sad (prázdná strana). Šipky výš/níž a ✕
         zatím text - až budou move_up/down a remove_page, vyměnit.
+      Hotovo 16. 11.: `/editor-strany` (odkaz v liště) je výběr, co upravovat - zpěvník
+      (vlastní, sdílené, u admina Naše zpěvníky) a jeho strana, nebo Nová strana na konec
+      (`vyber_strany.html`); pokusná stránka bez zpěvníku jen `?pokus=1` (kvůli
+      test_navrh_strany - **mrtvá pro uživatele, smazat až se test přepíše na stranu
+      zpěvníku**). Odchod z editorů sjednocený: odkaz uvnitř webu = okno aplikace (editor
+      stran nově pro všechny odkazy, ne jen „‹ zpěvník“), odchod z webu = upozornění
+      prohlížeče (editor zpěvníku ho dřív neměl vůbec). Obrázek a náplast jdou posunout
+      skoro celé mimo stranu (na straně zůstane 1 mm). „Oddělit“ prvek přes hřbet Aleš
+      nechce.
       Hotovo 11. 11.: **dvojstrana s úpravou obou stran** - jedno plátno (jeden dokument,
       prvky pravé strany s x + šířka strany), přesun prvků přes hřbet, text vyjmout/vložit,
       společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku

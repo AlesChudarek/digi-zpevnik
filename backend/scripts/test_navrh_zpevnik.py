@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -473,9 +474,53 @@ def main():
             ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
                page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
 
-            print("\n── duplikovat stranu ──")
-            page.click("#zpet-do-zpevniku")
+            print("\n── Editor strany z lišty: výběr, co upravovat ──")
+            page.goto(base + "/editor-strany")
+            page.wait_for_load_state("domcontentloaded")
+            page.click(f".vs-zpevniky a[href$='zpevnik={ZPEVNIK}']")
+            page.wait_for_load_state("domcontentloaded")
+            with A.app.app_context():
+                ids = [st.id for st in A.db.session.get(A.Songbook, ZPEVNIK).strany]
+            dlazdice = page.evaluate("[...document.querySelectorAll('.vs-strana')].map(a => [a.getAttribute('href'), a.querySelector('.vs-popis b')?.textContent])")
+            ok("vybraný zpěvník ukáže všechny strany s čísly a dlaždici Nová strana",
+               [d[0] for d in dlazdice[:-1]] == [f"/editor-strany/{i}" for i in ids]
+               and [d[1] for d in dlazdice[:-1]] == [str(5 + i) for i in range(len(ids))]
+               and dlazdice[-1][0] == f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={ids[-1]}", dlazdice)
+            page.click(f".vs-strana[data-strana='{ids[1]}']")
+            editor_stran(page)
+            ok("klik na stranu ji otevře v editoru", page.url.endswith(f"/editor-strany/{ids[1]}"), page.url)
+
+            print("\n── odchod z editoru stran přes lištu webu ──")
+            page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Q', 2)); })()")
+            page.click(".nav-links a[href='/my-songbooks']")
+            page.wait_for_selector("#app-confirm-overlay", state="visible")
+            ok("odkaz v liště webu s neuloženou stranou: okno aplikace, ne prohlížeče",
+               page.locator("#app-confirm-overlay button:visible").all_inner_texts() == ["Uložit a odejít", "Odejít bez uložení", "Zrušit"])
+            page.click("#app-confirm-ok")
             page.wait_for_url("**/my-songbooks**")
+
+            print("\n── odchod z webu s neuloženým editorem zpěvníku ──")
+            page.evaluate(f"window.openEditSongbookModal('{ZPEVNIK}')")
+            otevri_editor_zpevniku(page)
+            page.fill("#nb-name", "Změněný název")
+            dialogy = []
+            page.on("dialog", lambda d: (dialogy.append(d.type), d.dismiss()))
+            page.close(run_before_unload=True)
+            time.sleep(0.8)
+            ok("zavření stránky s neuloženým zpěvníkem upozorní (prohlížeč)", "beforeunload" in dialogy, dialogy)
+            page, chyby = prihlas(br, base, EMAIL3)
+            page.fill("#nb-name", "Navržené strany UI")
+            with page.expect_navigation(timeout=20000):
+                page.click("#nb-save-top")
+            page.wait_for_load_state("load")
+            dialogy = []
+            page.on("dialog", lambda d: (dialogy.append(d.type), d.accept()))
+            page.close(run_before_unload=True)
+            time.sleep(0.8)
+            ok("po uložení (obnovení stránky) se prohlížeč neptá", dialogy == [], dialogy)
+            page, chyby = prihlas(br, base, EMAIL3)
+
+            print("\n── duplikovat stranu ──")
             otevri_editor_zpevniku(page)
             pred = strany_db()
             pocet = page.locator("#es-seznam .es-strana").count()
