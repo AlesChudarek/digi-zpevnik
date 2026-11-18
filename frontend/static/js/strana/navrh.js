@@ -500,14 +500,25 @@ function vybranyAtom(state) {
 }
 
 // Ukázka pro účet bez prémia: strana, která předvede, co editor umí - styly a formátování,
-// víc textových rámečků, obrázek a náplast (pod nadpisem).
+// víc textových rámečků, obrázek a náplasti (i neobdélníkové a přes sebe).
 function ukazkovyDokument() {
   const f = format();
   const pisen = prazdnyDokument(f).firstChild;
   const poznamka = N.odstavec.create({ styl: 'normalni' }, schema.text('Capo 2, hrát volně a potichu',
     [M.pismo.create({ f: 'Caveat' }), M.velikost.create({ v: 14 }), M.barva.create({ c: '#b00020' })]));
+  // Náplasti nad logem: slunce a dva kopce přes sebe - neobdélníkový tvar a překrývání
+  // (později vložená leží výš).
+  const tvar = (body, barva) => {
+    const xs = body.map((b) => b[0]), ys = body.map((b) => b[1]);
+    const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x, h = Math.max(...ys) - y;
+    return N.tvar.create({ x, y, w, h, barva,
+      body: body.map(([bx, by]) => `${((bx - x) / w).toFixed(4)},${((by - y) / h).toFixed(4)}`).join(' ') });
+  };
+  const slunce = Array.from({ length: 16 }, (_, i) => [126 + 6 * Math.cos(i * Math.PI / 8), 167 + 6 * Math.sin(i * Math.PI / 8)]);
   return N.doc.create(null, [
-    N.tvar.create({ x: 0, y: 6, w: f.sirka, h: 15, barva: '#fff1c2' }),
+    tvar(slunce, '#ffcf3f'),
+    tvar([[92, 181], [100, 172], [108, 168], [116, 171], [126, 181]], '#9ccc65'),
+    tvar([[106, 181], [116, 174], [126, 170], [134, 172], [138, 175], [138, 181]], '#558b2f'),
     N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 156 }, pisen.content),
     N.ramecek.create({ x: f.okraj, y: 170, w: 70, h: 14 }, poznamka),
     N.obrazek.create({ src: document.getElementById('logo-ukazky').dataset.src, x: f.sirka - f.okraj - 48, y: 182, w: 48, h: 13.9, vrstva: 'pred' }),

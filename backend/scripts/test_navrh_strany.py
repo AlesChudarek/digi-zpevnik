@@ -536,12 +536,14 @@ def test_prohlizece(p, base, jmeno):
     ok('lištička vybraného rámečku je široká jako jeho obrys (±0,5 px)', abs(sirky[0]) <= 0.5 and abs(sirky[1]) <= 0.5 and sirky[2] > 0, sirky)
     pred = J("navrhStrany.view.state.doc.child(1).attrs")
     l = J("document.querySelectorAll('.ps-ramecek .ps-prvek-lista')[1].getBoundingClientRect().toJSON()")
+    J("document.activeElement.blur()")      # jako po kliknutí na panel - fokus mimo editor
     page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
     page.mouse.down()
     page.mouse.move(l['x'] + 20 + 40 * m * 96 / 25.4 / 10, l['y'] + l['height'] / 2 + 20 * m * 96 / 25.4 / 10, steps=5)
     page.mouse.up()
     po = J("navrhStrany.view.state.doc.child(1).attrs")
     ok('rámeček jde přesunout (o 4 a 2 mm)', abs(po['x'] - pred['x'] - 4) < 0.6 and abs(po['y'] - pred['y'] - 2) < 0.6, (pred, po))
+    ok('po přesunu je fokus v editoru (Ctrl+Z jde hned)', J("navrhStrany.view.hasFocus()"))
     page.keyboard.press(f'{MOD}+z')
     ok('Zpět vrátí přesun rámečku', J("navrhStrany.view.state.doc.child(1).attrs") == pred)
     page.click('.ps-ramecek:nth-child(2) .ps-prvek-smazat', force=True)
@@ -826,7 +828,9 @@ def test_pristup(p, base):
        'Ukázka editoru' in stav['pruh'] and 'pro prémiové účty' in stav['pruh'] and stav['znak'] == 'UKÁZKA', stav)
     ok('bez Uložit, výběru strany a PDF a obrázku z náhledu', not stav['ulozit'] and not stav['vyber'] and not stav['pdf'], stav)
     druhy = page.evaluate("navrhStrany.view.state.doc.toJSON().content.map(n => n.type)")
-    ok('ukázková strana předvede náplast, dva textové rámečky a obrázek', sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar'], druhy)
+    ok('ukázková strana předvede náplasti (volné tvary přes sebe), dva textové rámečky a obrázek',
+       sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar', 'tvar', 'tvar']
+       and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body)"), druhy)
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)

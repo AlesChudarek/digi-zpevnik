@@ -203,6 +203,9 @@ export class PrvekView {
     const tr = closeHistory(this.view.state.tr).setNodeMarkup(this.getPos(), null, t.nove);
     if (this.jeAtom) tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
     this.view.dispatch(tr);
+    // Tažení za lištu nebo roh nedá fokus do editoru (pointerdown je zastavený) - bez
+    // tohohle by Ctrl+Z po přesunu nešlo, dokud se nekliklo jinam.
+    this.view.focus();
   }
 
   zrus() {
