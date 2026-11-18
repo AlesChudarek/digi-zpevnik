@@ -11,9 +11,11 @@
 {# Ukázka pro účet bez prémia: editor jde vyzkoušet, nic se z něj nedostane. #}
 <script>document.documentElement.classList.add('navrh-ukazka');</script>
 <div class="navrh-ukazka-pruh" role="note">
-  Ukázka editoru: úpravy se neukládají a strana se nedá stáhnout ani vytisknout.
-  {% if guest %}Editor strany je pro přihlášené uživatele s prémiovým účtem.{% else %}Editor strany je pro prémiové účty.{% endif %}
+  <span class="pruh-znak" aria-hidden="true">i</span>
+  <span><b>Ukázka editoru</b> - úpravy se neukládají a strana se nedá stáhnout ani vytisknout.
+  {% if guest %}Editor strany je pro přihlášené uživatele s prémiovým účtem.{% else %}Editor strany je pro prémiové účty.{% endif %}</span>
 </div>
+<span id="logo-ukazky" data-src="{{ static_bust('img/logo/handicao_zlin.svg') }}" hidden></span>
 {% endif %}
 {% if kontext %}
 {# Strana zpěvníku: kde strana je (zpěvník, číslo, L/P) a kam se uloží. #}
@@ -104,12 +106,8 @@
       <button type="button" class="ikona" data-prikaz="transp-nahoru" data-napoveda="Transponovat o půltón výš" aria-label="Transponovat výš"><svg><use href="#i-krizek"/></svg></button>
     </div>
     <div class="skupina">
-      <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček"><svg><use href="#i-ramecek"/></svg>Text</button>
-      {% if ukazka %}
-      <span class="napoveda-duvod" data-napoveda="Vlastní obrázky jdou vložit jen s prémiovým účtem."><button type="button" class="s-popisem" disabled><svg><use href="#i-obrazek"/></svg>Obrázek</button></span>
-      {% else %}
+      <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček: klik na stranu, nebo tažením nakreslit (Esc vypne)"><svg><use href="#i-ramecek"/></svg>Text</button>
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
-      {% endif %}
       <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany). Esc vypne"><svg><use href="#i-naplast"/></svg>Náplast</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
     </div>

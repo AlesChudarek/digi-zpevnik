@@ -9,7 +9,7 @@
 // a táhne (PrvekView). Při zapnutém nástroji je vidět obrys všech náplastí (třída
 // rezim-naplasti na kořeni editoru).
 
-import { closeHistory, NodeSelection } from 'prosemirror';
+import { closeHistory, NodeSelection, TextSelection } from 'prosemirror';
 
 const MM_NA_PX = 96 / 25.4;
 const NS = 'http://www.w3.org/2000/svg';
@@ -176,5 +176,86 @@ export class NastrojNaplasti {
     const tr = closeHistory(view.state.tr).insert(pos, n);
     tr.setSelection(NodeSelection.create(tr.doc, pos));
     view.dispatch(tr);
+    // Klik nástrojem fokus do editoru nedal (pointerdown je zastavený) - bez něj by
+    // nová vybraná náplast nešla smazat Backspacem.
+    view.focus();
+  }
+}
+
+// Nástroj Text: stejně jako Náplast se zapne tlačítkem a pak se na stranu klikne (rámeček
+// výchozí velikosti) nebo táhne (rámeček podle tahu). Po vložení nástroj skončí a kurzor
+// je v novém rámečku - další klik do textu má psát, ne zakládat další rámeček. Klik do
+// existujícího textu nástroj jen vypne.
+const RAMECEK = { w: 60, h: 20 };   // rámeček z kliku (mm)
+const MIN_RAMECEK = { w: 10, h: 6 };
+
+export class NastrojTextu {
+  // volby: view, stranka, koren, meritko(), poZmene()
+  constructor(volby) {
+    this.v = volby;
+    this.aktivni = false;
+    this.nahled = document.createElementNS(NS, 'svg');
+    this.nahled.setAttribute('class', 'ps-naplast-nahled');
+    this.nahled.style.display = 'none';
+    volby.stranka.appendChild(this.nahled);
+    volby.stranka.addEventListener('pointerdown', (e) => this.dolu(e), true);
+  }
+
+  prepni(zapnout = !this.aktivni) {
+    this.aktivni = zapnout;
+    this.v.koren.classList.toggle('rezim-textu', zapnout);
+    this.v.poZmene();
+  }
+
+  mm(e) {
+    const r = this.v.stranka.getBoundingClientRect();
+    const k = MM_NA_PX * this.v.meritko();
+    return [(e.clientX - r.left) / k, (e.clientY - r.top) / k];
+  }
+
+  dolu(e) {
+    if (!this.aktivni || e.button !== 0) return;
+    if (e.target.closest && e.target.closest('.ps-ramecek')) { this.prepni(false); return; }
+    e.preventDefault();
+    e.stopPropagation();
+    const [x0, y0] = this.mm(e);
+    const sx = e.clientX, sy = e.clientY;
+    let tazeno = false;
+    const pohyb = (ev) => {
+      if (!tazeno && Math.hypot(ev.clientX - sx, ev.clientY - sy) < KLIK_PX) return;
+      tazeno = true;
+      const [x1, y1] = this.mm(ev);
+      const k = MM_NA_PX;
+      this.nahled.style.display = '';
+      this.nahled.innerHTML = '';
+      const r = document.createElementNS(NS, 'polygon');
+      r.setAttribute('points', [[x0, y0], [x1, y0], [x1, y1], [x0, y1]].map(([x, y]) => `${x * k},${y * k}`).join(' '));
+      r.setAttribute('fill', 'none');
+      this.nahled.appendChild(r);
+    };
+    const konec = (ev) => {
+      window.removeEventListener('pointermove', pohyb);
+      window.removeEventListener('pointerup', konec);
+      this.nahled.style.display = 'none';
+      this.nahled.innerHTML = '';
+      if (!tazeno) { this.vloz({ x: r1(x0), y: r1(y0), w: RAMECEK.w, h: RAMECEK.h }); return; }
+      const [x1, y1] = this.mm(ev);
+      this.vloz({ x: r1(Math.min(x0, x1)), y: r1(Math.min(y0, y1)),
+        w: Math.max(r1(Math.abs(x1 - x0)), MIN_RAMECEK.w), h: Math.max(r1(Math.abs(y1 - y0)), MIN_RAMECEK.h) });
+    };
+    window.addEventListener('pointermove', pohyb);
+    window.addEventListener('pointerup', konec);
+  }
+
+  vloz(attrs) {
+    const { view } = this.v;
+    const { schema } = view.state;
+    const n = schema.nodes.ramecek.create(attrs, schema.nodes.odstavec.create({ styl: 'normalni' }));
+    const pos = view.state.doc.content.size;
+    const tr = closeHistory(view.state.tr).insert(pos, n);
+    tr.setSelection(TextSelection.create(tr.doc, pos + 2));
+    view.dispatch(tr.scrollIntoView());
+    this.prepni(false);
+    view.focus();
   }
 }

@@ -309,6 +309,10 @@ def test_skenu(p, base):
     PRVKY = "navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').map(n => n.attrs)"
     page.mouse.click(r["x"] + 40 * k, r["y"] + 50 * k)
     t = page.evaluate(PRVKY)
+    page.keyboard.press("Backspace")
+    ok("nová vybraná náplast jde hned smazat Backspacem", len(page.evaluate(PRVKY)) == 0)
+    page.mouse.click(r["x"] + 40 * k, r["y"] + 50 * k)
+    t = page.evaluate(PRVKY)
     ok("klik vloží malý obdélník v barvě nástroje", len(t) == 1 and t[0]["w"] == 8 and t[0]["h"] == 4
        and abs(t[0]["x"] - 36) < 0.3 and t[0]["barva"] == "#ff0000" and not t[0]["body"], t)
     page.mouse.move(r["x"] + 60 * k, r["y"] + 100 * k)

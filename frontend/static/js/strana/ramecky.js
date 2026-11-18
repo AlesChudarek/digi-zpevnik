@@ -229,20 +229,6 @@ export class PrvekView {
   destroy() { this.uklid(); }
 }
 
-// Nový textový rámeček: posunutý kousek od levého horního rohu sazby, aby byl vidět.
-export function pridejRamecek(view, format) {
-  const { schema } = view.state;
-  const n = view.state.doc.childCount;
-  const ramecek = schema.nodes.ramecek.create(
-    { x: (format.posun || 0) + format.okraj + 6 * n, y: format.okraj + 6 * n, w: Math.round((format.sirka - 2 * format.okraj) / 2), h: 30 },
-    schema.nodes.odstavec.create({ styl: 'normalni' }),
-  );
-  const konec = view.state.doc.content.size;
-  const tr = closeHistory(view.state.tr).insert(konec, ramecek);
-  tr.setSelection(TextSelection.create(tr.doc, konec + 2));
-  view.dispatch(tr.scrollIntoView());
-  view.focus();
-}
 
 // --- obrázky --------------------------------------------------------------------------
 

@@ -1064,9 +1064,10 @@ kdo maže.
         transpozice a živé vykreslení ve čtečce, hledání v textech písní, export
         zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
       - **odkaz v liště** (Aleš 3. 11.): rozhodnuto 18. 11. - pro všechny přihlášené i hosty.
-        Bez prémia skutečný editor nad ukázkovou stranou (`navrh_strany.html`, `ukazka=True`):
-        text, akordy, styly, náplast, náhled jdou; bez výběru strany, Uložit, PDF/obrázku
-        z náhledu a vlastních obrázků; pruh „Ukázka editoru“, vodoznak UKÁZKA (i v náhledu),
+        Bez prémia skutečný editor nad ukázkovou stranou (`navrh_strany.html`, `ukazka=True`,
+        `ukazkovyDokument`: náplast pod nadpisem, píseň, poznámka jiným písmem, logo):
+        text, akordy, styly, náplast, obrázky (jen v prohlížeči, data:), náhled jdou; bez
+        výběru strany, Uložit a PDF/obrázku z náhledu; pruh „Ukázka editoru“, vodoznak UKÁZKA (i v náhledu),
         tisk schovaný. Zápis na server (strany, obrázky, styly) jen prémiový účet. Kód PDF
         běží v prohlížeči - zdatný člověk by ho z vývojářských nástrojů spustil (přijatelné:
         do zpěvníku ani exportu se strana nedostane). Aleš ho chce jako lákadlo -

@@ -13,13 +13,13 @@ import {
 } from 'prosemirror';
 import { schema, ROLE, VERZE_SCHEMATU, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
 import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-uzel.js';
-import { PrvekView, pridejRamecek, nactiObrazek, vlozObrazek } from './ramecky.js';
+import { PrvekView, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok, klicSlok, znackySlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
 import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
 import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany, formatStrany } from './vykresleni.js';
 import { prepocitej } from './kolize.js';
-import { NastrojNaplasti } from './naplast.js';
+import { NastrojNaplasti, NastrojTextu } from './naplast.js';
 import { transponuj } from './akordy.js';
 
 const N = schema.nodes;
@@ -87,6 +87,7 @@ const KONTEXT = (() => {
 const UKAZKA = document.documentElement.classList.contains('navrh-ukazka');
 const KLIC_REZIMU = 'navrh-rezim-stran';
 let naplast = null;          // nástroj Náplast (naplast.js), vznikne po editoru
+let nastrojTextu = null;     // nástroj Text (naplast.js)
 // Dvojstrana k úpravě: { druha: { st, cislo, lp, navrh, nastaveni, koncept, otisk } }.
 // Na plátně je jeden dokument přes obě strany, prvky pravé strany mají x posunuté
 // o šířku strany; při uložení (a v konceptech) se rozdělí podle středu prvku.
@@ -493,9 +494,29 @@ async function dokumentSeSkenem(src) {
   ]);
 }
 
+function vybranyAtom(state) {
+  const sel = state.selection;
+  return sel instanceof NodeSelection && (sel.node.type === N.obrazek || sel.node.type === N.tvar);
+}
+
+// Ukázka pro účet bez prémia: strana, která předvede, co editor umí - styly a formátování,
+// víc textových rámečků, obrázek a náplast (pod nadpisem).
+function ukazkovyDokument() {
+  const f = format();
+  const pisen = prazdnyDokument(f).firstChild;
+  const poznamka = N.odstavec.create({ styl: 'normalni' }, schema.text('Capo 2, hrát volně a potichu',
+    [M.pismo.create({ f: 'Caveat' }), M.velikost.create({ v: 14 }), M.barva.create({ c: '#b00020' })]));
+  return N.doc.create(null, [
+    N.tvar.create({ x: 0, y: 6, w: f.sirka, h: 15, barva: '#fff1c2' }),
+    N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 156 }, pisen.content),
+    N.ramecek.create({ x: f.okraj, y: 170, w: 70, h: 14 }, poznamka),
+    N.obrazek.create({ src: document.getElementById('logo-ukazky').dataset.src, x: f.sirka - f.okraj - 48, y: 182, w: 48, h: 13.9, vrstva: 'pred' }),
+  ]);
+}
+
 // Dvojstrana k úpravě: jen u uložené strany s protější stranou stejného formátu (jinak
 // zůstane protější strana jen k náhledu).
-let docStart = zaloha ? zaloha.doc : prazdnyDokument(format());
+let docStart = zaloha ? zaloha.doc : (UKAZKA ? ukazkovyDokument() : prazdnyDokument(format()));
 if (dvojstrana && KONTEXT && KONTEXT.strana) {
   const p = protejsiStrana();
   const druha = p && p.st ? await nactiProtejsek(p) : null;
@@ -539,7 +560,10 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   clipboardTextSerializer: (slice) => textZUzlu(slice.content),
   clipboardTextParser: vlozenyText,
   // Obrázek ze schránky nebo přetažený soubor se vloží jako obrázek na stranu.
-  handlePaste: (v, e) => vlozSoubory(e.clipboardData && e.clipboardData.files),
+  // Vybraný obrázek nebo náplast: psaní a vložení textu nic nedělá. Jinak by ProseMirror
+  // prvek nahradil textem v novém rámečku (vlevo nahoře, výchozí poloha).
+  handleTextInput: (v) => vybranyAtom(v.state),
+  handlePaste: (v, e) => vlozSoubory(e.clipboardData && e.clipboardData.files) || vybranyAtom(v.state),
   handleDrop: (v, e) => vlozSoubory(e.dataTransfer && e.dataTransfer.files, e),
   dispatchTransaction(tr) {
     const blik = akordyPoMazani(tr);
@@ -1021,10 +1045,7 @@ function smazStyl(id) {
 function vlozSoubory(soubory, udalost = null) {
   const obrazky = [...(soubory || [])].filter((f) => /^image\//.test(f.type));
   if (!obrazky.length) return false;
-  if (UKAZKA) {
-    window.oznam('Vlastní obrázky jdou vložit jen s prémiovým účtem.', { nadpis: 'Ukázka editoru', druh: 'info' });
-    return true;
-  }
+
   let kam = null;
   if (udalost) {
     const r = stranka.getBoundingClientRect();
@@ -1033,7 +1054,9 @@ function vlozSoubory(soubory, udalost = null) {
   }
   for (const soubor of obrazky) {
     nactiObrazek(soubor)
-      .then(async (o) => vlozObrazek(view, { ...format(), posun: posunAktualni() }, { ...o, src: await nahrajObrazek(o.src) }, kam))
+      // Ukázka obrázek nenahrává - zůstane jen v prohlížeči (data: URL ve straně), stejně
+      // se nikam neuloží.
+      .then(async (o) => vlozObrazek(view, { ...format(), posun: posunAktualni() }, { ...o, src: UKAZKA ? o.src : await nahrajObrazek(o.src) }, kam))
       .catch((chyba) => window.oznam(chyba.message, { nadpis: 'Obrázek se nevložil', druh: 'chyba' }));
   }
   return true;
@@ -1557,6 +1580,7 @@ function transponujVse(pultony) {
 function prepniRezimAkordu(zapnout = !rezimAkordu) {
   rezimAkordu = zapnout;
   if (zapnout && naplast?.aktivni) naplast.prepni(false);
+  if (zapnout && nastrojTextu?.aktivni) nastrojTextu.prepni(false);
   koren.classList.toggle('rezim-akordu', rezimAkordu);
   if (!rezimAkordu) skryjNabidkuSloky();
   aktualizujListu();
@@ -1643,10 +1667,16 @@ const PRIKAZY = {
   akordy: () => prepniRezimAkordu(),
   'transp-dolu': () => transponujVse(-1),
   'transp-nahoru': () => transponujVse(1),
-  ramecek: () => pridejRamecek(view, { ...format(), posun: posunAktualni() }),
+  // Nástroje (Akord, Text, Náplast) se navzájem vypínají - zapnutý je vždy nejvýš jeden.
+  ramecek: () => {
+    if (rezimAkordu) prepniRezimAkordu(false);
+    if (naplast.aktivni) naplast.prepni(false);
+    nastrojTextu.prepni();
+  },
   obrazek: () => el('soubor-obrazku').click(),
   naplast: () => {
     if (rezimAkordu) prepniRezimAkordu(false);
+    if (nastrojTextu.aktivni) nastrojTextu.prepni(false);
     naplast.prepni();
     if (naplast.aktivni) prepniZalozku('strana');
   },
@@ -1769,6 +1799,7 @@ function aktualizujListu() {
     const c = b.dataset.prikaz;
     if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
     else if (c === 'naplast') b.classList.toggle('aktivni', !!naplast?.aktivni);
+    else if (c === 'ramecek') b.classList.toggle('aktivni', !!nastrojTextu?.aktivni);
     else if (c === 'naplast-obdelnik' || c === 'naplast-volny') b.classList.toggle('aktivni', naplast?.druh === c.slice(8));
     else if (c === 'tucne') b.classList.toggle('aktivni', souhrn.tucne === true);
     else if (c === 'kurziva') b.classList.toggle('aktivni', souhrn.kurziva === true);
@@ -2013,8 +2044,10 @@ function zalozkaPodleVyberu(state) {
 
 // Nástroj Náplast (naplast.js): kreslí do strany, dokud je zapnutý.
 naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
+nastrojTextu = new NastrojTextu({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
 // Esc a Enter i mimo editor textu (po kliknutí do strany fokus v textu být nemusí).
 window.addEventListener('keydown', (e) => {
+  if (nastrojTextu.aktivni && e.key === 'Escape') { nastrojTextu.prepni(false); e.preventDefault(); e.stopPropagation(); return; }
   if (!naplast.aktivni) return;
   if ((e.key === 'Escape' && naplast.esc()) || (e.key === 'Enter' && naplast.enter())) {
     e.preventDefault();

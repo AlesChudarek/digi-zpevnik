@@ -510,8 +510,23 @@ def test_prohlizece(p, base, jmeno):
        and sum(1 for x in J('T.akordy()') if x['n'] == 'F') == 2, J('T.akordy()'))
 
     # Rámečky: nový, přesun za lištu (Zpět ho vrátí), smazání.
+    # Text je nástroj jako Náplast: tlačítko ho zapne, klik na stranu vloží rámeček.
     page.click('[data-prikaz="ramecek"]')
-    ok('+ Rámeček přidá rámeček', J("document.querySelectorAll('.ps-ramecek').length") == 2)
+    ok('Text zapne nástroj (rámeček zatím nepřibude)', J("document.querySelectorAll('.ps-ramecek').length") == 1
+       and J("document.querySelector('.navrh').classList.contains('rezim-textu')"))
+    page.click('[data-prikaz="naplast"]')
+    ok('Náplast nástroj Text vypne (zapnutý je jen jeden)', not J("document.querySelector('.navrh').classList.contains('rezim-textu')")
+       and J("document.querySelector('.navrh').classList.contains('rezim-naplasti')"))
+    page.click('[data-prikaz="ramecek"]')
+    ok('a Text zase Náplast', J("document.querySelector('.navrh').classList.contains('rezim-textu')")
+       and not J("document.querySelector('.navrh').classList.contains('rezim-naplasti')"))
+    st = J("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+    kmm = st['width'] / 148
+    page.mouse.click(st['x'] + 3 * kmm, st['y'] + 3 * kmm)
+    ok('klik na stranu vloží rámeček na místo kliku a nástroj skončí', J("document.querySelectorAll('.ps-ramecek').length") == 2
+       and abs(J("navrhStrany.view.state.doc.child(1).attrs.x") - 3) <= 0.3 and not J("document.querySelector('.navrh').classList.contains('rezim-textu')"),
+       (J("document.querySelectorAll('.ps-ramecek').length"), J("navrhStrany.view.state.doc.toJSON().content.map(n => [n.type, n.attrs.x, n.attrs.y])"),
+        J("document.querySelector('.navrh').classList.contains('rezim-textu')"), J("document.elementFromPoint(%f, %f).className" % (st['x'] + 3 * kmm, st['y'] + 3 * kmm))))
     page.keyboard.type('Poznámka')
     # Na obrazovce: obrys (CSS px, prohlížeč ho zaokrouhlí) krát zvětšení strany.
     sirky = J("""(() => { const r = document.querySelectorAll('.ps-ramecek')[1];
@@ -536,6 +551,8 @@ def test_prohlizece(p, base, jmeno):
     ok('editor stranu neořezává a okolí zašedí', J("getComputedStyle(document.getElementById('stranka')).overflow") == 'visible'
        and J("!!document.querySelector('#stranka > .ps-mimo')"))
     page.click('[data-prikaz="ramecek"]')
+    st = J("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+    page.mouse.click(st['x'] + 3 * st['width'] / 148, st['y'] + 3 * st['width'] / 148)
     page.keyboard.type('Odsunuto')
     l = J("document.querySelectorAll('.ps-ramecek .ps-prvek-lista')[1].getBoundingClientRect().toJSON()")
     page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
@@ -806,9 +823,25 @@ def test_pristup(p, base):
     ok('běžný uživatel dostane skutečný editor nad ukázkovou stranou', odpoved.status == 200
        and 'U ohně' in page.evaluate('navrhStrany.view.state.doc.textContent'), odpoved.status)
     ok('s pruhem, že jde o ukázku pro prémiové účty, a vodoznakem UKÁZKA',
-       stav['pruh'].startswith('Ukázka editoru') and 'pro prémiové účty' in stav['pruh'] and stav['znak'] == 'UKÁZKA', stav)
-    ok('bez Uložit, výběru strany, PDF a obrázku z náhledu; vlastní obrázek zašedlý',
-       not stav['ulozit'] and not stav['vyber'] and not stav['pdf'] and stav['obrazek'], stav)
+       'Ukázka editoru' in stav['pruh'] and 'pro prémiové účty' in stav['pruh'] and stav['znak'] == 'UKÁZKA', stav)
+    ok('bez Uložit, výběru strany a PDF a obrázku z náhledu', not stav['ulozit'] and not stav['vyber'] and not stav['pdf'], stav)
+    druhy = page.evaluate("navrhStrany.view.state.doc.toJSON().content.map(n => n.type)")
+    ok('ukázková strana předvede náplast, dva textové rámečky a obrázek', sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar'], druhy)
+    page.wait_for_timeout(400)
+    ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
+       and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)
+    png = Path(tempfile.mkdtemp(prefix='ukazka-obr-')) / 'obr.png'
+    from PIL import Image as _Img
+    _Img.new('RGB', (200, 120), (30, 120, 200)).save(png)
+    page.set_input_files('#soubor-obrazku', str(png))
+    page.wait_for_function("document.querySelectorAll('.ps-obrazek').length === 2", timeout=10000)
+    ok('vlastní obrázek jde vložit - zůstane jen v prohlížeči (data:)',
+       page.evaluate("navrhStrany.view.state.doc.lastChild.attrs.src.startsWith('data:image/')"))
+    prvku = page.evaluate("navrhStrany.view.state.doc.childCount")
+    page.keyboard.type("x")
+    ok('psaní při vybraném obrázku ho nesmaže ani nezaloží rámeček', page.evaluate("navrhStrany.view.state.doc.childCount") == prvku
+       and page.evaluate("navrhStrany.view.state.doc.lastChild.type.name") == 'obrazek')
+    page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.deleteSelection()); })()")
     pred = page.evaluate('navrhStrany.view.state.doc.textContent')
     page.click('.ps-ramecek .ps-p >> nth=2')
     page.keyboard.press('End')
@@ -824,7 +857,9 @@ def test_pristup(p, base):
     page.keyboard.type('Ami')
     page.keyboard.press('Enter')
     ok('akord jde přidat', page.evaluate("document.querySelectorAll('.akord-kotva').length") == akordu + 1,
-       (akordu, page.evaluate("document.querySelectorAll('.akord-kotva').length")))
+       (akordu, page.evaluate("document.querySelectorAll('.akord-kotva').length"), znak,
+        page.evaluate("(() => { const e = document.elementFromPoint(%f, %f); return e && (e.className + ' ' + e.textContent.slice(0, 20)); })()" % (znak[0], znak[1])),
+        page.evaluate("!document.querySelector('.akord-pole') || document.querySelector('.akord-pole').hidden")))
     page.click('[data-prikaz="nahled"]')
     ok('náhled jde, s vodoznakem', page.evaluate("getComputedStyle(document.querySelector('.nahled-cteni-obal'), '::after').content") == '"UKÁZKA"')
     page.keyboard.press('Escape')

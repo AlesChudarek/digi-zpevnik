@@ -441,8 +441,11 @@ def main():
             # Rozdělané obě strany: přežijí přelistování a odchod je vyjmenuje.
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('X', 2)); })()")
             page.click('[data-prikaz="ramecek"]')
+            st = page.evaluate("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+            k = st["width"] / 296
+            page.mouse.click(st["x"] + 150 * k, st["y"] + 202 * k)    # pravá strana, dole
             page.keyboard.type("Y")
-            ok("nový rámeček (Text) vznikne na upravované straně 7, vpravo",
+            ok("nový rámeček (nástroj Text, klik vpravo) patří straně 7",
                "Y" in page.evaluate("JSON.stringify(navrhStrany.zdroj('P').obsah)") and "Y" not in page.evaluate("JSON.stringify(navrhStrany.zdroj('L').obsah)"))
             page.click('[data-prikaz="dalsi-strana"]')
             editor_stran(page)
