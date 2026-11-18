@@ -2867,7 +2867,9 @@ def navrh_strany():
     Bez zadané strany okno „Upravit stranu“ (výběr zpěvníku a strany). Strana se vždy
     upravuje na svém místě ve zpěvníku - strana_ve_zpevniku, nova_strana."""
     if not smi_navrhovat(current_user):
-        abort(404)
+        # Běžný účet a host: ukázka, co editor umí, bez přístupu (rozhodnuto 4. 11. -
+        # vidět, ale nedovolit).
+        return render_template('editor_ukazka.html')
     # Výběr je okno (static/js/vyber-strany.js); stránka ho jen rovnou otevře.
     return render_template('vyber_strany.html')
 
@@ -2963,6 +2965,8 @@ def _za_stranou(sb, za_id):
 @login_required
 def strana_ve_zpevniku(strana_id):
     """Editor stran nad stranou zpěvníku. Uložit ji uloží rovnou na její místo."""
+    if not smi_navrhovat(current_user):
+        return redirect(url_for('navrh_strany'))      # ukázka pro účet bez prémia
     strana = db.session.get(Strana, strana_id)
     sb = strana.songbook if strana else None
     if strana is None or not _smi_navrhovat_ve_zpevniku(sb):
@@ -2975,6 +2979,8 @@ def strana_ve_zpevniku(strana_id):
 def nova_strana():
     """Editor stran pro novou stranu zpěvníku za stranou `za` (0 = na začátek). Strana
     vznikne až uložením - zavření bez uložení ve zpěvníku nic nenechá."""
+    if not smi_navrhovat(current_user):
+        return redirect(url_for('navrh_strany'))      # ukázka pro účet bez prémia
     sb = db.session.get(Songbook, request.args.get('zpevnik') or '')
     if not _smi_navrhovat_ve_zpevniku(sb):
         abort(404)
@@ -4811,11 +4817,19 @@ def build_songbook_export_sequence(songbook, recept=None):
     add(songbook.img_path_cover_front_outer, "cover")
     add(songbook.img_path_cover_front_inner, "cover")
 
-    sequence.extend(
-        {"file": page["file"], "kind": "content", "page_number": page["page_number"],
-         **({"navrh": page["navrh"], "navrh_pdf": page["navrh_pdf"]} if page.get("navrh") else {})}
-        for page in build_songbook_content_pages(songbook.id)
-    )
+    for i, page in enumerate(build_songbook_content_pages(songbook.id)):
+        polozka = {"file": page["file"], "kind": "content", "page_number": page["page_number"]}
+        if page.get("navrh"):
+            # Číslo strany na navržené straně dokreslí export (v PDF strany není): jeho
+            # nastavení ze zdroje verze a levá/pravá podle pozice ve zpěvníku.
+            navrh = db.session.get(NavrzenaStrana, page["navrh"])
+            try:
+                nastaveni = json.loads(navrh.zdroj).get("nastaveni") or {}
+            except (ValueError, AttributeError):
+                nastaveni = {}
+            polozka.update(navrh=page["navrh"], navrh_pdf=page["navrh_pdf"], navrh_lp=strana_lp(songbook, i),
+                           navrh_cislo=nastaveni.get("cislo") or {}, navrh_cislo_skryte=bool(nastaveni.get("cisloSkryte")))
+        sequence.append(polozka)
 
     add(songbook.img_path_cover_back_inner, "cover")
     add(songbook.img_path_cover_back_outer, "cover")
@@ -4914,9 +4928,10 @@ def songbook_export_key(sequence, token):
         # Barva se propisuje do pixelů průhledné obálky, takže její změna musí dát jiný
         # klíč. Bez tohohle by po přebarvení zpěvníku zůstalo viset staré PDF.
         digest.update(f"|{item.get('bg') or ''}\n".encode())
-        # Navržená strana: verze je neměnná, takže stačí její id.
+        # Navržená strana: verze je neměnná, takže stačí její id; číslo strany dokresluje
+        # export, takže změna čísla (přečíslování, jiná první strana) dá jiný soubor.
         if item.get('navrh'):
-            digest.update(f"|navrh:{item['navrh']}\n".encode())
+            digest.update(f"|navrh:{item['navrh']}|{item.get('page_number')}|{item.get('navrh_lp')}|v2\n".encode())
     return digest.hexdigest()[:16]
 
 
@@ -5000,94 +5015,41 @@ def poradi_brozury(pocet):
     return dvojice
 
 
-def _slozena_dvojstrana(leva, prava, velikost, pozadi):
-    """Dvě strany vedle sebe na jeden list A4 na šířku.
-
-    Obě půlky mají poměr A4 na výšku (`_fit_to_a4` to zařídí u každé strany), takže
-    dvě vedle sebe dají přesně A4 na šířku - není co dopočítávat ani ořezávat.
-    """
-    sirka, vyska = velikost
-    list = Image.new('RGB', (sirka * 2, vyska), pozadi)
-    for posun, strana in ((0, leva), (sirka, prava)):
-        if strana is None:
-            continue
-        if strana.size != velikost:
-            strana = strana.resize(velikost, Image.LANCZOS)
-        list.paste(strana, (posun, 0))
-    return list
-
-
-# Mezikrok brožury se ukládá ve vyšší kvalitě než výsledek. Strana projde JPEGem
-# dvakrát a na q75 by se to na akordových značkách projevilo; q95 je znatelně větší
-# soubor, ale leží jen na disku a po složení se smaže.
-BROZURA_MEZIKROK_QUALITY = 95
-
-
 def _render_brozura(sequence, out_path, recept, on_page=None):
     """Zpěvník jako sešitá brožura: dvě strany na list A4 na šířku.
 
-    Narozdíl od běžného exportu tohle nejde odbavit stranu po straně: první list nese
-    poslední stranu, takže se musí znát celý zpěvník. Držet ho přitom v paměti nejde -
-    123 stran v plné kvalitě je přes 1,5 GB, což je víc, než kolik má server celkem.
-    Strany se proto odloží na disk a při skládání listů se čtou po dvou; v paměti jsou
-    tak nanejvýš tři obrázky bez ohledu na délku zpěvníku.
+    Nejdřív se složí běžné PDF (stejně jako bez brožury - i s vektorovými navrženými
+    stranami, vodoznakem a černobíle), pak ho pypdf vyskládá: každá strana se zmenší do
+    poloviny listu v pořadí poradi_brozury. Strany se neodkládají jako JPEG a nic se
+    nepřevádí na pixely, takže navržená strana zůstane textem. Paměť: pypdf čte strany
+    z disku postupně.
     """
-    settings = EXPORT_KVALITY[recept['kvalita']]
-    quality, max_edge = settings['quality'], settings['max_edge']
-    vyska = max_edge or PAGE_PX[1]
-    velikost = (round(vyska * A4_INCHES[0] / A4_INCHES[1]), vyska)
-
-    with tempfile.TemporaryDirectory(prefix='brozura-') as odkladiste:
-        odkladiste = Path(odkladiste)
-        pocet = 0
-        for poradi, item in enumerate(sequence, start=1):
-            page = _fit_to_a4(_open_export_page(item, recept), _pozadi_strany(item, recept))
-            if recept.get('vodoznak'):
-                page = _vodoznak(page)
-            if page.size != velikost:
-                zmenseny = page.resize(velikost, Image.LANCZOS)
-                page.close()
-                page = zmenseny
-            page.save(odkladiste / f"{poradi:04d}.jpg", 'JPEG',
-                      quality=BROZURA_MEZIKROK_QUALITY)
-            page.close()
-            pocet = poradi
-
-        def nacti(cislo):
-            """Odložená strana, nebo None pro dopsaný prázdný list vazby."""
-            if cislo > pocet:
-                return None
-            obrazek = Image.open(odkladiste / f"{cislo:04d}.jpg")
-            obrazek.load()
-            return obrazek
-
-        first = True
+    from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+    strany = Path(str(out_path) + '.strany')
+    try:
+        render_songbook_pdf(sequence, strany, {**recept, 'brozura': False}, on_page)
+        ctenar = PdfReader(str(strany))
+        pocet = len(ctenar.pages)
+        zapis = PdfWriter()
+        # A4 na šířku v bodech (stejně jako dřív z A4_INCHES).
+        sirka, vyska = A4_INCHES[1] * 72, A4_INCHES[0] * 72
         for leva, prava in poradi_brozury(pocet):
-            started = time.time()
-            l, p = nacti(leva), nacti(prava)
-            # Doplněné strany jsou bílé: je to přidaný list vazby, ne strana zpěvníku.
-            list_papiru = _slozena_dvojstrana(l, p, velikost, (255, 255, 255))
-            for obrazek in (l, p):
-                if obrazek is not None:
-                    obrazek.close()
-            if recept['cernobile']:
-                list_papiru = list_papiru.convert('L')
-            sirka, vyska_listu = list_papiru.size
-            # A4 na šířku, takže delší rozměr papíru odpovídá šířce obrázku.
-            list_papiru.save(out_path, 'PDF', dpi=(sirka / A4_INCHES[1],
-                                                   vyska_listu / A4_INCHES[0]),
-                             quality=quality, append=not first)
-            list_papiru.close()
-            first = False
-            if on_page:
-                # Postup se počítá ve stranách zpěvníku, ne v listech papíru: čekající
-                # uživatel zná počet stran, ne kolik z nich vyjde listů.
-                for cislo in (leva, prava):
-                    if cislo <= pocet:
-                        on_page(time.time() - started)
-
-        if first:
-            Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
+            list_papiru = PageObject.create_blank_page(width=sirka, height=vyska)
+            for cislo, posun in ((leva, 0), (prava, sirka / 2)):
+                if cislo > pocet:
+                    continue        # doplněná strana vazby zůstane bílá
+                strana = ctenar.pages[cislo - 1]
+                sw, sv = float(strana.mediabox.width), float(strana.mediabox.height)
+                k = min((sirka / 2) / sw, vyska / sv)
+                list_papiru.merge_transformed_page(strana, Transformation().scale(k).translate(
+                    posun + (sirka / 2 - sw * k) / 2, (vyska - sv * k) / 2))
+            zapis.add_page(list_papiru)
+        if not pocet:
+            zapis.add_blank_page(width=sirka, height=vyska)
+        with open(out_path, 'wb') as f:
+            zapis.write(f)
+    finally:
+        strany.unlink(missing_ok=True)
 
 
 _PISMA_VODOZNAKU = ('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
@@ -5146,7 +5108,7 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
     navrzene = {}   # pořadí strany v PDF -> vektorové PDF navržené strany
     for poradi, item in enumerate(sequence):
         if item.get('navrh_pdf'):
-            navrzene[poradi] = IMAGES_DIR / item['navrh_pdf']
+            navrzene[poradi] = item
         started = time.time()
         page = _open_export_page(item, recept)
         # Doplnit dřív než zmenšit, ať doplněná strana skončí na téže výšce jako
@@ -5176,24 +5138,177 @@ def render_songbook_pdf(sequence, out_path, recept, on_page=None):
         # Prázdný zpěvník: PDF bez jediné strany uložit nejde, tak aspoň jednu bílou
         Image.new('RGB', PAGE_PX, (255, 255, 255)).save(out_path, 'PDF')
     elif navrzene:
-        _vloz_navrzene_strany(out_path, navrzene)
+        _vloz_navrzene_strany(out_path, navrzene, recept)
 
 
-def _vloz_navrzene_strany(out_path, navrzene):
+PT_NA_MM = 72 / 25.4
+PISMA_STRANY_DIR = Path(__file__).resolve().parent.parent / 'frontend' / 'static' / 'fonts' / 'strana' / 'ttf'
+
+
+class _PismaPdf:
+    """Písma navržené strany (TTF z fonts/strana/ttf) vložená do exportu přes pypdf - pro
+    číslo strany a vodoznak, které dokresluje server. Jednoduché písmo TrueType
+    s kódováním WinAnsi (stačí na číslice a text vodoznaku); šířky znaků změří Pillow.
+    Každé písmo se do PDF vloží jednou."""
+
+    def __init__(self, zapis):
+        self.zapis = zapis
+        self.cache = {}
+
+    def soubor(self, rodina, tucne):
+        jmeno = f"{(rodina or 'Noto Sans').lower().replace(' ', '-')}-{700 if tucne else 400}-normal.ttf"
+        cesta = PISMA_STRANY_DIR / jmeno
+        return cesta if cesta.is_file() else PISMA_STRANY_DIR / f"noto-sans-{700 if tucne else 400}-normal.ttf"
+
+    def ziskej(self, rodina, tucne=False):
+        """(odkaz na písmo, šířky 32-126 v tisícinách em, ascent, descent v em)."""
+        from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject, FloatObject,
+                                   NameObject, NumberObject)
+        cesta = self.soubor(rodina, tucne)
+        if cesta in self.cache:
+            return self.cache[cesta]
+        data = cesta.read_bytes()
+        f = ImageFont.truetype(str(cesta), 1000)
+        sirky = [round(f.getlength(chr(c))) for c in range(32, 127)]
+        asc, desc = f.getmetrics()
+        jmeno = NameObject('/' + cesta.stem.replace('-', ''))
+        soubor = DecodedStreamObject()
+        soubor.set_data(data)
+        soubor[NameObject('/Length1')] = NumberObject(len(data))
+        soubor = soubor.flate_encode()
+        popis = DictionaryObject({
+            NameObject('/Type'): NameObject('/FontDescriptor'), NameObject('/FontName'): jmeno,
+            NameObject('/Flags'): NumberObject(32),
+            NameObject('/FontBBox'): ArrayObject([NumberObject(v) for v in (-600, -400, 2000, 1200)]),
+            NameObject('/ItalicAngle'): NumberObject(0), NameObject('/Ascent'): NumberObject(asc),
+            NameObject('/Descent'): NumberObject(-desc), NameObject('/CapHeight'): NumberObject(700),
+            NameObject('/StemV'): NumberObject(80), NameObject('/FontFile2'): self.zapis._add_object(soubor),
+        })
+        pismo = DictionaryObject({
+            NameObject('/Type'): NameObject('/Font'), NameObject('/Subtype'): NameObject('/TrueType'),
+            NameObject('/BaseFont'): jmeno, NameObject('/FirstChar'): NumberObject(32),
+            NameObject('/LastChar'): NumberObject(126),
+            NameObject('/Widths'): ArrayObject([NumberObject(w) for w in sirky]),
+            NameObject('/Encoding'): NameObject('/WinAnsiEncoding'),
+            NameObject('/FontDescriptor'): self.zapis._add_object(popis),
+        })
+        vysledek = (self.zapis._add_object(pismo), sirky, asc / 1000, desc / 1000)
+        self.cache[cesta] = vysledek
+        return vysledek
+
+
+def _barva_pdf(hexa, vychozi=(0, 0, 0)):
+    r, g, b = _hex_to_rgb(hexa, tuple(int(x * 255) for x in vychozi))
+    return r / 255, g / 255, b / 255
+
+
+def _text_pdf(text):
+    return text.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)')
+
+
+def _prekryti_strany(zapis, pisma, sirka, vyska, kresby):
+    """Stránka jen s vrstvou `kresby` (seznam (rodina, tučně, operátory)), která se
+    sloučí přes navrženou stranu. Písma se v ní jmenují /F0, /F1… podle pořadí."""
+    from pypdf import PageObject
+    from pypdf.generic import DecodedStreamObject, DictionaryObject, FloatObject, NameObject
+    prekryti = PageObject.create_blank_page(width=sirka, height=vyska)
+    fonty = DictionaryObject()
+    operatory = []
+    for i, (rodina, tucne, ops) in enumerate(kresby):
+        odkaz, _, _, _ = pisma.ziskej(rodina, tucne)
+        fonty[NameObject(f'/F{i}')] = odkaz
+        operatory.append(ops.replace('/FONT', f'/F{i}'))
+    prekryti[NameObject('/Resources')] = DictionaryObject({
+        NameObject('/Font'): fonty,
+        NameObject('/ExtGState'): DictionaryObject({NameObject('/Pruhl'): DictionaryObject({
+            NameObject('/Type'): NameObject('/ExtGState'), NameObject('/ca'): FloatObject(170 / 255),
+            NameObject('/CA'): FloatObject(170 / 255)})}),
+    })
+    obsah = DecodedStreamObject()
+    obsah.set_data('\n'.join(operatory).encode('latin-1'))
+    prekryti[NameObject('/Contents')] = zapis._add_object(obsah)
+    return prekryti
+
+
+def _cislo_navrzene_strany(pisma, item, vs, vv):
+    """Operátory čísla strany ve vlastních souřadnicích navržené strany (pt), nebo None.
+    Stejně jako editor a čtečka (vykresleni.js, CisloStrany.poloha): poloha středu v mm
+    pro pravou stranu, na levé zrcadlově; číslo vycentrované i svisle (line-height 1)."""
+    c = item.get('navrh_cislo') or {}
+    cislo = item.get('page_number')
+    if not c.get('zobrazit') or item.get('navrh_cislo_skryte') or cislo is None:
+        return None
+    sirka_mm = vs / PT_NA_MM
+    x_mm = sirka_mm - float(c.get('x', 0)) if item.get('navrh_lp') == 'L' and c.get('zrcadlit') else float(c.get('x', 0))
+    y_mm = float(c.get('y', 0))
+    velikost = float(c.get('velikost') or 9)
+    text = str(cislo)
+    _, sirky, asc, desc = pisma.ziskej(c.get('pismo'), c.get('tucne'))
+    sirka = sum(sirky[ord(z) - 32] for z in text if 32 <= ord(z) < 127) * velikost / 1000
+    x = x_mm * PT_NA_MM - sirka / 2
+    uctari = y_mm * PT_NA_MM + velikost * (asc - desc) / 2
+    r, g, b = _barva_pdf(c.get('barva') or '#000000')
+    ops = (f'q BT /FONT {velikost:.3f} Tf {r:.3f} {g:.3f} {b:.3f} rg {x:.3f} {vv - uctari:.3f} Td '
+           f'({_text_pdf(text)}) Tj ET Q')
+    return (c.get('pismo'), bool(c.get('tucne')), ops)
+
+
+def _vodoznak_pdf(pisma, sirka, vyska):
+    """Vodoznak jako u stran z obrázků (_vodoznak): šedý text vpravo dole na poloprůhledném
+    bílém podkladu, výška písma 1,3 % strany."""
+    velikost = max(7.0, vyska * 0.013)
+    _, sirky, asc, desc = pisma.ziskej('Noto Sans', False)
+    w = sum(sirky[ord(z) - 32] for z in VODOZNAK_TEXT if 32 <= ord(z) < 127) * velikost / 1000
+    h = velikost * (asc + desc)
+    okraj, odsazeni = velikost * 0.4, vyska * 0.012
+    x = sirka - w - okraj - odsazeni
+    y = odsazeni + okraj
+    ops = (f'q /Pruhl gs 1 1 1 rg {x - okraj:.3f} {y - okraj:.3f} {w + 2 * okraj:.3f} {h + 2 * okraj:.3f} re f Q '
+           f'q BT /FONT {velikost:.3f} Tf 0.353 0.353 0.353 rg {x:.3f} {y + desc * velikost:.3f} Td '
+           f'({_text_pdf(VODOZNAK_TEXT)}) Tj ET Q')
+    return ('Noto Sans', False, ops)
+
+
+def _na_sedou(stranka):
+    """Černobílý export: barvy textu a tvarů (rg/RG) na šedou a obrázky ve straně na
+    odstíny šedi. Strany z obrázků převádí na šedou už Pillow."""
+    from pypdf.generic import ContentStream, FloatObject
+    obsah = stranka.get_contents()
+    if obsah is not None:
+        cs = ContentStream(obsah, stranka.pdf)
+        for i, (operandy, operator) in enumerate(cs.operations):
+            if operator in (b'rg', b'RG') and len(operandy) == 3:
+                r, g, b = (float(v) for v in operandy)
+                cs.operations[i] = ([FloatObject(round(0.3 * r + 0.59 * g + 0.11 * b, 4))],
+                                    b'g' if operator == b'rg' else b'G')
+        stranka.replace_contents(cs)
+    for obrazek in stranka.images:
+        try:
+            obrazek.replace(obrazek.image.convert('L'))
+        except Exception:  # noqa: BLE001 - obrázek, který nejde převést, zůstane barevný
+            app.logger.warning("Obrázek navržené strany se nepřevedl na šedou")
+
+
+def _vloz_navrzene_strany(out_path, navrzene, recept=None):
     """Na místo navržených stran (zatím bílé) dá jejich vektorové PDF z editoru stran.
 
     Strana se zvětší na rozměr strany exportu (A5 → A4) a vycentruje; text zůstane
-    textem. Chybějící nebo poškozené PDF strany nechá stranu bílou, export kvůli němu
-    nespadne. Číslo strany a vodoznak na navržené straně zatím nejsou (TODO bod 11, 3c).
+    textem. Číslo strany (podle pozice ve zpěvníku, písmem a polohou z nastavení strany)
+    a vodoznak dokreslí server - v PDF strany z prohlížeče nejsou. Černobílý export je
+    převede na šedou. Chybějící nebo poškozené PDF strany nechá stranu bílou, export
+    kvůli němu nespadne.
     """
     from pypdf import PdfReader, PdfWriter, PageObject, Transformation
+    recept = recept or {}
     ctenar = PdfReader(str(out_path))
     zapis = PdfWriter()
+    pisma = _PismaPdf(zapis)
     cache = {}
     for poradi, strana in enumerate(ctenar.pages):
-        cesta = navrzene.get(poradi)
+        item = navrzene.get(poradi)
         vektor = None
-        if cesta is not None:
+        if item is not None:
+            cesta = IMAGES_DIR / item['navrh_pdf']
             try:
                 if cesta not in cache:
                     cache[cesta] = PdfReader(str(cesta)).pages[0]
@@ -5206,10 +5321,17 @@ def _vloz_navrzene_strany(out_path, navrzene):
         sirka, vyska = float(strana.mediabox.width), float(strana.mediabox.height)
         vs, vv = float(vektor.mediabox.width), float(vektor.mediabox.height)
         k = min(sirka / vs, vyska / vv)
+        posun = Transformation().scale(k).translate((sirka - vs * k) / 2, (vyska - vv * k) / 2)
         nova = PageObject.create_blank_page(width=sirka, height=vyska)
-        nova.merge_transformed_page(
-            vektor, Transformation().scale(k).translate((sirka - vs * k) / 2, (vyska - vv * k) / 2))
-        zapis.add_page(nova)
+        nova.merge_transformed_page(vektor, posun)
+        cislo = _cislo_navrzene_strany(pisma, item, vs, vv)
+        if cislo:
+            nova.merge_transformed_page(_prekryti_strany(zapis, pisma, vs, vv, [cislo]), posun)
+        if recept.get('vodoznak'):
+            nova.merge_page(_prekryti_strany(zapis, pisma, sirka, vyska, [_vodoznak_pdf(pisma, sirka, vyska)]))
+        pridana = zapis.add_page(nova)
+        if recept.get('cernobile'):
+            _na_sedou(pridana)
     docasny = Path(str(out_path) + '.vektor')
     with open(docasny, 'wb') as f:
         zapis.write(f)

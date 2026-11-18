@@ -482,12 +482,15 @@
         {% else %}
           <a href="{{ url_for('my_songbooks') }}">Moje zpěvníky</a>
         {% endif %}
+        {# Editor stran pro všechny přihlášené (i hosty): prémiový účet v něm pracuje,
+           ostatní uvidí ukázku, co umí (rozhodnuto 4. 11.: vidět, ale nedovolit). #}
+        {% if current_user.is_authenticated %}
+          <a href="{{ url_for('navrh_strany') }}">Editor strany</a>
+        {% endif %}
         {% if current_user.is_authenticated and current_user.role == 'admin' %}
           {# Jeden odkaz: Uživatelé a Záznam jsou záložky na stránce. Pět odkazů se do lišty
              nevešlo (potřebovaly přes 1400 px) - Aleš 2. 11. #}
           <a href="{{ url_for('sprava_zpevniku') }}">Správa</a>
-          {# Editor stran s akordy, rozpracovaný (TODO bod 11) - zatím jen pro admina. #}
-          <a href="{{ url_for('navrh_strany') }}">Editor strany</a>
         {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>

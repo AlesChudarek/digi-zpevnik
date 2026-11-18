@@ -1063,7 +1063,8 @@ kdo maže.
         neprémiové (po uložení a tisku vyprší),
         transpozice a živé vykreslení ve čtečce, hledání v textech písní, export
         zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
-      - **odkaz v liště** (Aleš 3. 11.): zatím otevřené. Aleš ho chce jako lákadlo -
+      - **odkaz v liště** (Aleš 3. 11.): rozhodnuto 18. 11. - pro všechny přihlášené i hosty;
+        bez prémia ukázka (`editor_ukazka.html`, strana z `ukazka.json`), ne přístup. Aleš ho chce jako lákadlo -
         hodně lidí přijde jen kvůli tvorbě vlastních zpěvníků; proti je, že by to byl
         druhý vstup vedle Mých zpěvníků. Rozhodnout, až bude editor v editoru zpěvníku.
       - **číslo strany** (9. 11.): vrstva nad stranou, nikdy v obsahu ani v obrázku pro PDF
@@ -1131,12 +1132,11 @@ kdo maže.
            ZIP: navržená strana jako její PDF. Klíč cache nese id verze; „bez prázdných“
            navržené nevyhodí. Nová závislost **pypdf** (requirements.txt) - na serveru
            před nasazením `pip install`.
-         - [ ] číslo strany na navržené straně (písmo a poloha z `nastaveni.cislo`, L/P
-           z pozice) - potřebuje vložit TTF do PDF (pypdf to samo neumí; reportlab, nebo
-           nechat prohlížeč při Hotovo uložit i variantu s číslem?)
-         - [ ] vodoznak na navržené straně; černobílý export (vektor zůstane barevný)
-         - [ ] brožura: dnes rastrová, navržená strana v ní vyjde bílá - přepsat skládání
-           listů na pypdf (dvě strany na list A4 na šířku)
+         - [X] (18. 11.) číslo strany na navržené straně dokreslí server: TTF z fonts/strana/ttf
+           vložené přes pypdf jako jednoduché písmo TrueType (šířky z Pillow, bez reportlabu -
+           instalaci nové knihovny auto režim zamítl), poloha jako v editoru (sedí na 0,2 mm)
+         - [X] vodoznak i na navržené straně; černobíle převede rg/RG na šedou a obrázky na L
+         - [X] brožura přes pypdf: složí se běžné PDF a vyskládá po dvou stranách na list
       4. [X] editor zpěvníku (10. 11.): plus před první, mezi a za poslední stranou
          s nabídkou Prázdná / Navrhnout stranu; u prázdné strany „✎ navrhnout“, u navržené
          náhled se značkou a klik = Upravit. Editor stran se otevře v rámu (iframe,

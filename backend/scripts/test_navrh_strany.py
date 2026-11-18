@@ -789,9 +789,30 @@ def test_pristup(p, base):
     page.click('button[type="submit"]')
     page.wait_for_load_state('networkidle')
     odkazy = page.evaluate("[...document.querySelectorAll('.nav-links a')].map(a => a.textContent.trim())")
-    ok('běžný uživatel nemá v liště Editor strany', 'Editor strany' not in odkazy, odkazy)
+    ok('běžný uživatel má v liště Editor strany', 'Editor strany' in odkazy, odkazy)
     odpoved = page.goto(base + '/editor-strany')
-    ok('běžnému uživateli stránka neexistuje (404)', odpoved.status == 404, odpoved.status)
+    page.wait_for_selector('#eu-strana[data-hotovo="1"]', timeout=15000)
+    ukazka = page.evaluate("""(() => { const s = document.querySelector('#eu-strana .stranka'), m = document.getElementById('eu-strana');
+      return { text: s.innerText, akordu: s.querySelectorAll('.akord').length, vyplni: Math.abs(s.getBoundingClientRect().width - m.clientWidth) < 1,
+               pristup: document.getElementById('eu-pristup').innerText.trim() }; })()""")
+    ok('běžný uživatel dostane ukázku: strana z textu s akordy přes celou plochu', odpoved.status == 200
+       and 'U ohně' in ukazka['text'] and ukazka['akordu'] > 3 and ukazka['vyplni'], ukazka)
+    ok('a že editor je pro prémiové účty', ukazka['pristup'] == 'Editor strany je pro prémiové účty.', ukazka['pristup'])
+    ok('editor ani výběr strany se mu nenačte', page.locator('.navrh, #vyber-strany').count() == 0)
+    odpoved = page.goto(base + '/editor-strany/1')
+    ok('adresa strany v editoru vede na ukázku', page.url.endswith('/editor-strany') and odpoved.status == 200, page.url)
+    br.close()
+
+    br = p.chromium.launch()
+    page = br.new_page()
+    page.goto(base + '/guest-login')
+    page.wait_for_load_state('networkidle')
+    odkazy = page.evaluate("[...document.querySelectorAll('.nav-links a')].map(a => a.textContent.trim())")
+    page.goto(base + '/editor-strany')
+    page.wait_for_selector('#eu-strana[data-hotovo="1"]', timeout=15000)
+    ok('host má odkaz i ukázku, s informací o přihlášení', 'Editor strany' in odkazy
+       and page.inner_text('#eu-pristup').strip() == 'Editor strany je pro přihlášené uživatele s prémiovým účtem.',
+       (odkazy, page.inner_text('#eu-pristup')))
     br.close()
 
     br = p.chromium.launch()

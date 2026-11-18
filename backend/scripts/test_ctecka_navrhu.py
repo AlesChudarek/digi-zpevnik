@@ -236,6 +236,43 @@ def test_prohlizec(p, jmeno, base, a, b, poradi):
     ok("dvojstrana → svitek se vrátí na tutéž stranu", stred in ("14", "15"), stred)
     ok("bez chyb JavaScriptu", not chyby, chyby[:3])
 
+    if jmeno == "chromium":
+        # Číslo strany, které dokresluje server, sedí tam, kde ho kreslí prohlížeč (PDF
+        # strany z prohlížeče s číslem - pdf-strany.js z editoru).
+        import base64, io
+        from pypdf import PdfReader
+        b64 = page.evaluate("""async (id) => {
+          const d = await (await fetch('/api/navrh/strana/' + id)).json();
+          const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+          const { bytes } = await pdfStrany(d.zdroj, { cislo: 1, strana: 'P' });
+          let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); }""", a)
+        prohlizec = []
+        stranka = PdfReader(io.BytesIO(base64.b64decode(b64))).pages[0]
+        vyska_pt = float(stranka.mediabox.height)
+        def vis(text, cm, tm, font, size):
+            if text.strip() == "1":
+                prohlizec.append(((cm[0] * tm[4] + cm[2] * tm[5] + cm[4]) * 25.4 / 72,
+                                  (vyska_pt - (cm[1] * tm[4] + cm[3] * tm[5] + cm[5])) * 25.4 / 72))
+        stranka.extract_text(visitor_text=vis)
+        # Poslední „1“ je číslo strany (značka sloky „1.“ je v textu dřív).
+        with A.app.app_context():
+            sekv = A.build_songbook_export_sequence(A.db.session.get(A.Songbook, ZPEVNIK), None)
+        vystup = TMP / "jedna.pdf"
+        A.render_songbook_pdf(sekv[:1], vystup, A.normalizuj_recept(format="pdf"))
+        st = PdfReader(str(vystup)).pages[0]
+        sw, sv = float(st.mediabox.width), float(st.mediabox.height)
+        k = min(sw / (148 * 72 / 25.4), sv / (210 * 72 / 25.4))
+        offx = (sw - 148 * 72 / 25.4 * k) / 2
+        server = []
+        def vis2(text, cm, tm, font, size):
+            if text.strip() == "1":
+                server.append((((cm[0] * tm[4] + cm[2] * tm[5] + cm[4]) - offx) / k * 25.4 / 72,
+                               (sv - (cm[1] * tm[4] + cm[3] * tm[5] + cm[5])) / k * 25.4 / 72))
+        st.extract_text(visitor_text=vis2)
+        rozdil = (abs(prohlizec[-1][0] - server[-1][0]), abs(prohlizec[-1][1] - server[-1][1])) if prohlizec and server else None
+        ok("číslo strany ze serveru sedí s prohlížečem (do 0,3 mm)", rozdil is not None and max(rozdil) <= 0.3,
+           (prohlizec[-1:], server[-1:], rozdil))
+
     print("── zpěvník bez navržených stran ──")
     page.goto(f"{base}/songbook/{BEZ_NAVRHU}")
     page.wait_for_load_state("networkidle")
@@ -420,6 +457,45 @@ def main():
                     jmena = z.namelist()
                 ok("ZIP má navržené strany jako PDF", sum(j.endswith(".pdf") for j in jmena) == 20
                    and jmena[0] == "0001-strana-1.pdf", jmena[:3])
+
+                # Číslo strany na navržené straně dokreslí server: poloha v mm strany A5.
+                def cisla(stranka):
+                    nalez = []
+                    def vis(text, cm, tm, font, size):
+                        if text.strip().isdigit():
+                            x = cm[0] * tm[4] + cm[2] * tm[5] + cm[4]
+                            y = cm[1] * tm[4] + cm[3] * tm[5] + cm[5]
+                            nalez.append((text.strip(), x, y))
+                    stranka.extract_text(visitor_text=vis)
+                    return nalez
+                sirka_a4, vyska_a4 = float(pdf.pages[0].mediabox.width), float(pdf.pages[0].mediabox.height)
+                k = min(sirka_a4 / (148 * 72 / 25.4), vyska_a4 / (210 * 72 / 25.4))
+                offx = (sirka_a4 - 148 * 72 / 25.4 * k) / 2
+                na_a5 = lambda x, y: ((x - offx) / k / (72 / 25.4), (vyska_a4 - y) / k / (72 / 25.4))
+                c1 = [na_a5(x, y) for t, x, y in cisla(pdf.pages[0]) if t == "1"]
+                ok("navržená strana 1 (pravá) má v PDF číslo vpravo dole u vnějšího okraje",
+                   any(134 <= x <= 140 and 203 <= y <= 209 for x, y in c1), c1)
+                c6 = [na_a5(x, y) for t, x, y in cisla(pdf.pages[5]) if t == "6"]
+                ok("navržená strana 6 (levá) má číslo zrcadlově vlevo", any(7 <= x <= 13 and 203 <= y <= 209 for x, y in c6), c6)
+
+                vystup_v = TMP / "export-vodoznak.pdf"
+                A.render_songbook_pdf(sekv, vystup_v, A.normalizuj_recept(format="pdf", vodoznak=True))
+                ok("vodoznak je i na navržené straně", A.VODOZNAK_TEXT in PdfReader(str(vystup_v)).pages[0].extract_text())
+
+                vystup_cb = TMP / "export-cb.pdf"
+                A.render_songbook_pdf(sekv, vystup_cb, A.normalizuj_recept(format="pdf", cernobile=True))
+                st0 = PdfReader(str(vystup_cb)).pages[0]
+                ops = st0.get_contents().get_data()
+                ok("černobíle: navržená strana bez barev (akordy a číslo šedě)", b" rg" not in ops and b" g" in ops)
+
+                vystup_b = TMP / "export-brozura.pdf"
+                A.render_songbook_pdf(sekv, vystup_b, A.normalizuj_recept(format="pdf", brozura=True))
+                br_pdf = PdfReader(str(vystup_b))
+                listu = (len(poradi) + 3) // 4 * 2
+                texty = " ".join(" ".join(p.extract_text().split()) for p in br_pdf.pages)
+                ok("brožura: správný počet listů A4 na šířku a navržené strany v ní jako text",
+                   len(br_pdf.pages) == listu and float(br_pdf.pages[0].mediabox.width) > float(br_pdf.pages[0].mediabox.height)
+                   and "Píseň Alfa" in texty and "Píseň Beta" in texty, (len(br_pdf.pages), listu))
             for jmeno in ("chromium", "firefox", "webkit"):
                 test_prohlizec(p, jmeno, base, a, b, poradi)
             test_skenu(p, base)

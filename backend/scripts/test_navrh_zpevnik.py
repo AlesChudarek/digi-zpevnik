@@ -591,7 +591,8 @@ def main():
             ok("„nebo navrhnout v editoru stran“ je zašedlé", page.locator("#es-navrhnout-novou").is_disabled())
             for adresa in (f"/editor-strany/{strana1}", f"/editor-strany/nova?zpevnik={ZPEVNIK}&za=0", "/editor-strany"):
                 odpoved = page.goto(base + adresa)
-                ok(f"editor stran mu neodpoví ({adresa})", odpoved.status == 404, odpoved.status)
+                ok(f"místo editoru ukázka ({adresa})", odpoved.status == 200 and page.url.endswith("/editor-strany")
+                   and page.locator("#eu-strana").count() == 1 and page.locator(".navrh").count() == 0, (odpoved.status, page.url))
             br.close()
     finally:
         server.shutdown()

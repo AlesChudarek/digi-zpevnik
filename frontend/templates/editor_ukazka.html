@@ -1,0 +1,67 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Editor strany - DigiZpěvník{% endblock %}
+{% block content %}
+{# Editor strany pro účet bez prémia a pro hosta: ukázka, co editor umí, bez přístupu
+   (rozhodnuto 4. 11. - vidět, ale nedovolit). Ukázková strana se kreslí z textu stejně
+   jako ve čtečce (static/js/strana/vykresleni.js, zdroj static/js/strana/ukazka.json).
+   Třídy s předponou eu-, ať se nepotkají s obecnými styly webu. #}
+<link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
+<link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
+{% include '_strana_importmap.html' %}
+<style>
+  .eu { max-width: 1000px; margin: 24px auto; padding: 0 16px; box-sizing: border-box;
+        display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 28px; align-items: center; }
+  .eu-strana { position: relative; width: 100%; aspect-ratio: 148 / 210; border-radius: 4px; overflow: hidden;
+               background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), 0 12px 32px rgba(0, 0, 0, 0.14); }
+  .eu-strana .stranka { position: absolute; left: 0; top: 0; box-shadow: none; transform-origin: 0 0; }
+  .eu-text { background: var(--panel-bg, #fff); color: var(--panel-text, #222); border-radius: 14px; padding: 24px;
+             box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18); }
+  .eu-text h1 { margin: 0 0 8px; font-size: 24px; }
+  .eu-text p { margin: 0 0 12px; line-height: 1.5; }
+  .eu-text ul { margin: 0 0 16px; padding-left: 20px; line-height: 1.6; }
+  .eu-pristup { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--muted-bg, #e8f5e9);
+                color: var(--brand-dark, #1b5e20); font-weight: 600; }
+  @media (max-width: 760px) {
+    .eu { grid-template-columns: minmax(0, 1fr); }
+    .eu-strana { max-width: 340px; margin: 0 auto; }
+  }
+</style>
+
+<div class="eu">
+  <div class="eu-strana" id="eu-strana" aria-label="Ukázka strany z editoru"></div>
+  <div class="eu-text">
+    <h1>Editor strany</h1>
+    <p>Strana zpěvníku napsaná přímo v aplikaci, bez dalšího programu. Hotová strana se vloží
+      do zpěvníku jako každá jiná a vytiskne se jako text, ne jako obrázek.</p>
+    <ul>
+      <li>akordy nad slabikami, transpozice o půltón</li>
+      <li>sloky a refrény se číslují samy, refrén jde zopakovat jednou klávesou</li>
+      <li>styly odstavců, písma, obrázky a rámečky kdekoli na straně</li>
+      <li>úpravy naskenované strany: dopsat text a akordy, zakrýt chybu náplastí</li>
+      <li>dvojstrana - obě strany najednou, prvky i přes hřbet</li>
+    </ul>
+    <p class="eu-pristup" id="eu-pristup">
+      {% if guest %}Editor strany je pro přihlášené uživatele s prémiovým účtem.
+      {% else %}Editor strany je pro prémiové účty.{% endif %}
+    </p>
+  </div>
+</div>
+
+<script type="module">
+  import { vykresliStranu, dokonciStranu, formatStrany, MM_NA_PX } from "{{ url_for('static', filename='js/strana/vykresleni.js') }}";
+  const misto = document.getElementById('eu-strana');
+  const zdroj = await (await fetch("{{ static_bust('js/strana/ukazka.json') }}")).json();
+  const koren = vykresliStranu(zdroj, { cislo: 12, strana: 'P' });
+  misto.appendChild(koren);
+  const f = formatStrany(zdroj.nastaveni);
+  const prizpusob = () => {
+    const k = misto.clientWidth / (f.sirka * MM_NA_PX);
+    koren.style.transform = `scale(${k})`;
+    return k;
+  };
+  const k = prizpusob();
+  new ResizeObserver(prizpusob).observe(misto);
+  await dokonciStranu(koren, zdroj, k);
+  misto.dataset.hotovo = '1';
+</script>
+{% endblock %}
