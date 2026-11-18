@@ -301,12 +301,6 @@ function castStrany(lp) {
     }
     odst += pocet;
   });
-  if (!uzly.length) {
-    // Všechno se přesunulo na druhou stranu - strana musí mít aspoň prázdný rámeček.
-    const f = format();
-    uzly.push(N.ramecek.create({ x: f.okraj, y: f.okraj, w: f.sirka - 2 * f.okraj, h: 30 }, N.odstavec.create()));
-    indexy.push(-1);
-  }
   return { doc: N.doc.create(null, uzly), indexy };
 }
 
@@ -450,8 +444,7 @@ if (KONTEXT) {
   }
 }
 // Strana s nahraným obrázkem (sken), dosud nenavržená: obrázek je podkladem přes celou
-// stranu (za textem), aby šlo dopsat text a akordy. Plus malý textový rámeček nahoře -
-// strana ho mít musí a přes celou stranu by zakrýval sken pro klikání.
+// stranu (za textem); text a akordy se dopíšou do rámečku přidaného tlačítkem Text.
 if (KONTEXT && KONTEXT.obrazek && !KONTEXT.navrh && !pouzitKoncept) {
   try {
     zaloha = { nastaveni, doc: await dokumentSeSkenem(KONTEXT.obrazek) };
@@ -465,7 +458,8 @@ if (KONTEXT) {
   nastaveni = { ...nastaveni, nahledCisla: KONTEXT.cislo, nahledStrany: KONTEXT.lp === 'L' ? 'L' : 'P' };
 }
 
-const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: plocha });
+// presah: jak daleko za plátno (mm) smí prvek - zhruba šířka strany na každou stranu.
+const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: plocha, presah: () => format().sirka });
 
 // Protější strana pro úpravu ve dvojstraně: rozdělaná z prohlížeče (ke stejné verzi),
 // uložená verze, sken jako podklad, nebo prázdná strana - stejně jako při otevření samotné.
@@ -492,7 +486,6 @@ async function dokumentSeSkenem(src) {
   const w = Math.round(img.naturalWidth * k * 10) / 10, h = Math.round(img.naturalHeight * k * 10) / 10;
   return N.doc.create(null, [
     N.obrazek.create({ src, x: Math.round((f.sirka - w) * 5) / 10, y: Math.round((f.vyska - h) * 5) / 10, w, h, vrstva: 'za' }),
-    N.ramecek.create({ x: f.okraj, y: f.okraj, w: 60, h: 20 }, N.odstavec.create()),
   ]);
 }
 

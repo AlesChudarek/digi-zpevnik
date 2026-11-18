@@ -35,7 +35,8 @@ const mm = (x) => `${x}mm`;
 
 export const schema = new Schema({
   nodes: {
-    doc: { content: 'prvek+' },
+    // Strana může být i prázdná nebo jen s obrázky a náplastmi - text se přidá rámečkem.
+    doc: { content: 'prvek*' },
 
     // Rámeček: poloha a rozměr v mm od levého horního rohu strany.
     ramecek: {

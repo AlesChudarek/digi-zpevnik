@@ -1187,7 +1187,11 @@ kdo maže.
       okno přes cizí stránku nechtěl); „Jiná strana…“ v editoru stran ho otevře jako okno. Pokusná
       stránka bez zpěvníku je pryč (18. 11.), test editoru jede nad stranou zpěvníku.
       Odchod z editorů sjednocený (odkaz uvnitř webu = okno aplikace, odchod z webu =
-      upozornění prohlížeče). Obrázek a náplast jdou posunout skoro celé mimo stranu.
+      upozornění prohlížeče). 18. 11.: všechny prvky (i rámeček s textem) jdou posunout
+      i celé mimo stranu - do šířky strany za plátnem; editor stranu neořezává, okolí jen
+      zašedí (`.ps-mimo`), čtečka a obrázek ořezávají, vektorové PDF vynechá slova, akordy,
+      obrázky a náplasti celé mimo stranu (po slovech, nic se neposune). Strana nemusí mít
+      žádný rámeček (schéma `prvek*`, sken bez povinného rámečku).
       18. 11.: strana bez protějšku (první, poslední) je i ve dvojstraně jedna strana;
       „+“ ve spodní liště = nová strana za upravovanou; v editoru zpěvníku ikona obrázku
       u naskenované strany (tužka u navržené), pořadí akcí tužka / Nahradit stranu

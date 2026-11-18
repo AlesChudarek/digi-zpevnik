@@ -271,6 +271,15 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
   --vaha-akordu: 700; --akord-x: 0em; --akord-y: -0.08em; --okraj: 10mm; --meritko: 1;
   --sirka-znacky: 6mm;
 }
+/* Editor: prvky smí přes okraj strany. Strana je neořízne, jen je mimo ni zašedí
+   (obrys .ps-mimo přes celé okolí) - obrysy a lišty jsou vidět i tam. Čtečka, obrázek
+   i PDF stranu ořezávají jako dřív. */
+#stranka { overflow: visible; }
+#stranka > .ps-mimo {
+  position: absolute; inset: 0; pointer-events: none; z-index: 6;
+  outline: 1000mm solid rgba(228, 230, 234, 0.6);
+}
+.protejsek { z-index: 7; }
 /* Bez vyrovnání párů (kerning) a ligatur: vektorové PDF (pdf-strany.js) klade znaky
    podle šířek z písma, a tak strana vypadá stejně na obrazovce i v PDF. Editoru je
    ProseMirror vypíná taky - takhle platí i pro čtečku. */

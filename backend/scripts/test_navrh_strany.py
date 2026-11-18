@@ -532,6 +532,44 @@ def test_prohlizece(p, base, jmeno):
     page.click('.ps-ramecek:nth-child(2) .ps-prvek-smazat', force=True)
     ok('rámeček jde smazat', J("document.querySelectorAll('.ps-ramecek').length") == 1)
 
+    # Prvky smí přes okraj strany: editor je ukáže zašedlé, PDF vynechá, co je celé mimo.
+    ok('editor stranu neořezává a okolí zašedí', J("getComputedStyle(document.getElementById('stranka')).overflow") == 'visible'
+       and J("!!document.querySelector('#stranka > .ps-mimo')"))
+    page.click('[data-prikaz="ramecek"]')
+    page.keyboard.type('Odsunuto')
+    l = J("document.querySelectorAll('.ps-ramecek .ps-prvek-lista')[1].getBoundingClientRect().toJSON()")
+    page.mouse.move(l['x'] + 20, l['y'] + l['height'] / 2)
+    page.mouse.down()
+    page.mouse.move(l['x'] + 20 + 100 * m * 96 / 25.4, l['y'] + l['height'] / 2, steps=8)
+    page.mouse.up()
+    po = J("navrhStrany.view.state.doc.child(1).attrs")
+    ok('rámeček jde přetáhnout přes okraj strany', po['x'] + po['w'] > 148, po)
+    J("""(() => { const v = navrhStrany.view, n = v.state.doc.child(1);
+      v.dispatch(v.state.tr.setNodeMarkup(v.state.doc.child(0).nodeSize, null, { ...n.attrs, x: 160 })); })()""")
+    # Počet zápisů textu (Tj) přímo v PDF: s rámečkem celým mimo stranu musí být stejný
+    # jako bez něj. (Čtečka PDF by text mimo stranu při vytahování sama vynechala - ta
+    # by chybu nepoznala.)
+    ZAPISU = """async () => { const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+      const { bytes } = await pdfStrany(navrhStrany.zdroj(), {});
+      const { PDFDocument } = await import('/static/vendor/pdf-lib/pdf-lib.js');
+      const d = await PDFDocument.load(bytes);
+      const obsah = d.getPage(0).node.Contents();
+      const proudy = obsah.asArray ? obsah.asArray().map(r => d.context.lookup(r)) : [obsah];
+      let n = 0;
+      for (const p of proudy) {
+        const raw = new Blob([p.getContents()]).stream().pipeThrough(new DecompressionStream('deflate'));
+        const t = new TextDecoder('latin1').decode(await new Response(raw).arrayBuffer());
+        n += (t.match(/Tj/g) || []).length; }
+      return n; }"""
+    s_mimo = J(ZAPISU)
+    page.click('.ps-ramecek:nth-child(2) .ps-prvek-smazat', force=True)
+    bez = J(ZAPISU)
+    ok('PDF: text rámečku celého mimo stranu se nezapíše (zápisů jako bez něj)', s_mimo == bez and bez > 0, (s_mimo, bez))
+    page.click('.ps-ramecek .ps-prvek-smazat', force=True)
+    ok('i poslední rámeček jde smazat (strana může být bez textu)', J("document.querySelectorAll('.ps-ramecek').length") == 0)
+    page.keyboard.press(f'{MOD}+z')
+    ok('Zpět ho vrátí', J("document.querySelectorAll('.ps-ramecek').length") == 1)
+
     # Obrázek: vložení souborem, přesun, změna velikosti se zachovaným poměrem, vrstva.
     png = Path(tempfile.mkdtemp(prefix='navrh-obr-')) / 'obr.png'
     from PIL import Image as PILImage

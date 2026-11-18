@@ -13,7 +13,6 @@ import { bodyTvaru } from './schema.js';
 const MM_NA_PX = 96 / 25.4;
 const MIN_MM = 8;
 const KROK_MM = 0.5;
-const VIDET_MM = 1;       // kolik z obrázku či náplasti musí zůstat na straně
 
 const zaokrouhliMm = (x) => Math.round(x / KROK_MM) * KROK_MM;
 
@@ -157,21 +156,16 @@ export class PrvekView {
     const dx = (e.clientX - t.x0) / pxNaMm, dy = (e.clientY - t.y0) / pxNaMm;
     if (!t.posunuto && Math.hypot(dx, dy) * pxNaMm < 3) return;
     t.posunuto = true;
+    // Prvky smí i mimo stranu (strana je ořízne, editor je ukáže zašedlé) - jen do
+    // vzdálenosti `presah` (mm) od plátna, ať se nedají ztratit z dosahu.
     const { sirka, vyska } = this.volby.rozmer();
+    const M = this.volby.presah ? this.volby.presah() : 0;
     const p = t.puvodni;
     // Náplast se ladí jemněji (0,1 mm) - zakrývá i malé věci.
     const zaokrouhli = this.jeTvar ? (x) => Math.round(x * 10) / 10 : zaokrouhliMm;
     if (t.druh === 'presun') {
-      // Obrázek smí přesahovat přes okraj strany (ořízne se), rámeček ne.
-      // Obrázek a náplast smí skoro celé mimo stranu (ořízne se) - stačí, když z nich
-      // zůstane vidět kousek (VIDET_MM), ať jdou zase chytit. Rámeček s textem ne.
-      if (this.jeAtom) {
-        t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), VIDET_MM - p.w), sirka - VIDET_MM);
-        t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), VIDET_MM - p.h), vyska - VIDET_MM);
-      } else {
-        t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), 0), sirka - p.w);
-        t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), 0), vyska - p.h);
-      }
+      t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -M), sirka + M - p.w);
+      t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -M), vyska + M - p.h);
     } else {
       let w = Math.max(zaokrouhli(p.w + dx), MIN_MM);
       let h = Math.max(zaokrouhli(p.h + dy), MIN_MM);
@@ -185,8 +179,8 @@ export class PrvekView {
         if (Math.abs(dx) * p.h >= Math.abs(dy) * p.w) h = zaokrouhli(w / pomer);
         else w = zaokrouhli(h * pomer);
       }
-      t.nove.w = this.jeAtom ? w : Math.min(w, sirka - p.x);
-      t.nove.h = this.jeAtom ? h : Math.min(h, vyska - p.y);
+      t.nove.w = Math.min(w, sirka + M - p.x);
+      t.nove.h = Math.min(h, vyska + M - p.y);
     }
     this.nastav(t.nove);
   }
@@ -227,14 +221,6 @@ export class PrvekView {
 
   odstran() {
     const { state } = this.view;
-    if (!this.jeAtom) {
-      let ramecku = 0;
-      state.doc.forEach((n) => { if (n.type === this.node.type) ramecku += 1; });
-      if (ramecku < 2) {
-        window.oznam('Strana musí mít aspoň jeden textový rámeček.', { nadpis: 'Rámeček nejde smazat', druh: 'info' });
-        return;
-      }
-    }
     const pos = this.getPos();
     this.view.dispatch(closeHistory(state.tr).delete(pos, pos + this.node.nodeSize));
     this.view.focus();

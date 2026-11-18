@@ -261,7 +261,7 @@ def test_skenu(p, base):
     a = sken["attrs"]
     ok("a vyplní stranu A5 (na šířku nebo na výšku, vystředěný)",
        (abs(a["w"] - 148) < 0.2 or abs(a["h"] - 210) < 0.2) and abs(a["x"] * 2 + a["w"] - 148) < 0.3 and abs(a["y"] * 2 + a["h"] - 210) < 0.3, a)
-    ok("má i textový rámeček", any(n["type"] == "ramecek" for n in doc["content"]))
+    ok("strana je jen sken, text se přidá rámečkem (žádný povinný)", [n["type"] for n in doc["content"]] == ["obrazek"], [n["type"] for n in doc["content"]])
     page.click('[data-prikaz="naplast"]')
     ok("Náplast zapne nástroj (nic nevloží) a ukáže kartu s druhem",
        page.evaluate("navrhStrany.view.state.doc.lastChild.type.name") != "tvar" and page.is_visible("#vybrany-tvar")
@@ -300,7 +300,7 @@ def test_skenu(p, base):
     page.mouse.move(r["x"] - 60 * k, r["y"] + 50 * k, steps=6)
     page.mouse.up()
     x = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar')[0].attrs.x")
-    ok("náplast jde odsunout skoro celou mimo stranu (zůstane 1 mm)", x == -7, x)
+    ok("náplast jde odsunout celou mimo stranu (o 100 mm, editor ji ukáže zašedlou)", x == -64, x)
     page.keyboard.press("ControlOrMeta+z")
     kurzor = page.evaluate("getComputedStyle(document.querySelector('.ps-obrazek img')).cursor")
     ok("s nástrojem je nad obrázkem křížek, ne přesun", kurzor == "crosshair", kurzor)

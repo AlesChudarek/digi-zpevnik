@@ -186,6 +186,10 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
     doc.registerFontkit(fontkit);
     const stranka = doc.addPage([f.sirka * PT_NA_MM, f.vyska * PT_NA_MM]);
     const H = f.vyska * PT_NA_MM;
+    // Co je celé mimo stranu (prvek odsunutý přes okraj), do PDF nejde - nebylo by vidět,
+    // ale hledání a kopírování textu by ho našlo. Každé slovo má vlastní polohu, takže
+    // vynechání nic dalšího neposune; zčásti viditelné slovo se zapíše a strana ho ořízne.
+    const mimo = (l, t, r, b) => r <= r0.left || l >= r0.right || b <= r0.top || t >= r0.bottom;
     const vlozena = new Map();
     const pismo = async (soubor) => {
       if (!vlozena.has(soubor.url)) {
@@ -233,6 +237,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
     const kresliObrazek = async (o) => {
       const img = o.querySelector('img');
       const r = o.getBoundingClientRect();
+      if (mimo(r.left, r.top, r.right, r.bottom)) return;
       const emb = await vlozObrazek(doc, img.src);
       stranka.drawImage(emb, {
         x: (r.left - r0.left) * PT_NA_PX, y: H - (r.bottom - r0.top) * PT_NA_PX,
@@ -243,6 +248,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
     // vektorová cesta; SVG cesta v pdf-lib má osu y dolů od zadaného počátku.
     const kresliTvar = (t) => {
       const r = t.getBoundingClientRect();
+      if (mimo(r.left, r.top, r.right, r.bottom)) return;
       const body = (t.dataset.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map(Number));
       const w = r.width * PT_NA_PX, h = r.height * PT_NA_PX;
       const cesta = body.map(([fx, fy], i) => `${i ? 'L' : 'M'}${fx * w} ${fy * h}`).join(' ') + ' Z';
@@ -257,6 +263,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
 
     // Text odstavců.
     for (const u of useckyTextu(koren.querySelector('.stranka-obsah'), r0)) {
+      if (mimo(r0.left + u.x, r0.top + u.top, r0.left + (u.pravSlova ?? u.prav), r0.top + u.top + u.vyska)) continue;
       const ucariU = ucari(u.top, u.vyska, u.styl);
       // Mezera za slovem se nekreslí: další slovo má vlastní polohu a mezery navíc by
       // se při kopírování textu z PDF zdvojovaly.
@@ -278,6 +285,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
       const g = document.createRange();
       g.selectNodeContents(a);
       const r = g.getBoundingClientRect();
+      if (mimo(r.left, r.top, r.right, r.bottom)) continue;
       await kresliText(a.textContent, r.left - r0.left, ucari(r.top - r0.top, r.height, st), st, null, r.width);
     }
 
