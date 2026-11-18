@@ -763,12 +763,11 @@ def test_pristup(p, base):
     page.fill('input[name="password"]', T.PASSWORD)
     page.click('button[type="submit"]')
     page.wait_for_load_state('networkidle')
-    adresa = page.url
-    # V úzké liště je odkaz v nabídce (burger) - klik skriptem jde stejnou obsluhou.
-    page.evaluate("document.querySelector('.nav-links a[data-vyber-strany]').click()")
-    page.wait_for_selector(".vs-zaclona:not([hidden])")
-    page.wait_for_function("document.querySelector('.vs-zpevniky, .vs-prazdno:not(:empty)')")
-    ok('admin: Editor strany v liště otevře okno na téže stránce', page.url == adresa, page.url)
+    # V úzké liště je odkaz v nabídce (burger) - klik skriptem.
+    page.evaluate("document.querySelector('.nav-links a[href=\"/editor-strany\"]').click()")
+    page.wait_for_url('**/editor-strany')
+    page.wait_for_function("document.querySelector('#vyber-strany .vs-zpevniky, #vyber-strany .vs-prazdno:not(:empty)')")
+    ok('admin: Editor strany v liště vede na stránku s výběrem', page.url.endswith('/editor-strany'), page.url)
     import sqlite3
     with sqlite3.connect(str(T.PROJECT_ROOT / 'backend' / 'instance' / 'zpevnik.db')) as c:
         verejne = {r[0] for r in c.execute("select id from songbooks where is_public = 1")}

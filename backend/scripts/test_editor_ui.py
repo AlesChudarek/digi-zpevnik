@@ -228,6 +228,22 @@ def main():
         zkontroluj(all(vzhled.values()), "oznámení vypadá jako varování (znak a pruh)", vzhled)
         page.keyboard.press("Enter")
         zkontroluj(page.locator(".oznameni-zaclona").count() == 0, "oznámení zavře Enter")
+        # Nahrání selže, pak se po „Zkusit znovu“ povede: vyznačená chyba musí zmizet.
+        page.route("**/api/strany/nahrat", lambda r: r.fulfill(status=400, content_type="application/json",
+                                                               body='{"ok": false, "error": "Zkušební chyba."}'))
+        with page.expect_file_chooser() as fc:
+            strana(page, 4).locator(".es-nahrat-obrazek").click()
+        fc.value.set_files(str(soubory / "1.png"))
+        page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana')[4].classList.contains('chyba-nahrani')")
+        chyba = strana(page, 4).locator(".es-chyby").inner_text()
+        zkontroluj("Obrázek se nepodařilo nahrát." in chyba, "nepovedené nahrání se u strany vyznačí", chyba)
+        page.unroute("**/api/strany/nahrat")
+        strana(page, 4).locator(".es-znovu").click()
+        page.wait_for_function("!document.querySelectorAll('#es-seznam .es-strana')[4].classList.contains('chyba-nahrani')"
+                               " && !document.querySelectorAll('#es-seznam .es-strana')[4].classList.contains('nahrava')", timeout=20000)
+        chyba = strana(page, 4).locator(".es-chyby").inner_text()
+        zkontroluj("nahrát" not in chyba and "obrázek" not in chyba and "název" in chyba,
+                   "po povedeném nahrání chyba obrázku zmizí hned (zbude jen chybějící název)", chyba)
         strana(page, 4).locator(".es-odebrat").click()
 
         with page.expect_navigation():

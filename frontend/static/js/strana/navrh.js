@@ -1380,8 +1380,6 @@ if (KONTEXT) {
   // prohlížeče (beforeunload výš).
   document.addEventListener('click', async (e) => {
     const a = e.target.closest && e.target.closest('a[href]');
-    // Odkaz Editor strany jen otevře okno výběru - ptá se až odkaz na stranu v něm.
-    if (a && a.hasAttribute('data-vyber-strany')) return;
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target === '_blank') return;
     const href = a.getAttribute('href') || '';
     if (href.startsWith('#') || href.startsWith('javascript:')) return;

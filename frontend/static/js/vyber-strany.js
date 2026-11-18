@@ -2,21 +2,23 @@
  * zpěvníků) a jeho strana, nebo nová strana na konec. Strana se tak vždycky upravuje na
  * svém místě ve zpěvníku.
  *
- * Otevírá ho odkaz Editor strany v liště (data-vyber-strany), tlačítko v editoru stran
- * a stránka /editor-strany. Strany jsou obyčejné odkazy: editor stran s rozdělanou
+ * Dvě podoby: na stránce /editor-strany (odkaz Editor strany v liště) je panel přímo
+ * ve stránce (misto), v editoru stran ho tlačítko Jiná strana… (data-vyber-strany)
+ * otevře jako okno přes editor. Strany jsou obyčejné odkazy: editor stran s rozdělanou
  * stranou je zachytí a zeptá se (navrh.js).
  *
- *   VyberStrany.otevri({ zpevnik, priZavreni })
+ *   VyberStrany.otevri({ zpevnik, misto })
  */
 (function () {
   let okno = null;
-  let priZavreni = null;
 
-  function postav() {
+  function postav(misto) {
     if (okno) return okno;
-    const zaclona = document.createElement('div');
-    zaclona.className = 'vs-zaclona';
-    zaclona.hidden = true;
+    const zaclona = misto || document.createElement('div');
+    if (!misto) {
+      zaclona.className = 'vs-zaclona';
+      zaclona.hidden = true;
+    }
     zaclona.innerHTML = `
       <div class="okno vs-okno" role="dialog" aria-modal="true" aria-labelledby="vs-nadpis">
         <div class="vs-hlava">
@@ -25,9 +27,9 @@
         </div>
         <p class="vs-co" id="vs-co">Vyberte zpěvník.</p>
         <div class="vs-telo" id="vs-telo"></div>
-        <div class="actions"><button type="button" class="btn vs-zavrit">Zavřít</button></div>
+        ${misto ? '' : '<div class="actions"><button type="button" class="btn vs-zavrit">Zavřít</button></div>'}
       </div>`;
-    document.body.appendChild(zaclona);
+    if (!misto) document.body.appendChild(zaclona);
     okno = {
       zaclona,
       nadpis: zaclona.querySelector('#vs-nadpis'),
@@ -35,8 +37,9 @@
       telo: zaclona.querySelector('#vs-telo'),
       zpet: zaclona.querySelector('.vs-zpet'),
     };
-    zaclona.querySelector('.vs-zavrit').addEventListener('click', zavri);
     okno.zpet.addEventListener('click', () => ukazZpevniky());
+    if (misto) return okno;
+    zaclona.querySelector('.vs-zavrit').addEventListener('click', zavri);
     zaclona.addEventListener('click', (e) => { if (e.target === zaclona) zavri(); });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !zaclona.hidden) { e.stopPropagation(); zavri(); }
@@ -45,9 +48,7 @@
   }
 
   function zavri() {
-    if (!okno) return;
-    okno.zaclona.hidden = true;
-    if (priZavreni) { const f = priZavreni; priZavreni = null; f(); }
+    if (okno) okno.zaclona.hidden = true;
   }
 
   async function nacti(adresa) {
@@ -111,14 +112,13 @@
 
   window.VyberStrany = {
     otevri(volby = {}) {
-      postav();
-      priZavreni = volby.priZavreni || null;
+      postav(volby.misto || null);
       okno.zaclona.hidden = false;
       if (volby.zpevnik) ukazStrany(volby.zpevnik); else ukazZpevniky();
     },
   };
 
-  // Odkaz Editor strany v liště: okno místo přechodu na stránku.
+  // Tlačítko Jiná strana… v editoru stran: okno přes editor.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-vyber-strany]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;

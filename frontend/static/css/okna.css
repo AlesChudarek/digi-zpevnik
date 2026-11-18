@@ -137,6 +137,9 @@ html.theme-dark .okno.okno-varovani .okno-nadpis { color: #f0c46b; }
 .vs-zaclona { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center;
               padding: 16px; background: rgba(0, 0, 0, 0.45); }
 .vs-zaclona[hidden] { display: none; }
+/* Na stránce /editor-strany: tentýž panel jako součást stránky, na střed pod lištou. */
+.vs-stranka { display: flex; justify-content: center; padding: 24px 16px; box-sizing: border-box; }
+.vs-stranka .okno.vs-okno { max-height: none; }
 .okno.vs-okno { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
 .vs-hlava { display: flex; align-items: center; gap: 8px; }
 .vs-hlava h2 { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -558,7 +558,7 @@
 
   // Tlačítko editoru stran: jen pro prémiové účty, ostatní ho vidí zašedlé s důvodem.
   function tlacitkoNavrhu(trida, text) {
-    var b = tlacitko(trida, text, nastaveni.smiNavrhovat ? 'Navrhnout stranu v editoru stran (text a akordy)' : null);
+    var b = tlacitko(trida, text, nastaveni.smiNavrhovat ? 'Navrhnout stranu v editoru stran' : null);
     return nastaveni.smiNavrhovat ? b : zasedle(b, 'Navrhovat strany v editoru stran mohou prémiové účty.');
   }
 
@@ -674,8 +674,8 @@
     var ikony = nastaveni.ikony || {};
     var akceStrany = el('span', 'es-akce-strany');
     var tuzka = ikonoveTlacitko('es-navrhnout', ikony.upravit, s.navrzena_id ? 'Upravit stranu v editoru stran'
-      : (s.image_id || s.soubor) ? 'Upravit v editoru stran (dopsat text a akordy do obrázku)'
-      : 'Navrhnout stranu v editoru stran (text a akordy)');
+      : (s.image_id || s.soubor) ? 'Upravit v editoru stran'
+      : 'Navrhnout stranu v editoru stran');
     if (!nastaveni.smiNavrhovat) tuzka = zasedle(tuzka, 'Navrhovat strany v editoru stran mohou prémiové účty.');
     // Pořadí: editor stran, obrázek, duplikovat, ✕.
     akceStrany.appendChild(tuzka);
@@ -819,6 +819,9 @@
       }
     }
     hlasStav();
+    // Vyznačené chyby (po pokusu o uložení) podle nového stavu: povedené nahrání po
+    // „Zkusit znovu“ nebo výměně obrázku chybu u strany smaže.
+    if (ukazovatChyby) ukazProblemy(true);
     // Výměna obrázku jde přes výběr souboru mimo okno a nahrání doběhne samo - ani
     // jedno nevyvolá událost, podle které okno obnovuje tlačítko Uložit.
     if (nastaveni.poZmene) nastaveni.poZmene();

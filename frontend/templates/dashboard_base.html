@@ -36,7 +36,7 @@
   </script>
   <script src="{{ static_bust('js/napoveda.js') }}" defer></script>
   {% if current_user.is_authenticated and smi_navrhovat(current_user) %}
-  {# Okno „Upravit stranu“ (editor stran): z lišty i z editoru stran. #}
+  {# Výběr strany pro editor stran: stránka /editor-strany a okno Jiná strana… v editoru. #}
   <script src="{{ static_bust('js/vyber-strany.js') }}" defer></script>
   <style>:root { --ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}'); --ikona-navrhu: url('{{ static_bust('img/icons/edit_page.svg') }}'); }</style>
   {% endif %}
@@ -487,7 +487,7 @@
              nevešlo (potřebovaly přes 1400 px) - Aleš 2. 11. #}
           <a href="{{ url_for('sprava_zpevniku') }}">Správa</a>
           {# Editor stran s akordy, rozpracovaný (TODO bod 11) - zatím jen pro admina. #}
-          <a href="{{ url_for('navrh_strany') }}" data-vyber-strany>Editor strany</a>
+          <a href="{{ url_for('navrh_strany') }}">Editor strany</a>
         {% endif %}
         <a href="{{ url_for('search') }}">Hledat písničku</a>
       </div>

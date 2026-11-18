@@ -1,11 +1,13 @@
 {% extends "dashboard_base.html" %}
 {% block title %}Editor strany - DigiZpěvník{% endblock %}
 {% block content %}
-{# Editor strany bez zadané strany: rovnou okno „Upravit stranu“ (static/js/vyber-strany.js).
-   Zavřením se jde do Mých zpěvníků - bez vybrané strany tu není co dělat. #}
+{# Editor strany bez zadané strany: vlastní stránka s výběrem, co upravovat (zpěvník
+   z Mých zpěvníků a jeho strana). Panel vypadá jako okno aplikace, ale je součástí
+   stránky - static/js/vyber-strany.js, podoba „misto“. #}
+<div class="vs-stranka" id="vyber-strany"></div>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    window.VyberStrany.otevri({ priZavreni: () => { location.href = {{ url_for('my_songbooks') | tojson }}; } });
+    window.VyberStrany.otevri({ misto: document.getElementById('vyber-strany') });
   });
 </script>
 {% endblock %}

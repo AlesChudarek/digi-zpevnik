@@ -160,7 +160,7 @@ def main():
             ok("šipka výš je na stejné vodorovné jako ✕", abs(radek["nahoruVsKriz"]) <= 0.5, radek["nahoruVsKriz"])
             ok("šipka níž začíná na horní hraně psacího pole", abs(radek["doluVsPole"]) <= 0.5, radek["doluVsPole"])
             ok("prázdná strana má v náhledu ikonu, ne obrázek", radek["prazdnaIkona"] and radek["obrazkuVNahledu"] == 0, radek)
-            ok("ikony mají popisek", radek["popisky"] == ["Navrhnout stranu v editoru stran (text a akordy)", "Nahradit stranu obrázkem",
+            ok("ikony mají popisek", radek["popisky"] == ["Navrhnout stranu v editoru stran", "Nahradit stranu obrázkem",
                                                           "Duplikovat stranu", "Odebrat stranu"],
                radek["popisky"])
 
@@ -486,7 +486,7 @@ def main():
             ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
                page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
 
-            print("\n── Editor strany z lišty: okno, co upravovat ──")
+            print("\n── Editor strany: vlastní stránka s výběrem, co upravovat ──")
             with A.app.app_context():
                 ids = [st.id for st in A.db.session.get(A.Songbook, ZPEVNIK).strany]
                 verejne = {sb.id for sb in A.Songbook.query.filter_by(is_public=1)}
@@ -497,12 +497,12 @@ def main():
             ok("klik myší na název zpěvníku otevře nabídku (ne čtečku)", "/my-songbooks" in page.url
                and page.locator(".akce-nabidka:not([hidden])").count() == 1, page.url)
             page.keyboard.press("Escape")
-            # Odkaz v liště má zatím jen admin (test_navrh_strany); okno samo je pro prémiové.
-            page.evaluate("VyberStrany.otevri()")
-            page.wait_for_selector(".vs-zaclona:not([hidden]) .vs-zpevniky button")
+            odpoved = page.goto(base + "/editor-strany")
+            page.wait_for_selector("#vyber-strany .vs-zpevniky button")
             zpevniky = page.evaluate("[...document.querySelectorAll('.vs-zpevniky button')].map(b => b.dataset.zpevnik)")
-            ok("okno se otevře bez přechodu se zpěvníky jen z Mých zpěvníků",
-               "/my-songbooks" in page.url and ZPEVNIK in zpevniky and not (set(zpevniky) & verejne), (page.url, len(zpevniky)))
+            ok("/editor-strany je stránka s výběrem přímo v ní (ne okno přes jinou stránku)",
+               odpoved.status == 200 and page.locator(".vs-zaclona").count() == 0 and page.locator(".vs-zavrit").count() == 0)
+            ok("zpěvníky jen z Mých zpěvníků", ZPEVNIK in zpevniky and not (set(zpevniky) & verejne), len(zpevniky))
             page.click(f".vs-zpevniky button[data-zpevnik='{ZPEVNIK}']")
             page.wait_for_selector(".vs-strany .vs-strana")
             dlazdice = page.evaluate("[...document.querySelectorAll('.vs-strana')].map(a => [a.getAttribute('href'), a.querySelector('.vs-popis b')?.textContent])")
@@ -513,11 +513,6 @@ def main():
             page.click(".vs-zpet")
             page.wait_for_selector(".vs-zpevniky button")
             ok("šipka zpět vrátí seznam zpěvníků", page.locator(".vs-zpevniky button").count() == len(zpevniky))
-            page.keyboard.press("Escape")
-            ok("Esc okno zavře", page.locator(".vs-zaclona").is_hidden())
-            odpoved = page.goto(base + "/editor-strany")
-            page.wait_for_selector(".vs-zaclona:not([hidden]) .vs-zpevniky button")
-            ok("přímá adresa /editor-strany rovnou otevře okno", odpoved.status == 200)
             page.click(f".vs-zpevniky button[data-zpevnik='{ZPEVNIK}']")
             page.wait_for_selector(".vs-strany .vs-strana")
             page.click(f".vs-strana[data-strana='{ids[1]}']")
@@ -531,13 +526,7 @@ def main():
 
             print("\n── odchod z editoru stran přes lištu webu ──")
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Q', 2)); })()")
-            # Odkaz Editor strany (v liště má jen admin - tady stejný odkaz vložený skriptem).
-            page.evaluate("""(() => { const a = document.createElement('a'); a.href = '/editor-strany';
-              a.setAttribute('data-vyber-strany', ''); a.id = 'test-odkaz'; a.textContent = 'Editor strany';
-              document.querySelector('.nav-links').appendChild(a); a.click(); })()""")
-            page.wait_for_selector(".vs-zaclona:not([hidden])")
-            ok("odkaz Editor strany s neuloženou stranou jen otevře výběr, bez otázky na uložení",
-               page.locator("#app-confirm-overlay:visible").count() == 0 and "/editor-strany/" in page.url)
+            ok("Jiná strana… v editoru stran je okno přes editor", page.locator(".vs-zaclona").count() == 1)
             page.keyboard.press("Escape")
             page.click(".nav-links a[href='/my-songbooks']")
             page.wait_for_selector("#app-confirm-overlay", state="visible")
