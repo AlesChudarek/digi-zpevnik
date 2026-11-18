@@ -105,7 +105,14 @@ VYROB_VERZI = """async ([nazev, radky]) => {
 
 def vyrob_zpevnik(br, base):
     page, _ = prihlas(br, base)
-    page.goto(base + "/editor-strany?pokus=1")
+    # Verze stran se vyrábějí v editoru nad pomocným zpěvníkem (do testovaného se
+    # připojí až níž přímo v databázi).
+    with A.app.app_context():
+        A.db.session.add(A.Songbook(id="test-ctecka-pomocny", title="Pomocný", owner_id=3, is_public=0))
+        A.db.session.add(A.Strana(songbook_id="test-ctecka-pomocny", poradi=0))
+        A.db.session.commit()
+        pomocna = A.Strana.query.filter_by(songbook_id="test-ctecka-pomocny").first().id
+    page.goto(f"{base}/editor-strany/{pomocna}")
     page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
     a = page.evaluate(VYROB_VERZI, ["Píseň Alfa", "[Ami]První řádek alfa\n[C]druhý řádek"])
     b = page.evaluate(VYROB_VERZI, ["Píseň Beta", "[G]První řádek beta\n[D]druhý řádek"])

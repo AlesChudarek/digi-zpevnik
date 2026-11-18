@@ -271,12 +271,15 @@
   }
 
   // Kopie strany za její blok (doprostřed písně přes víc stran ne): stejný obrázek nebo
-  // navržená strana a popisek, bez písní. Navržená verze je neměnná, takže ji obě strany
-  // můžou sdílet; úprava jedné z nich v editoru stran dá jen jí novou verzi.
+  // navržená strana, popisek i písně. Písně jako nové písně se stejným názvem a autorem -
+  // tatáž píseň na dvou stranách by byla v obsahu dvakrát a přejmenování jedné by
+  // přejmenovalo i druhou. Navržená verze je neměnná, takže ji obě strany můžou sdílet;
+  // úprava jedné z nich v editoru stran dá jen jí novou verzi.
   function duplikujStranu(i) {
     var s = strany[i];
     var k = novaStrana({ image_id: s.image_id, navrzena_id: s.navrzena_id, nahled: s.nahled,
-                         obrazek: s.obrazek, popisek: s.popisek });
+                         obrazek: s.obrazek, popisek: s.popisek,
+                         pisne: s.pisne.map(function (p) { return { nazev: p.nazev, autor: p.autor }; }) });
     if (s.soubor && !s.image_id) nastavObrazek(k, s.soubor);   // ještě se nahrává - nahraje se znovu
     vlozNa(blok(i)[1] + 1, [k]);
     vykresli();
@@ -640,7 +643,7 @@
       img.alt = '';
       img.loading = 'lazy';
       nahled.appendChild(img);
-      nahled.setAttribute('data-napoveda', 'Zvětšit stranu');
+      nahled.setAttribute('data-napoveda', 'Náhled');
       nahled.tabIndex = 0;
       nahled.setAttribute('role', 'button');
     } else {
@@ -648,11 +651,12 @@
       nahled.classList.add('bez-obrazku');
       nahled.appendChild(el('span', 'es-prazdna-ikona'));
     }
-    if (s.navrzena_id) {
-      // Navržená strana: jen malá ikona v rohu (štítek s textem zakrýval pětinu náhledu).
-      var znacka = el('span', 'es-znacka-navrhu');
-      znacka.setAttribute('aria-label', 'navržená strana');
-      znacka.title = 'Navržená strana (editor stran)';
+    // Malá ikona v rohu: navržená strana (editor stran) tužka, naskenovaná obrázek. Úpravou
+    // v editoru stran se z naskenované stane navržená a ikona se vymění.
+    if (s.navrzena_id || s.image_id || s.soubor) {
+      var znacka = el('span', 'es-znacka-navrhu' + (s.navrzena_id ? '' : ' sken'));
+      znacka.setAttribute('aria-label', s.navrzena_id ? 'navržená strana' : 'naskenovaná strana');
+      znacka.title = s.navrzena_id ? 'Navržená strana (editor stran)' : 'Naskenovaná strana (obrázek)';
       nahled.appendChild(znacka);
     }
     nahled.appendChild(el('div', 'es-stav'));
@@ -669,15 +673,14 @@
     }
     var ikony = nastaveni.ikony || {};
     var akceStrany = el('span', 'es-akce-strany');
-    akceStrany.appendChild(ikonoveTlacitko('es-nahrat-obrazek', ikony.obrazek,
-      s.nahled && !s.navrzena_id ? 'Vyměnit obrázek strany' : 'Nahrát obrázek strany'));
     var tuzka = ikonoveTlacitko('es-navrhnout', ikony.upravit, s.navrzena_id ? 'Upravit stranu v editoru stran'
       : (s.image_id || s.soubor) ? 'Upravit v editoru stran (dopsat text a akordy do obrázku)'
       : 'Navrhnout stranu v editoru stran (text a akordy)');
     if (!nastaveni.smiNavrhovat) tuzka = zasedle(tuzka, 'Navrhovat strany v editoru stran mohou prémiové účty.');
+    // Pořadí: editor stran, obrázek, duplikovat, ✕.
     akceStrany.appendChild(tuzka);
-    akceStrany.appendChild(ikonoveTlacitko('es-duplikovat', ikony.duplikovat,
-      'Duplikovat stranu (kopie bez písní, třeba jako základ další písně ve stejném formátu)'));
+    akceStrany.appendChild(ikonoveTlacitko('es-nahrat-obrazek', ikony.obrazek, 'Nahradit stranu obrázkem'));
+    akceStrany.appendChild(ikonoveTlacitko('es-duplikovat', ikony.duplikovat, 'Duplikovat stranu'));
     akceStrany.appendChild(tlacitko('es-odebrat', '✕', 'Odebrat stranu'));
     hlava.appendChild(akceStrany);
     telo.appendChild(hlava);

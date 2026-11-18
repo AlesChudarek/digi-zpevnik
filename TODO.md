@@ -1183,13 +1183,16 @@ kdo maže.
       Hotovo 16. 11.: výběr, co upravovat, je okno „Upravit stranu“ (`static/js/vyber-strany.js`,
       vzhled v `okna.css`): zpěvník jen z Mých zpěvníků (ani admin ne Naše zpěvníky - ty
       upraví z editoru zpěvníku), pak mřížka stran a Nová strana. Otevírá ho odkaz v liště
-      (bez přechodu), „Jiná strana…“ v editoru stran a adresa `/editor-strany`; pokusná stránka bez zpěvníku jen `?pokus=1` (kvůli
-      test_navrh_strany - **mrtvá pro uživatele, smazat až se test přepíše na stranu
-      zpěvníku**). Odchod z editorů sjednocený: odkaz uvnitř webu = okno aplikace (editor
-      stran nově pro všechny odkazy, ne jen „‹ zpěvník“), odchod z webu = upozornění
-      prohlížeče (editor zpěvníku ho dřív neměl vůbec). Obrázek a náplast jdou posunout
-      skoro celé mimo stranu (na straně zůstane 1 mm). „Oddělit“ prvek přes hřbet Aleš
-      nechce.
+      (bez přechodu), „Jiná strana…“ v editoru stran a adresa `/editor-strany`. Pokusná
+      stránka bez zpěvníku je pryč (18. 11.), test editoru jede nad stranou zpěvníku.
+      Odchod z editorů sjednocený (odkaz uvnitř webu = okno aplikace, odchod z webu =
+      upozornění prohlížeče). Obrázek a náplast jdou posunout skoro celé mimo stranu.
+      18. 11.: strana bez protějšku (první, poslední) je i ve dvojstraně jedna strana;
+      „+“ ve spodní liště = nová strana za upravovanou; v editoru zpěvníku ikona obrázku
+      u naskenované strany (tužka u navržené), pořadí akcí tužka / Nahradit stranu
+      obrázkem / Duplikovat / ✕, náhled má nápovědu „Náhled“; duplikát strany kopíruje
+      i písně (jako nové písně se stejným názvem); v Mých zpěvnících klik na název otevře
+      nabídku (do čtečky vede obálka).
       Hotovo 11. 11.: **dvojstrana s úpravou obou stran** - jedno plátno (jeden dokument,
       prvky pravé strany s x + šířka strany), přesun prvků přes hřbet, text vyjmout/vložit,
       společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku

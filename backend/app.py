@@ -2864,13 +2864,10 @@ def prehled_zpevniku_pro_spravu():
 def navrh_strany():
     """Editor navržené strany s akordy (bod 11 v TODO), jen pro prémiové účty.
 
-    Bez zpěvníku výběr, co upravovat: zpěvník a jeho strana, nebo nová strana na konec
-    (strana zpěvníku má vlastní adresy - strana_ve_zpevniku, nova_strana). `?pokus=1` je
-    pokusná stránka bez zpěvníku se zálohou v prohlížeči (pro testy editoru)."""
+    Bez zadané strany okno „Upravit stranu“ (výběr zpěvníku a strany). Strana se vždy
+    upravuje na svém místě ve zpěvníku - strana_ve_zpevniku, nova_strana."""
     if not smi_navrhovat(current_user):
         abort(404)
-    if request.args.get('pokus') == '1':
-        return render_template('navrh_strany.html', kontext=None)
     # Výběr je okno (static/js/vyber-strany.js); stránka ho jen rovnou otevře.
     return render_template('vyber_strany.html')
 

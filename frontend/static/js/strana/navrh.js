@@ -80,7 +80,6 @@ function posunUzel(n, dx) {
 const KONTEXT = (() => {
   try { return JSON.parse(document.getElementById('kontext-strany')?.textContent || 'null'); } catch (_) { return null; }
 })();
-const KLIC_ZALOHY = 'navrh-strany-pokus';
 // Režim plochy u strany zpěvníku: jedna strana, nebo dvojstrana s protější stranou.
 // Tady nahoře - nastavMeritko ho čte už při startu.
 const KLIC_REZIMU = 'navrh-rezim-stran';
@@ -269,8 +268,7 @@ function normalizujStyly(state) {
   if (tr) tr.setMeta('addToHistory', false);
   return tr;
 }
-// Strana zpěvníku s navrženou verzí: zdroj verze ze serveru. Bez verze
-// nová strana. Zálohu v prohlížeči má jen samostatná pokusná stránka.
+// Strana zpěvníku s navrženou verzí: zdroj verze ze serveru. Bez verze nová strana.
 async function nactiVerzi(id) {
   const r = await fetch(`/api/navrh/strana/${id}`, { credentials: 'same-origin' });
   const d = await r.json();
@@ -278,27 +276,8 @@ async function nactiVerzi(id) {
   return { nastaveni: sluc(VYCHOZI, d.zdroj.nastaveni || {}), doc: schema.nodeFromJSON(d.zdroj.obsah) };
 }
 
-function nactiZalohu() {
-  if (KONTEXT) return null;
-  try {
-    const data = JSON.parse(localStorage.getItem(KLIC_ZALOHY) || 'null');
-    if (data && data.verze === VERZE_SCHEMATU && data.obsah) {
-      return { nastaveni: sluc(VYCHOZI, data.nastaveni || {}), doc: schema.nodeFromJSON(data.obsah) };
-    }
-  } catch (_) { /* poškozená, stará nebo nedostupná záloha - začne se znovu */ }
-  return null;
-}
-
-let casovacZalohy = null;
-function zalohuj() {
-  if (KONTEXT) { naplanujKoncept(); return; }
-  clearTimeout(casovacZalohy);
-  casovacZalohy = setTimeout(() => {
-    try {
-      localStorage.setItem(KLIC_ZALOHY, JSON.stringify(zdrojStrany()));
-    } catch (_) { /* soukromé okno apod. - záloha není nutná */ }
-  }, 400);
-}
+// Každá úprava: rozdělaná strana do prohlížeče (koncept, viz ulozKoncept).
+function zalohuj() { naplanujKoncept(); }
 
 // Zdroj strany v tom tvaru, v jakém se uloží na server. `zlomy` jsou místa, kde řádky
 // zalomil prohlížeč autora - čtečka a PDF je převezmou (vykresleni.js), protože jiný
@@ -449,7 +428,7 @@ const ovladac = new OvladacAkordu(obal, {
   priZmene: () => naplanujPrepocet(),
 });
 
-let zaloha = nactiZalohu();
+let zaloha = null;
 if (KONTEXT && KONTEXT.navrh) {
   try {
     zaloha = await nactiVerzi(KONTEXT.navrh);
@@ -675,7 +654,9 @@ function nastavMeritko(nove) {
     const plocha = el('navrh-plocha');
     // Okraj plochy (24 px kolem) a spodní pruh se stavem a přiblížením.
     const volnoX = plocha.clientWidth - 48, volnoY = plocha.clientHeight - 48 - 44;
-    const stran = dvojstrana && KONTEXT && !spoj ? 2 : 1;   // náhled protější strany vedle
+    // Náhled protější strany vedle - jen když nějaká je (první a poslední strana ji nemají
+    // a ukážou se jako jedna strana).
+    const stran = dvojstrana && KONTEXT && !spoj && protejsiStrana()?.st ? 2 : 1;
     meritko = Math.max(0.3, Math.min(3, (volnoX - (stran - 1) * 6) / (sirka * stran), volnoY / vyska));
   }
   meritko = Math.round(meritko * 100) / 100;
@@ -770,13 +751,6 @@ function napojPanel() {
   for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) {
     b.addEventListener('click', () => zmenCislo({ [b.dataset.cisloPrepinac]: !nastaveni.cislo[b.dataset.cisloPrepinac] }));
   }
-  for (const b of koren.querySelectorAll('[data-nahled-strany]')) {
-    b.addEventListener('click', () => {
-      nastaveni = { ...nastaveni, nahledStrany: b.dataset.nahledStrany };
-      pouzijNastaveni();
-      zalohuj();
-    });
-  }
   el('smazat-styl').addEventListener('click', () => smazStyl(rozbalenyStyl));
   el('novy-styl').addEventListener('click', () => {
     const formular = el('novy-styl-formular');
@@ -810,7 +784,6 @@ function nactiPanel() {
     if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
   }
   for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) b.classList.toggle('aktivni', !!nastaveni.cislo[b.dataset.cisloPrepinac]);
-  for (const b of koren.querySelectorAll('[data-nahled-strany]')) b.classList.toggle('aktivni', b.dataset.nahledStrany === nastaveni.nahledStrany);
   if (!rozbalenyStyl) return;
   const s = knihovna[rozbalenyStyl];
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
@@ -1291,6 +1264,14 @@ function obnovListovani() {
     const b = koren.querySelector(`[data-prikaz="${prikaz}"]`);
     if (b) b.disabled = !sousedniStrana(smer);
   }
+  // Nová strana: za upravovanou (ve dvojstraně za pravou). Nová, ještě neuložená strana
+  // další přidat nedá.
+  const nova = el('nova-strana');
+  if (nova) {
+    const za = spoj ? (KONTEXT.lp === 'P' ? KONTEXT.strana : spoj.druha.st.id) : KONTEXT.strana;
+    nova.hidden = !KONTEXT.strana;
+    if (KONTEXT.strana) nova.href = `/editor-strany/nova?zpevnik=${encodeURIComponent(KONTEXT.zpevnik)}&za=${za}`;
+  }
 }
 
 // --- dvojstrana -------------------------------------------------------------------------
@@ -1323,8 +1304,8 @@ async function vykresliProtejsek() {
   box.className = 'protejsek' + (p.st ? '' : ' zadna');
   box.style.width = sirka * meritko + 'px';
   box.style.height = vyska * meritko + 'px';
+  if (!p.st) return;     // první nebo poslední strana - zůstane jako jedna strana
   if (p.vlevo) dvoj.insertBefore(box, dvoj.firstChild); else dvoj.appendChild(box);
-  if (!p.st) return;
   box.dataset.napoveda = `Upravit stranu ${p.st.cislo}`;
   box.addEventListener('click', () => jdiNaStranu(p.st));
   const koncept = prectiKoncept(klicKonceptu({ strana: p.st.id }));
@@ -1399,6 +1380,8 @@ if (KONTEXT) {
   // prohlížeče (beforeunload výš).
   document.addEventListener('click', async (e) => {
     const a = e.target.closest && e.target.closest('a[href]');
+    // Odkaz Editor strany jen otevře okno výběru - ptá se až odkaz na stranu v něm.
+    if (a && a.hasAttribute('data-vyber-strany')) return;
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || a.target === '_blank') return;
     const href = a.getAttribute('href') || '';
     if (href.startsWith('#') || href.startsWith('javascript:')) return;
@@ -1929,20 +1912,6 @@ function napojPanelAkordu() {
     if (!zacatek) return;
     const h = e.target.value.trim();
     view.dispatch(view.state.tr.setNodeMarkup(zacatek.pos, null, { ...zacatek.node.attrs, znacka: h === '' ? null : h }));
-  });
-  el('zacit-znovu')?.addEventListener('click', async () => {
-    const ok = await window.showConfirm('Rozpracovaná strana se smaže a začne se s prázdnou.',
-      'Smazat stranu', { nebezpecne: true });
-    if (!ok) return;
-    nastaveni = structuredClone(VYCHOZI);
-    view.updateState(EditorState.create({ doc: prazdnyDokument(format()), plugins: view.state.plugins }));
-    const tr = normalizujStyly(view.state);
-    if (tr) view.updateState(view.state.apply(tr));
-    nactiPanel();
-    meritkoRucne = false;
-    pouzijNastaveni();
-    zalohuj();
-    aktualizujListu();
   });
 }
 

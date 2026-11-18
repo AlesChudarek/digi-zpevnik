@@ -168,6 +168,8 @@ def main():
         sirky = page.eval_on_selector_all(
             "#es-seznam .es-nahled img", "els => els.map(i => i.naturalWidth)")
         zkontroluj(sirky == [100, 200, 300], "soubory se seřadí podle jména (1, 2, 10)", sirky)
+        zkontroluj(page.locator("#es-seznam .es-nahled .es-znacka-navrhu.sken").count() == 3,
+                   "naskenovaná (nahraná) strana má v rohu náhledu ikonu obrázku")
         zkontroluj(not page.is_visible("#es-prazdno"), "hláška o prázdném zpěvníku zmizí")
         zkontroluj(page.locator("#es-seznam .es-nazev").count() == 3,
                    "nahraná strana má rovnou pole pro název písně")

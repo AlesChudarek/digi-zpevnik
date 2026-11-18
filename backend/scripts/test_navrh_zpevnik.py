@@ -147,20 +147,21 @@ def main():
             radek = page.evaluate("""(() => { const st = document.querySelector('#es-seznam .es-strana');
               const r = (sel) => st.querySelector(sel).getBoundingClientRect();
               const blok = st.closest('.es-blok'), nahoru = blok.querySelector('.es-nahoru').getBoundingClientRect();
-              const x = r('.es-odebrat'), o = r('.es-nahrat-obrazek'), t = r('.es-navrhnout');
-              return { ikony: [o.top, t.top, x.top].map(Math.round), poradi: o.right <= t.left && t.right <= x.left,
+              const x = r('.es-odebrat'), o = r('.es-nahrat-obrazek'), t = r('.es-navrhnout'), d = r('.es-duplikovat');
+              return { ikony: [t.top, o.top, d.top, x.top].map(Math.round), poradi: t.right <= o.left && o.right <= d.left && d.right <= x.left,
                        nahoruVsKriz: Math.round((nahoru.top - x.top) * 10) / 10,
                        doluVsPole: Math.round((blok.querySelector('.es-dolu').getBoundingClientRect().top
                                     - st.querySelector('.es-pisen input, .es-popisek').getBoundingClientRect().top) * 10) / 10,
                        prazdnaIkona: !!st.querySelector('.es-nahled .es-prazdna-ikona'),
                        obrazkuVNahledu: st.querySelectorAll('.es-nahled img').length,
                        popisky: [...st.querySelectorAll('.es-akce-strany button')].map(b => b.getAttribute('aria-label') || b.textContent) }; })()""")
-            ok("u strany jsou vpravo ikony obrázek a tužka a pak ✕, v jedné řadě",
+            ok("u strany jsou vpravo ikony tužka, obrázek, duplikovat a ✕, v jedné řadě",
                len(set(radek["ikony"])) == 1 and radek["poradi"], radek)
             ok("šipka výš je na stejné vodorovné jako ✕", abs(radek["nahoruVsKriz"]) <= 0.5, radek["nahoruVsKriz"])
             ok("šipka níž začíná na horní hraně psacího pole", abs(radek["doluVsPole"]) <= 0.5, radek["doluVsPole"])
             ok("prázdná strana má v náhledu ikonu, ne obrázek", radek["prazdnaIkona"] and radek["obrazkuVNahledu"] == 0, radek)
-            ok("ikony mají popisek", radek["popisky"][:2] == ["Nahrát obrázek strany", "Navrhnout stranu v editoru stran (text a akordy)"],
+            ok("ikony mají popisek", radek["popisky"] == ["Navrhnout stranu v editoru stran (text a akordy)", "Nahradit stranu obrázkem",
+                                                          "Duplikovat stranu", "Odebrat stranu"],
                radek["popisky"])
 
             print("\n── navrhnout novou stranu (zpěvník má neuložené změny) ──")
@@ -445,6 +446,17 @@ def main():
                "Y" in page.evaluate("JSON.stringify(navrhStrany.zdroj('P').obsah)") and "Y" not in page.evaluate("JSON.stringify(navrhStrany.zdroj('L').obsah)"))
             page.click('[data-prikaz="dalsi-strana"]')
             editor_stran(page)
+            jedna = page.evaluate("""(() => { const d = document.getElementById('dvojstrana').getBoundingClientRect(),
+              s = document.getElementById('stranka-obal').getBoundingClientRect(), p = document.getElementById('navrh-plocha').getBoundingClientRect();
+              return { protejsek: document.querySelectorAll('.protejsek').length, sirka: Math.round(d.width - s.width),
+                       stred: Math.round((s.left + s.right) / 2 - (p.left + p.right) / 2), spoj: !!navrhStrany.dvojstrana() }; })()""")
+            ok("poslední strana (8, bez protějšku) je i ve dvojstraně jedna strana na střed", jedna["protejsek"] == 0
+               and jedna["sirka"] == 0 and abs(jedna["stred"]) <= 12 and not jedna["spoj"], jedna)
+            with A.app.app_context():
+                strana8 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=3).first().id
+            ok("+ Nová strana vede na novou stranu za touto", page.get_attribute("#nova-strana", "href")
+               == f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={strana8}" and page.is_visible("#nova-strana"),
+               page.get_attribute("#nova-strana", "href"))
             ok("po přelistování na 8 je výstraha s rozdělanými 6, 7",
                page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6, 7",
                page.get_attribute("#neulozene-jinde", "data-napoveda"))
@@ -480,6 +492,11 @@ def main():
                 verejne = {sb.id for sb in A.Songbook.query.filter_by(is_public=1)}
             page.goto(base + "/my-songbooks")
             page.wait_for_load_state("domcontentloaded")
+            page.locator(".songbook-card .songbook-nazev").first.click()
+            page.wait_for_timeout(300)
+            ok("klik myší na název zpěvníku otevře nabídku (ne čtečku)", "/my-songbooks" in page.url
+               and page.locator(".akce-nabidka:not([hidden])").count() == 1, page.url)
+            page.keyboard.press("Escape")
             # Odkaz v liště má zatím jen admin (test_navrh_strany); okno samo je pro prémiové.
             page.evaluate("VyberStrany.otevri()")
             page.wait_for_selector(".vs-zaclona:not([hidden]) .vs-zpevniky button")
@@ -514,6 +531,14 @@ def main():
 
             print("\n── odchod z editoru stran přes lištu webu ──")
             page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Q', 2)); })()")
+            # Odkaz Editor strany (v liště má jen admin - tady stejný odkaz vložený skriptem).
+            page.evaluate("""(() => { const a = document.createElement('a'); a.href = '/editor-strany';
+              a.setAttribute('data-vyber-strany', ''); a.id = 'test-odkaz'; a.textContent = 'Editor strany';
+              document.querySelector('.nav-links').appendChild(a); a.click(); })()""")
+            page.wait_for_selector(".vs-zaclona:not([hidden])")
+            ok("odkaz Editor strany s neuloženou stranou jen otevře výběr, bez otázky na uložení",
+               page.locator("#app-confirm-overlay:visible").count() == 0 and "/editor-strany/" in page.url)
+            page.keyboard.press("Escape")
             page.click(".nav-links a[href='/my-songbooks']")
             page.wait_for_selector("#app-confirm-overlay", state="visible")
             ok("odkaz v liště webu s neuloženou stranou: okno aplikace, ne prohlížeče",

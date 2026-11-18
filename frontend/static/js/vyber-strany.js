@@ -121,7 +121,7 @@
   // Odkaz Editor strany v liště: okno místo přechodu na stránku.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('[data-vyber-strany]');
-    if (!a || e.button !== 0 || e.metaKey || e.ctrlKey) return;
+    if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey) return;
     e.preventDefault();
     window.VyberStrany.otevri({ zpevnik: a.dataset.zpevnik || null });
   });

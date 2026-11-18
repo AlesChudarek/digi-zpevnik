@@ -109,9 +109,19 @@ def zije(page):
 
 
 def otevri_editor(page, base):
-    page.goto(base + '/editor-strany?pokus=1')
+    """Editor nad stranou nového zpěvníku (číslo první strany 7, jedna prázdná strana) -
+    každý prohlížeč má svůj, ať si rozdělané strany nepřekážejí."""
+    page.goto(base + '/my-songbooks')
+    id_strany = page.evaluate("""async () => {
+      const fd = new FormData();
+      fd.append('nazev', 'Test editoru stran'); fd.append('prvni_cislo', '7');
+      fd.append('strany', JSON.stringify([{ id: null, typ: 'prazdna', image_id: null, navrzena_id: null, popisek: '', pisne: [] }]));
+      const z = await (await fetch('/api/zpevnik', { method: 'POST', body: fd })).json();
+      const d = await (await fetch('/api/zpevnik/' + encodeURIComponent(z.id))).json();
+      return d.zpevnik.strany[0].id; }""")
+    page.evaluate("localStorage.clear(); localStorage.setItem('navrh-rezim-stran', 'jedna')")
+    page.goto(f'{base}/editor-strany/{id_strany}')
     page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
-    page.evaluate('localStorage.clear()')
     # Knihovna stylů je u účtu na serveru a prohlížeče se v testu střídají na jednom
     # účtu - každý začne s výchozími styly.
     page.evaluate("""fetch('/api/navrh/styly', { method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -153,7 +163,15 @@ def test_prohlizece(p, base, jmeno):
     ok('na začátku je vidět celá strana', J("""(() => { const r = document.getElementById('stranka').getBoundingClientRect(),
        p = document.getElementById('navrh-plocha').getBoundingClientRect();
        return r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right; })()"""))
-    ok('lišta je na jednom řádku', J("new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size") == 1)
+    RADKY = "new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size"
+    PREKRYV = """(() => { const r = [...document.querySelectorAll('.navrh-lista .skupina, .navrh-lista .kde')].map(e => e.getBoundingClientRect());
+      return r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)); })()"""
+    ok('1400 px: lišta nejvýš na dvou řádcích a nic se nepřekrývá', J(RADKY) <= 2 and not J(PREKRYV), (J(RADKY), J(PREKRYV)))
+    page.set_viewport_size({'width': 1920, 'height': 1000})
+    page.wait_for_timeout(200)
+    ok('1920 px: lišta je na jednom řádku', J(RADKY) == 1, J(RADKY))
+    page.set_viewport_size({'width': 1400, 'height': 1000})
+    page.wait_for_timeout(200)
     ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].map(s => s.getBoundingClientRect().width)")))
 
     ok('panel má záložky Text, Akordy, Strana a Ovládání',
@@ -571,8 +589,8 @@ def test_prohlizece(p, base, jmeno):
     page.mouse.up()
     ok('číslo se přichytí ke středu strany', poloha()[0] == 74, poloha())
     J("navrhStrany.cislo().volby.zmen({ cislo: { ...navrhStrany.nastaveni().cislo, x: 138, y: 205 } })")
-    ukaz(page, '[data-nahled-strany="L"]')
-    page.click('[data-nahled-strany="L"]')
+    # Levou/pravou určuje pozice ve zpěvníku - tady ji test přepne přímo.
+    J("navrhStrany.cislo().volby.zmen({ nahledStrany: 'L' })")
     ok('na levé straně je zrcadlově u vnějšího okraje', poloha() == [10, 205], poloha())
     ukaz(page, '[data-cislo-pole="zrcadlit"]')
     page.uncheck('[data-cislo-pole="zrcadlit"]')
@@ -660,10 +678,12 @@ def test_prohlizece(p, base, jmeno):
     # Záloha v prohlížeči přežije obnovení stránky.
     page.wait_for_timeout(600)
     pocet = len(J('T.akordy()'))
+    J("window.__pred_obnovenim = 1")
     page.reload()
     page.wait_for_function('window.navrhStrany', timeout=15000)
     page.evaluate(POMOCNE)
-    ok('rozpracovaná strana přežije obnovení', len(J('T.akordy()')) == pocet, len(J('T.akordy()')))
+    ok('rozpracovaná strana přežije obnovení (koncept v prohlížeči)',
+       J("window.__pred_obnovenim === undefined") and len(J('T.akordy()')) == pocet, len(J('T.akordy()')))
 
     ok('bez chyb v konzoli', not chyby, chyby[:3])
     br.close()

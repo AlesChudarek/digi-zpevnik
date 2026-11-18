@@ -24,7 +24,6 @@
    ty se při zalomení lišty rozjely. Úzká lišta zalomí jen nástroje, každý řádek na střed.
    Samostatně se obal nástrojů nevidí (display: contents). */
 html.navrh-ve-zpevniku .navrh { max-width: none; }
-html.navrh-ve-zpevniku .jen-samostatne { display: none !important; }
 .navrh-lista .skupina.hotovo-zrusit { margin-left: auto; border-left: 0; }
 .navrh-lista .nastroje { display: contents; }
 html.navrh-ve-zpevniku .navrh-lista { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; column-gap: 8px; }
@@ -131,6 +130,10 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
   width: 3.4em; height: 26px; box-sizing: border-box; text-align: center; font: inherit; font-size: 13px;
   border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #222;
 }
+.navrh-listovani .nova-strana { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
+  border-radius: 999px; color: #333; text-decoration: none; font-size: 20px; line-height: 1; }
+.navrh-listovani .nova-strana[hidden] { display: none; }
+@media (hover: hover) { .navrh-listovani .nova-strana:hover { background: #eee; } }
 .navrh-listovani .oddelovac { width: 1px; height: 18px; background: #ddd; margin: 0 2px; }
 .navrh-zoom button.aktivni { background: #1a73e8; color: #fff; }
 .navrh-zoom button:disabled { opacity: 0.35; cursor: default; }
@@ -236,7 +239,6 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 
 .napoveda-editoru ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--panel-text, #333); }
 .napoveda-editoru li { margin: 3px 0; }
-.navrh-panel .zacit-znovu { align-self: flex-start; color: #b00020; background: transparent; text-decoration: underline; padding: 2px 4px; }
 
 /* --- strana (papír) --------------------------------------------------------------- */
 /* Rozměr strany a proměnné akordů nastavuje skript z šablony; styly odstavců (.ps-normalni,
@@ -455,7 +457,6 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 }
 .nahled-popis { position: absolute; left: 0; right: 0; bottom: -15px; text-align: center; font: 10px/1 system-ui, sans-serif; color: #888; }
 .nahled-dvojstrany { padding-bottom: 14px; }
-.navrh-panel .cislo-nahledu { width: 64px !important; }
 
 /* Strana vykreslená mimo editor (čtečka, obrázek pro PDF): bez ovládacích prvků. */
 .stranka.ps-cteni { position: relative; left: auto; top: auto; }

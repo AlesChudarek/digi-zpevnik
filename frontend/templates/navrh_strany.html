@@ -134,6 +134,7 @@
         <button type="button" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
         <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
         <button type="button" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
+        <a class="nova-strana" id="nova-strana" href="#" hidden data-napoveda="Nová strana za touto (doprostřed písně, která pokračuje na další stranu, nejde)" aria-label="Nová strana">+</a>
         <span class="oddelovac" aria-hidden="true"></span>
         <button type="button" data-prikaz="jedna-strana" data-napoveda="Jedna strana" aria-label="Jedna strana"><svg><use href="#i-jedna-strana"/></svg></button>
         <button type="button" data-prikaz="dvojstrana" data-napoveda="Dvojstrana (protější strana vedle)" aria-label="Dvojstrana"><svg><use href="#i-dvojstrana"/></svg></button>
@@ -301,13 +302,6 @@
           <input type="color" data-cislo-pole="barva" aria-label="Barva čísla">
         </span>
       </div>
-      <div class="radek-pole jen-samostatne">Ukázat jako
-        <span class="rez">
-          <input type="number" data-nastaveni="nahledCisla" min="1" max="9999" step="1" class="cislo-nahledu" aria-label="Číslo strany v náhledu">
-          <button type="button" class="prepinac-rez" data-nahled-strany="L" aria-label="Levá strana">L</button>
-          <button type="button" class="prepinac-rez" data-nahled-strany="P" aria-label="Pravá strana">P</button>
-        </span>
-      </div>
       <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně číslo skrýt (titulní strana apod.)</label>
       <p class="poznamka">Polohu změníš tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
         a levá/pravá doplní podle skutečné pozice strany.</p>
@@ -327,7 +321,6 @@
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
       </ul>
     </section>
-    {% if not kontext %}<button type="button" id="zacit-znovu" class="zacit-znovu">Začít znovu</button>{% endif %}
     </div>
   </aside>
 </div>

@@ -457,7 +457,7 @@
       {% set jsem_clen = book.owner_id and book.owner_id != current_user.id and current_user.role != 'admin' %}
       {% set clenu = (share_users|rejectattr('is_owner')|list|length) if not jsem_clen else 0 %}
       <div class="songbook-radek">
-        <a class="songbook-nazev" {% if zamek is none %}href="{{ url_for('songbook_detail', book_id=book.id) }}"{% endif %} draggable="false" title="{{ book.title }}">{{ book.title }}</a>
+        <a class="songbook-nazev" {% if zamek is none %}href="{{ url_for('songbook_detail', book_id=book.id) }}"{% endif %} draggable="false" title="{{ book.title }}" role="button" aria-haspopup="menu">{{ book.title }}</a>
         <div class="songbook-akce">
           <button type="button" class="akce-spoustec" aria-haspopup="menu" aria-expanded="false" aria-label="Možnosti zpěvníku">
             <span class="akce-sipka" aria-hidden="true">▾</span>
@@ -750,7 +750,7 @@
       </div>
 
       <section class="editor-stran" id="editor-stran"
-               style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}'); --ikona-navrhu: url('{{ static_bust('img/icons/edit_page.svg') }}')"
+               style="--ikona-prazdna: url('{{ static_bust('img/icons/image_sad.svg') }}'); --ikona-navrhu: url('{{ static_bust('img/icons/edit_page.svg') }}'); --ikona-skenu: url('{{ static_bust('img/icons/image_page.svg') }}')"
                data-pdfjs="{{ static_bust('vendor/pdfjs/pdf.min.js') }}"
                data-pdfjs-worker="{{ static_bust('vendor/pdfjs/pdf.worker.min.js') }}"
                data-jszip="{{ static_bust('vendor/jszip/jszip.min.js') }}">
@@ -1810,13 +1810,11 @@ function openCreateModal() {
       });
       nabidka.addEventListener('click', (e) => { if (e.target.closest('.akce-polozka')) zavriNabidky(); });
     });
-    // Na dotyku otevře nabídku ťuknutí kamkoli do řádku s názvem, i na název samotný -
-    // šipka je na prst malá. Myší vede název dál do čtečky.
-    let prst = false;
-    document.addEventListener('pointerdown', (e) => { prst = e.pointerType !== 'mouse'; }, true);
+    // Klik kamkoli do řádku s názvem, i na název samotný, otevře nabídku - šipka je malá
+    // a klik vedle na text vedl do čtečky (Aleš 18. 11.). Do čtečky vede obálka.
     document.querySelectorAll('.songbook-radek').forEach(radek => {
       radek.addEventListener('click', (e) => {
-        if (!prst || e.target.closest('.songbook-akce')) return;
+        if (e.target.closest('.songbook-akce')) return;
         e.preventDefault();
         e.stopPropagation();
         radek.querySelector('.akce-spoustec').click();
