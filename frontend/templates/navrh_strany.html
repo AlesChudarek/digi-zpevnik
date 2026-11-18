@@ -7,6 +7,14 @@
 <link rel="stylesheet" href="{{ static_bust('vendor/prosemirror/prosemirror.css') }}">
 <link rel="stylesheet" href="{{ static_bust('fonts/strana/pisma.css') }}">
 <link rel="stylesheet" href="{{ static_bust('css/strana.css') }}">
+{% if ukazka %}
+{# Ukázka pro účet bez prémia: editor jde vyzkoušet, nic se z něj nedostane. #}
+<script>document.documentElement.classList.add('navrh-ukazka');</script>
+<div class="navrh-ukazka-pruh" role="note">
+  Ukázka editoru: úpravy se neukládají a strana se nedá stáhnout ani vytisknout.
+  {% if guest %}Editor strany je pro přihlášené uživatele s prémiovým účtem.{% else %}Editor strany je pro prémiové účty.{% endif %}
+</div>
+{% endif %}
 {% if kontext %}
 {# Strana zpěvníku: kde strana je (zpěvník, číslo, L/P) a kam se uloží. #}
 <script type="application/json" id="kontext-strany">{{ kontext | tojson }}</script>
@@ -97,7 +105,11 @@
     </div>
     <div class="skupina">
       <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček"><svg><use href="#i-ramecek"/></svg>Text</button>
+      {% if ukazka %}
+      <span class="napoveda-duvod" data-napoveda="Vlastní obrázky jdou vložit jen s prémiovým účtem."><button type="button" class="s-popisem" disabled><svg><use href="#i-obrazek"/></svg>Obrázek</button></span>
+      {% else %}
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
+      {% endif %}
       <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany). Esc vypne"><svg><use href="#i-naplast"/></svg>Náplast</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
     </div>
@@ -122,6 +134,7 @@
           <div class="stranka-mount"></div>
           {# Zašedlé okolí: co přesahuje mimo stranu, je v editoru vidět, ale na papír nejde. #}
           <div class="ps-mimo" aria-hidden="true"></div>
+          {% if ukazka %}<div class="ps-ukazka-znak" aria-hidden="true">UKÁZKA</div>{% endif %}
         </div>
       </div>
     </div>
@@ -158,8 +171,10 @@
       <div class="nahled-cteni-hlava">
         <strong>Náhled čtení</strong>
         <span class="nahled-cteni-info" id="nahled-cteni-info"></span>
+        {% if not ukazka %}
         <button type="button" id="nahled-pdf">PDF strany</button>
         <button type="button" id="nahled-png">Obrázek</button>
+        {% endif %}
         <button type="button" id="nahled-zavrit" aria-label="Zavřít">×</button>
       </div>
       <div class="nahled-cteni-strana" id="nahled-cteni-strana"></div>

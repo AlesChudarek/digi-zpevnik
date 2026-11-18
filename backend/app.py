@@ -2867,9 +2867,11 @@ def navrh_strany():
     Bez zadané strany okno „Upravit stranu“ (výběr zpěvníku a strany). Strana se vždy
     upravuje na svém místě ve zpěvníku - strana_ve_zpevniku, nova_strana."""
     if not smi_navrhovat(current_user):
-        # Běžný účet a host: ukázka, co editor umí, bez přístupu (rozhodnuto 4. 11. -
-        # vidět, ale nedovolit).
-        return render_template('editor_ukazka.html')
+        # Běžný účet a host: skutečný editor nad ukázkovou stranou, aby si ho mohli
+        # vyzkoušet - ale nic z něj nedostanou: bez výběru strany, bez uložení, bez PDF
+        # a obrázku, s vodoznakem UKÁZKA a bez tisku (rozhodnuto 18. 11.). Zapisovat na
+        # server (strany, obrázky, styly) smí stejně jen prémiový účet.
+        return render_template('navrh_strany.html', kontext=None, ukazka=True)
     # Výběr je okno (static/js/vyber-strany.js); stránka ho jen rovnou otevře.
     return render_template('vyber_strany.html')
 

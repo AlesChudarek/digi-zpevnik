@@ -790,15 +790,55 @@ def test_pristup(p, base):
     page.wait_for_load_state('networkidle')
     odkazy = page.evaluate("[...document.querySelectorAll('.nav-links a')].map(a => a.textContent.trim())")
     ok('běžný uživatel má v liště Editor strany', 'Editor strany' in odkazy, odkazy)
+    chyby_ukazky = []
+    page.on('pageerror', lambda e: chyby_ukazky.append(str(e)))
+    odpovedi = []
+    page.on('response', lambda r: odpovedi.append((r.request.method, r.url, r.status)) if '/api/' in r.url else None)
     odpoved = page.goto(base + '/editor-strany')
-    page.wait_for_selector('#eu-strana[data-hotovo="1"]', timeout=15000)
-    ukazka = page.evaluate("""(() => { const s = document.querySelector('#eu-strana .stranka'), m = document.getElementById('eu-strana');
-      return { text: s.innerText, akordu: s.querySelectorAll('.akord').length, vyplni: Math.abs(s.getBoundingClientRect().width - m.clientWidth) < 1,
-               pristup: document.getElementById('eu-pristup').innerText.trim() }; })()""")
-    ok('běžný uživatel dostane ukázku: strana z textu s akordy přes celou plochu', odpoved.status == 200
-       and 'U ohně' in ukazka['text'] and ukazka['akordu'] > 3 and ukazka['vyplni'], ukazka)
-    ok('a že editor je pro prémiové účty', ukazka['pristup'] == 'Editor strany je pro prémiové účty.', ukazka['pristup'])
-    ok('editor ani výběr strany se mu nenačte', page.locator('.navrh, #vyber-strany').count() == 0)
+    page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
+    stav = page.evaluate("""(() => ({
+      pruh: (document.querySelector('.navrh-ukazka-pruh') || {}).innerText || '',
+      ulozit: !!document.querySelector('[data-prikaz="ulozit"]'),
+      vyber: !!document.querySelector('#cislo-strany-zpevniku, .jina-strana, #nova-strana'),
+      pdf: !!document.querySelector('#nahled-pdf, #nahled-png'),
+      obrazek: document.querySelector('.navrh-lista .s-popisem[disabled] use[href="#i-obrazek"]') !== null,
+      znak: (document.querySelector('#stranka .ps-ukazka-znak') || {}).textContent }))()""")
+    ok('běžný uživatel dostane skutečný editor nad ukázkovou stranou', odpoved.status == 200
+       and 'U ohně' in page.evaluate('navrhStrany.view.state.doc.textContent'), odpoved.status)
+    ok('s pruhem, že jde o ukázku pro prémiové účty, a vodoznakem UKÁZKA',
+       stav['pruh'].startswith('Ukázka editoru') and 'pro prémiové účty' in stav['pruh'] and stav['znak'] == 'UKÁZKA', stav)
+    ok('bez Uložit, výběru strany, PDF a obrázku z náhledu; vlastní obrázek zašedlý',
+       not stav['ulozit'] and not stav['vyber'] and not stav['pdf'] and stav['obrazek'], stav)
+    pred = page.evaluate('navrhStrany.view.state.doc.textContent')
+    page.click('.ps-ramecek .ps-p >> nth=2')
+    page.keyboard.press('End')
+    page.keyboard.type(' a ještě')
+    ok('text jde upravit', page.evaluate('navrhStrany.view.state.doc.textContent') != pred
+       and 'a ještě' in page.evaluate('navrhStrany.view.state.doc.textContent'))
+    akordu = page.evaluate("document.querySelectorAll('.akord-kotva').length")
+    page.click('[data-prikaz="akordy"]')
+    znak = page.evaluate("""(() => { const p = document.querySelectorAll('.ps-ramecek .ps-p')[2]; const r = document.createRange();
+      const t = document.createTreeWalker(p, NodeFilter.SHOW_TEXT).nextNode(); r.setStart(t, 1); r.setEnd(t, 2);
+      const b = r.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; })()""")
+    page.mouse.click(znak[0], znak[1])
+    page.keyboard.type('Ami')
+    page.keyboard.press('Enter')
+    ok('akord jde přidat', page.evaluate("document.querySelectorAll('.akord-kotva').length") == akordu + 1,
+       (akordu, page.evaluate("document.querySelectorAll('.akord-kotva').length")))
+    page.click('[data-prikaz="nahled"]')
+    ok('náhled jde, s vodoznakem', page.evaluate("getComputedStyle(document.querySelector('.nahled-cteni-obal'), '::after').content") == '"UKÁZKA"')
+    page.keyboard.press('Escape')
+    page.emulate_media(media='print')
+    ok('tisk z prohlížeče editor schová', page.evaluate("getComputedStyle(document.querySelector('.navrh')).display") == 'none')
+    page.emulate_media(media='screen')
+    page.wait_for_timeout(1000)
+    zapisy = [o for o in odpovedi if o[0] != 'GET']
+    ok('ukázka nic nezapisuje na server', not zapisy, zapisy)
+    kod = page.evaluate("""async () => { const fd = new FormData(); fd.append('zdroj', JSON.stringify(navrhStrany.zdroj()));
+      fd.append('pdf', new Blob(['%PDF-1.4'], { type: 'application/pdf' }), 's.pdf');
+      return (await fetch('/api/navrh/strana', { method: 'POST', body: fd })).status; }""")
+    ok('a server uložení strany odmítne (403)', kod == 403, kod)
+    ok('bez chyb JavaScriptu', not chyby_ukazky, chyby_ukazky[:3])
     odpoved = page.goto(base + '/editor-strany/1')
     ok('adresa strany v editoru vede na ukázku', page.url.endswith('/editor-strany') and odpoved.status == 200, page.url)
     br.close()
@@ -809,10 +849,10 @@ def test_pristup(p, base):
     page.wait_for_load_state('networkidle')
     odkazy = page.evaluate("[...document.querySelectorAll('.nav-links a')].map(a => a.textContent.trim())")
     page.goto(base + '/editor-strany')
-    page.wait_for_selector('#eu-strana[data-hotovo="1"]', timeout=15000)
-    ok('host má odkaz i ukázku, s informací o přihlášení', 'Editor strany' in odkazy
-       and page.inner_text('#eu-pristup').strip() == 'Editor strany je pro přihlášené uživatele s prémiovým účtem.',
-       (odkazy, page.inner_text('#eu-pristup')))
+    page.wait_for_function('window.navrhStrany', timeout=15000)
+    ok('host má odkaz i ukázkový editor, s informací o přihlášení', 'Editor strany' in odkazy
+       and 'pro přihlášené uživatele s prémiovým účtem' in page.inner_text('.navrh-ukazka-pruh'),
+       (odkazy, page.inner_text('.navrh-ukazka-pruh')))
     br.close()
 
     br = p.chromium.launch()

@@ -82,6 +82,9 @@ const KONTEXT = (() => {
 })();
 // Režim plochy u strany zpěvníku: jedna strana, nebo dvojstrana s protější stranou.
 // Tady nahoře - nastavMeritko ho čte už při startu.
+// Ukázka pro účet bez prémia (navrh_strany.html, ukazka): editor nad ukázkovou stranou,
+// bez ukládání, obrázků a PDF.
+const UKAZKA = document.documentElement.classList.contains('navrh-ukazka');
 const KLIC_REZIMU = 'navrh-rezim-stran';
 let naplast = null;          // nástroj Náplast (naplast.js), vznikne po editoru
 // Dvojstrana k úpravě: { druha: { st, cislo, lp, navrh, nastaveni, koncept, otisk } }.
@@ -204,6 +207,7 @@ let knihovna = await (async () => {
 
 let casovacKnihovny = null;
 function ulozKnihovnu() {
+  if (UKAZKA) return;            // ukázka nic neukládá (server by stejně odmítl)
   clearTimeout(casovacKnihovny);
   casovacKnihovny = setTimeout(() => {
     fetch('/api/navrh/styly', {
@@ -1017,6 +1021,10 @@ function smazStyl(id) {
 function vlozSoubory(soubory, udalost = null) {
   const obrazky = [...(soubory || [])].filter((f) => /^image\//.test(f.type));
   if (!obrazky.length) return false;
+  if (UKAZKA) {
+    window.oznam('Vlastní obrázky jdou vložit jen s prémiovým účtem.', { nadpis: 'Ukázka editoru', druh: 'info' });
+    return true;
+  }
   let kam = null;
   if (udalost) {
     const r = stranka.getBoundingClientRect();
@@ -1705,8 +1713,8 @@ function napojListu() {
   });
   barva.addEventListener('change', () => { vyberProBarvu = null; view.focus(); });
   el('nahled-zavrit').addEventListener('click', () => { el('nahled-cteni').hidden = true; view.focus(); });
-  el('nahled-png').addEventListener('click', obrazekNahledu);
-  el('nahled-pdf').addEventListener('click', pdfNahledu);
+  el('nahled-png')?.addEventListener('click', obrazekNahledu);
+  el('nahled-pdf')?.addEventListener('click', pdfNahledu);
   el('nahled-cteni').addEventListener('click', (e) => { if (e.target === el('nahled-cteni')) el('nahled-zavrit').click(); });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !el('nahled-cteni').hidden) { e.stopPropagation(); el('nahled-zavrit').click(); }

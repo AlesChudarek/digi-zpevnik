@@ -514,3 +514,23 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 @media (max-width: 900px) {
   .navrh { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 70vh auto; height: auto; }
 }
+
+/* --- ukázka pro účet bez prémia ------------------------------------------------------- */
+/* Pruh nad editorem: pořád vidět, že jde o ukázku. Vodoznak UKÁZKA přes stranu (i v náhledu),
+   ať snímek obrazovky není k ničemu; tisk z prohlížeče se schová. */
+.navrh-ukazka-pruh {
+  max-width: 1600px; margin: 10px auto 0; padding: 8px 14px; box-sizing: border-box; border-radius: 10px;
+  background: var(--muted-bg, #e8f5e9); color: var(--brand-dark, #1b5e20); font-weight: 600; font-size: 14px;
+}
+html.navrh-ukazka .navrh { height: calc(100vh - 130px); }
+.ps-ukazka-znak, html.navrh-ukazka .nahled-cteni-obal::after {
+  position: absolute; inset: 0; z-index: 7; pointer-events: none; display: flex; align-items: center; justify-content: center;
+  font-family: 'Noto Sans', sans-serif; font-weight: 700; font-size: 34mm; letter-spacing: 3mm; white-space: nowrap;
+  color: rgba(26, 115, 232, 0.16); transform: rotate(-35deg);
+}
+html.navrh-ukazka .nahled-cteni-obal { position: relative; overflow: hidden; }
+html.navrh-ukazka .nahled-cteni-obal::after { content: "UKÁZKA"; font-size: 34mm; }
+@media print {
+  html.navrh-ukazka .navrh, html.navrh-ukazka .nahled-cteni { display: none !important; }
+  html.navrh-ukazka .navrh-ukazka-pruh::after { content: " Tisk z ukázky není dostupný."; }
+}

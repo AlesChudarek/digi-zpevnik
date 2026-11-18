@@ -1063,8 +1063,13 @@ kdo maže.
         neprémiové (po uložení a tisku vyprší),
         transpozice a živé vykreslení ve čtečce, hledání v textech písní, export
         zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
-      - **odkaz v liště** (Aleš 3. 11.): rozhodnuto 18. 11. - pro všechny přihlášené i hosty;
-        bez prémia ukázka (`editor_ukazka.html`, strana z `ukazka.json`), ne přístup. Aleš ho chce jako lákadlo -
+      - **odkaz v liště** (Aleš 3. 11.): rozhodnuto 18. 11. - pro všechny přihlášené i hosty.
+        Bez prémia skutečný editor nad ukázkovou stranou (`navrh_strany.html`, `ukazka=True`):
+        text, akordy, styly, náplast, náhled jdou; bez výběru strany, Uložit, PDF/obrázku
+        z náhledu a vlastních obrázků; pruh „Ukázka editoru“, vodoznak UKÁZKA (i v náhledu),
+        tisk schovaný. Zápis na server (strany, obrázky, styly) jen prémiový účet. Kód PDF
+        běží v prohlížeči - zdatný člověk by ho z vývojářských nástrojů spustil (přijatelné:
+        do zpěvníku ani exportu se strana nedostane). Aleš ho chce jako lákadlo -
         hodně lidí přijde jen kvůli tvorbě vlastních zpěvníků; proti je, že by to byl
         druhý vstup vedle Mých zpěvníků. Rozhodnout, až bude editor v editoru zpěvníku.
       - **číslo strany** (9. 11.): vrstva nad stranou, nikdy v obsahu ani v obrázku pro PDF
