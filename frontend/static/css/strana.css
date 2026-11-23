@@ -294,12 +294,13 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* Prvky (rámečky a obrázky): poloha a rozměr v mm (inline styl). Obrys jen pod myší
    a u vybraného - na papíře nemají být vidět. Ovládací prvky mají na obrazovce stejnou
    velikost při každém přiblížení (dělí se měřítkem). */
-.ps-ramecek, .ps-obrazek, .ps-tvar { position: absolute; box-sizing: border-box; z-index: 1; }
-.ps-obrazek.ps-vrstva-za { z-index: 0; }
-/* Náplast leží s obrázky za textem (nad skenem, který je ve straně první) a pod textem. */
+/* Vrstvy: z-index dává prvku jeho `z` (schema.js, stylPrvku). Podklad (sken) leží vždy
+   vespod a klik ho nechytí - jen Alt+klik (navrh.js). */
+.ps-ramecek, .ps-obrazek, .ps-tvar { position: absolute; box-sizing: border-box; }
+.ps-podklad { pointer-events: none; }
 /* Plochu kreslí SVG uvnitř; obdélník kolem klikání nebere (prázdné rohy volného tvaru),
    jen samotný tvar. Obrys je tah SVG, ne outline (ten by obkreslil obdélník kolem). */
-.ps-tvar { z-index: 0; pointer-events: none; }
+.ps-tvar { pointer-events: none; }
 .ps-tvar > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
 .ps-tvar polygon { pointer-events: visiblePainted; cursor: move; stroke: none; }
 .ps-tvar .ps-prvek-roh { pointer-events: auto; }
@@ -318,7 +319,6 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 .ps-naplast-nahled polygon, .ps-naplast-nahled polyline { stroke: #1a73e8; stroke-width: calc(1.5px / var(--meritko)); stroke-dasharray: 4 3; opacity: 0.85; }
 .ps-naplast-nahled circle { fill: rgba(26, 115, 232, 0.25); stroke: #1a73e8; stroke-width: calc(1px / var(--meritko)); }
 .navrh-panel .napoveda-karty { font-size: 12px; color: var(--muted-text, #666); margin: 6px 0 0; line-height: 1.35; }
-.ps-obrazek.ps-vrstva-pred { z-index: 2; }
 .ps-ramecek.aktivni, .ps-obrazek.vybrany, .ps-ramecek.tazeny, .ps-obrazek.tazeny {
   outline: calc(1.5px / var(--meritko)) solid #1a73e8;
 }

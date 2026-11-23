@@ -231,9 +231,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
       return xKusu;
     };
 
-    // Obrázky (pod textem nebo nad ním podle vrstvy - pořadí kreslení) a náplasti (pod
-    // textem, v pořadí stránky spolu s obrázky za textem - náplast nad skenem).
-    const obrazky = [...koren.querySelectorAll('.ps-obrazek')];
+    // Prvky odspodu nahoru podle vrstvy (z-index), při shodě v pořadí stránky.
     const kresliObrazek = async (o) => {
       const img = o.querySelector('img');
       const r = o.getBoundingClientRect();
@@ -257,39 +255,42 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
         color: rgb(...barva(t.dataset.barva || '#ffffff')), borderWidth: 0,
       });
     };
-    for (const o of koren.querySelectorAll('.ps-obrazek.ps-vrstva-za, .ps-tvar')) {
-      if (o.classList.contains('ps-tvar')) kresliTvar(o); else await kresliObrazek(o);
-    }
-
-    // Text odstavců.
-    for (const u of useckyTextu(koren.querySelector('.stranka-obsah'), r0)) {
-      if (mimo(r0.left + u.x, r0.top + u.top, r0.left + (u.pravSlova ?? u.prav), r0.top + u.top + u.vyska)) continue;
-      const ucariU = ucari(u.top, u.vyska, u.styl);
-      // Mezera za slovem se nekreslí: další slovo má vlastní polohu a mezery navíc by
-      // se při kopírování textu z PDF zdvojovaly.
-      const konec = await kresliText(u.text.replace(/\s+$/, ''), u.x, ucariU, u.styl, null, (u.pravSlova ?? u.prav) - u.x);
-      if (/underline/.test(u.styl.textDecorationLine)) {
-        const tl = Math.max(0.5, parseFloat(u.styl.fontSize) / 16);
-        stranka.drawLine({
-          start: { x: u.x * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
-          end: { x: konec * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
-          thickness: tl * PT_NA_PX, color: rgb(...barva(u.styl.color)),
-        });
+    // Text odstavců rámečku a jeho akordy (v této kopii skutečný text, viz výš).
+    const kresliRamecek = async (ramecek) => {
+      for (const u of useckyTextu(ramecek, r0)) {
+        if (mimo(r0.left + u.x, r0.top + u.top, r0.left + (u.pravSlova ?? u.prav), r0.top + u.top + u.vyska)) continue;
+        const ucariU = ucari(u.top, u.vyska, u.styl);
+        // Mezera za slovem se nekreslí: další slovo má vlastní polohu a mezery navíc by
+        // se při kopírování textu z PDF zdvojovaly.
+        const konec = await kresliText(u.text.replace(/\s+$/, ''), u.x, ucariU, u.styl, null, (u.pravSlova ?? u.prav) - u.x);
+        if (/underline/.test(u.styl.textDecorationLine)) {
+          const tl = Math.max(0.5, parseFloat(u.styl.fontSize) / 16);
+          stranka.drawLine({
+            start: { x: u.x * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
+            end: { x: konec * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
+            thickness: tl * PT_NA_PX, color: rgb(...barva(u.styl.color)),
+          });
+        }
       }
-    }
+      for (const a of ramecek.querySelectorAll('.akord')) {
+        if (!a.firstChild) continue;
+        const st = getComputedStyle(a);
+        const g = document.createRange();
+        g.selectNodeContents(a);
+        const r = g.getBoundingClientRect();
+        if (mimo(r.left, r.top, r.right, r.bottom)) continue;
+        await kresliText(a.textContent, r.left - r0.left, ucari(r.top - r0.top, r.height, st), st, null, r.width);
+      }
+    };
 
-    // Akordy (v této kopii skutečný text, viz výš).
-    for (const a of koren.querySelectorAll('.akord')) {
-      if (!a.firstChild) continue;
-      const st = getComputedStyle(a);
-      const g = document.createRange();
-      g.selectNodeContents(a);
-      const r = g.getBoundingClientRect();
-      if (mimo(r.left, r.top, r.right, r.bottom)) continue;
-      await kresliText(a.textContent, r.left - r0.left, ucari(r.top - r0.top, r.height, st), st, null, r.width);
+    const prvky = [...koren.querySelectorAll('.stranka-obsah > .ps-ramecek, .stranka-obsah > .ps-obrazek, .stranka-obsah > .ps-tvar')];
+    const vrstva = (o) => parseInt(o.style.zIndex, 10) || 0;
+    prvky.sort((a, b) => vrstva(a) - vrstva(b));    // sort je stabilní - shoda zůstane v pořadí
+    for (const o of prvky) {
+      if (o.classList.contains('ps-tvar')) kresliTvar(o);
+      else if (o.classList.contains('ps-obrazek')) await kresliObrazek(o);
+      else await kresliRamecek(o);
     }
-
-    for (const o of obrazky.filter((x) => !x.classList.contains('ps-vrstva-za'))) await kresliObrazek(o);
 
     // Číslo strany (ve zpěvníku ho dokreslí server - tady jen pro náhled).
     const c = koren.querySelector('.ps-cislo-strany');

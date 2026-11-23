@@ -613,9 +613,15 @@ def test_prohlizece(p, base, jmeno):
     page.mouse.up()
     o3 = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
     ok('roh zvětší obrázek se stejným poměrem', o3['w'] > o2['w'] + 5 and abs(o3['w'] / o3['h'] - 2) < 0.05, (o3['w'], o3['h']))
-    ukaz(page, '#vybrany-obrazek [data-vrstva="za"]')
-    page.click('#vybrany-obrazek [data-vrstva="za"]')
-    ok('obrázek jde dát za text', J("getComputedStyle(document.querySelector('.ps-obrazek')).zIndex") == '0')
+    vrstvy = "[+getComputedStyle(document.querySelector('.ps-obrazek')).zIndex, +getComputedStyle(document.querySelector('.ps-ramecek')).zIndex]"
+    ok('nový obrázek leží nad textem', J(vrstvy)[0] > J(vrstvy)[1], J(vrstvy))
+    ukaz(page, '#obrazek-poradi [data-poradi="pozadi"]')
+    page.click('#obrazek-poradi [data-poradi="pozadi"]')
+    tlac = "Object.fromEntries([...document.querySelectorAll('#obrazek-poradi [data-poradi]')].map(b => [b.dataset.poradi, b.disabled]))"
+    ok('Do pozadí ho dá pod text; Do pozadí a O vrstvu níž jsou pak vypnuté', J(vrstvy)[0] < J(vrstvy)[1]
+       and J(tlac) == {'popredi': False, 'dopredu': False, 'dozadu': True, 'pozadi': True}, (J(vrstvy), J(tlac)))
+    page.keyboard.press(f'{MOD}+Shift+ArrowUp')
+    ok('Ctrl+Shift+↑ ho vrátí do popředí', J(vrstvy)[0] > J(vrstvy)[1], J(vrstvy))
     ukaz(page, '#obrazek-smazat')
     page.click('#obrazek-smazat')
     ok('obrázek jde smazat', J("document.querySelectorAll('.ps-obrazek').length") == 0)
@@ -798,6 +804,83 @@ def test_zlomy(p, base, prohlizece):
         br.close()
 
 
+def test_vrstvy_ukazky(page):
+    """Vrstvy na ukázce: náplast posunutá pod text, Alt+klik, tažení vybraného prvku pod
+    jiným, pořadí, převod strany ze schématu 2. Na konci vrátí ukázku (Zpět)."""
+    J = page.evaluate
+    hloubka = J("navrhStrany.view.state.doc.toJSON()")
+    # PDF kreslí prvky odspodu nahoru: počet výplní náplastí (operátor f) za posledním
+    # textem (Tj) - náplast pod textem se kreslí před ním. Logo ukázky je SVG (PDF ho
+    # nevloží - ukázka PDF nedělá), proto bez obrázků.
+    VYPLNI_NAD_TEXTEM = """async () => { const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+      const zdroj = navrhStrany.zdroj();
+      zdroj.obsah.content = zdroj.obsah.content.filter((n) => n.type !== 'obrazek');
+      const { bytes } = await pdfStrany(zdroj, {});
+      const { PDFDocument } = await import('/static/vendor/pdf-lib/pdf-lib.js');
+      const d = await PDFDocument.load(bytes);
+      const obsah = d.getPage(0).node.Contents();
+      const proudy = obsah.asArray ? obsah.asArray().map(r => d.context.lookup(r)) : [obsah];
+      let t = '';
+      for (const p of proudy) {
+        const raw = new Blob([p.getContents()]).stream().pipeThrough(new DecompressionStream('deflate'));
+        t += new TextDecoder('latin1').decode(await new Response(raw).arrayBuffer()); }
+      const radky = t.split('\\n');
+      const text = radky.map((r, i) => (/Tj$/.test(r) ? i : -1)).filter((i) => i >= 0);
+      return [text.length, radky.slice(text[text.length - 1]).filter((r) => r === 'f').length]; }"""
+    pdf_pred = J(VYPLNI_NAD_TEXTEM)
+    ok('PDF: náplasti ukázky leží pod textem (kreslí se před ním)', pdf_pred[0] > 0 and pdf_pred[1] == 0, pdf_pred)
+    # Náplast o 50 mm výš - pod rámeček písně (ten je ve vrstvách nad ní).
+    J("""(() => { const v = navrhStrany.view; const tr = v.state.tr;
+      v.state.doc.forEach((n, o) => { if (n.type.name === 'tvar') tr.setNodeMarkup(o, null, { ...n.attrs, y: n.attrs.y - 50 }); });
+      v.dispatch(tr); })()""")
+    srdce = J("""(() => { const r = document.querySelectorAll('.ps-tvar polygon')[2].getBoundingClientRect();
+      return [r.left + r.width / 2, r.top + r.height / 2]; })()""")
+    nahore = lambda: J("([x, y]) => { const e = document.elementFromPoint(x, y); return e.closest('.ps-tvar') ? 'tvar' : e.closest('.ps-ramecek') ? 'ramecek' : e.className; }", srdce)
+    vyber = lambda: J("(() => { const s = navrhStrany.view.state.selection; return s.node ? s.node.type.name + ':' + s.from : 'text'; })()")
+    pozice_srdce = J("(() => { let p = []; navrhStrany.view.state.doc.forEach((n, o) => { if (n.type.name === 'tvar') p.push(o); }); return p[2]; })()")
+    ok('náplast posunutá pod text: nahoře je rámeček', nahore() == 'ramecek', nahore())
+    page.mouse.click(*srdce)
+    page.wait_for_function("navrhStrany.view.state.selection.empty", timeout=3000)
+    ok('klik tam dá kurzor do textu', vyber() == 'text', vyber())
+    page.keyboard.down('Alt'); page.mouse.click(*srdce); page.keyboard.up('Alt')
+    ok('Alt+klik vybere náplast pod textem', vyber() == f'tvar:{pozice_srdce}', vyber())
+    y0 = J(f"navrhStrany.view.state.doc.nodeAt({pozice_srdce}).attrs.y")
+    tvaru = J("document.querySelectorAll('.ps-tvar').length")
+    page.click('[data-prikaz="naplast"]')
+    page.mouse.move(*srdce); page.mouse.down(); page.mouse.move(srdce[0], srdce[1] - 15, steps=4); page.mouse.up()
+    y1 = J(f"navrhStrany.view.state.doc.nodeAt({pozice_srdce}).attrs.y")
+    ok('vybraná náplast pod textem jde táhnout (i se zapnutým nástrojem, nekreslí se nová)',
+       y1 < y0 - 2 and J("document.querySelectorAll('.ps-tvar').length") == tvaru, (y0, y1))
+    page.click('[data-prikaz="naplast"]')
+    srdce = [srdce[0], srdce[1] - 15]
+    page.keyboard.press(f'{MOD}+Shift+ArrowUp')
+    ok('Ctrl+Shift+↑ dá náplast nad text', nahore() == 'tvar', nahore())
+    pdf_po = J(VYPLNI_NAD_TEXTEM)
+    ok('PDF: náplast v popředí se kreslí až po textu', pdf_po[1] == 1, pdf_po)
+    page.keyboard.press(f'{MOD}+ArrowDown')
+    ok('Ctrl+↓ ji dá o vrstvu níž - pod rámeček, se kterým se překrývá', nahore() == 'ramecek', nahore())
+    page.mouse.click(*srdce)
+    page.wait_for_function("navrhStrany.view.state.selection.empty", timeout=3000)
+    ok('obyčejný klik na místo vybrané náplasti pod textem dá kurzor do textu', vyber() == 'text', vyber())
+    ok('rámeček s kurzorem má v panelu kartu s pořadím', J("!document.getElementById('vybrany-ramecek').hidden"))
+    # Zpět až k původní ukázce.
+    for _ in range(8):
+        if J("navrhStrany.view.state.doc.toJSON()") == hloubka:
+            break
+        page.keyboard.press(f'{MOD}+z')
+    ok('Zpět vrátí ukázku, jak byla', J("navrhStrany.view.state.doc.toJSON()") == hloubka)
+    # Převod schématu 2: vrstvy podle druhu prvku -> z, sken jako podklad, pořadí uzlů beze změny.
+    prevod = J("""(() => {
+      const r = (x) => ({ type: 'ramecek', attrs: { x, y: 0, w: 10, h: 10 }, content: [{ type: 'odstavec' }] });
+      const o = (vrstva) => ({ type: 'obrazek', attrs: { src: 'x', vrstva } });
+      const d = navrhStrany.dokumentZeZdroje({ verze: 2, obsah: { type: 'doc', content: [
+        o('za'), r(1), o('pred'), { type: 'tvar', attrs: {} }, r(2), o('za')] } });
+      return d.content.content.map((n) => [n.type.name, n.attrs.z, !!n.attrs.podklad]);
+    })()""")
+    ok('strana ze schématu 2 se převede: sken podklad, náplasti a obrázky za textem < rámečky < obrázky před textem',
+       prevod == [['obrazek', 0, True], ['ramecek', 3, False], ['obrazek', 5, False], ['tvar', 1, False], ['ramecek', 4, False], ['obrazek', 2, False]], prevod)
+
+
 def test_pristup(p, base):
     print("\n── přístup ──")
     br = p.chromium.launch()
@@ -831,6 +914,7 @@ def test_pristup(p, base):
     ok('ukázková strana předvede náplasti (jednoduché polygony přes sebe), dva textové rámečky a obrázek',
        sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar', 'tvar', 'tvar']
        and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body && n.attrs.body.split(' ').length <= 10)"), druhy)
+    test_vrstvy_ukazky(page)
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)

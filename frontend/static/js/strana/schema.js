@@ -12,7 +12,76 @@
 
 import { Schema } from 'prosemirror';
 
-export const VERZE_SCHEMATU = 2;
+export const VERZE_SCHEMATU = 3;
+
+// Vrstvy: prvek s vyšším `z` leží výš, při shodě rozhoduje pořadí v dokumentu (to je
+// zároveň pořadí čtení - sloky se číslují napříč rámečky, hledání a export čtou text
+// v tomto pořadí -, proto vrstva není pořadím uzlů). Podklad (sken) leží vždy vespod.
+// Indexy prvků dokumentu odspodu nahoru.
+export function poradiVrstev(doc) {
+  const i = [];
+  doc.forEach((_, __, k) => i.push(k));
+  const klic = (k) => { const a = doc.child(k).attrs; return [a.podklad ? 0 : 1, a.z || 0, k]; };
+  return i.sort((x, y) => { const a = klic(x), b = klic(y); return a[0] - b[0] || a[1] - b[1] || a[2] - b[2]; });
+}
+
+// Vrstva nad všemi prvky (pro nový prvek).
+export function zNahore(doc) {
+  let z = 0;
+  doc.forEach((n) => { if (!n.attrs.podklad) z = Math.max(z, n.attrs.z || 0); });
+  return z + 1;
+}
+
+// Zapíše vrstvy podle pořadí `poradi` (indexy prvků odspodu nahoru): z = 1, 2, 3...
+// Mění jen atributy, takže pozice v transakci zůstanou.
+export function nastavVrstvy(tr, poradi) {
+  let z = 1;
+  for (const k of poradi) {
+    const n = tr.doc.child(k);
+    if (n.attrs.podklad) continue;
+    if (n.attrs.z !== z) {
+      let pos = 0;
+      for (let i = 0; i < k; i++) pos += tr.doc.child(i).nodeSize;
+      tr.setNodeMarkup(pos, null, { ...n.attrs, z });
+    }
+    z += 1;
+  }
+  return tr;
+}
+
+// Prvek s indexem k přesune ve vrstvách těsně pod nejnižší textový rámeček (nová
+// náplast zakrývá sken nebo obrázek, ne text); bez rámečku nahoru.
+export function vrstvaPodTextem(tr, k) {
+  const poradi = poradiVrstev(tr.doc).filter((i) => i !== k);
+  const ramecek = poradi.findIndex((i) => tr.doc.child(i).type.name === 'ramecek');
+  poradi.splice(ramecek < 0 ? poradi.length : ramecek, 0, k);
+  return nastavVrstvy(tr, poradi);
+}
+
+// Zdroj strany ze serveru nebo z konceptu na dokument. Verze 2 měla vrstvy podle druhu
+// prvku (obrázky za textem a náplasti < rámečky < obrázky před textem), od verze 3 je
+// vrstva v `z`. Převod vrstvy zachová, takže strana vypadá stejně.
+export function znamaVerze(verze) { return verze === 2 || verze === VERZE_SCHEMATU; }
+
+export function dokumentZeZdroje(zdroj) {
+  let obsah = zdroj.obsah;
+  if (zdroj.verze === 2) {
+    const prvky = (obsah && obsah.content) || [];
+    const za = (u) => u.type === 'tvar' || (u.type === 'obrazek' && (u.attrs || {}).vrstva === 'za');
+    // Sken vložil editor jako první prvek, obrázek za textem přes celou stranu.
+    const sken = prvky.length && prvky[0].type === 'obrazek' && (prvky[0].attrs || {}).vrstva === 'za' ? prvky[0] : null;
+    const patro = (u) => (u === sken ? 0 : za(u) ? 1 : u.type === 'ramecek' ? 2 : 3);
+    const z = new Map();
+    let dalsi = 1;
+    for (const p of [1, 2, 3]) for (const u of prvky) if (patro(u) === p) z.set(u, dalsi++);
+    obsah = { ...obsah, content: prvky.map((u) => {
+      const { vrstva, ...attrs } = u.attrs || {};
+      if (u === sken) return { ...u, attrs: { ...attrs, podklad: true, z: 0 } };
+      return { ...u, attrs: { ...attrs, z: z.get(u) } };
+    }) };
+  }
+  return schema.nodeFromJSON(obsah);
+}
 
 // Body náplasti pro SVG polygon v souřadnicích 0-100 (viewBox), bez bodů obdélník.
 export function bodyTvaru(body) {
@@ -32,6 +101,8 @@ export const ROLE = {
 };
 
 const mm = (x) => `${x}mm`;
+// Poloha prvku a jeho vrstva (z-index; podklad vždy vespod).
+export const stylPrvku = (a) => `left:${mm(a.x)};top:${mm(a.y)};width:${mm(a.w)};height:${mm(a.h)};z-index:${a.podklad ? 0 : (a.z || 0) + 1}`;
 
 export const schema = new Schema({
   nodes: {
@@ -44,31 +115,31 @@ export const schema = new Schema({
       // presah: kopie rámečku přes hřbet dvojstrany na straně, kde nemá střed - vykreslí
       // se (každá strana ukáže svou část), ale nepočítá se do slok (značky nese pevně
       // v odstavcích) a obsahem zpěvníku (hledání, export) je jen originál.
-      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 }, presah: { default: false } },
+      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 }, presah: { default: false }, z: { default: 0 } },
       toDOM: (n) => ['div', {
         class: 'ps-ramecek', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
-        ...(n.attrs.presah ? { 'data-presah': '1' } : {}),
-        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
+        ...(n.attrs.presah ? { 'data-presah': '1' } : {}), 'data-z': n.attrs.z, style: stylPrvku(n.attrs),
       }, ['div', { class: 'ps-ramecek-obsah' }, 0]],
       parseDOM: [{
         tag: 'div.ps-ramecek', contentElement: '.ps-ramecek-obsah',
         getAttrs: (d) => ({ x: +d.dataset.x || 12, y: +d.dataset.y || 12, w: +d.dataset.w || 124, h: +d.dataset.h || 186,
-          presah: d.dataset.presah === '1' }),
+          presah: d.dataset.presah === '1', z: +d.dataset.z || 0 }),
       }],
     },
 
-    // Obrázek na straně. src je zatím data: URL (strana se ještě neukládá na server);
-    // vrstva: 'pred' nad textem, 'za' pod textem.
+    // Obrázek na straně. podklad: sken strany - leží vždy vespod (mimo vrstvy, viz
+    // poradiVrstev) a klik ho nechytí (jen Alt+klik), ať se při práci nad ním omylem
+    // nepřesune. z: vrstva (u všech prvků).
     obrazek: {
       group: 'prvek', atom: true, selectable: true, draggable: false,
       attrs: {
         src: {}, x: { default: 20 }, y: { default: 20 }, w: { default: 50 }, h: { default: 40 },
-        vrstva: { default: 'pred' },
+        podklad: { default: false }, z: { default: 0 },
       },
       toDOM: (n) => ['div', {
-        class: `ps-obrazek ps-vrstva-${n.attrs.vrstva}`, 'data-x': n.attrs.x, 'data-y': n.attrs.y,
-        'data-w': n.attrs.w, 'data-h': n.attrs.h, 'data-vrstva': n.attrs.vrstva,
-        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
+        class: `ps-obrazek${n.attrs.podklad ? ' ps-podklad' : ''}`, 'data-x': n.attrs.x, 'data-y': n.attrs.y,
+        'data-w': n.attrs.w, 'data-h': n.attrs.h, ...(n.attrs.podklad ? { 'data-podklad': '1' } : {}), 'data-z': n.attrs.z,
+        style: stylPrvku(n.attrs),
       }, ['img', { src: n.attrs.src, alt: '' }]],
       parseDOM: [{
         tag: 'div.ps-obrazek',
@@ -76,12 +147,12 @@ export const schema = new Schema({
           const img = d.querySelector('img');
           if (!img) return false;
           return { src: img.getAttribute('src'), x: +d.dataset.x || 20, y: +d.dataset.y || 20,
-            w: +d.dataset.w || 50, h: +d.dataset.h || 40, vrstva: d.dataset.vrstva || 'pred' };
+            w: +d.dataset.w || 50, h: +d.dataset.h || 40, podklad: d.dataset.podklad === '1', z: +d.dataset.z || 0 };
         },
       }],
     },
 
-    // Tvar (náplast): plocha s výplní nad obrázky za textem a pod textem - zakryje třeba
+    // Tvar (náplast): plocha s výplní (nová se vkládá pod text) - zakryje třeba
     // vypálené číslo strany nebo chybu ve skenu. x, y, w, h je obdélník kolem v mm,
     // body mnohoúhelník uvnitř v podílech šířky a výšky („0,0 1,0 1,1 0,1“); bez nich
     // je to obdélník. Kreslí se jako SVG, ať jde vidět i obrys volného tvaru.
@@ -89,18 +160,17 @@ export const schema = new Schema({
       group: 'prvek', atom: true, selectable: true, draggable: false,
       attrs: {
         x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 },
-        barva: { default: '#ffffff' }, body: { default: null },
+        barva: { default: '#ffffff' }, body: { default: null }, z: { default: 0 },
       },
       toDOM: (n) => ['div', {
         class: 'ps-tvar', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
-        'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '',
-        style: `left:${mm(n.attrs.x)};top:${mm(n.attrs.y)};width:${mm(n.attrs.w)};height:${mm(n.attrs.h)}`,
+        'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '', 'data-z': n.attrs.z, style: stylPrvku(n.attrs),
       }, ['http://www.w3.org/2000/svg svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none' },
         ['http://www.w3.org/2000/svg polygon', { points: bodyTvaru(n.attrs.body), fill: n.attrs.barva }]]],
       parseDOM: [{
         tag: 'div.ps-tvar',
         getAttrs: (d) => ({ x: +d.dataset.x || 20, y: +d.dataset.y || 20, w: +d.dataset.w || 30, h: +d.dataset.h || 10,
-          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null }),
+          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null, z: +d.dataset.z || 0 }),
       }],
     },
 

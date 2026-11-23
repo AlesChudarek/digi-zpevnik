@@ -1209,6 +1209,20 @@ kdo maže.
       obrázkem / Duplikovat / ✕, náhled má nápovědu „Náhled“; duplikát strany kopíruje
       i písně (jako nové písně se stejným názvem); v Mých zpěvnících klik na název otevře
       nabídku (do čtečky vede obálka).
+      Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
+      „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
+      v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok
+      napříč rámečky, hledání, ChordPro, zlomy). Sken je `podklad`: vždy vespod, klik ho
+      nechytí (jen Alt+klik), jde smazat. Příkazy Do popředí / O vrstvu výš / O vrstvu
+      níž / Do pozadí v kartě obrázku, náplasti a nové kartě Textový rámeček (Text);
+      u obrázku a náplasti i Ctrl(+Shift)+↑/↓. O vrstvu výš/níž přeskakuje prvky, které
+      se s tímhle nepřekrývají. Nový prvek nahoru, nová náplast pod nejnižší text.
+      Alt+klik vybere prvek pod vybraným (cyklí dolů, i podklad) a takhle vybraný obrázek
+      nebo náplast jde táhnout i pod jiným prvkem (jen po Alt+kliku - jinak by tažení
+      přes text posunulo náhodou vybraný prvek). Strany schématu 2 převede editor
+      i čtečka při načtení (`dokumentZeZdroje`), vzhled zůstane. PDF kreslí prvky podle
+      vrstev (text po rámečcích). Před/Za textem u obrázků zrušené. Ukázka: rámeček písně
+      jen na výšku textu.
       Hotovo 11. 11.: **dvojstrana s úpravou obou stran** - jedno plátno (jeden dokument,
       prvky pravé strany s x + šířka strany), přesun prvků přes hřbet, text vyjmout/vložit,
       společné Zpět; při uložení a v konceptech se dokument rozdělí podle středu prvku

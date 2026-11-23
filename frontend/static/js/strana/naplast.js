@@ -10,6 +10,7 @@
 // rezim-naplasti na kořeni editoru).
 
 import { closeHistory, NodeSelection, TextSelection } from 'prosemirror';
+import { vrstvaPodTextem, zNahore } from './schema.js';
 
 const MM_NA_PX = 96 / 25.4;
 const NS = 'http://www.w3.org/2000/svg';
@@ -171,9 +172,10 @@ export class NastrojNaplasti {
   vloz(attrs) {
     const { view } = this.v;
     const n = view.state.schema.nodes.tvar.create({ ...attrs, barva: this.barva });
-    // Na konec dokumentu: nad sken (ten je první) i nad dřív vložené náplasti.
+    // Na konec dokumentu, ve vrstvách nad dřív vložené náplasti, ale pod text.
     const pos = view.state.doc.content.size;
     const tr = closeHistory(view.state.tr).insert(pos, n);
+    vrstvaPodTextem(tr, tr.doc.childCount - 1);
     tr.setSelection(NodeSelection.create(tr.doc, pos));
     view.dispatch(tr);
     // Klik nástrojem fokus do editoru nedal (pointerdown je zastavený) - bez něj by
@@ -250,7 +252,7 @@ export class NastrojTextu {
   vloz(attrs) {
     const { view } = this.v;
     const { schema } = view.state;
-    const n = schema.nodes.ramecek.create(attrs, schema.nodes.odstavec.create({ styl: 'normalni' }));
+    const n = schema.nodes.ramecek.create({ ...attrs, z: zNahore(view.state.doc) }, schema.nodes.odstavec.create({ styl: 'normalni' }));
     const pos = view.state.doc.content.size;
     const tr = closeHistory(view.state.tr).insert(pos, n);
     tr.setSelection(TextSelection.create(tr.doc, pos + 2));

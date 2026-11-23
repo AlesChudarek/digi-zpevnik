@@ -293,7 +293,7 @@ def test_skenu(p, base):
     page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
     doc = page.evaluate("navrhStrany.view.state.doc.toJSON()")
     sken = doc["content"][0]
-    ok("sken je první prvek strany: obrázek za textem", sken["type"] == "obrazek" and sken["attrs"]["vrstva"] == "za"
+    ok("sken je první prvek strany: obrázek jako podklad", sken["type"] == "obrazek" and sken["attrs"]["podklad"] is True
        and sken["attrs"]["src"] == f"/navrh/obrazek/{OBRAZEK_ID}", sken)
     a = sken["attrs"]
     ok("a vyplní stranu A5 (na šířku nebo na výšku, vystředěný)",
@@ -391,7 +391,7 @@ def test_skenu(p, base):
     page.wait_for_function("window.navrhStrany && document.fonts.status === 'loaded'", timeout=20000)
     sken = page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'obrazek').map(n => n.attrs)")
     ok("protější strana se skenem je na plátně vpravo jako podklad", len(sken) == 1 and sken[0]["x"] >= 148
-       and sken[0]["vrstva"] == "za", sken)
+       and sken[0]["podklad"] is True, sken)
     page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.insertText('Z', 2)); })()")
     page.click('[data-prikaz="ulozit"]')
     page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)

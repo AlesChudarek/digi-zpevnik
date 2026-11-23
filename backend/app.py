@@ -3970,7 +3970,7 @@ NAVRH_MAX_PDF = 5 * 1024 * 1024
 NAVRH_MAX_OBRAZEK = 8 * 1024 * 1024
 NAVRH_MAX_STYLY = 256 * 1024
 NAVRH_MAX_NAHLED = 1024 * 1024
-NAVRH_VERZE_ZDROJE = {2}
+NAVRH_VERZE_ZDROJE = {2, 3}    # 3: vrstvy v `z`, sken jako podklad (2 převede editor)
 RE_OBRAZEK_NAVRHU = re.compile(r'^/navrh/obrazek/(\d+)$')
 
 

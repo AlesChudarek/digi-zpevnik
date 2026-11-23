@@ -10,7 +10,7 @@
 // nestahuje.
 
 import { DOMSerializer } from 'prosemirror';
-import { schema } from './schema.js';
+import { schema, dokumentZeZdroje, stylPrvku } from './schema.js';
 import { znackySlok } from './sloky.js';
 import { CisloStrany } from './cislo-strany.js';
 import { prepocitej } from './kolize.js';
@@ -53,7 +53,6 @@ function element(tag, trida, styl) {
 }
 
 const mm = (x) => `${x}mm`;
-const polohaPrvku = (a) => `left:${mm(a.x)};top:${mm(a.y)};width:${mm(a.w)};height:${mm(a.h)}`;
 
 // Stejná stavba jako AkordView a PrvekView v editoru, bez ovládacích prvků.
 const serializer = (() => {
@@ -74,13 +73,13 @@ const serializer = (() => {
       return kotva;
     },
     ramecek(n) {
-      const dom = element('div', 'ps-ramecek', polohaPrvku(n.attrs));
+      const dom = element('div', 'ps-ramecek', stylPrvku(n.attrs));
       const obsah = element('div', 'ps-ramecek-obsah');
       dom.appendChild(obsah);
       return { dom, contentDOM: obsah };
     },
     obrazek(n) {
-      const dom = element('div', `ps-obrazek ps-vrstva-${n.attrs.vrstva === 'za' ? 'za' : 'pred'}`, polohaPrvku(n.attrs));
+      const dom = element('div', `ps-obrazek${n.attrs.podklad ? ' ps-podklad' : ''}`, stylPrvku(n.attrs));
       const img = element('img');
       img.src = n.attrs.src;
       img.alt = '';
@@ -99,7 +98,7 @@ let pocitadlo = 0;
 //   strana     'L' | 'P' - levá/pravá (poloha čísla)
 export function vykresliStranu(zdroj, { cislo = null, strana = 'P' } = {}) {
   const n = zdroj.nastaveni;
-  const doc = schema.nodeFromJSON(zdroj.obsah);
+  const doc = dokumentZeZdroje(zdroj);
   const f = formatStrany(n);
   const id = `ps-s${++pocitadlo}`;
 

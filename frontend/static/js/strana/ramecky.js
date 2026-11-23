@@ -8,7 +8,7 @@
 // puštění jde jedna transakce - celý přesun vrátí jedno „Zpět“.
 
 import { closeHistory, TextSelection, NodeSelection } from 'prosemirror';
-import { bodyTvaru } from './schema.js';
+import { bodyTvaru, zNahore } from './schema.js';
 
 const MM_NA_PX = 96 / 25.4;
 const MIN_MM = 8;
@@ -33,6 +33,7 @@ export class PrvekView {
 
     this.dom = document.createElement('div');
     this.dom.className = this.jeObrazek ? 'ps-obrazek' : this.jeTvar ? 'ps-tvar' : 'ps-ramecek';
+    this.dom.prvekView = this;    // tažení prvku pod jiným (Alt+klik, navrh.js)
 
     this.lista = document.createElement('div');
     this.lista.className = 'ps-prvek-lista';
@@ -91,10 +92,10 @@ export class PrvekView {
     s.top = a.y + 'mm';
     s.width = a.w + 'mm';
     s.height = a.h + 'mm';
+    s.zIndex = a.podklad ? 0 : (a.z || 0) + 1;    // vrstva, viz stylPrvku ve schema.js
     if (this.jeObrazek) {
       if (this.img.getAttribute('src') !== a.src) this.img.src = a.src;
-      this.dom.classList.toggle('ps-vrstva-za', a.vrstva === 'za');
-      this.dom.classList.toggle('ps-vrstva-pred', a.vrstva !== 'za');
+      this.dom.classList.toggle('ps-podklad', !!a.podklad);
     }
     if (this.jeTvar) {
       this.polygon.setAttribute('points', bodyTvaru(a.body));
@@ -134,12 +135,13 @@ export class PrvekView {
 
   stopEvent(e) { return !this.contentDOM || !this.contentDOM.contains(e.target); }
 
-  zacni(e, druh) {
+  // priKliku: co udělat místo výběru, když se nepohnulo (klik, ne tah).
+  zacni(e, druh, priKliku = null) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const a = this.node.attrs;
-    this.tah = { druh, x0: e.clientX, y0: e.clientY, puvodni: { ...a }, nove: { ...a }, posunuto: false };
+    this.tah = { druh, x0: e.clientX, y0: e.clientY, puvodni: { ...a }, nove: { ...a }, posunuto: false, priKliku };
     this.dom.classList.add('tazeny');
     this._pohyb = (ev) => this.pohyb(ev);
     this._konec = () => this.konec();
@@ -190,7 +192,8 @@ export class PrvekView {
     this.uklid();
     if (!t) return;
     if (!t.posunuto) {
-      if (this.jeAtom) {
+      if (t.priKliku) t.priKliku();
+      else if (this.jeAtom) {
         this.view.dispatch(this.view.state.tr.setSelection(NodeSelection.create(this.view.state.doc, this.getPos())));
       } else {
         // Klik na lištu rámečku: kurzor na konec jeho textu.
@@ -276,7 +279,7 @@ export function vlozObrazek(view, format, { src, w, h }, kam = null) {
   // format.posun: ve dvojstraně levý okraj upravované strany (mm).
   const x = kam ? zaokrouhliMm(kam.x - sirka / 2) : zaokrouhliMm((format.posun || 0) + (format.sirka - sirka) / 2);
   const y = kam ? zaokrouhliMm(kam.y - vyska / 2) : zaokrouhliMm((format.vyska - vyska) / 2);
-  const uzel = view.state.schema.nodes.obrazek.create({ src, x, y, w: sirka, h: vyska });
+  const uzel = view.state.schema.nodes.obrazek.create({ src, x, y, w: sirka, h: vyska, z: zNahore(view.state.doc) });
   const konec = view.state.doc.content.size;
   const tr = closeHistory(view.state.tr).insert(konec, uzel);
   tr.setSelection(NodeSelection.create(tr.doc, konec));

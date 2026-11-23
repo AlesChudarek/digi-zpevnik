@@ -11,7 +11,7 @@ import {
   EditorState, EditorView, NodeSelection, TextSelection, Plugin, keymap, baseKeymap, history,
   undo, redo, undoDepth, redoDepth, toggleMark, Slice, Fragment, closeHistory,
 } from 'prosemirror';
-import { schema, ROLE, VERZE_SCHEMATU, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
+import { schema, ROLE, VERZE_SCHEMATU, znamaVerze, dokumentZeZdroje, poradiVrstev, nastavVrstvy, zNahore, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
 import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-uzel.js';
 import { PrvekView, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok, klicSlok, znackySlok } from './sloky.js';
@@ -87,6 +87,7 @@ const KONTEXT = (() => {
 const UKAZKA = document.documentElement.classList.contains('navrh-ukazka');
 const KLIC_REZIMU = 'navrh-rezim-stran';
 let naplast = null;          // nástroj Náplast (naplast.js), vznikne po editoru
+let vybranoAltem = null;     // pozice prvku vybraného Alt+klikem (tažení pod jiným prvkem)
 let nastrojTextu = null;     // nástroj Text (naplast.js)
 // Dvojstrana k úpravě: { druha: { st, cislo, lp, navrh, nastaveni, koncept, otisk } }.
 // Na plátně je jeden dokument přes obě strany, prvky pravé strany mají x posunuté
@@ -278,7 +279,7 @@ async function nactiVerzi(id) {
   const r = await fetch(`/api/navrh/strana/${id}`, { credentials: 'same-origin' });
   const d = await r.json();
   if (!d.ok) throw new Error(d.error || 'Stranu se nepodařilo načíst.');
-  return { nastaveni: sluc(VYCHOZI, d.zdroj.nastaveni || {}), doc: schema.nodeFromJSON(d.zdroj.obsah) };
+  return { nastaveni: sluc(VYCHOZI, d.zdroj.nastaveni || {}), doc: dokumentZeZdroje(d.zdroj) };
 }
 
 // Každá úprava: rozdělaná strana do prohlížeče (koncept, viz ulozKoncept).
@@ -404,6 +405,12 @@ const klavesy = keymap({
   'Mod-b': toggleMark(M.tucne), 'Mod-i': toggleMark(M.kurziva), 'Mod-u': toggleMark(M.podtrzeni),
   Enter: enter,
   'Shift-Enter': zalomeni,
+  // Pořadí vrstev u vybraného obrázku nebo náplasti (v textu mají šipky s Ctrl svůj
+  // význam - rámeček jde přes tlačítka v panelu).
+  'Mod-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('dopredu'), true),
+  'Mod-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('dozadu'), true),
+  'Mod-Shift-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('popredi'), true),
+  'Mod-Shift-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('pozadi'), true),
   Escape: () => { if (rezimAkordu) { prepniRezimAkordu(false); return true; } return false; },
 });
 
@@ -440,11 +447,11 @@ if (KONTEXT && KONTEXT.navrh) {
 let pouzitKoncept = false;
 if (KONTEXT) {
   const k = prectiKoncept(klicKonceptu(KONTEXT));
-  if (k && k.zdroj && k.zdroj.verze === VERZE_SCHEMATU) {
+  if (k && k.zdroj && znamaVerze(k.zdroj.verze)) {
     pouzitKoncept = (k.zaklad || null) === (KONTEXT.navrh || null)
       || await window.showConfirm('Strana má rozdělanou úpravu, ale mezitím byla uložena jinak. '
         + 'Pokračovat v rozdělané úpravě? Jinak se zahodí.', 'Pokračovat v úpravě');
-    if (pouzitKoncept) zaloha = { nastaveni: sluc(VYCHOZI, k.zdroj.nastaveni || {}), doc: schema.nodeFromJSON(k.zdroj.obsah) };
+    if (pouzitKoncept) zaloha = { nastaveni: sluc(VYCHOZI, k.zdroj.nastaveni || {}), doc: dokumentZeZdroje(k.zdroj) };
     else smazKoncept(klicKonceptu(KONTEXT));
   }
 }
@@ -470,8 +477,8 @@ const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozm
 // uložená verze, sken jako podklad, nebo prázdná strana - stejně jako při otevření samotné.
 async function nactiProtejsek(p) {
   const k = prectiKoncept(klicKonceptu({ strana: p.st.id }));
-  if (k && k.zdroj && k.zdroj.verze === VERZE_SCHEMATU && (k.zaklad || null) === (p.st.navrh || null)) {
-    return { nastaveni: sluc(VYCHOZI, k.zdroj.nastaveni || {}), doc: schema.nodeFromJSON(k.zdroj.obsah), koncept: true };
+  if (k && k.zdroj && znamaVerze(k.zdroj.verze) && (k.zaklad || null) === (p.st.navrh || null)) {
+    return { nastaveni: sluc(VYCHOZI, k.zdroj.nastaveni || {}), doc: dokumentZeZdroje(k.zdroj), koncept: true };
   }
   try {
     if (p.st.navrh) return { ...(await nactiVerzi(p.st.navrh)), koncept: false };
@@ -490,13 +497,82 @@ async function dokumentSeSkenem(src) {
   const k = Math.min(f.sirka / img.naturalWidth, f.vyska / img.naturalHeight);
   const w = Math.round(img.naturalWidth * k * 10) / 10, h = Math.round(img.naturalHeight * k * 10) / 10;
   return N.doc.create(null, [
-    N.obrazek.create({ src, x: Math.round((f.sirka - w) * 5) / 10, y: Math.round((f.vyska - h) * 5) / 10, w, h, vrstva: 'za' }),
+    N.obrazek.create({ src, x: Math.round((f.sirka - w) * 5) / 10, y: Math.round((f.vyska - h) * 5) / 10, w, h, podklad: true }),
   ]);
 }
 
 function vybranyAtom(state) {
   const sel = state.selection;
   return sel instanceof NodeSelection && (sel.node.type === N.obrazek || sel.node.type === N.tvar);
+}
+
+// --- vrstvy ---------------------------------------------------------------------------
+// Vrstva prvku je jeho `z` (schema.js, poradiVrstev) - pořadí uzlů je pořadí čtení.
+
+// Prvek s výběrem: vybraný obrázek nebo náplast, nebo rámeček s kurzorem.
+// { index, pos, node } nebo null.
+function prvekVyberu(state) {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection && sel.$from.depth === 0) return { index: sel.$from.index(0), pos: sel.from, node: sel.node };
+  if (sel.$from.depth < 1 || sel.$from.index(0) !== sel.$to.index(0)) return null;
+  return { index: sel.$from.index(0), pos: sel.$from.before(1), node: sel.$from.node(1) };
+}
+
+const prekryva = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+// Nové pořadí vrstev (indexy odspodu nahoru) po příkazu, nebo null, když by se nic
+// nezměnilo. O vrstvu výš/níž: přes nejbližší prvek, který se s tímhle překrývá -
+// přeskočit prvek jinde na straně by na pohled nic neudělalo.
+function poradiPoPrikazu(doc, k, kam) {
+  if (doc.child(k).attrs.podklad) return null;
+  const poradi = poradiVrstev(doc).filter((i) => !doc.child(i).attrs.podklad);
+  const i = poradi.indexOf(k);
+  const a = doc.child(k).attrs;
+  let cil = null;
+  if (kam === 'popredi') cil = i < poradi.length - 1 ? poradi.length - 1 : null;
+  else if (kam === 'pozadi') cil = i > 0 ? 0 : null;
+  else if (kam === 'dopredu') {
+    for (let j = i + 1; j < poradi.length && cil == null; j++) if (prekryva(a, doc.child(poradi[j]).attrs)) cil = j;
+  } else if (kam === 'dozadu') {
+    for (let j = i - 1; j >= 0 && cil == null; j--) if (prekryva(a, doc.child(poradi[j]).attrs)) cil = j;
+  }
+  if (cil == null) return null;
+  poradi.splice(i, 1);
+  poradi.splice(cil, 0, k);
+  return poradi;
+}
+
+function zmenVrstvu(kam) {
+  const { state } = view;
+  const p = prvekVyberu(state);
+  const poradi = p && poradiPoPrikazu(state.doc, p.index, kam);
+  if (!poradi) return false;
+  const tr = nastavVrstvy(closeHistory(state.tr), poradi);
+  if (state.selection instanceof NodeSelection) tr.setSelection(NodeSelection.create(tr.doc, state.selection.from));
+  view.dispatch(tr);
+  view.focus();
+  return true;
+}
+
+// Prvky pod bodem obrazovky, odshora dolů (i podklad, i prvek pod jiným). Náplast jen
+// svou plochou, ne prázdnými rohy obdélníku kolem.
+function prvkyPodBodem(x, y) {
+  const doc = view.state.doc;
+  const pozice = [];
+  doc.forEach((_, pos) => pozice.push(pos));
+  return poradiVrstev(doc).reverse().map((k) => ({ index: k, pos: pozice[k], node: doc.child(k), dom: view.nodeDOM(pozice[k]) }))
+    .filter(({ node, dom }) => {
+      if (!dom) return false;
+      const r = dom.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+      if (node.type !== N.tvar) return true;
+      const poly = dom.querySelector('polygon');
+      const svg = poly.ownerSVGElement;
+      const bod = svg.createSVGPoint();
+      bod.x = (x - r.left) / r.width * 100;
+      bod.y = (y - r.top) / r.height * 100;
+      return poly.isPointInFill(bod);
+    });
 }
 
 // Ukázka pro účet bez prémia: strana, která předvede, co editor umí - styly a formátování,
@@ -523,9 +599,10 @@ function ukazkovyDokument() {
     tvar(natoc([[-6, -6], [6, -6], [6, 6], [-6, 6]]), '#ffffff'),
     tvar(natoc([[0, -2], [1.2, -3.4], [2.8, -3.4], [4, -2.2], [4, -0.6], [0, 3.6],
       [-4, -0.6], [-4, -2.2], [-2.8, -3.4], [-1.2, -3.4]]), '#d6453d'),
-    N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 156 }, pisen.content),
+    // Rámeček na výšku textu (končí ~119 mm) - prázdná plocha by kryla prvky pod ním.
+    N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 116 }, pisen.content),
     N.ramecek.create({ x: f.okraj, y: 170, w: 70, h: 14 }, poznamka),
-    N.obrazek.create({ src: document.getElementById('logo-ukazky').dataset.src, x: f.sirka - f.okraj - 48, y: 182, w: 48, h: 13.9, vrstva: 'pred' }),
+    N.obrazek.create({ src: document.getElementById('logo-ukazky').dataset.src, x: f.sirka - f.okraj - 48, y: 182, w: 48, h: 13.9 }),
   ]);
 }
 
@@ -583,6 +660,12 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
   dispatchTransaction(tr) {
     const blik = akordyPoMazani(tr);
     view.updateState(view.state.apply(tr));
+    if (vybranoAltem != null) {
+      // Prvek vybraný Alt+klikem drží přednost, dokud je vybraný (i po přesunu).
+      const pos = tr.mapping.map(vybranoAltem);
+      const s = view.state.selection;
+      vybranoAltem = s instanceof NodeSelection && s.from === pos ? pos : null;
+    }
     if (tr.docChanged) zalohuj();
     if (blik.length) ovladac.blikni(blik);
     aktualizujListu();
@@ -1848,10 +1931,16 @@ function aktualizujListu() {
   el('tvar-smazat-vse').hidden = naplasti < 1 || (!!tvar && naplasti < 2);
   el('tvar-smazat-vse').textContent = `Smazat všechny (${naplasti})`;
   if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
-  if (obrazek) {
-    for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
-      b.classList.toggle('aktivni', b.dataset.vrstva === obrazek.attrs.vrstva);
-    }
+  // Pořadí vrstev: u vybraného obrázku a náplasti, u rámečku s kurzorem vlastní karta.
+  // Tlačítko, které by nic nezměnilo, je vypnuté. Podklad ve vrstvách není.
+  const prvek = prvekVyberu(state);
+  const podklad = !!(obrazek && obrazek.attrs.podklad);
+  el('obrazek-poradi').hidden = podklad;
+  el('obrazek-podklad').hidden = !podklad;
+  el('vybrany-ramecek').hidden = !(prvek && prvek.node.type === N.ramecek && !prvek.node.attrs.presah);
+  el('tvar-poradi').hidden = !tvar;
+  for (const b of document.querySelectorAll('[data-poradi]')) {
+    b.disabled = !prvek || !poradiPoPrikazu(state.doc, prvek.index, b.dataset.poradi);
   }
 
   // Nabídka akordů u sloky s kurzorem (bez myši nad stranou).
@@ -1908,14 +1997,10 @@ function napojPanelAkordu() {
     upravVybranyAkord({ vel: !v || v === 100 ? null : Math.max(40, Math.min(300, v)) });
   });
   el('akord-vychozi').addEventListener('click', () => upravVybranyAkord({ dx: 0, dy: 0 }));
-  for (const b of el('vybrany-obrazek').querySelectorAll('[data-vrstva]')) {
-    b.addEventListener('click', () => {
-      const sel = view.state.selection;
-      if (!(sel instanceof NodeSelection) || sel.node.type !== N.obrazek) return;
-      const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, vrstva: b.dataset.vrstva });
-      tr.setSelection(NodeSelection.create(tr.doc, sel.from));
-      view.dispatch(tr);
-    });
+  for (const b of document.querySelectorAll('[data-poradi]')) {
+    // Klik nemá brát fokus z editoru (kurzor v rámečku = rámeček, se kterým se hýbe).
+    b.addEventListener('pointerdown', (e) => e.preventDefault());
+    b.addEventListener('click', () => zmenVrstvu(b.dataset.poradi));
   }
   // Náplast: barva (input při tahu jen ukazuje, change uloží jedním krokem zpět).
   const upravTvar = (barva, zapsat) => {
@@ -2057,6 +2142,48 @@ function zalozkaPodleVyberu(state) {
   nastaveni = { ...nastaveni, styly: Object.fromEntries(Object.entries(nastaveni.styly).filter(([k]) => pouzite.has(k))) };
 }
 
+// Prvek pod jiným (registrováno před nástroji, ať má přednost):
+// - Alt+klik vybere prvek pod tím vybraným (opakovaně dál dolů, pak znovu shora), i podklad,
+//   a hned ho jde táhnout.
+// - Obrázek nebo náplast vybraná Alt+klikem jde pak táhnout, i když ji jiný prvek
+//   zakrývá; klik bez tahu je obyčejný klik na to, co je nahoře. Jen po Alt+kliku -
+//   jinak by tažení přes text (označení) posunulo náhodou vybraný prvek pod ním.
+stranka.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || (naplast && naplast.body)) return;
+  const t = e.target;
+  // Vlastní ovládání (lišta, roh, akord, číslo strany) a místa mimo prvky si klik nechají.
+  if (t.closest('.ps-prvek-lista, .ps-prvek-roh, .akord-kotva, .ps-cislo-strany')) return;
+  if (!t.closest('.ps-ramecek, .ps-obrazek, .ps-tvar') && !t.closest('.stranka-obsah')) return;
+  const pod = prvkyPodBodem(e.clientX, e.clientY);
+  if (!pod.length) return;
+  const vybrany = prvekVyberu(view.state);
+  const i = vybrany ? pod.findIndex((h) => h.index === vybrany.index) : -1;
+  let volba = null, priKliku = null;
+  if (e.altKey) {
+    volba = pod[(i < 0 ? 1 : i + 1) % pod.length];
+    if (volba && volba.node.type !== N.ramecek) vybranoAltem = volba.pos;
+  } else if (i > 0 && vybranyAtom(view.state) && vybranoAltem === vybrany.pos) {
+    volba = pod[i];
+    if (!naplast || !naplast.aktivni) priKliku = () => klikNaPrvek(pod[0], e);
+  }
+  if (!volba || !volba.dom.prvekView) return;
+  e.stopImmediatePropagation();
+  volba.dom.prvekView.zacni(e, 'presun', priKliku);
+}, true);
+
+// Klik na prvek bez tahu: obrázek a náplast vybere, do rámečku dá kurzor na místo kliku.
+function klikNaPrvek(h, e) {
+  const { state } = view;
+  let sel;
+  if (h.node.type !== N.ramecek) sel = NodeSelection.create(state.doc, h.pos);
+  else {
+    const p = view.posAtCoords({ left: e.clientX, top: e.clientY });
+    const uvnitr = p && p.pos > h.pos && p.pos < h.pos + h.node.nodeSize;
+    sel = TextSelection.near(state.doc.resolve(uvnitr ? p.pos : h.pos + h.node.nodeSize - 2), -1);
+  }
+  view.dispatch(state.tr.setSelection(sel));
+}
+
 // Nástroj Náplast (naplast.js): kreslí do strany, dokud je zapnutý.
 naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
 nastrojTextu = new NastrojTextu({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
@@ -2090,13 +2217,13 @@ window.navrhStrany = {
   cislo: () => cisloStrany,
   zdroj: (lp) => zdrojStrany(lp),
   dvojstrana: () => (spoj ? { lp: KONTEXT.lp, druha: { cislo: spoj.druha.cislo, lp: spoj.druha.lp, id: spoj.druha.st.id } } : null),
-  zmerZlomy,
+  zmerZlomy, dokumentZeZdroje,
   vykresliStranu, obrazekStrany,
   // Ve dvojstraně nahradí jen upravovanou stranu.
   nahradTextem(nazev, autor, text) {
     const f = format();
     const novy = posunUzel(N.ramecek.create(
-      { x: f.okraj, y: f.okraj, w: f.sirka - 2 * f.okraj, h: f.vyska - 2 * f.okraj },
+      { x: f.okraj, y: f.okraj, w: f.sirka - 2 * f.okraj, h: f.vyska - 2 * f.okraj, z: zNahore(view.state.doc) },
       [N.odstavec.create({ styl: 'nadpis' }, schema.text(nazev)),
         N.odstavec.create({ styl: 'autor' }, schema.text(autor)), ...odstavceZTextu(text)],
     ), posunAktualni());
