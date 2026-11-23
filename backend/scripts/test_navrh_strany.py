@@ -172,7 +172,7 @@ def test_prohlizece(p, base, jmeno):
     ok('1920 px: lišta je na jednom řádku', J(RADKY) == 1, J(RADKY))
     page.set_viewport_size({'width': 1400, 'height': 1000})
     page.wait_for_timeout(200)
-    ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].map(s => s.getBoundingClientRect().width)")))
+    ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].filter(s => !s.closest('[hidden]')).map(s => s.getBoundingClientRect().width)")))
 
     ok('panel má záložky Text, Akordy, Strana a Ovládání',
        J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.dataset.zalozka)") == ['text', 'akordy', 'strana', 'ovladani'])
@@ -615,11 +615,18 @@ def test_prohlizece(p, base, jmeno):
     ok('roh zvětší obrázek se stejným poměrem', o3['w'] > o2['w'] + 5 and abs(o3['w'] / o3['h'] - 2) < 0.05, (o3['w'], o3['h']))
     vrstvy = "[+getComputedStyle(document.querySelector('.ps-obrazek')).zIndex, +getComputedStyle(document.querySelector('.ps-ramecek')).zIndex]"
     ok('nový obrázek leží nad textem', J(vrstvy)[0] > J(vrstvy)[1], J(vrstvy))
-    ukaz(page, '#obrazek-poradi [data-poradi="pozadi"]')
-    page.click('#obrazek-poradi [data-poradi="pozadi"]')
-    tlac = "Object.fromEntries([...document.querySelectorAll('#obrazek-poradi [data-poradi]')].map(b => [b.dataset.poradi, b.disabled]))"
-    ok('Do pozadí ho dá pod text; Do pozadí a O vrstvu níž jsou pak vypnuté', J(vrstvy)[0] < J(vrstvy)[1]
+    ukaz(page, '#poradi-tlacitko')
+    page.click('#poradi-tlacitko')
+    ok('Pořadí v liště otevře nabídku', J("!document.getElementById('poradi-nabidka').hidden"))
+    page.click('#poradi-nabidka [data-poradi="pozadi"]')
+    tlac = "Object.fromEntries([...document.querySelectorAll('#poradi-nabidka [data-poradi]')].map(b => [b.dataset.poradi, b.disabled]))"
+    ok('Do pozadí ho dá pod text a nabídku zavře; Do pozadí a O vrstvu níž jsou pak vypnuté', J(vrstvy)[0] < J(vrstvy)[1]
+       and J("document.getElementById('poradi-nabidka').hidden")
        and J(tlac) == {'popredi': False, 'dopredu': False, 'dozadu': True, 'pozadi': True}, (J(vrstvy), J(tlac)))
+    page.click('#poradi-tlacitko')
+    page.keyboard.press('Escape')
+    ok('Esc nabídku zavře a obrázek zůstane vybraný', J("document.getElementById('poradi-nabidka').hidden")
+       and J("!document.getElementById('vybrany-obrazek').hidden"))
     page.keyboard.press(f'{MOD}+Shift+ArrowUp')
     ok('Ctrl+Shift+↑ ho vrátí do popředí', J(vrstvy)[0] > J(vrstvy)[1], J(vrstvy))
     ukaz(page, '#obrazek-smazat')
@@ -862,7 +869,7 @@ def test_vrstvy_ukazky(page):
     page.mouse.click(*srdce)
     page.wait_for_function("navrhStrany.view.state.selection.empty", timeout=3000)
     ok('obyčejný klik na místo vybrané náplasti pod textem dá kurzor do textu', vyber() == 'text', vyber())
-    ok('rámeček s kurzorem má v panelu kartu s pořadím', J("!document.getElementById('vybrany-ramecek').hidden"))
+    ok('u rámečku s kurzorem jde Pořadí v liště použít', not J("document.getElementById('poradi-tlacitko').disabled"))
     # Zpět až k původní ukázce.
     for _ in range(8):
         if J("navrhStrany.view.state.doc.toJSON()") == hloubka:

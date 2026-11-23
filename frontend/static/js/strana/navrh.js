@@ -1931,17 +1931,17 @@ function aktualizujListu() {
   el('tvar-smazat-vse').hidden = naplasti < 1 || (!!tvar && naplasti < 2);
   el('tvar-smazat-vse').textContent = `Smazat všechny (${naplasti})`;
   if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
-  // Pořadí vrstev: u vybraného obrázku a náplasti, u rámečku s kurzorem vlastní karta.
-  // Tlačítko, které by nic nezměnilo, je vypnuté. Podklad ve vrstvách není.
+  // Pořadí vrstev (nabídka v liště): položka, která by nic nezměnila, je vypnutá, bez
+  // takové položky i celé tlačítko. Podklad ve vrstvách není.
+  el('obrazek-podklad').hidden = !(obrazek && obrazek.attrs.podklad);
   const prvek = prvekVyberu(state);
-  const podklad = !!(obrazek && obrazek.attrs.podklad);
-  el('obrazek-poradi').hidden = podklad;
-  el('obrazek-podklad').hidden = !podklad;
-  el('vybrany-ramecek').hidden = !(prvek && prvek.node.type === N.ramecek && !prvek.node.attrs.presah);
-  el('tvar-poradi').hidden = !tvar;
-  for (const b of document.querySelectorAll('[data-poradi]')) {
-    b.disabled = !prvek || !poradiPoPrikazu(state.doc, prvek.index, b.dataset.poradi);
+  let nejakePoradi = false;
+  for (const b of el('poradi-nabidka').querySelectorAll('[data-poradi]')) {
+    b.disabled = !prvek || prvek.node.attrs.presah || !poradiPoPrikazu(state.doc, prvek.index, b.dataset.poradi);
+    nejakePoradi ||= !b.disabled;
   }
+  el('poradi-tlacitko').disabled = !nejakePoradi;
+  if (!nejakePoradi) ukazPoradi(false);
 
   // Nabídka akordů u sloky s kurzorem (bez myši nad stranou).
   if (rezimAkordu && nabidkaSloky.hidden && state.selection.empty) ukazNabidkuSloky(slokaNaPozici(state.selection.from));
@@ -1991,17 +1991,32 @@ function upravVybranyAkord(zmena) {
   view.dispatch(tr);
 }
 
+function ukazPoradi(ukazat) {
+  el('poradi-nabidka').hidden = !ukazat;
+  el('poradi-tlacitko').setAttribute('aria-expanded', String(ukazat));
+}
+
 function napojPanelAkordu() {
   el('akord-velikost').addEventListener('change', (e) => {
     const v = parseInt(e.target.value, 10);
     upravVybranyAkord({ vel: !v || v === 100 ? null : Math.max(40, Math.min(300, v)) });
   });
   el('akord-vychozi').addEventListener('click', () => upravVybranyAkord({ dx: 0, dy: 0 }));
-  for (const b of document.querySelectorAll('[data-poradi]')) {
-    // Klik nemá brát fokus z editoru (kurzor v rámečku = rámeček, se kterým se hýbe).
+  // Nabídka Pořadí: klik nemá brát fokus z editoru (kurzor v rámečku = rámeček, se
+  // kterým se hýbe). Zavře ji výběr, klik jinam a Esc.
+  el('poradi-tlacitko').addEventListener('pointerdown', (e) => e.preventDefault());
+  el('poradi-tlacitko').addEventListener('click', () => ukazPoradi(el('poradi-nabidka').hidden));
+  for (const b of el('poradi-nabidka').querySelectorAll('[data-poradi]')) {
     b.addEventListener('pointerdown', (e) => e.preventDefault());
-    b.addEventListener('click', () => zmenVrstvu(b.dataset.poradi));
+    b.addEventListener('click', () => { ukazPoradi(false); zmenVrstvu(b.dataset.poradi); });
   }
+  document.addEventListener('pointerdown', (e) => { if (!e.target.closest('.navrh-poradi')) ukazPoradi(false); }, true);
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || el('poradi-nabidka').hidden) return;
+    ukazPoradi(false);
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
   // Náplast: barva (input při tahu jen ukazuje, change uloží jedním krokem zpět).
   const upravTvar = (barva, zapsat) => {
     const sel = view.state.selection;

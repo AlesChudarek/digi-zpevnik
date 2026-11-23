@@ -1214,8 +1214,11 @@ kdo maže.
       v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok
       napříč rámečky, hledání, ChordPro, zlomy). Sken je `podklad`: vždy vespod, klik ho
       nechytí (jen Alt+klik), jde smazat. Příkazy Do popředí / O vrstvu výš / O vrstvu
-      níž / Do pozadí v kartě obrázku, náplasti a nové kartě Textový rámeček (Text);
-      u obrázku a náplasti i Ctrl(+Shift)+↑/↓. O vrstvu výš/níž přeskakuje prvky, které
+      níž / Do pozadí v nabídce Pořadí v horní liště (ikona vrstev ▾; Aleš: obecné úpravy
+      všech prvků nahoru, vpravo jen věci pro vybraný prvek nebo nástroj - formátování
+      textu zatím zůstává nahoře jako ve Wordu, kontextová lišta jako v Canvě možná
+      později); u obrázku a náplasti i Ctrl(+Shift)+↑/↓. Lišta je při 1920 px na jednom
+      řádku jen o 1,5 px (popisek zpěvníku vlevo se jinak zalomí). O vrstvu výš/níž přeskakuje prvky, které
       se s tímhle nepřekrývají. Nový prvek nahoru, nová náplast pod nejnižší text.
       Alt+klik vybere prvek pod vybraným (cyklí dolů, i podklad) a takhle vybraný obrázek
       nebo náplast jde táhnout i pod jiným prvkem (jen po Alt+kliku - jinak by tažení

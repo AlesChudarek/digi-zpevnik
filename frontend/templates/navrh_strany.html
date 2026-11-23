@@ -33,6 +33,7 @@
     <symbol id="i-stred" viewBox="0 0 24 24"><path d="M3 6h18M6 12h12M4 18h16"/></symbol>
     <symbol id="i-vpravo" viewBox="0 0 24 24"><path d="M3 6h18M9 12h12M5 18h16"/></symbol>
     <symbol id="i-blok" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+    <symbol id="i-vrstvy" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5zM3 12.5l9 5 9-5M3 17l9 5 9-5"/></symbol>
     <symbol id="i-popredi" viewBox="0 0 24 24"><path d="M5 4h14M12 20V9M7 14l5-5 5 5"/></symbol>
     <symbol id="i-dopredu" viewBox="0 0 24 24"><path d="M12 19V6M7 11l5-5 5 5"/></symbol>
     <symbol id="i-dozadu" viewBox="0 0 24 24"><path d="M12 5v13M7 13l5 5 5-5"/></symbol>
@@ -114,6 +115,17 @@
       <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
       <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany). Esc vypne"><svg><use href="#i-naplast"/></svg>Náplast</button>
       <input type="file" id="soubor-obrazku" accept="image/*" hidden>
+      {# Pořadí vrstev: platí pro každý prvek (rámeček s kurzorem, vybraný obrázek, náplast). #}
+      <div class="navrh-poradi">
+        <button type="button" class="poradi-tlacitko" id="poradi-tlacitko" aria-haspopup="menu" aria-expanded="false" aria-label="Pořadí"
+                data-napoveda="Pořadí: vybraný prvek do popředí, do pozadí, o vrstvu výš nebo níž"><svg><use href="#i-vrstvy"/></svg><span class="sipka">▾</span></button>
+        <div class="navrh-poradi-nabidka" id="poradi-nabidka" role="menu" hidden>
+          <button type="button" role="menuitem" data-poradi="popredi"><svg><use href="#i-popredi"/></svg>Do popředí<kbd>Ctrl+Shift+↑</kbd></button>
+          <button type="button" role="menuitem" data-poradi="dopredu"><svg><use href="#i-dopredu"/></svg>O vrstvu výš<kbd>Ctrl+↑</kbd></button>
+          <button type="button" role="menuitem" data-poradi="dozadu"><svg><use href="#i-dozadu"/></svg>O vrstvu níž<kbd>Ctrl+↓</kbd></button>
+          <button type="button" role="menuitem" data-poradi="pozadi"><svg><use href="#i-pozadi"/></svg>Do pozadí<kbd>Ctrl+Shift+↓</kbd></button>
+        </div>
+      </div>
     </div>
     <div class="skupina">
       <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
@@ -242,17 +254,6 @@
       </label>
       <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
     </section>
-    <section class="karta kontext" id="vybrany-ramecek" hidden>
-      <h2>Textový rámeček</h2>
-      <div class="radek-pole poradi">Pořadí
-        <span class="rez">
-          <button type="button" class="prepinac-rez" data-poradi="popredi" data-napoveda="Do popředí (Ctrl+Shift+↑)" aria-label="Do popředí"><svg><use href="#i-popredi"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dopredu" data-napoveda="O vrstvu výš (Ctrl+↑)" aria-label="O vrstvu výš"><svg><use href="#i-dopredu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dozadu" data-napoveda="O vrstvu níž (Ctrl+↓)" aria-label="O vrstvu níž"><svg><use href="#i-dozadu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="pozadi" data-napoveda="Do pozadí (Ctrl+Shift+↓)" aria-label="Do pozadí"><svg><use href="#i-pozadi"/></svg></button>
-        </span>
-      </div>
-    </section>
     </div>
     <div class="panel-obsah" data-panel="akordy" role="tabpanel" hidden>
     <section class="karta kontext" id="vybrany-akord" hidden>
@@ -300,14 +301,6 @@
       <div class="radek-pole">Barva
         <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti">
       </div>
-      <div class="radek-pole poradi" id="tvar-poradi">Pořadí
-        <span class="rez">
-          <button type="button" class="prepinac-rez" data-poradi="popredi" data-napoveda="Do popředí (Ctrl+Shift+↑)" aria-label="Do popředí"><svg><use href="#i-popredi"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dopredu" data-napoveda="O vrstvu výš (Ctrl+↑)" aria-label="O vrstvu výš"><svg><use href="#i-dopredu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dozadu" data-napoveda="O vrstvu níž (Ctrl+↓)" aria-label="O vrstvu níž"><svg><use href="#i-dozadu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="pozadi" data-napoveda="Do pozadí (Ctrl+Shift+↓)" aria-label="Do pozadí"><svg><use href="#i-pozadi"/></svg></button>
-        </span>
-      </div>
       <div class="tlacitka">
         <button type="button" id="tvar-smazat" class="nebezpecne">Smazat</button>
         <button type="button" id="tvar-smazat-vse" class="nebezpecne">Smazat všechny</button>
@@ -315,14 +308,6 @@
     </section>
     <section class="karta kontext" id="vybrany-obrazek" hidden>
       <h2>Obrázek</h2>
-      <div class="radek-pole poradi" id="obrazek-poradi">Pořadí
-        <span class="rez">
-          <button type="button" class="prepinac-rez" data-poradi="popredi" data-napoveda="Do popředí (Ctrl+Shift+↑)" aria-label="Do popředí"><svg><use href="#i-popredi"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dopredu" data-napoveda="O vrstvu výš (Ctrl+↑)" aria-label="O vrstvu výš"><svg><use href="#i-dopredu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="dozadu" data-napoveda="O vrstvu níž (Ctrl+↓)" aria-label="O vrstvu níž"><svg><use href="#i-dozadu"/></svg></button>
-          <button type="button" class="prepinac-rez" data-poradi="pozadi" data-napoveda="Do pozadí (Ctrl+Shift+↓)" aria-label="Do pozadí"><svg><use href="#i-pozadi"/></svg></button>
-        </span>
-      </div>
       <p class="poznamka" id="obrazek-podklad" hidden>Podklad strany (sken) leží vždy vespod. Vybere se
         Alt+klikem, přesouvá se jako jiné prvky.</p>
       <div class="tlacitka">
@@ -363,7 +348,7 @@
         <li><b>Řádek v odstavci:</b> Shift+Enter.</li>
         <li><b>Číslo strany:</b> táhni ho na straně; přichytí se ke středu a k okrajům a ukáže se, kde bude na levé i pravé straně.</li>
         <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
-        <li><b>Vrstvy:</b> později vložený prvek leží výš, nová náplast pod textem. Pořadí mění tlačítka Pořadí u vybraného prvku nebo Ctrl+↑/↓ (o vrstvu), Ctrl+Shift+↑/↓ (úplně nahoru/dolů). Alt+klik vybere prvek pod tím vybraným (i sken), opakovaně dál dolů; takhle vybraný prvek jde táhnout, i když ho jiný zakrývá.</li>
+        <li><b>Vrstvy:</b> později vložený prvek leží výš, nová náplast pod textem. Pořadí mění nabídka Pořadí v liště nebo u obrázku a náplasti Ctrl+↑/↓ (o vrstvu), Ctrl+Shift+↑/↓ (úplně nahoru/dolů). Alt+klik vybere prvek pod tím vybraným (i sken), opakovaně dál dolů; takhle vybraný prvek jde táhnout, i když ho jiný zakrývá.</li>
       </ul>
     </section>
     </div>
