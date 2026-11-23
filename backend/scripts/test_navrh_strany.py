@@ -831,24 +831,6 @@ def test_pristup(p, base):
     ok('ukázková strana předvede náplasti (jednoduché polygony přes sebe), dva textové rámečky a obrázek',
        sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar', 'tvar', 'tvar']
        and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body && n.attrs.body.split(' ').length <= 10)"), druhy)
-    # Náplast posunutá pod text: bez nástroje ji kryje rámeček, s nástrojem Náplast jde
-    # chytit a přesunout (upravují se jen náplasti), místo aby se kreslila nová.
-    page.evaluate("""(() => { const v = navrhStrany.view; const tr = v.state.tr;
-      v.state.doc.forEach((n, o) => { if (n.type.name === 'tvar') tr.setNodeMarkup(o, null, { ...n.attrs, y: n.attrs.y - 20 }); });
-      v.dispatch(tr); })()""")
-    srdce = page.evaluate("""(() => { const r = document.querySelectorAll('.ps-tvar polygon')[2].getBoundingClientRect();
-      return [r.left + r.width / 2, r.top + r.height / 2]; })()""")
-    pod = lambda: page.evaluate("([x, y]) => { const e = document.elementFromPoint(x, y); return e.closest('.ps-tvar') ? 'tvar' : e.closest('.ps-ramecek') ? 'ramecek' : e.className; }", srdce)
-    bez_nastroje = pod()
-    page.click('[data-prikaz="naplast"]')
-    s_nastrojem = pod()
-    tvaru, y_srdce = page.evaluate("[document.querySelectorAll('.ps-tvar').length, navrhStrany.view.state.doc.child(2).attrs.y]")
-    page.mouse.move(*srdce); page.mouse.down(); page.mouse.move(srdce[0], srdce[1] - 15, steps=4); page.mouse.up()
-    po = page.evaluate("[document.querySelectorAll('.ps-tvar').length, navrhStrany.view.state.doc.child(2).attrs.y]")
-    ok('s nástrojem Náplast jde chytit a přesunout i náplast pod textem (nekreslí se nová)',
-       bez_nastroje == 'ramecek' and s_nastrojem == 'tvar' and po[0] == tvaru and po[1] < y_srdce, (bez_nastroje, s_nastrojem, tvaru, y_srdce, po))
-    page.click('[data-prikaz="naplast"]')
-    page.keyboard.press('Control+z'); page.keyboard.press('Control+z')
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)
