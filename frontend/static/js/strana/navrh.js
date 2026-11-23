@@ -507,7 +507,7 @@ function ukazkovyDokument() {
   const poznamka = N.odstavec.create({ styl: 'normalni' }, schema.text('Capo 2, hrát volně a potichu',
     [M.pismo.create({ f: 'Caveat' }), M.velikost.create({ v: 14 }), M.barva.create({ c: '#b00020' })]));
   // Náplasti nad logem: obrázek náplasti ze tří polygonů přes sebe (později vložená leží
-  // výš) - pásek se zkosenými rohy a polštářek natočené, srdce rovně. Body jsou v mm
+  // výš) - pásek se zkosenými rohy, polštářek a srdce, celé natočené. Body jsou v mm
   // vůči středu náplasti.
   const tvar = (body, barva) => {
     const xs = body.map((b) => b[0]), ys = body.map((b) => b[1]);
@@ -518,11 +518,10 @@ function ukazkovyDokument() {
   const sx = 115, sy = 166, uhel = -18 * Math.PI / 180;
   const natoc = (body) => body.map(([bx, by]) => [sx + bx * Math.cos(uhel) - by * Math.sin(uhel),
     sy + bx * Math.sin(uhel) + by * Math.cos(uhel)]);
-  const posun = (body) => body.map(([bx, by]) => [sx + bx, sy + by]);
   return N.doc.create(null, [
     tvar(natoc([[-19, -7], [19, -7], [22, -4], [22, 4], [19, 7], [-19, 7], [-22, 4], [-22, -4]]), '#e8c9a0'),
     tvar(natoc([[-6, -6], [6, -6], [6, 6], [-6, 6]]), '#ffffff'),
-    tvar(posun([[0, -2], [1.2, -3.4], [2.8, -3.4], [4, -2.2], [4, -0.6], [0, 3.6],
+    tvar(natoc([[0, -2], [1.2, -3.4], [2.8, -3.4], [4, -2.2], [4, -0.6], [0, 3.6],
       [-4, -0.6], [-4, -2.2], [-2.8, -3.4], [-1.2, -3.4]]), '#d6453d'),
     N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 156 }, pisen.content),
     N.ramecek.create({ x: f.okraj, y: 170, w: 70, h: 14 }, poznamka),
