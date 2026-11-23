@@ -1065,7 +1065,12 @@ kdo maže.
         zpěvníku do ChordPro po písních, „Přečíslovat“, vektorové PDF.
       - **odkaz v liště** (Aleš 3. 11.): rozhodnuto 18. 11. - pro všechny přihlášené i hosty.
         Bez prémia skutečný editor nad ukázkovou stranou (`navrh_strany.html`, `ukazka=True`,
-        `ukazkovyDokument`: píseň, poznámka jiným písmem, logo a nad ním krajinka z náplastí):
+        `ukazkovyDokument`: píseň, poznámka jiným písmem, logo a nad ním obrázek náplasti ze tří polygonů - pásek se zkosenými rohy, polštářek,
+        srdce z 10 bodů; Aleš 23. 11.: jednoduché tvary, ať je vidět, že jde o polygon.
+        **Krajinku si Aleš chce nechat na později** (commit `056fd93`, body v mm): slunce
+        `[126 + 6cos(iπ/8), 167 + 6sin(iπ/8)]` pro i = 0..15 `#ffcf3f`, kopec
+        `[[92,181],[100,172],[108,168],[116,171],[126,181]]` `#9ccc65`, kopec
+        `[[106,181],[116,174],[126,170],[134,172],[138,175],[138,181]]` `#558b2f`):
         text, akordy, styly, náplast, obrázky (jen v prohlížeči, data:), náhled jdou; bez
         výběru strany, Uložit a PDF/obrázku z náhledu; pruh „Ukázka editoru“, vodoznak UKÁZKA (i v náhledu),
         tisk schovaný. Zápis na server (strany, obrázky, styly) jen prémiový účet. Kód PDF

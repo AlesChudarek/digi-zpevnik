@@ -506,19 +506,24 @@ function ukazkovyDokument() {
   const pisen = prazdnyDokument(f).firstChild;
   const poznamka = N.odstavec.create({ styl: 'normalni' }, schema.text('Capo 2, hrát volně a potichu',
     [M.pismo.create({ f: 'Caveat' }), M.velikost.create({ v: 14 }), M.barva.create({ c: '#b00020' })]));
-  // Náplasti nad logem: slunce a dva kopce přes sebe - neobdélníkový tvar a překrývání
-  // (později vložená leží výš).
+  // Náplasti nad logem: obrázek náplasti ze tří polygonů přes sebe (později vložená leží
+  // výš) - pásek se zkosenými rohy a polštářek natočené, srdce rovně. Body jsou v mm
+  // vůči středu náplasti.
   const tvar = (body, barva) => {
     const xs = body.map((b) => b[0]), ys = body.map((b) => b[1]);
     const x = Math.min(...xs), y = Math.min(...ys), w = Math.max(...xs) - x, h = Math.max(...ys) - y;
     return N.tvar.create({ x, y, w, h, barva,
       body: body.map(([bx, by]) => `${((bx - x) / w).toFixed(4)},${((by - y) / h).toFixed(4)}`).join(' ') });
   };
-  const slunce = Array.from({ length: 16 }, (_, i) => [126 + 6 * Math.cos(i * Math.PI / 8), 167 + 6 * Math.sin(i * Math.PI / 8)]);
+  const sx = 115, sy = 166, uhel = -18 * Math.PI / 180;
+  const natoc = (body) => body.map(([bx, by]) => [sx + bx * Math.cos(uhel) - by * Math.sin(uhel),
+    sy + bx * Math.sin(uhel) + by * Math.cos(uhel)]);
+  const posun = (body) => body.map(([bx, by]) => [sx + bx, sy + by]);
   return N.doc.create(null, [
-    tvar(slunce, '#ffcf3f'),
-    tvar([[92, 181], [100, 172], [108, 168], [116, 171], [126, 181]], '#9ccc65'),
-    tvar([[106, 181], [116, 174], [126, 170], [134, 172], [138, 175], [138, 181]], '#558b2f'),
+    tvar(natoc([[-19, -7], [19, -7], [22, -4], [22, 4], [19, 7], [-19, 7], [-22, 4], [-22, -4]]), '#e8c9a0'),
+    tvar(natoc([[-6, -6], [6, -6], [6, 6], [-6, 6]]), '#ffffff'),
+    tvar(posun([[0, -2], [1.2, -3.4], [2.8, -3.4], [4, -2.2], [4, -0.6], [0, 3.6],
+      [-4, -0.6], [-4, -2.2], [-2.8, -3.4], [-1.2, -3.4]]), '#d6453d'),
     N.ramecek.create({ x: f.okraj, y: 8, w: f.sirka - 2 * f.okraj, h: 156 }, pisen.content),
     N.ramecek.create({ x: f.okraj, y: 170, w: 70, h: 14 }, poznamka),
     N.obrazek.create({ src: document.getElementById('logo-ukazky').dataset.src, x: f.sirka - f.okraj - 48, y: 182, w: 48, h: 13.9, vrstva: 'pred' }),

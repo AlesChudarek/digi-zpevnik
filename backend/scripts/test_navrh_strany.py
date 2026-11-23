@@ -828,9 +828,9 @@ def test_pristup(p, base):
        'Ukázka editoru' in stav['pruh'] and 'pro prémiové účty' in stav['pruh'] and stav['znak'] == 'UKÁZKA', stav)
     ok('bez Uložit, výběru strany a PDF a obrázku z náhledu', not stav['ulozit'] and not stav['vyber'] and not stav['pdf'], stav)
     druhy = page.evaluate("navrhStrany.view.state.doc.toJSON().content.map(n => n.type)")
-    ok('ukázková strana předvede náplasti (volné tvary přes sebe), dva textové rámečky a obrázek',
+    ok('ukázková strana předvede náplasti (jednoduché polygony přes sebe), dva textové rámečky a obrázek',
        sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar', 'tvar', 'tvar']
-       and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body)"), druhy)
+       and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body && n.attrs.body.split(' ').length <= 10)"), druhy)
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)
@@ -848,6 +848,9 @@ def test_pristup(p, base):
     page.evaluate("(() => { const v = navrhStrany.view; v.dispatch(v.state.tr.deleteSelection()); })()")
     pred = page.evaluate('navrhStrany.view.state.doc.textContent')
     page.click('.ps-ramecek .ps-p >> nth=2')
+    # Výběr z kliknutí převezme editor až o chvilku později - do té doby je vybrané logo
+    # a psaní by (správně) nic nezměnilo.
+    page.wait_for_function("navrhStrany.view.state.selection.empty")
     page.keyboard.press('End')
     page.keyboard.type(' a ještě')
     ok('text jde upravit', page.evaluate('navrhStrany.view.state.doc.textContent') != pred
