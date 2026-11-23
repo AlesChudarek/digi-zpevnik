@@ -313,6 +313,9 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* Nástroj Text: křížek na volné ploše, nad textem obvyklý kurzor (klik do textu nástroj vypne). */
 .rezim-textu .stranka { cursor: crosshair; }
 .rezim-naplasti .ps-tvar polygon { cursor: move !important; }
+/* S nástrojem Náplast se upravují jen náplasti: text a obrázky myš nechytí, takže jde
+   chytit i náplast schovaná pod textem nebo pod obrázkem. */
+.rezim-naplasti .ps-ramecek, .rezim-naplasti .ps-obrazek { pointer-events: none; }
 .rezim-naplasti .ps-tvar .ps-prvek-roh { cursor: nwse-resize !important; }
 .ps-naplast-nahled { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 5; }
 .ps-naplast-nahled polygon, .ps-naplast-nahled polyline { stroke: #1a73e8; stroke-width: calc(1.5px / var(--meritko)); stroke-dasharray: 4 3; opacity: 0.85; }
