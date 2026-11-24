@@ -184,6 +184,7 @@ def main():
             ok("číslo a strana podle pozice (první strana zpěvníku = 5, pravá)",
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [5, "P"],
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]"))
+            page.evaluate("navrhStrany.view.focus()")     # po otevření není nic vybrané
             s1400 = page.evaluate(LISTA)
             ok("1400 px: v hlavičce zpěvník a listování vlevo, Zpět/Znovu uprostřed, Uložit vpravo, úpravy textu na jednom řádku",
                s1400["kdeVlevo"] and s1400["listovaniPredStredem"] and s1400["ulozitVpravo"] and s1400["jedenRadek"]

@@ -16,7 +16,7 @@ import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-
 import { PrvekView, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok, klicSlok, znackySlok } from './sloky.js';
 import { slokyDokumentu, vzorProSloku, doplnAkordy, smazAkordy } from './navrhy-akordu.js';
-import { CisloStrany, vykresliDvojstranu } from './cislo-strany.js';
+import { CisloStrany } from './cislo-strany.js';
 import { FORMATY, cssStylu, nastavAkordy, vykresliStranu, dokonciStranu, obrazekStrany, formatStrany } from './vykresleni.js';
 import { prepocitej } from './kolize.js';
 import { NastrojNaplasti, NastrojTextu } from './naplast.js';
@@ -89,6 +89,10 @@ const KLIC_REZIMU = 'navrh-rezim-stran';
 let naplast = null;          // nástroj Náplast (naplast.js), vznikne po editoru
 let vybranoAltem = null;     // pozice prvku vybraného Alt+klikem (tažení pod jiným prvkem)
 let nastrojTextu = null;     // nástroj Text (naplast.js)
+// Výběr mimo ProseMirror: 'nic' (nic nevybráno - po otevření, klik na prázdné místo, Esc)
+// nebo 'cislo' (vybrané číslo strany). ProseMirror nějaký výběr mít musí (jinak by po
+// otevření byla vybraná první náplast) - editor je pak bez fokusu a výběr se neukazuje.
+let zvlastniVyber = 'nic';
 // Dvojstrana k úpravě: { druha: { st, cislo, lp, navrh, nastaveni, koncept, otisk } }.
 // Na plátně je jeden dokument přes obě strany, prvky pravé strany mají x posunuté
 // o šířku strany; při uložení (a v konceptech) se rozdělí podle středu prvku.
@@ -413,7 +417,7 @@ const klavesy = keymap({
   'Mod-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('dozadu'), true),
   'Mod-Shift-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('popredi'), true),
   'Mod-Shift-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('pozadi'), true),
-  Escape: () => { if (rezimAkordu) { prepniRezimAkordu(false); return true; } return false; },
+  Escape: () => { if (rezimAkordu) prepniRezimAkordu(false); else zrusVyber(); return true; },
 });
 
 // Vkládání textu: každý řádek je odstavec, prázdný řádek dělí sloky, [Ami] je ukotvený
@@ -678,6 +682,7 @@ ovladac.pripoj(view);
 
 const cisloStrany = new CisloStrany(stranka, el('navrh-plocha'), {
   format, nastaveni: () => nastaveni, meritko: () => meritko, posun: () => posunAktualni(),
+  vyber: () => vyberCislo(),
   zmen: (zmena) => { nastaveni = { ...nastaveni, ...zmena }; pouzijNastaveni(); zalohuj(); },
 });
 
@@ -731,7 +736,6 @@ function pouzijNastaveni() {
   naplnVyberStylu();
   vykresliStyly();
   if (typeof cisloStrany !== 'undefined') cisloStrany.vykresli();
-  vykresliDvojstranu(el('dvojstrana-panel'), f, nastaveni.cislo, String(nastaveni.nahledCisla), nastaveni.nahledStrany);
   // Role stylu mohla změnit číslování slok.
   if (typeof view !== 'undefined') view.dispatch(view.state.tr.setMeta(klicSlok, true));
   nastavMeritko();
@@ -860,6 +864,8 @@ function napojPanel() {
     nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, ...zmena } };
     pouzijNastaveni();
     zalohuj();
+    // Vypnuté číslování: vybrané číslo zmizelo.
+    if (zvlastniVyber === 'cislo' && !nastaveni.cislo.zobrazit) zrusVyber();
   };
   for (const prvek of koren.querySelectorAll('[data-cislo-pole]')) {
     prvek.addEventListener(udalostPrvku(prvek), () => {
@@ -1984,6 +1990,7 @@ function aktualizujListu() {
 // podle výběru; karty vybraného akordu, obrázku a náplasti řídí aktualizujListu výš.
 
 function druhVyberu(state) {
+  if (zvlastniVyber) return zvlastniVyber;
   const sel = state.selection;
   if (sel instanceof NodeSelection) {
     const t = sel.node.type;
@@ -2000,7 +2007,7 @@ const cisloMm = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
 const POPISY_VYBERU = {
   text: ['i-ramecek', 'Text'], ramecek: ['i-ramecek', 'Rámeček'], akord: ['i-akord', 'Akord'],
   obrazek: ['i-obrazek', 'Obrázek'], podklad: ['i-obrazek', 'Podklad strany'], naplast: ['i-naplast', 'Náplast'],
-  nic: ['i-kurzor', 'Strana'], 'nova-naplast': ['i-naplast', 'Nová náplast'], 'novy-ramecek': ['i-ramecek', 'Nový rámeček'],
+  nic: ['i-kurzor', 'Nic nevybráno'], cislo: ['i-cislo', 'Číslo strany'], 'nova-naplast': ['i-naplast', 'Nová náplast'], 'novy-ramecek': ['i-ramecek', 'Nový rámeček'],
 };
 
 // Text s tučným začátkem (název výběru) - bez innerHTML, název akordu píše uživatel.
@@ -2022,9 +2029,16 @@ function obnovKontext(state) {
   const ukaz = new Set();
   if (druh === 'text' && nastroj !== 'naplast' && nastroj !== 'text') ukaz.add('text');
   if (nastroj === 'akord' || druh === 'akord') ukaz.add('akordy');
-  const p = prvekVyberu(state);
+  const p = zvlastniVyber ? null : prvekVyberu(state);
   if (p && !p.node.attrs.podklad && !p.node.attrs.presah && druh !== 'akord' && nastroj !== 'text'
       && !(nastroj === 'naplast' && druh !== 'naplast')) ukaz.add('prvek');
+  if (zvlastniVyber) {
+    el('vybrany-akord').hidden = true;
+    el('vybrany-obrazek').hidden = true;
+    if (nastroj !== 'naplast') el('vybrany-tvar').hidden = true;
+    else el('tvar-smazat').hidden = true;
+  }
+  el('vybrane-cislo').hidden = druh !== 'cislo';
   const skupiny = [...koren.querySelectorAll('.navrh-kontext .skupina')];
   for (const g of skupiny) if (g.dataset.pro) g.hidden = !g.dataset.pro.split(' ').some((t) => ukaz.has(t));
   // Duplikát rámečku s textem jde Ctrl+D; v liště jen u obrázku a náplasti (místo pro text).
@@ -2040,7 +2054,7 @@ function obnovKontext(state) {
   const sel = state.selection;
   stitek.querySelector('span').textContent = druh === 'akord' && klic === 'akord' && sel.node.attrs.n ? `Akord ${sel.node.attrs.n}` : nazev;
   el('kontext-napoveda').textContent = klic === 'novy-ramecek' ? 'Klik na stranu vloží rámeček, tažením jde nakreslit libovolně velký.'
-    : klic === 'nic' ? 'Klik do textu ho upraví, klik na obrázek nebo náplast je vybere. Nové prvky vkládají nástroje vlevo.' : '';
+    : klic === 'nic' ? 'Klik do textu ho upraví, klik na obrázek, náplast nebo číslo strany je vybere. Nové prvky vkládají nástroje vlevo.' : '';
 
   // Stavový řádek: popis výběru, u nástroje jak s ním pracovat.
   const popis = el('navrh-popis');
@@ -2064,7 +2078,8 @@ function obnovKontext(state) {
     if (p && p.node.type === N.ramecek) casti.push(`rámeček ${rozmer(p.node.attrs)}`);
     if (!sel.empty) casti.push(`označeno znaků: ${state.doc.textBetween(sel.from, sel.to, '').length}`);
     napisPopis(popis, 'Text', casti.join(' · '));
-  } else napisPopis(popis, 'Strana', `${nastaveni.format || 'A5'}`);
+  } else if (druh === 'cislo') napisPopis(popis, 'Číslo strany', 'tažením posunout, přichytí se ke středu a k okrajům · platí pro všechny strany · Esc zruší výběr');
+  else napisPopis(popis, 'Nic nevybráno', `strana ${nastaveni.format || 'A5'}`);
 
   // Štítek nástroje nad stranou.
   const rezim = el('navrh-rezim');
@@ -2075,6 +2090,22 @@ function obnovKontext(state) {
       : nastroj === 'text' ? 'Nástroj Text: klik nebo tažení vloží rámeček'
       : `Nástroj Náplast: ${naplast.druh === 'volny' ? 'volný tvar' : 'obdélník'}`;
   }
+}
+
+// Zrušení výběru (klik na prázdné místo, Esc) a výběr čísla strany: editor bez fokusu,
+// ať klávesy (Delete) nesahají na prvek, který tam ProseMirror drží.
+function zrusVyber() {
+  zvlastniVyber = 'nic';
+  cisloStrany.nastavVybrane(false);
+  view.dom.blur();
+  aktualizujListu();
+}
+function vyberCislo() {
+  if (zapnutyNastroj()) PRIKAZY.vybrat();
+  zvlastniVyber = 'cislo';
+  cisloStrany.nastavVybrane(true);
+  view.dom.blur();
+  aktualizujListu();
 }
 
 // Stav uložení v hlavičce (obnovuje se se zálohou rozdělané strany).
@@ -2423,7 +2454,44 @@ nactiPanelVidet();
 pouzijNastaveni();
 aktualizujListu();
 window.addEventListener('resize', () => { nastavVysku(); if (!meritkoRucne) nastavMeritko(); });
-view.focus();
+// Po otevření není nic vybrané (ProseMirror by jinak držel první prvek - často náplast).
+// Klik do textu nebo na prvek dá editoru fokus a tím i běžný výběr.
+view.dom.addEventListener('focus', () => {
+  if (!zvlastniVyber) return;
+  zvlastniVyber = null;
+  cisloStrany.nastavVybrane(false);
+  aktualizujListu();
+});
+// Klik na prázdné místo (papír mimo prvky, šedá plocha kolem): nic nevybráno.
+el('navrh-plocha').addEventListener('pointerdown', (e) => {
+  if (e.button !== 0 || zapnutyNastroj()) return;
+  const t = e.target;
+  if (t !== view.dom && !['stranka', 'navrh-plocha', 'dvojstrana', 'stranka-obal'].includes(t.id) && !t.classList.contains('ps-mimo')) return;
+  e.preventDefault();
+  zrusVyber();
+});
+// Bez fokusu v editoru (nic nevybráno, vybrané číslo): Esc, Zpět/Znovu a Uložit fungují dál.
+window.addEventListener('keydown', (e) => {
+  // Psaní do polí (velikost, název) nechat být; zaškrtávátko a tlačítko v liště Esc nebrání.
+  const pole = e.target.closest?.('input:not([type="checkbox"]):not([type="color"]), select, textarea, [contenteditable="true"]');
+  if (!zvlastniVyber || view.hasFocus() || pole) return;
+  if (document.querySelector('.oznameni-zaclona, #app-confirm-overlay[aria-hidden="false"]')) return;
+  const mod = e.metaKey || e.ctrlKey;
+  const k = e.key.toLowerCase();
+  if (e.key === 'Escape' && zvlastniVyber === 'cislo') { e.target.blur?.(); zrusVyber(); }
+  else if (mod && k === 'z' && !e.shiftKey) undo(view.state, view.dispatch);
+  else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) redo(view.state, view.dispatch);
+  else if (mod && k === 's') { if (KONTEXT && !UKAZKA) ulozit(); }
+  else return;
+  e.preventDefault();
+});
+// Zaškrtávátko v kontextové liště po změně fokus pustí - jinak by u něj zůstala viset
+// nápověda (napoveda.js ji ukazuje i u fokusu) a první Esc by patřil jí.
+for (const z of koren.querySelectorAll('.navrh-kontext input[type="checkbox"]')) z.addEventListener('change', () => z.blur());
+el('upravit-cislo').addEventListener('click', () => {
+  if (!nastaveni.cislo.zobrazit) { nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, zobrazit: true } }; pouzijNastaveni(); nactiPanel(); zalohuj(); }
+  vyberCislo();
+});
 // Načtený koncept je rozdělaná úprava: strana je od začátku neuložená.
 otiskPriNacteni = pouzitKoncept ? null : otiskStrany();
 if (spoj) spoj.druha.otisk = spoj.druha.koncept ? null : otiskStrany(spoj.druha.lp);

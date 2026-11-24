@@ -201,6 +201,27 @@ def test_rozlozeni(page):
     page.click('[data-prikaz="panel"]')
     page.wait_for_timeout(100)
     ok('a zase ukázat', J("getComputedStyle(document.getElementById('navrh-panel')).display") != 'none')
+    # Nic nevybráno: klik na prázdné místo strany, Esc v textu.
+    prazdno = J("""(() => { const r = document.getElementById('stranka').getBoundingClientRect();
+      for (let y = r.top + 5; y < r.bottom; y += 8) for (let x = r.left + 5; x < r.right; x += 8) {
+        const e = document.elementFromPoint(x, y); if (e && e.classList.contains('stranka-obsah')) return [x, y]; } return null; })()""")
+    if prazdno:
+        page.mouse.click(*prazdno)
+        st = J(STAV)
+        ok('klik na prázdné místo strany výběr zruší (štítek Nic nevybráno, bez formátování textu)',
+           st['vyber'] == 'nic' and st['stitek'] == 'Nic nevybráno' and not st['text'] and not J("navrhStrany.view.hasFocus()"), st)
+    J("navrhStrany.view.focus()")
+    page.keyboard.press('Escape')
+    ok('Esc v textu výběr zruší', J(STAV)['vyber'] == 'nic')
+    J("T.kurzor(3)")
+    ok('klik/kurzor do textu ho zase vybere', J(STAV)['vyber'] == 'text', J(STAV))
+    page.click('[data-prikaz="naplast"]')
+    r = J("document.querySelector('.ps-ramecek').getBoundingClientRect().toJSON()")
+    page.mouse.move(r['x'] + r['width'] / 2, r['y'] + 20)
+    page.wait_for_timeout(200)
+    ok('s nástrojem Náplast rámeček na myš nereaguje (bez obrysu a lišty)',
+       J("(() => { const e = document.querySelector('.ps-ramecek'); return getComputedStyle(e).outlineStyle === 'none' && getComputedStyle(e.querySelector('.ps-prvek-lista')).opacity === '0'; })()"))
+    page.click('[data-prikaz="naplast"]')
     page.click('.navrh-nastroje .pripravuje')
     page.wait_for_timeout(100)
     ok('připravovaná funkce jen napíše do stavového řádku, že se připravuje',
@@ -738,6 +759,10 @@ def test_prohlizece(p, base, jmeno):
     ok('při tažení je vidět náhled dvojstrany', J("!document.querySelector('.nahled-dvojstrany.plovouci').hidden"))
     page.mouse.up()
     ok('číslo se přichytí ke středu strany', poloha()[0] == 74, poloha())
+    ok('a je vybrané jako prvek: štítek Číslo strany, jeho úpravy v liště, náhled dvojstrany zůstane',
+       J("document.getElementById('kontext-stitek').textContent.trim()") == 'Číslo strany'
+       and J("!document.getElementById('vybrane-cislo').hidden && document.querySelector('.ps-cislo-strany').classList.contains('vybrane')")
+       and J("!document.querySelector('.nahled-dvojstrany.plovouci').hidden"))
     J("navrhStrany.cislo().volby.zmen({ cislo: { ...navrhStrany.nastaveni().cislo, x: 138, y: 205 } })")
     # Levou/pravou určuje pozice ve zpěvníku - tady ji test přepne přímo.
     J("navrhStrany.cislo().volby.zmen({ nahledStrany: 'L' })")
@@ -750,6 +775,13 @@ def test_prohlizece(p, base, jmeno):
     ok('na jedné straně jde číslo skrýt', J("document.querySelector('.ps-cislo-strany').classList.contains('skryte')"))
     ukaz(page, '[data-nastaveni="cisloSkryte"]')
     page.uncheck('[data-nastaveni="cisloSkryte"]')
+    pl = page.evaluate("document.getElementById('navrh-plocha').getBoundingClientRect().toJSON()")
+    page.mouse.move(pl['x'] + 6, pl['y'] + pl['height'] - 6)   # na šedou plochu - bez nápovědy pod myší (první Esc by zavřel ji)
+    page.wait_for_timeout(300)       # nápověda mizí s odkladem 160 ms
+    page.wait_for_timeout(100)
+    page.keyboard.press('Escape')
+    ok('Esc výběr čísla zruší (náhled zmizí)', J("document.getElementById('navrh').dataset.vyber") == 'nic'
+       and J("document.querySelector('.nahled-dvojstrany.plovouci').hidden"))
 
     # Vykreslení mimo editor (čtečka, obrázek pro PDF): musí vypadat přesně jako editor.
     v = J("""async () => {

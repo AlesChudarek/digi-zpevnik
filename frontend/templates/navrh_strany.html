@@ -66,6 +66,7 @@
     <symbol id="i-tvary" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><rect x="11" y="11" width="10" height="10" rx="1"/></symbol>
     <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></symbol>
     <symbol id="i-orez" viewBox="0 0 24 24"><path d="M6 2v16h16"/><path d="M2 6h16v16"/></symbol>
+    <symbol id="i-cislo" viewBox="0 0 24 24"><path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17"/></symbol>
   </defs>
 </svg>
 
@@ -119,8 +120,8 @@
   {# Nástroje: Výběr je „žádný nástroj“ (psaní, výběr a přesun prvků). Text, Akord a Náplast
      se navzájem vypínají; Obrázek je jen akce (otevře soubor). #}
   <nav class="navrh-nastroje" role="toolbar" aria-orientation="vertical" aria-label="Nástroje">
-    <button type="button" class="nastroj" data-prikaz="vybrat" data-napoveda="Výběr: psaní do textu, výběr a přesun prvků (Esc)"><svg><use href="#i-kurzor"/></svg><span>Výběr</span></button>
-    <button type="button" class="nastroj" data-prikaz="ramecek" data-napoveda="Nový textový rámeček: klik na stranu, nebo tažením nakreslit"><svg><use href="#i-ramecek"/></svg><span>Text</span></button>
+    <button type="button" class="nastroj" data-prikaz="vybrat" data-napoveda="Výběr: klik do textu ho upraví, klik na prvek ho vybere, klik na prázdné místo výběr zruší (Esc)"><svg><use href="#i-kurzor"/></svg><span>Výběr</span></button>
+    <button type="button" class="nastroj" data-prikaz="ramecek" data-napoveda="Nový textový rámeček: klik na stranu, nebo tažením nakreslit. Upravit text jde vždy klikem do něj."><svg><use href="#i-ramecek"/></svg><span>Nový text</span></button>
     <button type="button" class="nastroj" data-prikaz="akordy" data-napoveda="Akordy: klik na znak vloží akord"><svg><use href="#i-akord"/></svg><span>Akord</span></button>
     <button type="button" class="nastroj" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout na stranu nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg><span>Obrázek</span></button>
     <button type="button" class="nastroj" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany)"><svg><use href="#i-naplast"/></svg><span>Náplast</span></button>
@@ -189,6 +190,16 @@
       <span class="skupina-popis" id="obrazek-podklad" hidden>Podklad leží vždy vespod, vybírá se Alt+klikem.</span>
       <button type="button" class="s-popisem pripravuje" data-pripravuje="Oříznutí obrázku" data-napoveda="Oříznout - připravuje se"><svg><use href="#i-orez"/></svg>Oříznout</button>
       <button type="button" class="ikona nebezpecne" id="obrazek-smazat" data-napoveda="Smazat obrázek (Delete)" aria-label="Smazat obrázek"><svg><use href="#i-kos"/></svg></button>
+    </div>
+    {# Číslo strany (vybrané klikem na straně): vzhled; poloha tažením, náhled dvojstrany
+       je při výběru vidět nad stranou. Platí pro všechny strany zpěvníku. #}
+    <div class="skupina" id="vybrane-cislo" hidden>
+      <select data-cislo-pole="pismo" data-pisma class="vyber-pismo" data-napoveda="Písmo čísla strany" aria-label="Písmo čísla strany"></select>
+      <label class="pole-v-liste"><span class="s-jednotkou"><input type="number" data-cislo-pole="velikost" min="5" max="40" step="0.5" aria-label="Velikost čísla strany"> pt</span></label>
+      <button type="button" class="ikona text" data-cislo-prepinac="tucne" data-napoveda="Tučně" aria-label="Tučně"><b>B</b></button>
+      <label class="pole-v-liste"><input type="color" data-cislo-pole="barva" aria-label="Barva čísla"></label>
+      <label class="zaskrt-v-liste" data-napoveda="Na levé straně zrcadlově: vnější roh zůstane vnějším"><input type="checkbox" data-cislo-pole="zrcadlit"> Zrcadlit na levé</label>
+      <label class="zaskrt-v-liste" data-napoveda="Jen na této straně (titulní strana apod.)"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně skrýt</label>
     </div>
     {# Prvek jako celek (rámeček s kurzorem, obrázek, náplast): pořadí vrstev a duplikát. #}
     <div class="skupina" data-pro="prvek">
@@ -434,20 +445,10 @@
         <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
       </label>
       <h3>Číslo strany</h3>
-      <div class="nahled-dvojstrany" id="dvojstrana-panel" aria-hidden="true"></div>
       <label class="zaskrt"><input type="checkbox" data-cislo-pole="zobrazit"> Číslovat strany</label>
-      <label class="zaskrt dlouhy"><input type="checkbox" data-cislo-pole="zrcadlit"> Na levé straně zrcadlově (vnější roh zůstane vnějším)</label>
-      <label class="radek-pole">Písmo <select data-cislo-pole="pismo" data-pisma></select></label>
-      <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-cislo-pole="velikost" min="5" max="40" step="0.5"> pt</span></label>
-      <div class="radek-pole">Řez
-        <span class="rez">
-          <button type="button" class="prepinac-rez" data-cislo-prepinac="tucne" aria-label="Tučně"><b>B</b></button>
-          <input type="color" data-cislo-pole="barva" aria-label="Barva čísla">
-        </span>
-      </div>
-      <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně číslo skrýt (titulní strana apod.)</label>
-      <p class="poznamka">Poloha se mění tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
-        a levá/pravá doplní podle skutečné pozice strany.</p>
+      <p class="poznamka">Vzhled a poloha: klik na číslo na straně (táhnout ho jde rovnou). Platí pro všechny
+        strany; ve zpěvníku se číslo a levá/pravá doplní podle skutečné pozice strany.</p>
+      <div class="tlacitka"><button type="button" id="upravit-cislo">Upravit číslo strany</button></div>
     </section>
     <section class="karta pripravuje-karta">
       <h2>Připravuje se</h2>

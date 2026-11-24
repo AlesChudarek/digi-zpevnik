@@ -8,7 +8,9 @@
 // Poloha (x, y v mm, střed čísla) platí pro PRAVOU stranu. Na levé je se zrcadlením
 // zrcadlově podle svislé osy (vnější roh zůstane vnějším), bez zrcadlení na stejném
 // místě. Tažením čísla na straně se poloha mění; přichytí se ke středu a k okrajům sazby
-// a během tažení je vidět náhled dvojstrany s oběma čísly.
+// a během tažení i u vybraného čísla je vidět náhled dvojstrany s oběma čísly.
+// Klik na číslo ho vybere jako prvek (volby.vyber) - úpravy vzhledu jsou pak v kontextové
+// liště editoru.
 
 const MM_NA_PX = 96 / 25.4;
 const PRICHYT_MM = 1.5;
@@ -21,14 +23,15 @@ export class CisloStrany {
     this.volby = volby;
     this.el = document.createElement('div');
     this.el.className = 'ps-cislo-strany';
-    this.el.title = 'Táhnout: poloha čísla strany';
+    this.el.title = 'Číslo strany: klik vybere, tažením poloha';
+    this.vybrane = false;
     stranka.appendChild(this.el);
     this.voditkoX = document.createElement('div');
     this.voditkoX.className = 'ps-voditko-cisla svisle';
     this.voditkoY = document.createElement('div');
     this.voditkoY.className = 'ps-voditko-cisla vodorovne';
     stranka.append(this.voditkoX, this.voditkoY);
-    // Plovoucí náhled dvojstrany během tažení.
+    // Plovoucí náhled dvojstrany během tažení a u vybraného čísla.
     this.nahled = document.createElement('div');
     this.nahled.className = 'nahled-dvojstrany plovouci';
     this.nahled.hidden = true;
@@ -57,12 +60,26 @@ export class CisloStrany {
     this.el.hidden = !c.zobrazit;
     // Skryté na této straně: v editoru jen bledě, ať je vidět, kde by bylo.
     this.el.classList.toggle('skryte', !!n.cisloSkryte);
+    this.obnovNahled();
+  }
+
+  nastavVybrane(v) {
+    this.vybrane = !!v;
+    this.el.classList.toggle('vybrane', this.vybrane);
+    this.obnovNahled();
+  }
+
+  obnovNahled(c = null) {
+    const n = this.volby.nastaveni();
+    this.nahled.hidden = !(this.vybrane || this.tah) || !n.cislo.zobrazit;
+    if (!this.nahled.hidden) vykresliDvojstranu(this.nahled, this.volby.format(), c || n.cislo, String(n.nahledCisla), n.nahledStrany);
   }
 
   zacni(e) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
+    if (this.volby.vyber) this.volby.vyber();
     const n = this.volby.nastaveni();
     this.tah = { strana: n.nahledStrany, posun: false };
     this.el.classList.add('tazene');
@@ -100,8 +117,7 @@ export class CisloStrany {
     const { x: vx, y: vy } = CisloStrany.poloha(this.tah.nove, f, this.tah.strana);
     this.el.style.left = vx + this.posun() + 'mm';
     this.el.style.top = vy + 'mm';
-    this.nahled.hidden = false;
-    vykresliDvojstranu(this.nahled, f, this.tah.nove, String(n.nahledCisla), this.tah.strana);
+    this.obnovNahled(this.tah.nove);
   }
 
   ukazVoditka(x, y) {
@@ -116,10 +132,10 @@ export class CisloStrany {
     window.removeEventListener('pointerup', this._konec);
     this.el.classList.remove('tazene');
     this.ukazVoditka(null, null);
-    this.nahled.hidden = true;
     const t = this.tah;
     this.tah = null;
     if (t && t.posun) this.volby.zmen({ cislo: t.nove });
+    this.obnovNahled();
   }
 }
 

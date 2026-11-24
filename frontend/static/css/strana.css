@@ -140,6 +140,7 @@
   background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
   border: 1px solid var(--ram); border-radius: 6px;
 }
+.zaskrt-v-liste { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; padding: 0 6px; white-space: nowrap; cursor: pointer; }
 .pole-v-liste { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-muted, #666); padding: 0 6px 0 2px; }
 .pole-v-liste .s-jednotkou { display: inline-flex; align-items: center; gap: 4px; }
 .pole-v-liste input[type="number"] { width: 58px; }
@@ -417,6 +418,27 @@
     outline: calc(1px / var(--meritko)) solid rgba(26, 115, 232, 0.45);
   }
 }
+/* Nic nevybráno / vybrané číslo strany: ProseMirror si nějaký prvek drží, ale editor je
+   bez fokusu a výběr se nemá ukazovat (navrh.js, zvlastniVyber). */
+.navrh[data-vyber="nic"] .ps-ramecek.aktivni, .navrh[data-vyber="cislo"] .ps-ramecek.aktivni,
+.navrh[data-vyber="nic"] .ps-obrazek.vybrany, .navrh[data-vyber="cislo"] .ps-obrazek.vybrany { outline: none; }
+.navrh[data-vyber="nic"] .ps-tvar.vybrany polygon, .navrh[data-vyber="cislo"] .ps-tvar.vybrany polygon { stroke: none; }
+.navrh[data-vyber="nic"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="nic"] .vybrany > .ps-prvek-roh,
+.navrh[data-vyber="nic"] .aktivni > .ps-prvek-lista, .navrh[data-vyber="nic"] .aktivni > .ps-prvek-roh,
+.navrh[data-vyber="cislo"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="cislo"] .vybrany > .ps-prvek-roh,
+.navrh[data-vyber="cislo"] .aktivni > .ps-prvek-lista, .navrh[data-vyber="cislo"] .aktivni > .ps-prvek-roh { opacity: 0; }
+.navrh[data-vyber="nic"] .akord-kotva.vybrany .akord, .navrh[data-vyber="cislo"] .akord-kotva.vybrany .akord { outline: none; }
+/* Nástroj Náplast kreslí i přes text a obrázky - ty na myš nereagují (žádný obrys ani
+   lišta), ať je jasné, že klik kreslí. Reagují jen náplasti. */
+.rezim-naplasti .ps-ramecek, .rezim-naplasti .ps-obrazek { outline: none !important; }
+.rezim-naplasti .ps-ramecek > .ps-prvek-lista, .rezim-naplasti .ps-ramecek > .ps-prvek-roh,
+.rezim-naplasti .ps-obrazek > .ps-prvek-lista, .rezim-naplasti .ps-obrazek > .ps-prvek-roh { opacity: 0 !important; pointer-events: none; }
+.rezim-naplasti .ps-cislo-strany { pointer-events: none; }
+/* Nástroj Nový text: obrázky a náplasti na myš nereagují. */
+.rezim-textu .ps-obrazek { outline: none !important; }
+.rezim-textu .ps-obrazek > .ps-prvek-lista, .rezim-textu .ps-obrazek > .ps-prvek-roh, .rezim-textu .ps-tvar > .ps-prvek-roh { opacity: 0 !important; }
+.rezim-textu .ps-tvar polygon { stroke: none !important; }
+
 /* Kopie rámečku přes hřbet z vedlejší strany: jen k vidění (upravuje se ve dvojstraně). */
 .ps-ramecek.ps-presah { outline: calc(1px / var(--meritko)) dashed rgba(0, 0, 0, 0.35) !important; cursor: default; }
 .ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-prvek-roh { display: none; }
@@ -536,7 +558,7 @@
 }
 .ps-cislo-strany[hidden] { display: none; }
 @media (hover: hover) { .ps-cislo-strany:hover { outline: calc(1px / var(--meritko)) dashed #1a73e8; } }
-.ps-cislo-strany.tazene { outline: calc(1px / var(--meritko)) solid #1a73e8; }
+.ps-cislo-strany.tazene, .ps-cislo-strany.vybrane { outline: calc(1.5px / var(--meritko)) solid #1a73e8; outline-offset: calc(2px / var(--meritko)); }
 .ps-cislo-strany.skryte { opacity: 0.25; }
 .ps-voditko-cisla { position: absolute; display: none; z-index: 4; pointer-events: none; }
 .ps-voditko-cisla.svisle { top: 0; bottom: 0; border-left: calc(1px / var(--meritko)) dashed #e91e63; }
