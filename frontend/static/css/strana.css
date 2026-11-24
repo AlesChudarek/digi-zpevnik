@@ -1,183 +1,250 @@
 /* Editor navržené strany. Třídy obsahu mají předponu ps- (písňová strana): .radek,
    .pole i .nadpis už používají globální styly webu (profil.css, dashboard_base).
    Dvě části:
-   - ovládání (lišta, panel) na proměnných --panel-* jako okna a správa, ať sedí do motivu;
+   - ovládání (hlavička, nástroje, kontextová lišta, panel, stavový řádek) na proměnných
+     --panel-* jako okna a správa, ať sedí do motivu;
    - strana sama je papír: vždy bílá s černým textem, v každém motivu stejná, protože
      z ní vznikne obrázek do zpěvníku. Rozměry v mm, písmo v pt. */
 
-/* --- pracovní plocha ---------------------------------------------------------------- */
-/* Výšku (do spodku okna) nastavuje skript; lišta nahoře přes celou šířku, pod ní plocha
-   se stranou a panel, každý se posouvá sám. */
+/* --- rozložení ------------------------------------------------------------------------ */
+/* Jako grafické editory: hlavička přes celou šířku, vlevo svislá lišta nástrojů, nad
+   stranou kontextová lišta (úpravy výběru), vpravo panel s nastavením strany, dole
+   stavový řádek. Výšku (do spodku okna) nastavuje skript; plocha a panel se posouvají
+   samy. Panel jde schovat (třída bez-panelu). */
 .navrh {
-  display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-rows: auto minmax(0, 1fr);
-  gap: 10px; max-width: 1600px; margin: 10px auto 0; padding: 0 12px 12px; box-sizing: border-box;
-  height: calc(100vh - 80px);
-}
-
-.navrh-lista, .navrh-panel .karta {
+  --akcent: #1a73e8;
+  --plocha-bg: #e4e6ea;
+  --ram: var(--panel-border, #e2e2e2);
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 300px;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-areas: "hlava hlava hlava" "nastroje kontext panel" "nastroje plocha panel" "dole dole dole";
+  margin: 8px 10px 0; box-sizing: border-box; height: calc(100vh - 80px);
   background: var(--panel-bg, #fff); color: var(--panel-text, #222);
-  border-radius: 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22); overflow: hidden;
 }
+.navrh.bez-panelu { grid-template-columns: 64px minmax(0, 1fr) 0; }
+.navrh.bez-panelu .navrh-panel { display: none; }
 
-/* Strana zpěvníku (/editor-strany/<id>): přes celou šířku okna, vlevo v liště kde
-   strana je, nástroje uprostřed, Uložit vpravo. Mřížka, ne automatické okraje ve flexu -
-   ty se při zalomení lišty rozjely. Úzká lišta zalomí jen nástroje, každý řádek na střed.
-   Samostatně se obal nástrojů nevidí (display: contents). */
-html.navrh-ve-zpevniku .navrh { max-width: none; }
-.navrh-lista .skupina.hotovo-zrusit { margin-left: auto; border-left: 0; }
-.navrh-lista .nastroje { display: contents; }
-html.navrh-ve-zpevniku .navrh-lista { display: grid; grid-template-columns: 1fr minmax(0, max-content) 1fr; align-items: center; column-gap: 8px; }
-html.navrh-ve-zpevniku .navrh-lista .nastroje {
-  grid-column: 2; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 0;
-}
-html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-self: end; align-self: start; margin-left: 0; }
-/* Bez min-width: 0 - sloupec mřížky se pak nesmrskne pod popisek (dlouhý název se
-   zkrátí třemi tečkami, max-width) a popisek nevleze pod nástroje. */
-.navrh-lista .kde { grid-column: 1; justify-self: start; align-self: start; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
-.navrh-lista .neulozene-jinde { display: inline-flex; align-items: center; padding: 0 6px; cursor: help; }
-.navrh-lista .neulozene-jinde[hidden] { display: none; }
-.navrh-lista .neulozene-jinde img { width: 18px; height: 18px; }
-.navrh-lista .kde-strana {
-  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px;
-  border-radius: 6px; color: var(--panel-text, #333); text-decoration: none; font-size: 14px;
-}
-.navrh-lista .kde-strana:hover { background: var(--panel-btn-bg, #f0f0f0); }
-.navrh-lista .kde-sipka { font-size: 20px; line-height: 1; }
-.navrh-lista .kde-nazev { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 14em; }
-.navrh-lista .hotovo-zrusit .hlavni { background: var(--brand-dark, #1b5e20); color: #fff; padding: 0 16px; font-weight: 600; }
-
-/* --- lišta --------------------------------------------------------------------------- */
-.navrh-lista {
-  grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0;
-  padding: 5px 8px;
-}
-/* Skupina se nikdy nerozdělí na dva řádky (Zpět a Znovu vždy vedle sebe). */
-.navrh-lista .skupina {
-  display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px;
-  padding: 0 6px; border-left: 1px solid var(--panel-border, #e2e2e2);
-}
-.navrh-lista .skupina:first-child { border-left: 0; padding-left: 0; }
-.navrh-lista button, .navrh-lista .ikona {
+/* Společný vzhled tlačítek ovládání (hlavička, nástroje, kontextová lišta). */
+.navrh-hlava button, .navrh-hlava .ikona, .navrh-kontext button, .navrh-kontext .ikona {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 32px; min-width: 32px; padding: 0 7px; box-sizing: border-box;
+  height: 32px; min-width: 32px; padding: 0 8px; box-sizing: border-box;
   background: transparent; color: var(--panel-text, #333); border: 0; border-radius: 6px;
-  font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
+  font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; text-decoration: none;
 }
-.navrh-lista .ikona { padding: 0; }
-.navrh-lista .ikona.text { font-size: 16px; font-family: Georgia, serif; }
-.navrh-lista svg {
+.navrh-hlava .ikona, .navrh-kontext .ikona { padding: 0; }
+.navrh-kontext .ikona.text { font-size: 16px; font-family: Georgia, serif; }
+.navrh svg {
   width: 20px; height: 20px; flex: 0 0 auto;
   fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
 @media (hover: hover) {
-  .navrh-lista button:hover:not(:disabled), .navrh-lista .ikona:hover { background: var(--panel-btn-bg, #f0f0f0); }
+  .navrh-hlava button:hover:not(:disabled), .navrh-hlava .ikona:hover,
+  .navrh-kontext button:hover:not(:disabled), .navrh-kontext .ikona:hover { background: var(--panel-btn-bg, #f0f0f0); }
 }
-.navrh-lista button.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
-.navrh-lista button:disabled { opacity: 0.35; cursor: default; }
-/* Nabídka Pořadí (vrstvy): pod tlačítkem, položka s ikonou a klávesou. */
-.navrh-poradi { position: relative; }
-.navrh-lista .poradi-tlacitko { gap: 0; padding: 0 2px; }
-.navrh-lista .poradi-tlacitko .sipka { font-size: 10px; }
-.navrh-poradi-nabidka {
-  position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; display: flex; flex-direction: column;
-  min-width: 230px; padding: 4px; background: var(--panel-bg, #fff); border: 1px solid var(--panel-border, #ddd);
-  border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-}
-.navrh-poradi-nabidka[hidden] { display: none; }
-.navrh-lista .navrh-poradi-nabidka button { justify-content: flex-start; width: 100%; }
-.navrh-poradi-nabidka kbd { margin-left: auto; padding-left: 16px; font: inherit; font-size: 12px; color: var(--muted-text, #777); }
-.navrh-lista select {
+.navrh-hlava button.aktivni, .navrh-kontext button.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
+.navrh-hlava button:disabled, .navrh-kontext button:disabled { opacity: 0.35; cursor: default; }
+.navrh .nebezpecne { color: #b00020; }
+.navrh select {
   height: 32px; font: inherit; font-size: 14px; padding: 0 6px; border-radius: 6px;
   background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
-  border: 1px solid var(--panel-border, #ddd);
+  border: 1px solid var(--ram);
 }
-.navrh-lista .vyber-styl { width: 104px; }
-.navrh-lista .vyber-pismo { width: 132px; }
+
+/* --- hlavička ------------------------------------------------------------------------- */
+/* Vlevo kde strana je a listování, uprostřed Zpět/Znovu, vpravo stav uložení a akce. */
+.navrh-hlava {
+  grid-area: hlava; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--ram);
+}
+.hlava-vlevo { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.hlava-stred { display: flex; gap: 2px; }
+.hlava-vpravo { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.hlava-nazev { font-weight: 600; padding: 0 6px; }
+.navrh-hlava .kde-strana { padding: 0 8px 0 4px; flex: 0 1 auto; min-width: 0; }
+.navrh-hlava .kde-sipka { font-size: 20px; line-height: 1; }
+.navrh-hlava .kde-nazev { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
+.navrh-listovani { display: flex; align-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid var(--ram); flex: none; }
+.listovani-cislo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-muted, #666); }
+.listovani-cislo input {
+  width: 3.2em; height: 28px; box-sizing: border-box; text-align: center; font: inherit; font-size: 14px;
+  border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
+}
+.listovani-lp { min-width: 3.6em; }
+.navrh-listovani .nova-strana[hidden] { display: none; }
+.navrh-hlava .jina-strana { font-size: 13px; color: var(--panel-muted, #555); }
+.stav-ulozeni { font-size: 13px; color: var(--panel-muted, #666); margin-right: 6px; white-space: nowrap; }
+.stav-ulozeni.neulozeno::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #f59e0b; margin-right: 6px; vertical-align: 1px;
+}
+.neulozene-jinde { display: inline-flex; align-items: center; padding: 0 4px; cursor: help; }
+.neulozene-jinde[hidden] { display: none; }
+.neulozene-jinde img { width: 18px; height: 18px; }
+.navrh-hlava .hlavni { background: var(--brand-dark, #1b5e20); color: #fff; padding: 0 18px; font-weight: 600; margin-left: 4px; }
+@media (hover: hover) { .navrh-hlava .hlavni:hover:not(:disabled) { background: var(--brand-dark, #1b5e20); filter: brightness(1.12); } }
+.navrh-hlava button[aria-pressed="true"] { color: var(--akcent); }
+
+/* --- lišta nástrojů ------------------------------------------------------------------- */
+/* Svislá, ikona s popiskem pod ní; zapnutý nástroj plně zvýrazněný (Výběr, když není
+   zapnutý žádný jiný). */
+.navrh-nastroje {
+  grid-area: nastroje; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; border-right: 1px solid var(--ram); overflow-y: auto;
+}
+.navrh-nastroje .nastroj {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  width: 56px; height: 54px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+  color: var(--panel-text, #333); font: inherit; font-size: 11px; line-height: 1; cursor: pointer;
+}
+.navrh-nastroje .nastroj svg { width: 22px; height: 22px; }
+@media (hover: hover) { .navrh-nastroje .nastroj:hover:not(:disabled):not(.aktivni) { background: var(--panel-btn-bg, #f0f0f0); } }
+.navrh-nastroje .nastroj.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
+.navrh-nastroje .nastroj:disabled { opacity: 0.35; cursor: default; }
+.nastroje-oddelovac { width: 32px; height: 1px; background: var(--ram); margin: 6px 0; flex: none; }
+
+/* Připravované funkce: vidět, ale tlumeně, s tečkovaným obrysem. */
+.navrh .pripravuje { opacity: 0.55; }
+.navrh .pripravuje:hover { opacity: 0.8; }
+.navrh-panel .pripravuje { background: transparent; border: 1px dashed var(--ram); }
+
+/* --- kontextová lišta ----------------------------------------------------------------- */
+/* Štítek vlevo říká, co se upravuje; skupiny podle výběru (navrh.js). */
+.navrh-kontext {
+  grid-area: kontext; display: flex; align-items: flex-start; gap: 8px; min-height: 44px; box-sizing: border-box;
+  padding: 6px 10px; border-bottom: 1px solid var(--ram);
+}
+.kontext-stitek {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 8px; flex: none;
+  border-radius: 999px; background: rgba(26, 115, 232, 0.1); color: var(--akcent);
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.kontext-stitek svg { width: 17px; height: 17px; }
+.kontext-skupiny { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 0; min-width: 0; }
+.navrh-kontext .skupina {
+  display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px;
+  padding: 0 8px; border-left: 1px solid var(--ram);
+}
+.navrh-kontext .skupina[hidden] { display: none; }
+.navrh-kontext .skupina.prvni { border-left: 0; padding-left: 0; }
+.skupina-popis { font-size: 13px; color: var(--panel-muted, #666); padding: 0 6px 0 2px; white-space: nowrap; }
+.kontext-napoveda { font-size: 13px; color: var(--panel-muted, #666); line-height: 32px; padding: 0 4px; }
+.kontext-napoveda:empty { display: none; }
+.navrh-kontext .vyber-styl { width: 110px; }
+.navrh-kontext .vyber-pismo { width: 136px; }
 .velikost-pisma { display: inline-flex; align-items: center; margin-left: 4px; }
-.velikost-pisma button { min-width: 26px !important; font-size: 16px !important; }
-.velikost-pisma input {
-  width: 44px; height: 28px; text-align: center; box-sizing: border-box; font: inherit; font-size: 14px;
+.velikost-pisma button { min-width: 26px !important; font-size: 16px !important; padding: 0 !important; }
+.velikost-pisma input, .pole-v-liste input[type="number"] {
+  width: 46px; height: 28px; text-align: center; box-sizing: border-box; font: inherit; font-size: 14px;
   background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
-  border: 1px solid var(--panel-border, #ddd); border-radius: 6px;
+  border: 1px solid var(--ram); border-radius: 6px;
 }
+.pole-v-liste { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-muted, #666); padding: 0 6px 0 2px; }
+.pole-v-liste .s-jednotkou { display: inline-flex; align-items: center; gap: 4px; }
+.pole-v-liste input[type="number"] { width: 58px; }
+.navrh-kontext input[type="color"] {
+  width: 34px; height: 28px; padding: 1px 2px; border-radius: 6px; cursor: pointer;
+  background: var(--panel-btn-bg, #f4f4f4); border: 1px solid var(--ram);
+}
+.navrh-kontext .prepinac { display: inline-flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--ram); margin-right: 6px; }
+.navrh-kontext .prepinac[hidden] { display: none; }
+.navrh-kontext .prepinac button { border-radius: 0; height: 30px; font-size: 13px; }
+.navrh-kontext #tvar-smazat-vse { font-size: 13px; }
+.navrh-kontext [hidden] { display: none !important; }
 /* Barva textu: „A“ s pruhem vybrané barvy, pod ním skrytý výběr barvy. */
 .barva-textu { position: relative; flex-direction: column; gap: 0 !important; cursor: pointer; }
 .barva-textu .pismeno { font-size: 16px; font-weight: 600; line-height: 1; margin-top: 2px; }
 .barva-textu .pruh { width: 18px; height: 4px; border-radius: 1px; margin-top: 2px; background: #000; }
 .barva-textu input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
 
+/* Nabídky (Pořadí, nabídka prvku na pravé tlačítko): položka s ikonou a klávesou. */
+.navrh-poradi { position: relative; }
+.navrh-kontext .poradi-tlacitko .sipka { font-size: 10px; margin-left: -2px; }
+.nabidka {
+  display: flex; flex-direction: column; min-width: 230px; padding: 4px; z-index: 30;
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222); border: 1px solid var(--ram);
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+.nabidka[hidden] { display: none; }
+.navrh-poradi-nabidka { position: absolute; top: calc(100% + 4px); left: 0; }
+.nabidka-prvku { position: fixed; }
+.nabidka button {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 8px; justify-content: flex-start;
+  border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; font-size: 14px; cursor: pointer;
+}
+.nabidka button.nebezpecne { color: #b00020; }
+@media (hover: hover) { .nabidka button:hover:not(:disabled) { background: var(--panel-btn-bg, #f0f0f0); } }
+.nabidka button:disabled { opacity: 0.35; cursor: default; }
+.nabidka kbd { margin-left: auto; padding-left: 16px; font: inherit; font-size: 12px; color: var(--muted-text, #777); }
+.nabidka-oddelovac { height: 1px; background: var(--ram); margin: 4px 0; }
+
 /* --- plocha se stranou ---------------------------------------------------------------- */
-.navrh-plocha {
-  position: relative; overflow: auto; border-radius: 10px;
-  background: #e4e6ea; padding: 24px;
+.navrh-plocha { grid-area: plocha; position: relative; overflow: auto; background: var(--plocha-bg); padding: 24px; }
+/* Zapnutý nástroj: tenký rámeček kolem plochy v barvě zvýraznění a štítek nahoře. */
+.navrh.s-nastrojem .navrh-plocha { box-shadow: inset 0 0 0 2px var(--akcent); }
+.navrh-rezim {
+  grid-area: plocha; align-self: start; justify-self: center; position: relative; z-index: 20;
+  max-width: calc(100% - 20px); box-sizing: border-box; margin-top: 8px; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 12px;
+  background: var(--akcent); color: #fff; border-radius: 999px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-size: 13px; font-weight: 600;
 }
-/* Spodní pruh plochy: drží se dole i při posouvání; klikat jde jen na jeho obsah. */
+.navrh-rezim[hidden] { display: none; }
+.navrh-rezim svg { width: 17px; height: 17px; }
+.navrh-rezim .rezim-konec {
+  width: 24px; height: 24px; border: 0; border-radius: 50%; background: rgba(255, 255, 255, 0.2); color: #fff;
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 0;
+}
+@media (hover: hover) { .navrh-rezim .rezim-konec:hover { background: rgba(255, 255, 255, 0.35); } }
+
+/* --- stavový řádek -------------------------------------------------------------------- */
 .navrh-dole {
-  position: sticky; left: 0; bottom: -12px; margin-top: 14px; pointer-events: none;
-  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px;
+  grid-area: dole; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  padding: 4px 10px; border-top: 1px solid var(--ram); font-size: 13px; min-height: 40px; box-sizing: border-box;
 }
-.navrh-dole > * { pointer-events: auto; }
-.navrh-stav {
-  grid-column: 2; font-size: 13px; background: rgba(255, 255, 255, 0.94); color: #555;
-  border-radius: 999px; padding: 4px 14px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
-}
-.navrh-stav:empty { visibility: hidden; }
-.navrh-vpravo { grid-column: 3; justify-self: end; display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; white-space: nowrap; }
-@media (max-width: 700px) { .navrh-vpravo { flex-wrap: wrap; } }
-.navrh-zoom {
-  display: inline-flex; align-items: center; gap: 2px;
-  background: rgba(255, 255, 255, 0.96); border-radius: 999px; padding: 2px 6px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
-}
+.navrh-popis { color: var(--panel-muted, #555); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.navrh-popis b { color: var(--panel-text, #222); font-weight: 600; }
+.navrh-popis.pripravuje-zprava, .navrh-popis.pripravuje-zprava b { color: var(--akcent); }
+.navrh-stav:empty { display: none; }
+.navrh-stav .varovani { color: #b00020; font-weight: 600; }
+.navrh-vpravo { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+.navrh-zoom { display: inline-flex; align-items: center; gap: 2px; }
 .navrh-zoom button {
   display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
-  border: 0; border-radius: 999px; background: transparent; color: #333; cursor: pointer;
+  border: 0; border-radius: 6px; background: transparent; color: var(--panel-text, #333); cursor: pointer;
 }
-@media (hover: hover) { .navrh-zoom button:hover { background: #eee; } }
-.navrh-zoom svg {
-  width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8;
-  stroke-linecap: round; stroke-linejoin: round;
-}
-.navrh-listovani input {
-  width: 3.4em; height: 26px; box-sizing: border-box; text-align: center; font: inherit; font-size: 13px;
-  border: 1px solid #ccc; border-radius: 6px; background: #fff; color: #222;
-}
-.navrh-listovani .nova-strana { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
-  border-radius: 999px; color: #333; text-decoration: none; font-size: 20px; line-height: 1; }
-.navrh-listovani .nova-strana[hidden] { display: none; }
-@media (hover: hover) { .navrh-listovani .nova-strana:hover { background: #eee; } }
-.navrh-listovani .oddelovac { width: 1px; height: 18px; background: #ddd; margin: 0 2px; }
-.navrh-zoom button.aktivni { background: #1a73e8; color: #fff; }
+@media (hover: hover) { .navrh-zoom button:hover:not(.aktivni) { background: var(--panel-btn-bg, #eee); } }
+.navrh-zoom svg { width: 18px; height: 18px; }
+.navrh-zoom button.aktivni { background: rgba(26, 115, 232, 0.14); color: var(--akcent); }
 .navrh-zoom button:disabled { opacity: 0.35; cursor: default; }
-.navrh-zoom .meritko-text { font-size: 13px; min-width: 44px; text-align: center; color: #444; }
-.navrh-stav .varovani { color: #b00020; font-weight: 600; }
+.navrh-zoom .meritko-text { font-size: 13px; min-width: 44px; text-align: center; color: var(--panel-text, #444); }
+.navrh-pohled { padding-right: 8px; border-right: 1px solid var(--ram); }
 
 /* --- panel vpravo ----------------------------------------------------------------------- */
 .navrh-panel {
-  overflow-y: auto; display: flex; flex-direction: column; gap: 10px; font-size: 14px;
-  padding-bottom: 4px;
+  grid-area: panel; overflow-y: auto; display: flex; flex-direction: column; font-size: 14px;
+  border-left: 1px solid var(--ram);
 }
-.navrh-panel .karta { padding: 10px 14px 12px; }
+.navrh-panel .karta { padding: 12px 14px 14px; border-bottom: 1px solid var(--ram); }
 /* Záložky panelu: pevně nahoře, obsah pod nimi se posouvá. */
 .panel-zalozky {
-  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 3px;
-  background: var(--panel-bg, #fff); border-radius: 10px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; padding: 6px 8px;
+  background: var(--panel-bg, #fff); border-bottom: 1px solid var(--ram);
 }
 .panel-zalozky button {
-  flex: 1 1 auto; padding: 7px 6px !important; border-radius: 7px !important; background: transparent !important;
-  color: var(--panel-text, #333) !important; font-weight: 600; font-size: 13.5px;
+  flex: 1 1 auto; padding: 6px 6px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--panel-text, #333); font: inherit; font-weight: 600; font-size: 13.5px; cursor: pointer;
 }
-.panel-zalozky button[data-zalozka="ovladani"] { flex: 0 0 38px; display: inline-flex; align-items: center; justify-content: center; }
-.panel-zalozky .ikona-info { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
-.panel-zalozky button.aktivni { background: var(--brand-dark, #1b5e20) !important; color: #fff !important; }
-.panel-obsah { display: flex; flex-direction: column; gap: 10px; }
+@media (hover: hover) { .panel-zalozky button:hover:not(.aktivni) { background: var(--panel-btn-bg, #f0f0f0); } }
+.panel-zalozky button.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
+.panel-obsah { display: flex; flex-direction: column; }
 .panel-obsah[hidden] { display: none; }
 .navrh-panel h3 {
   font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
-  color: var(--panel-muted, #666); margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--panel-border, #e6e6e6);
+  color: var(--panel-muted, #666); margin: 14px 0 6px; padding-top: 10px; border-top: 1px solid var(--ram);
 }
 .navrh-panel .karta[hidden] { display: none; }
-.navrh-panel .karta.kontext { box-shadow: 0 0 0 2px #1a73e8, 0 1px 4px rgba(0, 0, 0, 0.2); }
+.navrh-panel .karta.kontext { background: rgba(26, 115, 232, 0.06); box-shadow: inset 3px 0 0 var(--akcent); }
 .navrh-panel h2 {
   font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;
   color: var(--panel-muted, #666); margin: 0 0 8px;
@@ -188,11 +255,11 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 .navrh-panel select, .navrh-panel input[type="number"], .navrh-panel input[type="text"] {
   width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; height: 30px;
   background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
-  border: 1px solid var(--panel-border, #ddd); border-radius: 6px; padding: 0 6px;
+  border: 1px solid var(--ram); border-radius: 6px; padding: 0 6px;
 }
 .navrh-panel input[type="color"] {
   width: 34px; height: 28px; padding: 1px 2px; border-radius: 6px; cursor: pointer;
-  background: var(--panel-btn-bg, #f4f4f4); border: 1px solid var(--panel-border, #ddd);
+  background: var(--panel-btn-bg, #f4f4f4); border: 1px solid var(--ram);
 }
 .navrh-panel .s-jednotkou { display: flex; align-items: center; gap: 6px; color: var(--panel-muted, #666); }
 .navrh-panel .s-jednotkou input { flex: 1 1 auto; }
@@ -202,37 +269,35 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 .navrh-panel .poznamka { font-size: 12.5px; color: var(--panel-muted, #666); line-height: 1.4; margin: 6px 0 0; }
 .navrh-panel .tlacitka { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .navrh-panel button {
+  display: inline-flex; align-items: center; gap: 4px;
   background: var(--panel-btn-bg, #f0f0f0); color: var(--panel-btn-text, #333);
   border: 0; border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 13.5px; cursor: pointer;
 }
 @media (hover: hover) { .navrh-panel button:hover { background: var(--panel-btn-hover, #e2e2e2); } }
-.navrh-panel .nebezpecne { color: #b00020; }
-.navrh-panel .prepinac { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid var(--panel-border, #ddd); }
-.navrh-panel .prepinac button { flex: 1; border-radius: 0; }
-.navrh-panel .prepinac button.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; }
+.navrh-panel .ikona-v-panelu { width: 16px; height: 16px; }
 
 /* Seznam stylů: ukázka každého stylu jeho vlastním písmem na bílém papíře (i v tmavém
    motivu, jako strana); klik použije styl na odstavec, tužka rozbalí úpravu. */
 .styly { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .styly li {
   display: flex; align-items: center; gap: 4px; border-radius: 6px; background: #fff;
-  border: 1px solid var(--panel-border, #e4e4e4);
+  border: 1px solid var(--ram);
 }
-.styly li.aktivni { border-color: #1a73e8; box-shadow: inset 3px 0 0 #1a73e8; }
+.styly li.aktivni { border-color: var(--akcent); box-shadow: inset 3px 0 0 var(--akcent); }
 .styly .nahled {
   flex: 1 1 auto; min-width: 0; text-align: left; background: transparent !important; color: #111;
-  padding: 4px 8px !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 4px 8px !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block !important;
 }
 .styly .popis { display: block; font: 11.5px/1.3 system-ui, sans-serif; color: #777; font-style: normal; font-weight: 400; }
 .styly .upravit { padding: 4px 6px !important; background: transparent !important; color: #777 !important; }
-.styly .upravit svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.styly li.rozbaleny .upravit { color: #1a73e8 !important; }
+.styly .upravit svg { width: 16px; height: 16px; }
+.styly li.rozbaleny .upravit { color: var(--akcent) !important; }
 .uprava-stylu { margin: 2px 0 6px; padding: 6px 10px; border-radius: 6px; background: var(--panel-btn-bg, #f6f6f6); }
 .uprava-stylu[hidden], .novy-styl[hidden], .jen-vlastni[hidden] { display: none; }
 /* „Uložit“ u stylu odstavce, který se od stylu liší přímým formátováním. */
 .styly .ulozit-styl {
   flex: 0 0 auto; padding: 3px 8px !important; font-size: 12px !important; border-radius: 999px !important;
-  background: #1a73e8 !important; color: #fff !important;
+  background: var(--akcent) !important; color: #fff !important;
 }
 .styly .ulozit-styl[hidden] { display: none; }
 /* Řez a zarovnání ve stylu: přepínače jako v liště. */
@@ -240,17 +305,30 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 .navrh-panel .prepinac-rez {
   width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center;
   font-family: Georgia, serif; font-size: 15px; background: var(--panel-bg, #fff);
-  border: 1px solid var(--panel-border, #ddd);
+  border: 1px solid var(--ram);
 }
-.navrh-panel .prepinac-rez svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.navrh-panel .prepinac-rez svg { width: 17px; height: 17px; }
 .navrh-panel .prepinac-rez.aktivni { background: var(--brand-dark, #1b5e20); color: #fff; border-color: transparent; }
 .navrh-panel .rez input[type="color"] { margin-left: 6px; }
 .novy-styl { margin-top: 8px; padding: 8px 10px; border-radius: 6px; background: var(--panel-btn-bg, #f6f6f6); }
 .navrh-panel button.hlavni { background: var(--brand-dark, #1b5e20); color: #fff; }
-.ukazka-akordu { display: flex; gap: 14px; padding: 4px 8px; border-radius: 6px; margin-bottom: 6px; background: #fff; border: 1px solid var(--panel-border, #e4e4e4); }
+.ukazka-akordu { display: flex; gap: 14px; padding: 4px 8px; border-radius: 6px; margin-bottom: 6px; background: #fff; border: 1px solid var(--ram); }
 
-.napoveda-editoru ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; color: var(--panel-text, #333); }
-.napoveda-editoru li { margin: 3px 0; }
+/* Okno zkratek: stejný podklad jako náhled čtení. */
+.zkratky-okno {
+  width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--panel-bg, #fff); color: var(--panel-text, #222); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+.zkratky-obsah { overflow-y: auto; padding: 4px 20px 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 0 28px; }
+.zkratky-obsah h3 { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--panel-muted, #666); margin: 16px 0 6px; }
+.zkratky-obsah dl { margin: 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; font-size: 13.5px; line-height: 1.4; }
+.zkratky-obsah dt { font-weight: 600; }
+.zkratky-obsah dd { margin: 0; color: var(--panel-muted, #555); }
+.zkratky-obsah kbd, .zkratky-okno .poznamka kbd {
+  display: inline-block; min-width: 1.2em; padding: 0 5px; border: 1px solid var(--ram); border-bottom-width: 2px;
+  border-radius: 4px; font: 12px/1.5 system-ui, sans-serif; text-align: center; background: var(--panel-btn-bg, #f6f6f6); color: var(--panel-text, #333);
+}
+.zkratky-okno .poznamka { font-size: 12.5px; color: var(--panel-muted, #666); margin: 10px 0 0; }
 
 /* --- strana (papír) --------------------------------------------------------------- */
 /* Rozměr strany a proměnné akordů nastavuje skript z šablony; styly odstavců (.ps-normalni,
@@ -525,15 +603,12 @@ html.navrh-ve-zpevniku .navrh-lista .hotovo-zrusit { grid-column: 3; justify-sel
 /* Přetažení obrázku nad stranu. */
 .navrh-plocha.pretahovani .stranka { box-shadow: 0 0 0 3px #1a73e8; }
 
-@media (max-width: 900px) {
-  .navrh { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 70vh auto; height: auto; }
-}
 
 /* --- ukázka pro účet bez prémia ------------------------------------------------------- */
 /* Pruh nad editorem: pořád vidět, že jde o ukázku. Vodoznak UKÁZKA přes stranu (i v náhledu),
    ať snímek obrazovky není k ničemu; tisk z prohlížeče se schová. */
 .navrh-ukazka-pruh {
-  max-width: 1600px; margin: 10px auto 0; padding: 0 12px; box-sizing: border-box;
+  margin: 8px 10px 0; padding: 0; box-sizing: border-box;
   display: flex; align-items: center; gap: 10px; font-size: 13px; line-height: 1.35;
 }
 .navrh-ukazka-pruh > span:last-child {
@@ -554,4 +629,38 @@ html.navrh-ukazka .nahled-cteni-obal::after { content: "UKÁZKA"; font-size: 34m
 @media print {
   html.navrh-ukazka .navrh, html.navrh-ukazka .nahled-cteni { display: none !important; }
   html.navrh-ukazka .navrh-ukazka-pruh::after { content: " Tisk z ukázky není dostupný."; }
+}
+
+/* Středně široké okno: štítek výběru jen ikonou, Pořadí bez popisku, užší výběry -
+   formátování textu se vejde na jeden řádek i při 1280 px. */
+@media (max-width: 1400px) {
+  .navrh { grid-template-columns: 64px minmax(0, 1fr) 270px; }
+  .navrh-kontext .skupina { padding: 0 6px; }
+  .kontext-stitek { padding: 0 8px; }
+  .kontext-stitek > span { display: none; }
+  .navrh-kontext .poradi-tlacitko .poradi-popisek { display: none; }
+  .navrh-kontext .vyber-styl { width: 100px; }
+  .navrh-kontext .vyber-pismo { width: 120px; }
+}
+
+/* --- úzké okno (na konci: přebíjí pravidla výš) --------------------------------------- */
+/* Pod sebou: hlavička, nástroje vodorovně, kontextová lišta, plocha, stavový řádek, panel. */
+@media (max-width: 900px) {
+  .navrh, .navrh.bez-panelu {
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: none; height: auto;
+    grid-template-areas: "hlava" "nastroje" "kontext" "plocha" "dole" "panel";
+  }
+  .navrh-plocha { height: 70vh; }
+  .navrh-hlava { grid-template-columns: minmax(0, 1fr) auto; }
+  .hlava-vlevo { grid-column: 1 / -1; flex-wrap: wrap; }
+  .hlava-stred { grid-column: 1; }
+  .navrh-nastroje { flex-direction: row; justify-content: center; border-right: 0; border-bottom: 1px solid var(--ram); padding: 4px; overflow-x: auto; }
+  .nastroje-oddelovac { width: 1px; height: 32px; margin: 0 6px; }
+  .navrh-panel { border-left: 0; border-top: 1px solid var(--ram); }
+  .navrh-dole { grid-template-columns: minmax(0, 1fr) auto; }
+  .navrh-stav { grid-column: 1 / -1; grid-row: 2; }
+  #prepinac-panelu { display: none; }
+}
+@media (max-width: 600px) {
+  .stav-ulozeni, .navrh-hlava .jina-strana { display: none; }
 }

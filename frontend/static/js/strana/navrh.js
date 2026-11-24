@@ -407,6 +407,8 @@ const klavesy = keymap({
   'Shift-Enter': zalomeni,
   // Pořadí vrstev u vybraného obrázku nebo náplasti (v textu mají šipky s Ctrl svůj
   // význam - rámeček jde přes tlačítka v panelu).
+  'Mod-d': () => { duplikuj(); return true; },
+  'Mod-s': () => { if (KONTEXT && !UKAZKA) ulozit(); return true; },
   'Mod-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('dopredu'), true),
   'Mod-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('dozadu'), true),
   'Mod-Shift-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('popredi'), true),
@@ -703,8 +705,6 @@ function ukazStav({ pretece, kolize }) {
     s.className = 'varovani';
     s.textContent = zpravy.join(' ');
     stav.appendChild(s);
-  } else {
-    stav.textContent = 'Rozpracovaná strana zůstává jen v tomto prohlížeči, do zpěvníku se zatím neukládá.';
   }
 }
 
@@ -771,8 +771,8 @@ function nastavMeritko(nove) {
   if (nove != null) { meritko = nove; meritkoRucne = true; }
   else if (!meritkoRucne) {
     const plocha = el('navrh-plocha');
-    // Okraj plochy (24 px kolem) a spodní pruh se stavem a přiblížením.
-    const volnoX = plocha.clientWidth - 48, volnoY = plocha.clientHeight - 48 - 44;
+    // Okraj plochy (24 px kolem).
+    const volnoX = plocha.clientWidth - 48, volnoY = plocha.clientHeight - 48;
     // Náhled protější strany vedle - jen když nějaká je (první a poslední strana ji nemají
     // a ukážou se jako jedna strana).
     const stran = dvojstrana && KONTEXT && !spoj && protejsiStrana()?.st ? 2 : 1;
@@ -1376,6 +1376,9 @@ function obnovListovani() {
   if (!KONTEXT) return;
   const pole = el('cislo-strany-zpevniku');
   if (pole && document.activeElement !== pole) pole.value = String(KONTEXT.cislo);
+  const lp = el('listovani-lp');
+  if (lp) lp.textContent = spoj ? `a ${spoj.druha.cislo}` : (KONTEXT.lp === 'L' ? 'levá' : 'pravá');
+  obnovStavUlozeni();
   const jine = jineKoncepty();
   const znak = el('neulozene-jinde');
   if (znak) {
@@ -1776,8 +1779,16 @@ const PRIKAZY = {
     if (rezimAkordu) prepniRezimAkordu(false);
     if (nastrojTextu.aktivni) nastrojTextu.prepni(false);
     naplast.prepni();
-    if (naplast.aktivni) prepniZalozku('strana');
   },
+  // Výběr = žádný nástroj (i × ve štítku nástroje).
+  vybrat: () => {
+    if (rezimAkordu) prepniRezimAkordu(false);
+    if (nastrojTextu.aktivni) nastrojTextu.prepni(false);
+    if (naplast.aktivni) naplast.prepni(false);
+  },
+  duplikovat: () => duplikuj(),
+  zkratky: () => { el('okno-zkratek').hidden = false; el('zkratky-zavrit').focus(); },
+  panel: () => prepniPanel(),
   'pismo-mensi': () => krokVelikosti(-1),
   'pismo-vetsi': () => krokVelikosti(1),
   zpet: () => undo(view.state, view.dispatch),
@@ -1795,7 +1806,7 @@ const PRIKAZY = {
   'naplast-volny': () => naplast.nastavDruh('volny'),
 };
 
-const BEZ_FOKUSU = ['mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
+const BEZ_FOKUSU = ['zkratky', 'panel', 'mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1895,7 +1906,8 @@ function aktualizujListu() {
 
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
     const c = b.dataset.prikaz;
-    if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
+    if (c === 'vybrat') b.classList.toggle('aktivni', b.classList.contains('nastroj') && !rezimAkordu && !naplast?.aktivni && !nastrojTextu?.aktivni);
+    else if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
     else if (c === 'naplast') b.classList.toggle('aktivni', !!naplast?.aktivni);
     else if (c === 'ramecek') b.classList.toggle('aktivni', !!nastrojTextu?.aktivni);
     else if (c === 'naplast-obdelnik' || c === 'naplast-volny') b.classList.toggle('aktivni', naplast?.druh === c.slice(8));
@@ -1911,8 +1923,7 @@ function aktualizujListu() {
   const aktivni = $from.depth >= 1 ? view.nodeDOM($from.before(1)) : null;
   for (const r of view.dom.querySelectorAll('.ps-ramecek')) r.classList.toggle('aktivni', r === aktivni);
 
-  // Kontextové karty: vybraný akord, vybraný obrázek.
-  if (typeof prepniZalozku === 'function') zalozkaPodleVyberu(state);
+  // Kontextová lišta: vybraný akord, obrázek, náplast.
   const sel = state.selection;
   const vybrany = sel instanceof NodeSelection && sel.node.type === N.akord ? sel : null;
   el('vybrany-akord').hidden = !vybrany;
@@ -1964,6 +1975,143 @@ function aktualizujListu() {
       pole.placeholder = (dom && dom.dataset.znacka) || '';
     });
   }
+  obnovKontext(state);
+}
+
+// --- kontextová lišta a stavový řádek -------------------------------------------------
+// Co je vybrané (štítek vlevo v kontextové liště, popis ve stavovém řádku) a jaký nástroj
+// je zapnutý (štítek nad stranou, rámeček plochy). Skupiny lišty s data-pro se ukazují
+// podle výběru; karty vybraného akordu, obrázku a náplasti řídí aktualizujListu výš.
+
+function druhVyberu(state) {
+  const sel = state.selection;
+  if (sel instanceof NodeSelection) {
+    const t = sel.node.type;
+    if (t === N.akord) return 'akord';
+    if (t === N.obrazek) return sel.node.attrs.podklad ? 'podklad' : 'obrazek';
+    if (t === N.tvar) return 'naplast';
+    if (t === N.ramecek) return 'ramecek';
+  }
+  return sel.$from.parent.type === N.odstavec ? 'text' : 'nic';
+}
+
+const zapnutyNastroj = () => (naplast?.aktivni ? 'naplast' : nastrojTextu?.aktivni ? 'text' : rezimAkordu ? 'akord' : null);
+const cisloMm = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
+const POPISY_VYBERU = {
+  text: ['i-ramecek', 'Text'], ramecek: ['i-ramecek', 'Rámeček'], akord: ['i-akord', 'Akord'],
+  obrazek: ['i-obrazek', 'Obrázek'], podklad: ['i-obrazek', 'Podklad strany'], naplast: ['i-naplast', 'Náplast'],
+  nic: ['i-kurzor', 'Strana'], 'nova-naplast': ['i-naplast', 'Nová náplast'], 'novy-ramecek': ['i-ramecek', 'Nový rámeček'],
+};
+
+// Text s tučným začátkem (název výběru) - bez innerHTML, název akordu píše uživatel.
+function napisPopis(prvek, nazev, zbytek) {
+  prvek.textContent = '';
+  const b = document.createElement('b');
+  b.textContent = nazev;
+  prvek.append(b, zbytek ? ' · ' + zbytek : '');
+}
+
+function obnovKontext(state) {
+  if (typeof naplast === 'undefined' || !naplast || !nastrojTextu) return;
+  const druh = druhVyberu(state);
+  const nastroj = zapnutyNastroj();
+  koren.dataset.vyber = druh;
+  koren.dataset.nastroj = nastroj || '';
+  koren.classList.toggle('s-nastrojem', !!nastroj);
+
+  const ukaz = new Set();
+  if (druh === 'text' && nastroj !== 'naplast' && nastroj !== 'text') ukaz.add('text');
+  if (nastroj === 'akord' || druh === 'akord') ukaz.add('akordy');
+  const p = prvekVyberu(state);
+  if (p && !p.node.attrs.podklad && !p.node.attrs.presah && druh !== 'akord' && nastroj !== 'text'
+      && !(nastroj === 'naplast' && druh !== 'naplast')) ukaz.add('prvek');
+  const skupiny = [...koren.querySelectorAll('.navrh-kontext .skupina')];
+  for (const g of skupiny) if (g.dataset.pro) g.hidden = !g.dataset.pro.split(' ').some((t) => ukaz.has(t));
+  // Duplikát rámečku s textem jde Ctrl+D; v liště jen u obrázku a náplasti (místo pro text).
+  koren.querySelector('.navrh-kontext [data-prikaz="duplikovat"]').hidden = druh === 'text';
+  let prvni = true;
+  for (const g of skupiny) { g.classList.toggle('prvni', prvni && !g.hidden); if (!g.hidden) prvni = false; }
+
+  // Štítek: co se upravuje.
+  const klic = nastroj === 'naplast' && druh !== 'naplast' ? 'nova-naplast' : nastroj === 'text' ? 'novy-ramecek' : druh;
+  const [ikona, nazev] = POPISY_VYBERU[klic];
+  const stitek = el('kontext-stitek');
+  stitek.querySelector('use').setAttribute('href', '#' + ikona);
+  const sel = state.selection;
+  stitek.querySelector('span').textContent = druh === 'akord' && klic === 'akord' && sel.node.attrs.n ? `Akord ${sel.node.attrs.n}` : nazev;
+  el('kontext-napoveda').textContent = klic === 'novy-ramecek' ? 'Klik na stranu vloží rámeček, tažením jde nakreslit libovolně velký.'
+    : klic === 'nic' ? 'Klik do textu ho upraví, klik na obrázek nebo náplast je vybere. Nové prvky vkládají nástroje vlevo.' : '';
+
+  // Stavový řádek: popis výběru, u nástroje jak s ním pracovat.
+  const popis = el('navrh-popis');
+  popis.classList.remove('pripravuje-zprava');
+  const rozmer = (a) => `${cisloMm(a.w)} × ${cisloMm(a.h)} mm`;
+  if (nastroj === 'akord') napisPopis(popis, 'Nástroj Akord', 'klik na znak vloží akord, tažením se akord posune · Esc ukončí');
+  else if (nastroj === 'naplast' && druh !== 'naplast') {
+    napisPopis(popis, 'Nástroj Náplast', naplast.druh === 'volny'
+      ? 'klikáním body, tvar uzavře klik na první bod, dvojklik nebo Enter · Esc ukončí'
+      : 'klik vloží malý obdélník, tažení větší · Esc ukončí');
+  } else if (nastroj === 'text') napisPopis(popis, 'Nástroj Text', 'klik nebo tažení na straně vloží rámeček · Esc ukončí');
+  else if (druh === 'akord') napisPopis(popis, `Akord ${sel.node.attrs.n || ''}`.trim(), 'tažením posunout (Alt drží znak, Shift jen vodorovně) · Delete smaže');
+  else if (druh === 'obrazek') napisPopis(popis, 'Obrázek', `${rozmer(sel.node.attrs)} · přesun za lištu, velikost za roh · pravé tlačítko nabídne další`);
+  else if (druh === 'podklad') napisPopis(popis, 'Podklad strany', 'leží vždy vespod, klik ho nevybere (jen Alt+klik) · Delete smaže');
+  else if (druh === 'naplast') napisPopis(popis, 'Náplast', `${rozmer(sel.node.attrs)} · přesun tažením, velikost za roh · pravé tlačítko nabídne další`);
+  else if (druh === 'ramecek') napisPopis(popis, 'Rámeček', rozmer(sel.node.attrs));
+  else if (druh === 'text') {
+    const id = souhrnVyberu(state).styl;
+    const casti = [];
+    if (id && knihovna[id]) casti.push(`styl ${knihovna[id].nazev}`);
+    if (p && p.node.type === N.ramecek) casti.push(`rámeček ${rozmer(p.node.attrs)}`);
+    if (!sel.empty) casti.push(`označeno znaků: ${state.doc.textBetween(sel.from, sel.to, '').length}`);
+    napisPopis(popis, 'Text', casti.join(' · '));
+  } else napisPopis(popis, 'Strana', `${nastaveni.format || 'A5'}`);
+
+  // Štítek nástroje nad stranou.
+  const rezim = el('navrh-rezim');
+  rezim.hidden = !nastroj;
+  if (nastroj) {
+    rezim.querySelector('use').setAttribute('href', nastroj === 'akord' ? '#i-akord' : nastroj === 'naplast' ? '#i-naplast' : '#i-ramecek');
+    rezim.querySelector('.rezim-text').textContent = nastroj === 'akord' ? 'Nástroj Akord: klik na znak vloží akord'
+      : nastroj === 'text' ? 'Nástroj Text: klik nebo tažení vloží rámeček'
+      : `Nástroj Náplast: ${naplast.druh === 'volny' ? 'volný tvar' : 'obdélník'}`;
+  }
+}
+
+// Stav uložení v hlavičce (obnovuje se se zálohou rozdělané strany).
+function obnovStavUlozeni() {
+  const e = el('stav-ulozeni');
+  if (!e || !KONTEXT) return;
+  const ne = neulozeno();
+  e.classList.toggle('neulozeno', ne || !KONTEXT.strana);
+  e.textContent = !KONTEXT.strana ? 'Nová strana, zatím neuložená' : ne ? 'Neuložené změny' : 'Uloženo';
+}
+
+// Panel vpravo jde schovat (víc místa pro stranu); volba zůstane v prohlížeči.
+const KLIC_PANELU = 'navrh-strany-panel';
+function prepniPanel(ukazat = koren.classList.contains('bez-panelu')) {
+  koren.classList.toggle('bez-panelu', !ukazat);
+  el('prepinac-panelu').setAttribute('aria-pressed', String(ukazat));
+  try { localStorage.setItem(KLIC_PANELU, ukazat ? '1' : '0'); } catch (_) { /* jen pohodlí */ }
+  if (!meritkoRucne) nastavMeritko();
+}
+function nactiPanelVidet() {
+  try { if (localStorage.getItem(KLIC_PANELU) === '0') prepniPanel(false); } catch (_) { /* jen pohodlí */ }
+}
+
+// Duplikát prvku (obrázek, náplast, rámeček s kurzorem): o 5 mm vedle, nahoru ve vrstvách,
+// v pořadí čtení na konec. Podklad ani kopie přes hřbet se neduplikují.
+function duplikuj() {
+  const { state } = view;
+  const p = prvekVyberu(state);
+  if (!p || p.node.attrs.podklad || p.node.attrs.presah) return false;
+  const a = p.node.attrs;
+  const kopie = p.node.type.create({ ...a, x: a.x + 5, y: a.y + 5, z: zNahore(state.doc) }, p.node.content, p.node.marks);
+  const konec = state.doc.content.size;
+  const tr = closeHistory(state.tr).insert(konec, kopie);
+  tr.setSelection(kopie.type === N.ramecek ? TextSelection.near(tr.doc.resolve(konec + 1)) : NodeSelection.create(tr.doc, konec));
+  view.dispatch(tr.scrollIntoView());
+  view.focus();
+  return true;
 }
 
 // První odstavec sloky/refrénu, ve které je kurzor: { node, pos } nebo null.
@@ -2134,18 +2282,6 @@ for (const b of koren.querySelectorAll('[data-zalozka]')) {
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', () => prepniZalozku(b.dataset.zalozka));
 }
-// Výběr akordu nebo obrázku přepne na jeho záložku (jen při nově vybraném uzlu, ne při
-// každé změně - jinak by panel přeskakoval pod rukama).
-let posledniVybrany = null;
-function zalozkaPodleVyberu(state) {
-  const sel = state.selection;
-  const uzel = sel instanceof NodeSelection ? sel.node : null;
-  if (uzel === posledniVybrany) return;
-  posledniVybrany = uzel;
-  if (uzel && uzel.type === N.akord) prepniZalozku('akordy');
-  else if (uzel && (uzel.type === N.obrazek || uzel.type === N.tvar)) prepniZalozku('strana');
-}
-
 // --- start ----------------------------------------------------------------------------
 
 // Start: styly strany na verze z knihovny; kopie stylů, které strana nepoužívá, pryč.
@@ -2211,11 +2347,79 @@ window.addEventListener('keydown', (e) => {
     e.stopPropagation();
   }
 }, true);
+// Připravované funkce: tlačítko jen na chvíli napíše do stavového řádku, že funkce zatím
+// není (okno by zbytečně zdržovalo).
+let casovacPripravy = null;
+for (const b of koren.querySelectorAll('[data-pripravuje]')) {
+  b.addEventListener('mousedown', (e) => e.preventDefault());
+  b.addEventListener('click', () => {
+    clearTimeout(casovacPripravy);
+    const popis = el('navrh-popis');
+    napisPopis(popis, 'Připravuje se', b.dataset.pripravuje);
+    popis.classList.add('pripravuje-zprava');
+    casovacPripravy = setTimeout(aktualizujListu, 3500);
+  });
+}
+
+// Okno zkratek: zavře ×, klik vedle a Esc.
+{
+  const okno = el('okno-zkratek');
+  const zavri = () => { okno.hidden = true; view.focus(); };
+  el('zkratky-zavrit').addEventListener('click', zavri);
+  okno.addEventListener('click', (e) => { if (e.target === okno) zavri(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !okno.hidden) { e.stopPropagation(); e.preventDefault(); zavri(); }
+  }, true);
+}
+
+// Nabídka prvku na pravé tlačítko (obrázek, náplast, podklad): pořadí, duplikát, smazání.
+// V textu zůstává nabídka prohlížeče (kopírovat, vložit).
+{
+  const nabidka = el('nabidka-prvku');
+  const zavri = () => { nabidka.hidden = true; };
+  stranka.addEventListener('contextmenu', (e) => {
+    if (naplast.body) return;
+    const pod = prvkyPodBodem(e.clientX, e.clientY);
+    const vybrany = prvekVyberu(view.state);
+    const h = pod.find((x) => vybrany && x.index === vybrany.index && x.node.type !== N.ramecek) || pod[0];
+    if (!h || h.node.type === N.ramecek) { zavri(); return; }
+    e.preventDefault();
+    const sel = view.state.selection;
+    if (!(sel instanceof NodeSelection && sel.from === h.pos)) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, h.pos)));
+    for (const b of nabidka.querySelectorAll('[data-poradi]')) b.disabled = !poradiPoPrikazu(view.state.doc, h.index, b.dataset.poradi);
+    nabidka.querySelector('[data-akce="duplikovat"]').disabled = !!h.node.attrs.podklad || !!h.node.attrs.presah;
+    nabidka.hidden = false;
+    const r = nabidka.getBoundingClientRect();
+    nabidka.style.left = Math.max(4, Math.min(e.clientX, window.innerWidth - r.width - 8)) + 'px';
+    nabidka.style.top = Math.max(4, Math.min(e.clientY, window.innerHeight - r.height - 8)) + 'px';
+  });
+  for (const b of nabidka.querySelectorAll('button')) {
+    b.addEventListener('pointerdown', (e) => e.preventDefault());
+    b.addEventListener('click', () => {
+      zavri();
+      if (b.dataset.poradi) zmenVrstvu(b.dataset.poradi);
+      else if (b.dataset.akce === 'duplikovat') duplikuj();
+      else if (b.dataset.akce === 'smazat' && view.state.selection instanceof NodeSelection) {
+        view.dispatch(view.state.tr.deleteSelection());
+        view.focus();
+      }
+    });
+  }
+  document.addEventListener('pointerdown', (e) => { if (!nabidka.contains(e.target)) zavri(); }, true);
+  el('navrh-plocha').addEventListener('scroll', zavri);
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !nabidka.hidden) { zavri(); e.preventDefault(); e.stopPropagation(); }
+  }, true);
+}
+
 napojPanel();
 napojListu();
 napojPanelAkordu();
 nastavVysku();
-prepniZalozku((() => { try { return localStorage.getItem(KLIC_ZALOZKY) || 'text'; } catch (_) { return 'text'; } })());
+prepniZalozku((() => {
+  try { const z = localStorage.getItem(KLIC_ZALOZKY); return ['text', 'akordy', 'strana'].includes(z) ? z : 'text'; } catch (_) { return 'text'; }
+})());
+nactiPanelVidet();
 pouzijNastaveni();
 aktualizujListu();
 window.addEventListener('resize', () => { nastavVysku(); if (!meritkoRucne) nastavMeritko(); });
@@ -2228,7 +2432,7 @@ obnovListovani();
 // Pro testy a ladění.
 // nahradTextem: test začíná od známého textu, ne od ukázkové písně.
 window.navrhStrany = {
-  view, schema, TextSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
+  view, schema, TextSelection, NodeSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
   cislo: () => cisloStrany,
   zdroj: (lp) => zdrojStrany(lp),
   dvojstrana: () => (spoj ? { lp: KONTEXT.lp, druha: { cislo: spoj.druha.cislo, lp: spoj.druha.lp, id: spoj.druha.st.id } } : null),

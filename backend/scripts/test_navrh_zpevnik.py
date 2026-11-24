@@ -110,18 +110,17 @@ def otevri_editor_zpevniku(page):
     page.wait_for_function("document.querySelectorAll('#es-seznam .es-strana').length >= 1", timeout=20000)
 
 
-LISTA = """(() => { const l = document.querySelector('.navrh-lista').getBoundingClientRect();
-  const n = document.querySelector('.navrh-lista .nastroje').getBoundingClientRect();
-  const hz = document.querySelector('.navrh-lista .hotovo-zrusit').getBoundingClientRect();
-  const kde = document.querySelector('.navrh-lista .kde-strana').getBoundingClientRect();
-  const sk = [...document.querySelectorAll('.navrh-lista .nastroje .skupina')].map(e => e.getBoundingClientRect());
-  const radky = {};
-  for (const r of sk) { const k = Math.round(r.top); (radky[k] = radky[k] || []).push(r); }
-  const odchylka = Math.max(...Object.values(radky).map(rr => Math.abs((Math.min(...rr.map(r => r.left)) - n.left) - (n.right - Math.max(...rr.map(r => r.right))))));
-  return { radku: Object.keys(radky).length, odchylka: Math.round(odchylka),
-           hotovoNahore: Math.abs(hz.top - l.top) < 20 && hz.right <= l.right + 1,
-           kdeVlevo: kde.left - l.left < 20 && kde.right <= n.left + 1,
-           stred: Math.round((n.left + n.right) / 2 - (l.left + l.right) / 2) }; })()"""
+LISTA = """(() => { const h = document.querySelector('.navrh-hlava').getBoundingClientRect();
+  const kde = document.querySelector('.navrh-hlava .kde-strana').getBoundingClientRect();
+  const li = document.querySelector('.navrh-listovani').getBoundingClientRect();
+  const st = document.querySelector('.navrh-hlava .hlava-stred').getBoundingClientRect();
+  const ul = document.querySelector('[data-prikaz="ulozit"]').getBoundingClientRect();
+  const sk = [...document.querySelectorAll('.navrh-kontext .skupina')].filter(e => !e.hidden).map(e => Math.round(e.getBoundingClientRect().top));
+  return { radku: new Set(sk).size, jedenRadek: h.height < 60,
+           kdeVlevo: kde.left - h.left < 20 && kde.right <= li.left + 1,
+           listovaniPredStredem: li.right <= st.left,
+           ulozitVpravo: h.right - ul.right < 20 && Math.abs(ul.top - kde.top) < 12,
+           stred: Math.round((st.left + st.right) / 2 - (h.left + h.right) / 2) }; })()"""
 
 
 def main():
@@ -178,28 +177,22 @@ def main():
             ok("zpěvník se před přechodem uložil (3 strany), nová strana zatím nevznikla",
                len(strany_db()) == 3 and all(n is None for _, n, _ in strany_db()), strany_db())
             ok("lišta webu je vidět", page.evaluate("getComputedStyle(document.querySelector('.navbar')).display") != "none")
-            ok("v liště editoru je zpěvník, dole číslo nové strany 5",
+            ok("v hlavičce editoru je zpěvník a číslo nové strany 5",
                page.inner_text(".kde-strana").split() == ["‹", "Navržené", "strany", "UI"]
                and page.input_value("#cislo-strany-zpevniku") == "5",
                (page.inner_text(".kde-strana"), page.input_value("#cislo-strany-zpevniku")))
-            dole = page.evaluate("""(() => { const l = document.querySelector('.navrh-listovani').getBoundingClientRect();
-              const z = document.querySelector('.navrh-zoom:not(.navrh-listovani)').getBoundingClientRect();
-              const p = document.querySelector('#navrh-plocha').getBoundingClientRect();
-              return { vedleZoomu: Math.abs(l.top - z.top) < 2 && l.right <= z.left, dole: p.bottom - l.bottom < 40,
-                       l: [l.left, l.top, l.right, l.bottom].map(Math.round), z: [z.left, z.top, z.right, z.bottom].map(Math.round),
-                       p: [p.left, p.top, p.right, p.bottom].map(Math.round) }; })()""")
-            ok("listování je dole vpravo vedle přiblížení", dole["vedleZoomu"] and dole["dole"], dole)
             ok("číslo a strana podle pozice (první strana zpěvníku = 5, pravá)",
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]") == [5, "P"],
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]"))
             s1400 = page.evaluate(LISTA)
-            ok("1400 px: zpěvník vlevo, nástroje (zalomené) na střed, Uložit nahoře vpravo",
-               s1400["odchylka"] <= 2 and s1400["hotovoNahore"] and s1400["kdeVlevo"], s1400)
+            ok("1400 px: v hlavičce zpěvník a listování vlevo, Zpět/Znovu uprostřed, Uložit vpravo, úpravy textu na jednom řádku",
+               s1400["kdeVlevo"] and s1400["listovaniPredStredem"] and s1400["ulozitVpravo"] and s1400["jedenRadek"]
+               and abs(s1400["stred"]) <= 2 and s1400["radku"] == 1, s1400)
             page.set_viewport_size({"width": 1920, "height": 1000})
             page.wait_for_timeout(200)
             s1920 = page.evaluate(LISTA)
-            ok("1920 px: nástroje na jednom řádku uprostřed lišty", s1920["radku"] == 1 and abs(s1920["stred"]) <= 2
-               and s1920["hotovoNahore"] and s1920["kdeVlevo"], s1920)
+            ok("1920 px: totéž", s1920["radku"] == 1 and abs(s1920["stred"]) <= 2 and s1920["kdeVlevo"]
+               and s1920["ulozitVpravo"] and s1920["jedenRadek"], s1920)
             page.set_viewport_size({"width": 1400, "height": 1000})
 
             page.evaluate("navrhStrany.nahradTextem('Testovací píseň', 'Autor', '[Ami]První řádek\\n[C]druhý řádek')")

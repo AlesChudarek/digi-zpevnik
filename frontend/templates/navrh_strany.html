@@ -57,28 +57,85 @@
     <symbol id="i-jedna-strana" viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="1.5"/></symbol>
     <symbol id="i-dvojstrana" viewBox="0 0 24 24"><rect x="2.5" y="4" width="9" height="16" rx="1.5"/><rect x="12.5" y="4" width="9" height="16" rx="1.5"/></symbol>
     <symbol id="i-tuzka" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
+    <symbol id="i-kurzor" viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.5L10 19z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-kos" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-duplikovat" viewBox="0 0 24 24"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></symbol>
+    <symbol id="i-klavesnice" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-tvary" viewBox="0 0 24 24"><circle cx="8" cy="8" r="5"/><rect x="11" y="11" width="10" height="10" rx="1"/></symbol>
+    <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></symbol>
+    <symbol id="i-orez" viewBox="0 0 24 24"><path d="M6 2v16h16"/><path d="M2 6h16v16"/></symbol>
   </defs>
 </svg>
 
-<div class="navrh" id="navrh">
-  <div class="navrh-lista" role="toolbar" aria-label="Úpravy strany">
-    {% if kontext %}
-    {# Kde strana je; odkaz vede zpátky do editoru zpěvníku (s upozorněním na neuložené). #}
-    <div class="kde">
+<div class="navrh" id="navrh" data-vyber="text">
+  {# Rozložení (jako grafické editory, 24. 11.):
+     - hlavička: kde strana je a listování, Zpět/Znovu, stav uložení, Náhled, Uložit;
+     - vlevo svislá lišta nástrojů - vždy je vidět, který nástroj je zapnutý (Výběr = žádný);
+     - nad stranou kontextová lišta: jen úpravy toho, co je vybrané (štítek vlevo říká co);
+     - vpravo panel s nastavením celé strany (styly, akordy, strana), jde schovat;
+     - dole stavový řádek: co je vybrané a jak s tím pracovat, varování, dvojstrana, přiblížení. #}
+  <header class="navrh-hlava navrh-lista" aria-label="Strana">
+    <div class="hlava-vlevo kde">
+      {% if kontext %}
       <a class="kde-strana" id="zpet-do-zpevniku" href="{{ kontext.zpet }}" data-napoveda="Zpět do editoru zpěvníku">
         <span class="kde-sipka" aria-hidden="true">‹</span>
         <span class="kde-nazev">{{ kontext.nazev }}</span>
       </a>
-      <button type="button" class="jina-strana" data-vyber-strany data-zpevnik="{{ kontext.zpevnik }}"
-              data-napoveda="Otevřít jinou stranu nebo jiný zpěvník">Jiná strana…</button>
+      {# Listování zpěvníkem jako ve čtečce: rozdělaná strana se zálohuje v prohlížeči,
+         nikdo se neptá. Číslo strany jde napsat. #}
+      <div class="navrh-listovani" role="group" aria-label="Strana zpěvníku">
+        <button type="button" class="ikona" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
+        <label class="listovani-cislo">Strana
+          <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
+          <span class="listovani-lp" id="listovani-lp"></span>
+        </label>
+        <button type="button" class="ikona" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
+        <a class="ikona nova-strana" id="nova-strana" href="#" hidden data-napoveda="Nová strana za touto (doprostřed písně, která pokračuje na další stranu, nejde)" aria-label="Nová strana"><svg><use href="#i-plus"/></svg></a>
+        <button type="button" class="jina-strana" data-vyber-strany data-zpevnik="{{ kontext.zpevnik }}"
+                data-napoveda="Otevřít jinou stranu nebo jiný zpěvník">Jiná strana…</button>
+      </div>
+      {% else %}
+      <span class="hlava-nazev">Editor strany</span>
+      {% endif %}
     </div>
-    {% endif %}
-    <div class="nastroje">
-    <div class="skupina">
+    <div class="hlava-stred skupina" role="group" aria-label="Historie">
       <button type="button" class="ikona" data-prikaz="zpet" data-napoveda="Zpět (Ctrl+Z)" aria-label="Zpět"><svg><use href="#i-zpet"/></svg></button>
       <button type="button" class="ikona" data-prikaz="znovu" data-napoveda="Znovu (Ctrl+Y)" aria-label="Znovu"><svg><use href="#i-znovu"/></svg></button>
     </div>
-    <div class="skupina">
+    <div class="hlava-vpravo hotovo-zrusit">
+      <span class="stav-ulozeni" id="stav-ulozeni" aria-live="polite">{% if ukazka %}Ukázka · neukládá se{% endif %}</span>
+      <span class="neulozene-jinde" id="neulozene-jinde" hidden tabindex="0"><img src="{{ static_bust('img/icons/warning.svg') }}" alt="Neuložené změny i na jiných stranách"></span>
+      <button type="button" class="ikona" data-prikaz="zkratky" data-napoveda="Ovládání a klávesové zkratky" aria-label="Ovládání a klávesové zkratky"><svg><use href="#i-klavesnice"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="panel" id="prepinac-panelu" data-napoveda="Ukázat nebo schovat panel vpravo" aria-label="Panel" aria-pressed="true"><svg><use href="#i-panel"/></svg></button>
+      <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
+      {% if kontext %}
+      <button type="button" class="hlavni" data-prikaz="ulozit" data-napoveda="Uložit stranu do zpěvníku (Ctrl+S)">Uložit</button>
+      {% endif %}
+    </div>
+  </header>
+
+  {# Nástroje: Výběr je „žádný nástroj“ (psaní, výběr a přesun prvků). Text, Akord a Náplast
+     se navzájem vypínají; Obrázek je jen akce (otevře soubor). #}
+  <nav class="navrh-nastroje" role="toolbar" aria-orientation="vertical" aria-label="Nástroje">
+    <button type="button" class="nastroj" data-prikaz="vybrat" data-napoveda="Výběr: psaní do textu, výběr a přesun prvků (Esc)"><svg><use href="#i-kurzor"/></svg><span>Výběr</span></button>
+    <button type="button" class="nastroj" data-prikaz="ramecek" data-napoveda="Nový textový rámeček: klik na stranu, nebo tažením nakreslit"><svg><use href="#i-ramecek"/></svg><span>Text</span></button>
+    <button type="button" class="nastroj" data-prikaz="akordy" data-napoveda="Akordy: klik na znak vloží akord"><svg><use href="#i-akord"/></svg><span>Akord</span></button>
+    <button type="button" class="nastroj" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout na stranu nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg><span>Obrázek</span></button>
+    <button type="button" class="nastroj" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany)"><svg><use href="#i-naplast"/></svg><span>Náplast</span></button>
+    <span class="nastroje-oddelovac" aria-hidden="true"></span>
+    <button type="button" class="nastroj pripravuje" data-pripravuje="Tvary (čára, obdélník, elipsa)" data-napoveda="Tvary - připravuje se"><svg><use href="#i-tvary"/></svg><span>Tvary</span></button>
+    <button type="button" class="nastroj pripravuje" data-pripravuje="Vložení písně s akordy z webu nebo z ChordPro" data-napoveda="Vložit píseň s akordy z webu nebo ChordPro - připravuje se"><svg><use href="#i-import"/></svg><span>Import</span></button>
+    <input type="file" id="soubor-obrazku" accept="image/*" hidden>
+  </nav>
+
+  {# Kontextová lišta: štítek říká, co se upravuje; skupiny se ukazují podle výběru
+     (data-pro, přepíná navrh.js - aktualizujListu). #}
+  <div class="navrh-kontext" role="toolbar" aria-label="Úpravy výběru">
+    <span class="kontext-stitek" id="kontext-stitek"><svg><use href="#i-ramecek"/></svg><span>Text</span></span>
+    <div class="kontext-skupiny">
+    <div class="skupina" data-pro="text">
       <select id="lista-styl" class="vyber-styl" data-napoveda="Styl odstavce" aria-label="Styl odstavce"></select>
       <select id="lista-pismo" class="vyber-pismo" data-napoveda="Písmo" aria-label="Písmo"></select>
       <div class="velikost-pisma">
@@ -87,7 +144,7 @@
         <button type="button" data-prikaz="pismo-vetsi" data-napoveda="Větší písmo" aria-label="Větší písmo">+</button>
       </div>
     </div>
-    <div class="skupina">
+    <div class="skupina" data-pro="text">
       <button type="button" class="ikona text" data-prikaz="tucne" data-napoveda="Tučně (Ctrl+B)" aria-label="Tučně"><b>B</b></button>
       <button type="button" class="ikona text" data-prikaz="kurziva" data-napoveda="Kurzívou (Ctrl+I)" aria-label="Kurzívou"><i>I</i></button>
       <button type="button" class="ikona text" data-prikaz="podtrzeni" data-napoveda="Podtrženě (Ctrl+U)" aria-label="Podtrženě"><u>U</u></button>
@@ -97,7 +154,7 @@
       </label>
       <button type="button" class="ikona" data-prikaz="vymazat" data-napoveda="Vymazat přímé formátování (zůstane styl)" aria-label="Vymazat formátování"><svg><use href="#i-vymazat"/></svg></button>
     </div>
-    <div class="skupina">
+    <div class="skupina" data-pro="text">
       <button type="button" class="ikona" data-prikaz="zarovnat-left" data-napoveda="Zarovnat vlevo" aria-label="Zarovnat vlevo"><svg><use href="#i-vlevo"/></svg></button>
       <button type="button" class="ikona" data-prikaz="zarovnat-center" data-napoveda="Na střed" aria-label="Na střed"><svg><use href="#i-stred"/></svg></button>
       <button type="button" class="ikona" data-prikaz="zarovnat-right" data-napoveda="Zarovnat vpravo" aria-label="Zarovnat vpravo"><svg><use href="#i-vpravo"/></svg></button>
@@ -105,40 +162,58 @@
       <button type="button" class="ikona" data-prikaz="odsadit-mene" data-napoveda="Zmenšit odsazení" aria-label="Zmenšit odsazení"><svg><use href="#i-odsadit-mene"/></svg></button>
       <button type="button" class="ikona" data-prikaz="odsadit-vice" data-napoveda="Zvětšit odsazení" aria-label="Zvětšit odsazení"><svg><use href="#i-odsadit-vice"/></svg></button>
     </div>
-    <div class="skupina">
-      <button type="button" class="s-popisem" data-prikaz="akordy" data-napoveda="Klik na znak vloží akord (Esc vypne)"><svg><use href="#i-akord"/></svg>Akord</button>
-      <button type="button" class="ikona" data-prikaz="transp-dolu" data-napoveda="Transponovat o půltón níž" aria-label="Transponovat níž"><svg><use href="#i-becko"/></svg></button>
-      <button type="button" class="ikona" data-prikaz="transp-nahoru" data-napoveda="Transponovat o půltón výš" aria-label="Transponovat výš"><svg><use href="#i-krizek"/></svg></button>
+    {# Transpozice celé strany: u nástroje Akord a u vybraného akordu. #}
+    <div class="skupina" data-pro="akordy">
+      <span class="skupina-popis">Transponovat</span>
+      <button type="button" class="ikona" data-prikaz="transp-dolu" data-napoveda="Všechny akordy strany o půltón níž" aria-label="Transponovat níž"><svg><use href="#i-becko"/></svg></button>
+      <button type="button" class="ikona" data-prikaz="transp-nahoru" data-napoveda="Všechny akordy strany o půltón výš" aria-label="Transponovat výš"><svg><use href="#i-krizek"/></svg></button>
     </div>
-    <div class="skupina">
-      <button type="button" class="s-popisem" data-prikaz="ramecek" data-napoveda="Nový textový rámeček: klik na stranu, nebo tažením nakreslit (Esc vypne)"><svg><use href="#i-ramecek"/></svg>Text</button>
-      <button type="button" class="s-popisem" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg>Obrázek</button>
-      <button type="button" class="s-popisem" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany). Esc vypne"><svg><use href="#i-naplast"/></svg>Náplast</button>
-      <input type="file" id="soubor-obrazku" accept="image/*" hidden>
-      {# Pořadí vrstev: platí pro každý prvek (rámeček s kurzorem, vybraný obrázek, náplast). #}
+    <div class="skupina" id="vybrany-akord" hidden>
+      <label class="pole-v-liste">Velikost
+        <span class="s-jednotkou"><input type="number" id="akord-velikost" min="40" max="300" step="10" value="100"> %</span>
+      </label>
+      <button type="button" class="s-popisem" id="akord-vychozi" data-napoveda="Vrátit akord nad jeho znak">Výchozí poloha</button>
+      <button type="button" class="ikona nebezpecne" id="akord-smazat" data-napoveda="Smazat akord (Delete)" aria-label="Smazat akord"><svg><use href="#i-kos"/></svg></button>
+    </div>
+    {# Náplast: druh nových náplastí (jen se zapnutým nástrojem) a barva (nových i vybrané). #}
+    <div class="skupina" id="vybrany-tvar" hidden>
+      <div class="prepinac" id="tvar-druh" role="group" aria-label="Druh náplasti">
+        <button type="button" data-prikaz="naplast-obdelnik">Obdélník</button>
+        <button type="button" data-prikaz="naplast-volny">Volný tvar</button>
+      </div>
+      <label class="pole-v-liste">Barva <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti"></label>
+      <button type="button" class="ikona nebezpecne" id="tvar-smazat" data-napoveda="Smazat náplast (Delete)" aria-label="Smazat náplast"><svg><use href="#i-kos"/></svg></button>
+      <button type="button" class="s-popisem nebezpecne" id="tvar-smazat-vse">Smazat všechny</button>
+    </div>
+    <div class="skupina" id="vybrany-obrazek" hidden>
+      <span class="skupina-popis" id="obrazek-podklad" hidden>Podklad leží vždy vespod, vybírá se Alt+klikem.</span>
+      <button type="button" class="s-popisem pripravuje" data-pripravuje="Oříznutí obrázku" data-napoveda="Oříznout - připravuje se"><svg><use href="#i-orez"/></svg>Oříznout</button>
+      <button type="button" class="ikona nebezpecne" id="obrazek-smazat" data-napoveda="Smazat obrázek (Delete)" aria-label="Smazat obrázek"><svg><use href="#i-kos"/></svg></button>
+    </div>
+    {# Prvek jako celek (rámeček s kurzorem, obrázek, náplast): pořadí vrstev a duplikát. #}
+    <div class="skupina" data-pro="prvek">
       <div class="navrh-poradi">
-        <button type="button" class="poradi-tlacitko" id="poradi-tlacitko" aria-haspopup="menu" aria-expanded="false" aria-label="Pořadí"
-                data-napoveda="Pořadí: vybraný prvek do popředí, do pozadí, o vrstvu výš nebo níž"><svg><use href="#i-vrstvy"/></svg><span class="sipka">▾</span></button>
-        <div class="navrh-poradi-nabidka" id="poradi-nabidka" role="menu" hidden>
+        <button type="button" class="s-popisem poradi-tlacitko" id="poradi-tlacitko" aria-label="Pořadí" aria-haspopup="menu" aria-expanded="false"
+                data-napoveda="Pořadí: do popředí, do pozadí, o vrstvu výš nebo níž"><svg><use href="#i-vrstvy"/></svg><span class="poradi-popisek">Pořadí</span><span class="sipka">▾</span></button>
+        <div class="navrh-poradi-nabidka nabidka" id="poradi-nabidka" role="menu" hidden>
           <button type="button" role="menuitem" data-poradi="popredi"><svg><use href="#i-popredi"/></svg>Do popředí<kbd>Ctrl+Shift+↑</kbd></button>
           <button type="button" role="menuitem" data-poradi="dopredu"><svg><use href="#i-dopredu"/></svg>O vrstvu výš<kbd>Ctrl+↑</kbd></button>
           <button type="button" role="menuitem" data-poradi="dozadu"><svg><use href="#i-dozadu"/></svg>O vrstvu níž<kbd>Ctrl+↓</kbd></button>
           <button type="button" role="menuitem" data-poradi="pozadi"><svg><use href="#i-pozadi"/></svg>Do pozadí<kbd>Ctrl+Shift+↓</kbd></button>
         </div>
       </div>
+      <button type="button" class="ikona" data-prikaz="duplikovat" data-napoveda="Duplikovat (Ctrl+D)" aria-label="Duplikovat"><svg><use href="#i-duplikovat"/></svg></button>
     </div>
-    <div class="skupina">
-      <button type="button" class="s-popisem" data-prikaz="nahled" data-napoveda="Strana tak, jak ji uvidí čtečka"><svg><use href="#i-nahled"/></svg>Náhled</button>
+    <span class="kontext-napoveda" id="kontext-napoveda"></span>
     </div>
-    </div>
-    {% if kontext %}
-    <div class="skupina hotovo-zrusit">
-      <span class="neulozene-jinde" id="neulozene-jinde" hidden tabindex="0"><img src="{{ static_bust('img/icons/warning.svg') }}" alt="Neuložené změny i na jiných stranách"></span>
-      <button type="button" class="hlavni" data-prikaz="ulozit" data-napoveda="Uložit stranu do zpěvníku">Uložit</button>
-    </div>
-    {% endif %}
   </div>
 
+  {# Zapnutý nástroj: štítek nahoře nad stranou (co nástroj dělá, × ho vypne).
+     Leží nad plochou (stejná buňka mřížky), ne v ní - nic neposune. #}
+    <div class="navrh-rezim" id="navrh-rezim" hidden>
+      <svg><use href="#i-akord"/></svg><span class="rezim-text"></span>
+      <button type="button" class="rezim-konec" data-prikaz="vybrat" data-napoveda="Ukončit nástroj (Esc)" aria-label="Ukončit nástroj">×</button>
+    </div>
   <div class="navrh-plocha" id="navrh-plocha">
     {# Dvojstrana: vedle upravované strany protější strana zpěvníku (jen k náhledu, klik ji
        otevře k úpravě). #}
@@ -152,19 +227,16 @@
         </div>
       </div>
     </div>
-    {# Spodní pruh plochy: stav uprostřed, přiblížení vpravo (jako v grafických editorech). #}
-    <div class="navrh-dole">
-      <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
-      <div class="navrh-vpravo">
+  </div>
+
+  {# Stavový řádek: vlevo co je vybrané / co dělá nástroj, uprostřed varování, vpravo
+     zobrazení (jedna strana / dvojstrana) a přiblížení. #}
+  <footer class="navrh-dole">
+    <div class="navrh-popis" id="navrh-popis" aria-live="polite"></div>
+    <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+    <div class="navrh-vpravo">
       {% if kontext %}
-      {# Listování zpěvníkem jako ve čtečce: rozdělaná strana se zálohuje v prohlížeči,
-         nikdo se neptá. Číslo strany jde napsat. #}
-      <div class="navrh-zoom navrh-listovani" role="group" aria-label="Strana zpěvníku">
-        <button type="button" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
-        <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
-        <button type="button" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
-        <a class="nova-strana" id="nova-strana" href="#" hidden data-napoveda="Nová strana za touto (doprostřed písně, která pokračuje na další stranu, nejde)" aria-label="Nová strana">+</a>
-        <span class="oddelovac" aria-hidden="true"></span>
+      <div class="navrh-zoom navrh-pohled" role="group" aria-label="Zobrazení">
         <button type="button" data-prikaz="jedna-strana" data-napoveda="Jedna strana" aria-label="Jedna strana"><svg><use href="#i-jedna-strana"/></svg></button>
         <button type="button" data-prikaz="dvojstrana" data-napoveda="Dvojstrana (protější strana vedle)" aria-label="Dvojstrana"><svg><use href="#i-dvojstrana"/></svg></button>
       </div>
@@ -175,9 +247,8 @@
         <button type="button" data-prikaz="vetsi" data-napoveda="Přiblížit" aria-label="Přiblížit"><svg><use href="#i-vetsi"/></svg></button>
         <button type="button" data-prikaz="cela-strana" data-napoveda="Celá strana" aria-label="Celá strana"><svg><use href="#i-cela"/></svg></button>
       </div>
-      </div>
     </div>
-  </div>
+  </footer>
 
   {# Náhled čtení: strana vykreslená mimo editor, stejně jako ve čtečce. #}
   <div class="nahled-cteni" id="nahled-cteni" hidden>
@@ -195,16 +266,87 @@
     </div>
   </div>
 
-  <aside class="navrh-panel" aria-label="Vzhled strany">
-    {# Záložky: Text (styly, značka sloky), Akordy, Strana (formát, číslo strany, obrázek),
-       Ovládání. Výběr akordu nebo obrázku přepne na jeho záložku. #}
+  {# Ovládání a klávesové zkratky (místo záložky Ovládání v panelu). #}
+  <div class="nahled-cteni zkratky" id="okno-zkratek" hidden>
+    <div class="zkratky-okno" role="dialog" aria-labelledby="zkratky-nadpis">
+      <div class="nahled-cteni-hlava">
+        <strong id="zkratky-nadpis">Ovládání a klávesové zkratky</strong>
+        <button type="button" id="zkratky-zavrit" aria-label="Zavřít">×</button>
+      </div>
+      <div class="zkratky-obsah">
+        <section>
+          <h3>Text</h3>
+          <dl>
+            <dt>Nový rámeček</dt><dd>nástroj Text, klik na stranu nebo tažení</dd>
+            <dt>Řádek v odstavci</dt><dd><kbd>Shift</kbd>+<kbd>Enter</kbd></dd>
+            <dt>Tučně, kurzívou, podtrženě</dt><dd><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd></dd>
+            <dt>Refrén znovu</dt><dd><kbd>Tab</kbd> na prázdném řádku se stylem Refrén</dd>
+            <dt>Vlastní styl</dt><dd>naformátovat odstavec, v panelu Styly „+ Nový styl z odstavce“; u stylu, od kterého se odstavec liší, je „Uložit“</dd>
+            <dt>Značka sloky</dt><dd>v panelu Styly, když je kurzor ve sloce; prázdná = číslo automaticky</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Akordy</h3>
+          <dl>
+            <dt>Vložit akord</dt><dd>nástroj Akord a klik na znak, nebo <kbd>[</kbd> u kurzoru</dd>
+            <dt>Potvrdit / další</dt><dd><kbd>Enter</kbd> / <kbd>Tab</kbd></dd>
+            <dt>Posun akordu</dt><dd>tažení; přichytí se ke znaku a k výšce sousedů. <kbd>Alt</kbd> drží znak, <kbd>Shift</kbd> jen vodorovně</dd>
+            <dt>Akordy do další sloky</dt><dd>s nástrojem Akord najet na sloku bez akordů, „Doplnit akordy“ (vezmou se z předchozí sloky po slabikách)</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Prvky a vrstvy</h3>
+          <dl>
+            <dt>Přesun, velikost</dt><dd>za lištu nad prvkem, za roh</dd>
+            <dt>Smazat vybraný prvek</dt><dd><kbd>Delete</kbd></dd>
+            <dt>Duplikovat</dt><dd><kbd>Ctrl</kbd>+<kbd>D</kbd></dd>
+            <dt>O vrstvu výš / níž</dt><dd><kbd>Ctrl</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></dd>
+            <dt>Do popředí / do pozadí</dt><dd><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>↑</kbd> / <kbd>↓</kbd></dd>
+            <dt>Prvek pod jiným</dt><dd><kbd>Alt</kbd>+klik (opakovaně dál dolů, i podklad); takhle vybraný prvek jde táhnout</dd>
+            <dt>Nabídka prvku</dt><dd>pravé tlačítko na obrázku nebo náplasti</dd>
+            <dt>Číslo strany</dt><dd>tažením na straně; přichytí se ke středu a k okrajům</dd>
+          </dl>
+        </section>
+        <section>
+          <h3>Editor</h3>
+          <dl>
+            <dt>Zpět / Znovu</dt><dd><kbd>Ctrl</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></dd>
+            <dt>Uložit</dt><dd><kbd>Ctrl</kbd>+<kbd>S</kbd></dd>
+            <dt>Ukončit nástroj</dt><dd><kbd>Esc</kbd></dd>
+          </dl>
+          <p class="poznamka">Na Macu místo <kbd>Ctrl</kbd> <kbd>⌘</kbd> a místo <kbd>Alt</kbd> <kbd>⌥</kbd>.</p>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  {# Nabídka prvku (pravé tlačítko na obrázku nebo náplasti). #}
+  <div class="nabidka nabidka-prvku" id="nabidka-prvku" role="menu" hidden>
+    <button type="button" role="menuitem" data-poradi="popredi"><svg><use href="#i-popredi"/></svg>Do popředí<kbd>Ctrl+Shift+↑</kbd></button>
+    <button type="button" role="menuitem" data-poradi="dopredu"><svg><use href="#i-dopredu"/></svg>O vrstvu výš<kbd>Ctrl+↑</kbd></button>
+    <button type="button" role="menuitem" data-poradi="dozadu"><svg><use href="#i-dozadu"/></svg>O vrstvu níž<kbd>Ctrl+↓</kbd></button>
+    <button type="button" role="menuitem" data-poradi="pozadi"><svg><use href="#i-pozadi"/></svg>Do pozadí<kbd>Ctrl+Shift+↓</kbd></button>
+    <span class="nabidka-oddelovac"></span>
+    <button type="button" role="menuitem" data-akce="duplikovat"><svg><use href="#i-duplikovat"/></svg>Duplikovat<kbd>Ctrl+D</kbd></button>
+    <button type="button" role="menuitem" data-akce="smazat" class="nebezpecne"><svg><use href="#i-kos"/></svg>Smazat<kbd>Delete</kbd></button>
+  </div>
+
+  <aside class="navrh-panel" id="navrh-panel" aria-label="Nastavení strany">
+    {# Panel = nastavení celé strany: styly odstavců, vzhled akordů, formát a číslo strany.
+       Úpravy vybraného prvku jsou v kontextové liště nad stranou. #}
     <div class="panel-zalozky" role="tablist" aria-label="Panel">
-      <button type="button" role="tab" data-zalozka="text">Text</button>
+      <button type="button" role="tab" data-zalozka="text">Styly</button>
       <button type="button" role="tab" data-zalozka="akordy">Akordy</button>
       <button type="button" role="tab" data-zalozka="strana">Strana</button>
-      <button type="button" role="tab" data-zalozka="ovladani" data-napoveda="Ovládání editoru" aria-label="Ovládání"><svg class="ikona-info"><use href="#i-info"/></svg></button>
     </div>
     <div class="panel-obsah" data-panel="text" role="tabpanel">
+    <section class="karta kontext" id="panel-znacka" hidden>
+      <h2>Sloka s kurzorem</h2>
+      <label class="radek-pole">Značka
+        <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
+      </label>
+      <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
+    </section>
     <section class="karta">
       <h2>Styly odstavců</h2>
       <ul class="styly" id="seznam-stylu"></ul>
@@ -247,27 +389,10 @@
         </div>
       </div>
     </section>
-    <section class="karta kontext" id="panel-znacka" hidden>
-      <h2>Sloka</h2>
-      <label class="radek-pole">Značka
-        <input type="text" id="znacka-sloky" maxlength="8" autocomplete="off">
-      </label>
-      <p class="poznamka">Prázdné = číslo automaticky. Ručně zadané číslo (např. 5.) posune i další sloky.</p>
-    </section>
     </div>
     <div class="panel-obsah" data-panel="akordy" role="tabpanel" hidden>
-    <section class="karta kontext" id="vybrany-akord" hidden>
-      <h2>Vybraný akord</h2>
-      <label class="radek-pole">Velikost
-        <span class="s-jednotkou"><input type="number" id="akord-velikost" min="40" max="300" step="10" value="100"> %</span>
-      </label>
-      <div class="tlacitka">
-        <button type="button" id="akord-vychozi">Výchozí poloha</button>
-        <button type="button" id="akord-smazat" class="nebezpecne">Smazat</button>
-      </div>
-    </section>
     <section class="karta">
-      <h2>Akordy</h2>
+      <h2>Vzhled akordů</h2>
       <div class="ukazka-akordu" id="ukazka-akordu"><span class="ukazka-akord">Ami</span><span class="ukazka-akord">C#7</span></div>
       <label class="radek-pole">Písmo <select data-nastaveni="pismoAkordu" data-pisma></select></label>
       <label class="radek-pole">Velikost <span class="s-jednotkou"><input type="number" data-nastaveni="velikostAkordu" min="6" max="40" step="0.5"> pt</span></label>
@@ -286,34 +411,23 @@
       <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="automatickaMezera">
         Akordy přes sebe odsunou text (ručně posunuté nikdy)</label>
     </section>
+    <section class="karta">
+      <h2>Transpozice</h2>
+      <div class="tlacitka">
+        <button type="button" data-prikaz="transp-dolu"><svg class="ikona-v-panelu"><use href="#i-becko"/></svg> O půltón níž</button>
+        <button type="button" data-prikaz="transp-nahoru"><svg class="ikona-v-panelu"><use href="#i-krizek"/></svg> O půltón výš</button>
+      </div>
+      <p class="poznamka">Platí pro všechny akordy strany.</p>
+    </section>
+    <section class="karta pripravuje-karta">
+      <h2>Připravuje se</h2>
+      <div class="tlacitka">
+        <button type="button" class="pripravuje" data-pripravuje="Diagramy akordů (prstoklady pro kytaru a ukulele)">Diagramy akordů</button>
+        <button type="button" class="pripravuje" data-pripravuje="Export a import ChordPro">ChordPro</button>
+      </div>
+    </section>
     </div>
     <div class="panel-obsah" data-panel="strana" role="tabpanel" hidden>
-    <section class="karta kontext" id="vybrany-tvar" hidden>
-      <h2>Náplast</h2>
-      <div id="tvar-druh">
-        <div class="prepinac" role="group" aria-label="Druh náplasti">
-          <button type="button" data-prikaz="naplast-obdelnik">Obdélník</button>
-          <button type="button" data-prikaz="naplast-volny">Volný tvar</button>
-        </div>
-        <p class="napoveda-karty">Obdélník: klik vloží malý, tažení větší. Volný tvar: klikáním body,
-          uzavře klik na první bod, dvojklik nebo Enter. Esc nástroj vypne.</p>
-      </div>
-      <div class="radek-pole">Barva
-        <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti">
-      </div>
-      <div class="tlacitka">
-        <button type="button" id="tvar-smazat" class="nebezpecne">Smazat</button>
-        <button type="button" id="tvar-smazat-vse" class="nebezpecne">Smazat všechny</button>
-      </div>
-    </section>
-    <section class="karta kontext" id="vybrany-obrazek" hidden>
-      <h2>Obrázek</h2>
-      <p class="poznamka" id="obrazek-podklad" hidden>Podklad strany (sken) leží vždy vespod. Vybere se
-        Alt+klikem, přesouvá se jako jiné prvky.</p>
-      <div class="tlacitka">
-        <button type="button" id="obrazek-smazat" class="nebezpecne">Smazat</button>
-      </div>
-    </section>
     <section class="karta">
       <h2>Strana</h2>
       <label class="radek-pole">Formát
@@ -332,24 +446,16 @@
         </span>
       </div>
       <label class="zaskrt dlouhy"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně číslo skrýt (titulní strana apod.)</label>
-      <p class="poznamka">Polohu změníš tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
+      <p class="poznamka">Poloha se mění tažením čísla na straně. Platí pro všechny strany; ve zpěvníku se číslo
         a levá/pravá doplní podle skutečné pozice strany.</p>
     </section>
-    </div>
-    <div class="panel-obsah" data-panel="ovladani" role="tabpanel" hidden>
-    <section class="karta napoveda-editoru">
-      <h2>Ovládání</h2>
-      <ul>
-        <li><b>Akord:</b> nástroj Akord a klik na znak, nebo znak [ u kurzoru. Enter zapíše, Tab přejde na další.</li>
-        <li><b>Posun akordu:</b> přichytí se ke znaku pod sebou a k výšce sousedů. Alt drží jeho znak, Shift jen vodorovně.</li>
-        <li><b>Akordy do další sloky:</b> s nástrojem Akord najeď na sloku bez akordů a klikni na „Doplnit akordy“ - vezmou se z předchozí sloky po slabikách. Opravit jde tažením, vrátit jedním Zpět.</li>
-        <li><b>Vlastní styl:</b> naformátuj odstavec a „+ Nový styl z odstavce“; u stylu, od kterého se odstavec liší, je „Uložit“.</li>
-        <li><b>Refrén znovu:</b> na prázdném řádku se stylem Refrén vloží Tab kopii předchozího.</li>
-        <li><b>Řádek v odstavci:</b> Shift+Enter.</li>
-        <li><b>Číslo strany:</b> táhni ho na straně; přichytí se ke středu a k okrajům a ukáže se, kde bude na levé i pravé straně.</li>
-        <li><b>Rámeček a obrázek:</b> za lištu nad nimi přesunout, za roh zvětšit.</li>
-        <li><b>Vrstvy:</b> později vložený prvek leží výš, nová náplast pod textem. Pořadí mění nabídka Pořadí v liště nebo u obrázku a náplasti Ctrl+↑/↓ (o vrstvu), Ctrl+Shift+↑/↓ (úplně nahoru/dolů). Alt+klik vybere prvek pod tím vybraným (i sken), opakovaně dál dolů; takhle vybraný prvek jde táhnout, i když ho jiný zakrývá.</li>
-      </ul>
+    <section class="karta pripravuje-karta">
+      <h2>Připravuje se</h2>
+      <div class="tlacitka">
+        <button type="button" class="pripravuje" data-pripravuje="Okraje sazby, mřížka a vodítka při přesunu prvků">Vodítka a mřížka</button>
+        <button type="button" class="pripravuje" data-pripravuje="Šablona zpěvníku (styly a vzhled pro všechny strany)">Šablona zpěvníku</button>
+        <button type="button" class="pripravuje" data-pripravuje="Pozadí strany (barva nebo obrázek)">Pozadí strany</button>
+      </div>
     </section>
     </div>
   </aside>

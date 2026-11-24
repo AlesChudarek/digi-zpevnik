@@ -1209,6 +1209,19 @@ kdo maže.
       obrázkem / Duplikovat / ✕, náhled má nápovědu „Náhled“; duplikát strany kopíruje
       i písně (jako nové písně se stejným názvem); v Mých zpěvnících klik na název otevře
       nabídku (do čtečky vede obálka).
+      Hotovo 24. 11.: **nové rozložení editoru stran** (Aleš: „navrhni od základu, ať je to
+      jednoduché, intuitivní a profesionální“; dva návrhy agentů - Office a Canva - sloučené):
+      hlavička (zpěvník, ‹ Strana N levá/pravá ›, +, Jiná strana… | Zpět/Znovu | stav uložení,
+      zkratky, schovat panel, Náhled, Uložit), vlevo svislá lišta nástrojů (Výběr, Text, Akord,
+      Obrázek, Náplast; zástupné Tvary a Import), nad stranou kontextová lišta podle výběru
+      se štítkem, co se upravuje (text / akord / obrázek / podklad / náplast / nový rámeček),
+      vpravo panel jen s nastavením celé strany (Styly, Akordy, Strana; jde schovat), dole
+      stavový řádek (co je vybrané a jak s tím pracovat, varování, jedna strana / dvojstrana,
+      přiblížení). Zapnutý nástroj: modrý štítek nad stranou s × a rámeček plochy. Nové:
+      Duplikovat (Ctrl+D), nabídka na pravé tlačítko u obrázku a náplasti, Ctrl+S, okno
+      Ovládání a zkratky (místo záložky Ovládání), zástupná tlačítka „připravuje se“
+      (Tvary, Import písně z webu/ChordPro, Oříznout obrázek, Diagramy akordů, ChordPro,
+      Vodítka a mřížka, Šablona zpěvníku, Pozadí strany). Panel se už sám nepřepíná.
       Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
       „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
       v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok

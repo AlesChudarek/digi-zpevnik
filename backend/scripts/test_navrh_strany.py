@@ -140,6 +140,75 @@ def zacni_testovacim_textem(page):
     page.wait_for_timeout(100)
 
 
+def test_rozlozeni(page):
+    """Rozložení editoru (24. 11.): hlavička, nástroje vlevo, kontextová lišta podle výběru,
+    panel s nastavením strany, stavový řádek."""
+    J = page.evaluate
+    RADKY = """new Set([...document.querySelectorAll('.navrh-kontext .skupina')].filter(e => !e.hidden && e.offsetParent)
+      .map(s => Math.round(s.getBoundingClientRect().top))).size"""
+    PREKRYV = """(() => { const r = [...document.querySelectorAll('.navrh-hlava > *, .navrh-kontext .skupina, .kontext-stitek')]
+      .filter(e => !e.hidden && e.offsetParent).map(e => e.getBoundingClientRect());
+      return r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)); })()"""
+    J("navrhStrany.view.focus()")
+    for sirka in (1280, 1400, 1920):
+        page.set_viewport_size({'width': sirka, 'height': 1000})
+        page.wait_for_timeout(200)
+        ok(f'{sirka} px: úpravy textu na jednom řádku, nic se nepřekrývá, stránka se nerozjede do šířky',
+           J(RADKY) == 1 and not J(PREKRYV) and J("document.documentElement.scrollWidth <= innerWidth"),
+           (J(RADKY), J(PREKRYV), J("[document.documentElement.scrollWidth, innerWidth]")))
+    page.set_viewport_size({'width': 1400, 'height': 1000})
+    page.wait_for_timeout(200)
+    ok('ikony ovládání jsou vidět', all(w >= 16 for w in J("""[...document.querySelectorAll('.navrh-hlava svg, .navrh-nastroje svg, .navrh-kontext svg')]
+       .filter(s => !s.closest('[hidden]') && s.closest('button, label, a, .kontext-stitek').offsetParent).map(s => s.getBoundingClientRect().width)""")))
+    ok('panel má záložky Styly, Akordy, Strana',
+       J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.textContent.trim())") == ['Styly', 'Akordy', 'Strana'])
+    ok('na záložce Styly jsou styly odstavců',
+       J("document.querySelector('[data-panel=\"text\"] > section:not([hidden])').textContent.includes('Styly odstavců')"))
+    STAV = """(() => ({ vyber: document.getElementById('navrh').dataset.vyber, nastroj: document.getElementById('navrh').dataset.nastroj,
+      stitek: document.getElementById('kontext-stitek').textContent.trim(), popis: document.getElementById('navrh-popis').textContent,
+      aktivni: [...document.querySelectorAll('.navrh-nastroje .nastroj.aktivni')].map(b => b.dataset.prikaz),
+      rezim: !document.getElementById('navrh-rezim').hidden,
+      text: !document.querySelector('.navrh-kontext [data-pro="text"]').hidden }))()"""
+    st = J(STAV)
+    ok('kurzor v textu: Výběr zapnutý, štítek Text, lišta s formátováním, popis se stylem',
+       st['vyber'] == 'text' and st['aktivni'] == ['vybrat'] and st['stitek'] == 'Text' and st['text']
+       and 'styl ' in st['popis'] and not st['rezim'], st)
+    strana = "(() => { const r = document.getElementById('stranka').getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)]; })()"
+    pred = J(strana)
+    page.click('[data-prikaz="akordy"]')
+    st = J(STAV)
+    ok('zapnutý nástroj stranou nepohne (štítek leží nad plochou)', J(strana) == pred, (pred, J(strana)))
+    ok('nástroj Akord: zapnutý v liště, štítek nad stranou, popis jak s ním pracovat, transpozice v liště',
+       st['aktivni'] == ['akordy'] and st['rezim'] and st['nastroj'] == 'akord' and 'Esc' in st['popis']
+       and J("!document.querySelector('.navrh-kontext [data-pro=\"akordy\"]').hidden"), st)
+    page.click('[data-prikaz="naplast"]')
+    st = J(STAV)
+    ok('nástroj Náplast vypne Akord, lišta ukáže druh a barvu nových náplastí, formátování textu ne',
+       st['aktivni'] == ['naplast'] and st['stitek'] == 'Nová náplast' and not st['text']
+       and J("!document.getElementById('tvar-druh').hidden && !document.getElementById('vybrany-tvar').hidden"), st)
+    page.click('#navrh-rezim .rezim-konec')
+    st = J(STAV)
+    ok('× ve štítku nástroj ukončí (zpět Výběr)', st['aktivni'] == ['vybrat'] and not st['rezim'] and st['nastroj'] == '', st)
+    page.click('[data-prikaz="zkratky"]')
+    ok('okno Ovládání a zkratky se otevře', J("!document.getElementById('okno-zkratek').hidden"))
+    page.keyboard.press('Escape')
+    ok('a Esc ho zavře', J("document.getElementById('okno-zkratek').hidden"))
+    w = J("document.getElementById('navrh-plocha').clientWidth")
+    page.click('[data-prikaz="panel"]')
+    page.wait_for_timeout(100)
+    ok('panel jde schovat (plocha se rozšíří)', J("document.getElementById('navrh-plocha').clientWidth") > w + 200
+       and J("getComputedStyle(document.getElementById('navrh-panel')).display") == 'none')
+    page.click('[data-prikaz="panel"]')
+    page.wait_for_timeout(100)
+    ok('a zase ukázat', J("getComputedStyle(document.getElementById('navrh-panel')).display") != 'none')
+    page.click('.navrh-nastroje .pripravuje')
+    page.wait_for_timeout(100)
+    ok('připravovaná funkce jen napíše do stavového řádku, že se připravuje',
+       J("document.getElementById('navrh-popis').textContent").startswith('Připravuje se') and not J("!!document.querySelector('.oznameni-zaclona')"))
+    J("navrhStrany.view.focus()")
+
+
+
 def test_prohlizece(p, base, jmeno):
     print(f"\n── {jmeno} ──")
     br = getattr(p, jmeno).launch()
@@ -163,21 +232,7 @@ def test_prohlizece(p, base, jmeno):
     ok('na začátku je vidět celá strana', J("""(() => { const r = document.getElementById('stranka').getBoundingClientRect(),
        p = document.getElementById('navrh-plocha').getBoundingClientRect();
        return r.top >= p.top && r.bottom <= p.bottom && r.left >= p.left && r.right <= p.right; })()"""))
-    RADKY = "new Set([...document.querySelectorAll('.navrh-lista .skupina')].map(s => Math.round(s.getBoundingClientRect().top))).size"
-    PREKRYV = """(() => { const r = [...document.querySelectorAll('.navrh-lista .skupina, .navrh-lista .kde')].map(e => e.getBoundingClientRect());
-      return r.some((a, i) => r.some((b, j) => j > i && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1)); })()"""
-    ok('1400 px: lišta nejvýš na dvou řádcích a nic se nepřekrývá', J(RADKY) <= 2 and not J(PREKRYV), (J(RADKY), J(PREKRYV)))
-    page.set_viewport_size({'width': 1920, 'height': 1000})
-    page.wait_for_timeout(200)
-    ok('1920 px: lišta je na jednom řádku', J(RADKY) == 1, J(RADKY))
-    page.set_viewport_size({'width': 1400, 'height': 1000})
-    page.wait_for_timeout(200)
-    ok('ikony lišty jsou vidět', all(w >= 18 for w in J("[...document.querySelectorAll('.navrh-lista svg')].filter(s => !s.closest('[hidden]')).map(s => s.getBoundingClientRect().width)")))
-
-    ok('panel má záložky Text, Akordy, Strana a Ovládání',
-       J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.dataset.zalozka)") == ['text', 'akordy', 'strana', 'ovladani'])
-    ok('na záložce Text jsou nahoře styly',
-       J("document.querySelector('[data-panel=\"text\"] > section').textContent.includes('Styly odstavců')"))
+    test_rozlozeni(page)
 
     # Akordy podle předchozí sloky (na ukázkové písni): smazat akordy 2. sloky a doplnit.
     J('navrhStrany.prepniRezimAkordu(true)')
@@ -334,8 +389,9 @@ def test_prohlizece(p, base, jmeno):
     ok('psaní za akordem jde před něj', J('T.akordy()')[0]['znak'] == 'u', J('T.akordy()'))
 
     # Transpozice.
-    page.click('[data-prikaz="transp-nahoru"]')
-    page.click('[data-prikaz="transp-nahoru"]')
+    ukaz(page, '.navrh-panel [data-prikaz="transp-nahoru"]')
+    page.click('.navrh-panel [data-prikaz="transp-nahoru"]')
+    page.click('.navrh-panel [data-prikaz="transp-nahoru"]')
     ok('transpozice +2', [x['n'] for x in J('T.akordy()')][:2] == ['Hmi', 'D#mi7'], J('T.akordy()'))
     page.wait_for_timeout(600)
 
@@ -629,6 +685,30 @@ def test_prohlizece(p, base, jmeno):
        and J("!document.getElementById('vybrany-obrazek').hidden"))
     page.keyboard.press(f'{MOD}+Shift+ArrowUp')
     ok('Ctrl+Shift+↑ ho vrátí do popředí', J(vrstvy)[0] > J(vrstvy)[1], J(vrstvy))
+    ok('kontextová lišta: štítek Obrázek, bez formátování textu, s Pořadím a Duplikovat',
+       J("document.getElementById('kontext-stitek').textContent.trim()") == 'Obrázek'
+       and J("document.querySelector('.navrh-kontext [data-pro=\"text\"]').hidden")
+       and J("!document.querySelector('.navrh-kontext [data-pro=\"prvek\"]').hidden")
+       and J("!document.querySelector('.navrh-kontext [data-prikaz=\"duplikovat\"]').hidden"))
+    obrazku = "document.querySelectorAll('.ps-obrazek').length"
+    page.keyboard.press(f'{MOD}+d')
+    dup = J("(() => { const a = []; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a.push(n.attrs); }); return a; })()")
+    ok('Ctrl+D obrázek duplikuje o 5 mm vedle, nahoru, a vybere kopii', len(dup) == 2
+       and abs(dup[1]['x'] - dup[0]['x'] - 5) < 0.01 and abs(dup[1]['y'] - dup[0]['y'] - 5) < 0.01 and dup[1]['z'] > dup[0]['z']
+       and J("navrhStrany.view.state.selection.node?.attrs.x") == dup[1]['x'], dup)
+    page.keyboard.press(f'{MOD}+z')
+    ok('Zpět duplikát vrátí', J(obrazku) == 1, J(obrazku))
+    r = J("document.querySelector('.ps-obrazek').getBoundingClientRect().toJSON()")
+    page.mouse.click(r['x'] + r['width'] / 2, r['y'] + r['height'] / 2, button='right')
+    ok('pravé tlačítko na obrázku otevře nabídku prvku', J("!document.getElementById('nabidka-prvku').hidden"))
+    page.click('#nabidka-prvku [data-akce="duplikovat"]')
+    ok('Duplikovat z nabídky přidá kopii a nabídku zavře', J(obrazku) == 2 and J("document.getElementById('nabidka-prvku').hidden"), J(obrazku))
+    r = J("[...document.querySelectorAll('.ps-obrazek')].pop().getBoundingClientRect().toJSON()")
+    page.mouse.click(r['x'] + r['width'] - 4, r['y'] + r['height'] - 12, button='right')
+    page.click('#nabidka-prvku [data-akce="smazat"]')
+    ok('Smazat z nabídky kopii smaže', J(obrazku) == 1, J(obrazku))
+    J("""(() => { const v = navrhStrany.view; let p = null; v.state.doc.forEach((n, q) => { if (n.type.name === 'obrazek') p = q; });
+      const { NodeSelection } = navrhStrany; v.dispatch(v.state.tr.setSelection(NodeSelection.create(v.state.doc, p))); })()""")
     ukaz(page, '#obrazek-smazat')
     page.click('#obrazek-smazat')
     ok('obrázek jde smazat', J("document.querySelectorAll('.ps-obrazek').length") == 0)
