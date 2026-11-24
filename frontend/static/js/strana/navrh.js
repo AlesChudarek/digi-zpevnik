@@ -1793,6 +1793,11 @@ const PRIKAZY = {
     if (naplast.aktivni) naplast.prepni(false);
   },
   duplikovat: () => duplikuj(),
+  cislo: () => {
+    zapniCislovani(true);
+    vyberCislo();
+    stranka.querySelector('.ps-cislo-strany').scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  },
   zkratky: () => { el('okno-zkratek').hidden = false; el('zkratky-zavrit').focus(); },
   panel: () => prepniPanel(),
   'pismo-mensi': () => krokVelikosti(-1),
@@ -1812,7 +1817,7 @@ const PRIKAZY = {
   'naplast-volny': () => naplast.nastavDruh('volny'),
 };
 
-const BEZ_FOKUSU = ['zkratky', 'panel', 'mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
+const BEZ_FOKUSU = ['cislo', 'zkratky', 'panel', 'mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1912,7 +1917,8 @@ function aktualizujListu() {
 
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
     const c = b.dataset.prikaz;
-    if (c === 'vybrat') b.classList.toggle('aktivni', b.classList.contains('nastroj') && !rezimAkordu && !naplast?.aktivni && !nastrojTextu?.aktivni);
+    if (c === 'cislo') b.classList.toggle('aktivni', zvlastniVyber === 'cislo');
+    else if (c === 'vybrat') b.classList.toggle('aktivni', b.classList.contains('nastroj') && !rezimAkordu && !naplast?.aktivni && !nastrojTextu?.aktivni && zvlastniVyber !== 'cislo');
     else if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
     else if (c === 'naplast') b.classList.toggle('aktivni', !!naplast?.aktivni);
     else if (c === 'ramecek') b.classList.toggle('aktivni', !!nastrojTextu?.aktivni);
@@ -2488,10 +2494,16 @@ window.addEventListener('keydown', (e) => {
 // Zaškrtávátko v kontextové liště po změně fokus pustí - jinak by u něj zůstala viset
 // nápověda (napoveda.js ji ukazuje i u fokusu) a první Esc by patřil jí.
 for (const z of koren.querySelectorAll('.navrh-kontext input[type="checkbox"]')) z.addEventListener('change', () => z.blur());
-el('upravit-cislo').addEventListener('click', () => {
-  if (!nastaveni.cislo.zobrazit) { nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, zobrazit: true } }; pouzijNastaveni(); nactiPanel(); zalohuj(); }
-  vyberCislo();
-});
+// Číslo v levé liště: zapne číslování (když je vypnuté) a číslo vybere; Vypnout číslování
+// v kontextové liště u vybraného čísla.
+const zapniCislovani = (zapnout) => {
+  if (!!nastaveni.cislo.zobrazit === zapnout) return;
+  nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, zobrazit: zapnout } };
+  pouzijNastaveni();
+  nactiPanel();
+  zalohuj();
+};
+el('vypnout-cislovani').addEventListener('click', () => { zapniCislovani(false); zrusVyber(); });
 // Načtený koncept je rozdělaná úprava: strana je od začátku neuložená.
 otiskPriNacteni = pouzitKoncept ? null : otiskStrany();
 if (spoj) spoj.druha.otisk = spoj.druha.koncept ? null : otiskStrany(spoj.druha.lp);

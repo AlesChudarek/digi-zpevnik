@@ -125,6 +125,7 @@
     <button type="button" class="nastroj" data-prikaz="akordy" data-napoveda="Akordy: klik na znak vloží akord"><svg><use href="#i-akord"/></svg><span>Akord</span></button>
     <button type="button" class="nastroj" data-prikaz="obrazek" data-napoveda="Vložit obrázek (jde i přetáhnout na stranu nebo vložit ze schránky)"><svg><use href="#i-obrazek"/></svg><span>Obrázek</span></button>
     <button type="button" class="nastroj" data-prikaz="naplast" data-napoveda="Náplast: plocha s barvou, zakryje část obrázku (třeba vypálené číslo strany)"><svg><use href="#i-naplast"/></svg><span>Náplast</span></button>
+    <button type="button" class="nastroj" data-prikaz="cislo" data-napoveda="Číslo strany: zapne číslování a vybere číslo (táhnout, upravit vzhled). Platí pro celý zpěvník."><svg><use href="#i-cislo"/></svg><span>Číslo</span></button>
     <span class="nastroje-oddelovac" aria-hidden="true"></span>
     <button type="button" class="nastroj pripravuje" data-pripravuje="Tvary (čára, obdélník, elipsa)" data-napoveda="Tvary - připravuje se"><svg><use href="#i-tvary"/></svg><span>Tvary</span></button>
     <button type="button" class="nastroj pripravuje" data-pripravuje="Vložení písně s akordy z webu nebo z ChordPro" data-napoveda="Vložit píseň s akordy z webu nebo ChordPro - připravuje se"><svg><use href="#i-import"/></svg><span>Import</span></button>
@@ -200,6 +201,7 @@
       <label class="pole-v-liste"><input type="color" data-cislo-pole="barva" aria-label="Barva čísla"></label>
       <label class="zaskrt-v-liste" data-napoveda="Na levé straně zrcadlově: vnější roh zůstane vnějším"><input type="checkbox" data-cislo-pole="zrcadlit"> Zrcadlit na levé</label>
       <label class="zaskrt-v-liste" data-napoveda="Jen na této straně (titulní strana apod.)"><input type="checkbox" data-nastaveni="cisloSkryte"> Na této straně skrýt</label>
+      <button type="button" class="s-popisem nebezpecne" id="vypnout-cislovani" data-napoveda="Vypnout číslování všech stran zpěvníku (zapne ho znovu Číslo v levé liště)">Vypnout číslování</button>
     </div>
     {# Prvek jako celek (rámeček s kurzorem, obrázek, náplast): pořadí vrstev a duplikát. #}
     <div class="skupina" data-pro="prvek">
@@ -444,11 +446,6 @@
       <label class="radek-pole">Formát
         <select data-nastaveni="format"><option value="A5">A5</option><option value="A4">A4</option></select>
       </label>
-      <h3>Číslo strany</h3>
-      <label class="zaskrt"><input type="checkbox" data-cislo-pole="zobrazit"> Číslovat strany</label>
-      <p class="poznamka">Vzhled a poloha: klik na číslo na straně (táhnout ho jde rovnou). Platí pro všechny
-        strany; ve zpěvníku se číslo a levá/pravá doplní podle skutečné pozice strany.</p>
-      <div class="tlacitka"><button type="button" id="upravit-cislo">Upravit číslo strany</button></div>
     </section>
     <section class="karta pripravuje-karta">
       <h2>Připravuje se</h2>

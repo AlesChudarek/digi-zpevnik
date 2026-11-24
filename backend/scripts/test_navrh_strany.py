@@ -782,6 +782,16 @@ def test_prohlizece(p, base, jmeno):
     page.keyboard.press('Escape')
     ok('Esc výběr čísla zruší (náhled zmizí)', J("document.getElementById('navrh').dataset.vyber") == 'nic'
        and J("document.querySelector('.nahled-dvojstrany.plovouci').hidden"))
+    page.click('[data-prikaz="cislo"]')
+    ok('Číslo v levé liště číslo vybere (tlačítko zapnuté)', J("document.getElementById('navrh').dataset.vyber") == 'cislo'
+       and J("document.querySelector('.nastroj[data-prikaz=\"cislo\"]').classList.contains('aktivni')"))
+    page.click('#vypnout-cislovani')
+    ok('Vypnout číslování číslo schová a výběr zruší', J("document.querySelector('#stranka .ps-cislo-strany').hidden")
+       and J("document.getElementById('navrh').dataset.vyber") == 'nic' and not J("navrhStrany.nastaveni().cislo.zobrazit"))
+    page.click('[data-prikaz="cislo"]')
+    ok('Číslo v liště číslování zase zapne a číslo vybere', J("navrhStrany.nastaveni().cislo.zobrazit")
+       and not J("document.querySelector('#stranka .ps-cislo-strany').hidden") and J("document.getElementById('navrh').dataset.vyber") == 'cislo')
+    page.keyboard.press('Escape')
 
     # Vykreslení mimo editor (čtečka, obrázek pro PDF): musí vypadat přesně jako editor.
     v = J("""async () => {

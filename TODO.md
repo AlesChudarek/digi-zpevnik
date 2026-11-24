@@ -1225,7 +1225,8 @@ kdo maže.
       Po Alešově zkoušení (24. 11.): po otevření a po kliku na prázdné místo / Esc není nic
       vybrané (dřív držel ProseMirror první prvek - náplast - a štítek ukazoval Náplast);
       číslo strany je prvek jako ostatní (klik vybere, úpravy v kontextové liště, plovoucí
-      náhled dvojstrany místo statického v panelu); s nástrojem Náplast rámečky a obrázky
+      náhled dvojstrany místo statického v panelu; tlačítko Číslo v levé liště zapne
+      číslování a číslo vybere, Vypnout číslování u vybraného čísla); s nástrojem Náplast rámečky a obrázky
       na myš nereagují; nástroj Text přejmenovaný na „Nový text“ (vkládá rámeček).
       Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
       „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
