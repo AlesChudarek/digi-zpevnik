@@ -172,10 +172,14 @@ def main():
                tlacitka == ["Uložit a přejít do editoru", "Přejít bez uložení", "Zrušit"], tlacitka)
             page.click("#app-confirm-save")
             editor_stran(page)
-            ok("editor stran je samostatná stránka s adresou nové strany",
-               "/editor-strany/nova?zpevnik=" in page.url and page.url.endswith("&za=0"), page.url)
-            ok("zpěvník se před přechodem uložil (3 strany), nová strana zatím nevznikla",
-               len(strany_db()) == 3 and all(n is None for _, n, _ in strany_db()), strany_db())
+            # Nová strana vznikne hned při otevření (ne až prvním Uložit) a adresa je pak její.
+            page.wait_for_url(re.compile(r"/editor-strany/\d+$"), timeout=30000)
+            page.wait_for_function("!document.querySelector('[data-prikaz=\"ulozit\"]').disabled", timeout=30000)
+            s_hned = strany_db()
+            ok("zpěvník se před přechodem uložil a nová prázdná strana vznikla hned na začátku",
+               len(s_hned) == 4 and s_hned[0][1] is not None and all(n is None for _, n, _ in s_hned[1:]), s_hned)
+            ok("nová strana je prázdná (bez ukázkové písně)", page.evaluate("navrhStrany.view.state.doc.textContent") == "",
+               page.evaluate("navrhStrany.view.state.doc.textContent")[:40])
             ok("lišta webu je vidět", page.evaluate("getComputedStyle(document.querySelector('.navbar')).display") != "none")
             ok("v hlavičce editoru je zpěvník a číslo nové strany 5",
                page.inner_text(".kde-strana").split() == ["‹", "Navržené", "strany", "UI"]
@@ -201,17 +205,18 @@ def main():
             page.on("response", lambda r: odpovedi.append(r) if "/api/navrh/strana" in r.url else None)
             konzole = []
             page.on("console", lambda m: konzole.append(m.text))
-            page.click('[data-prikaz="ulozit"]')
             try:
-                page.wait_for_url(re.compile(r"/editor-strany/\d+$"), timeout=30000)
+                with page.expect_response(lambda r: "/api/navrh/strana" in r.url and r.request.method == "POST", timeout=30000):
+                    page.click('[data-prikaz="ulozit"]')
+                page.wait_for_function("!document.querySelector('[data-prikaz=\"ulozit\"]').disabled", timeout=30000)
             except Exception:
                 print("    ladění:", page.evaluate("location.href"), page.url, page.inner_text('[data-prikaz="ulozit"]'),
                       page.evaluate("[...document.querySelectorAll('.oznameni-zaclona')].map(e => e.innerText).join(' | ')"),
                       strany_db(), chyby[:3], [ (r.status, r.text()[:200]) for r in odpovedi], konzole[-5:])
                 raise
             s = strany_db()
-            ok("Uložit vloží novou stranu na začátek zpěvníku s navrženou verzí",
-               len(s) == 4 and s[0][1] is not None and all(n is None for _, n, _ in s[1:]), s)
+            ok("Uložit uloží novou verzi té strany (žádná další strana)",
+               len(s) == 4 and s[0][1] is not None and s[0][1] != s_hned[0][1] and all(n is None for _, n, _ in s[1:]), s)
             with A.app.app_context():
                 strana0 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=0).first()
                 navrh = strana0.navrzena
@@ -469,9 +474,14 @@ def main():
                and jedna["sirka"] == 0 and abs(jedna["stred"]) <= 12 and not jedna["spoj"], jedna)
             with A.app.app_context():
                 strana8 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=3).first().id
-            ok("+ Nová strana vede na novou stranu za touto", page.get_attribute("#nova-strana", "href")
-               == f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={strana8}" and page.is_visible("#nova-strana"),
-               page.get_attribute("#nova-strana", "href"))
+            page.click("#nova-strana")
+            nabidka = page.evaluate("""(() => ({ videt: !document.getElementById('nabidka-stran').hidden,
+              za: document.getElementById('ns-za-popis').textContent, kopie: document.getElementById('ns-kopie').value,
+              moznosti: document.getElementById('ns-kopie').options.length }))()""")
+            ok("+ otevře nabídku Přidat stranu: za touto (8), ke kopii předvybraná tato",
+               nabidka["videt"] and nabidka["za"] == "Za stranu 8" and nabidka["kopie"] == str(strana8) and nabidka["moznosti"] == 4, nabidka)
+            page.keyboard.press("Escape")
+            ok("Esc nabídku zavře", page.is_hidden("#nabidka-stran"))
             ok("po přelistování na 8 je výstraha s rozdělanými 6, 7",
                page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6, 7",
                page.get_attribute("#neulozene-jinde", "data-napoveda"))
@@ -498,8 +508,47 @@ def main():
             editor_stran(page)
             with A.app.app_context():
                 posledni = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi.desc()).first().id
-            ok("„nebo navrhnout v editoru stran“ otevře novou stranu na konci zpěvníku",
-               page.url.endswith(f"/editor-strany/nova?zpevnik={ZPEVNIK}&za={posledni}"), page.url)
+            page.wait_for_url(re.compile(r"/editor-strany/\d+$"), timeout=30000)
+            page.wait_for_function("!document.querySelector('[data-prikaz=\"ulozit\"]').disabled", timeout=30000)
+            with A.app.app_context():
+                nova_posledni = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi.desc()).first()
+                nova_id, pocet_pred = nova_posledni.id, A.Strana.query.filter_by(songbook_id=ZPEVNIK).count()
+            ok("„nebo navrhnout v editoru stran“ založí novou stranu na konci zpěvníku a otevře ji",
+               nova_id != posledni and page.url.endswith(f"/editor-strany/{nova_id}") and nova_posledni.navrzena_id is not None, page.url)
+
+            print("\n── Přidat stranu: kopie, víc stran naráz, bez ptaní na uložení ──")
+            page.click('[data-prikaz="ramecek"]')
+            st = page.evaluate("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+            page.mouse.click(st["x"] + 40, st["y"] + 60)
+            page.keyboard.type("Kopie")
+            dialogy = []
+            def zavri_dialog(d):
+                dialogy.append(d.message)
+                d.dismiss()
+            page.on("dialog", zavri_dialog)
+            page.click("#nova-strana")
+            page.check('input[name="ns-kam"][value="konec"]')
+            page.select_option("#ns-kopie", str(nova_id))
+            ok("výběr strany ke kopii zvolí „Kopie strany“", page.is_checked('input[name="ns-obsah"][value="kopie"]'))
+            page.fill("#ns-pocet", "2")
+            page.click("#ns-pridat")
+            page.wait_for_url(lambda u: re.search(r"/editor-strany/\d+$", u) and not u.endswith(f"/{nova_id}"), timeout=60000)
+            editor_stran(page)
+            with A.app.app_context():
+                A.db.session.expire_all()
+                strany_po = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi).all()
+                zdroje = [json.loads(st.navrzena.zdroj)["obsah"] if st.navrzena else None for st in strany_po[-2:]]
+                nove_ids = [st.id for st in strany_po[-2:]]
+            ok("přidaly se 2 strany na konec zpěvníku", len(strany_po) == pocet_pred + 2, (pocet_pred, len(strany_po)))
+            ok("obě jsou kopie strany i s neuloženou úpravou", all(z and "Kopie" in json.dumps(z, ensure_ascii=False) for z in zdroje))
+            ok("editor otevřel první z nich", page.url.endswith(f"/editor-strany/{nove_ids[0]}"), page.url)
+            ok("přidání se na uložení neptalo", page.locator("#app-confirm-overlay:visible").count() == 0 and not dialogy, dialogy)
+            ok("rozdělaná úprava zdrojové strany zůstala v prohlížeči",
+               page.evaluate(f"!!localStorage.getItem('navrh-koncept:{ZPEVNIK}:s{nova_id}')"))
+
+            # Rozdělaná úprava zdrojové strany zůstala - odchod by se (správně) zeptal.
+            page.evaluate("Object.keys(localStorage).filter(k => k.startsWith('navrh-koncept:')).forEach(k => localStorage.removeItem(k))")
+            page.remove_listener("dialog", zavri_dialog)
 
             print("\n── Editor strany: vlastní stránka s výběrem, co upravovat ──")
             with A.app.app_context():

@@ -15,6 +15,9 @@ const MIN_MM = 8;
 const KROK_MM = 0.5;
 
 const zaokrouhliMm = (x) => Math.round(x / KROK_MM) * KROK_MM;
+const r1 = (x) => Math.round(x * 10) / 10;
+const r4 = (x) => Math.round(x * 10000) / 10000;
+const MAX_BODU = 24;      // víc bodů (elipsa má 36) se jako táhnutelné body neukazuje
 
 export class PrvekView {
   // volby: meritko() a rozmer() -> { sirka, vyska } strany v mm
@@ -60,7 +63,8 @@ export class PrvekView {
       this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
     } else if (this.jeTvar) {
       // Náplast bez lišty: táhne se za samotný tvar (klikat jde jen na jeho plochu, ne na
-      // prázdné rohy obdélníku kolem volného tvaru), obrys kreslí SVG.
+      // prázdné rohy obdélníku kolem volného tvaru), obrys kreslí SVG. Vybraná má úchyty
+      // jako v Canvě: 8 na velikost, kolečko nad ní na otočení a u mnohoúhelníku body.
       this.dom.contentEditable = 'false';
       const NS = 'http://www.w3.org/2000/svg';
       this.svg = document.createElementNS(NS, 'svg');
@@ -68,8 +72,26 @@ export class PrvekView {
       this.svg.setAttribute('preserveAspectRatio', 'none');
       this.polygon = document.createElementNS(NS, 'polygon');
       this.svg.appendChild(this.polygon);
-      this.dom.append(this.svg, this.roh);
+      this.uchyty = document.createElement('div');
+      this.uchyty.className = 'ps-uchyty';
+      this.uchyty.contentEditable = 'false';
+      const stopka = document.createElement('div');
+      stopka.className = 'ps-otoc-stopka';
+      this.uchyty.appendChild(stopka);
+      for (const u of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'otoc']) {
+        const d = document.createElement('div');
+        d.className = u === 'otoc' ? 'ps-uchyt ps-uchyt-otoc' : `ps-uchyt ps-uchyt-${u}`;
+        d.dataset.uchyt = u;
+        d.title = u === 'otoc' ? 'Otočit (se Shiftem po 15°)' : 'Změnit velikost (u rohu se Shiftem ve stejném poměru)';
+        this.uchyty.appendChild(d);
+      }
+      this.bodyEl = document.createElement('div');
+      this.bodyEl.className = 'ps-body';
+      this.uchyty.appendChild(this.bodyEl);
+      this.dom.append(this.svg, this.uchyty);
       this.polygon.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
+      this.uchyty.addEventListener('pointerdown', (e) => this.chytni(e, e.target));
+      this.polygon.addEventListener('dblclick', (e) => this.pridejBod(e));
     } else {
       this.contentDOM = document.createElement('div');
       this.contentDOM.className = 'ps-ramecek-obsah';
@@ -100,7 +122,39 @@ export class PrvekView {
     if (this.jeTvar) {
       this.polygon.setAttribute('points', bodyTvaru(a.body));
       this.polygon.setAttribute('fill', a.barva);
+      s.transform = a.otoceni ? `rotate(${a.otoceni}deg)` : '';
+      this.dom.dataset.otoceni = a.otoceni || '';
+      this.nastavBody(a);
+      // Kurzor úchytu podle toho, kam po otočení míří.
+      const KURZORY = ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'];
+      const SMERY = { n: 0, ne: 1, e: 2, se: 3, s: 0, sw: 1, w: 2, nw: 3 };
+      for (const d of this.uchyty.querySelectorAll('[data-uchyt]')) {
+        if (d.dataset.uchyt === 'otoc') continue;
+        d.style.cursor = KURZORY[(SMERY[d.dataset.uchyt] + Math.round((a.otoceni || 0) / 45) + 8) % 4];
+      }
     }
+  }
+
+  // Body mnohoúhelníku jde táhnout (volný tvar, trojúhelník). Obdélník má na to rohy
+  // velikosti a elipsa (36 bodů) by byla jen hromada teček.
+  nastavBody(a) {
+    const body = a.body ? a.body.trim().split(/\s+/) : [];
+    const pocet = body.length >= 3 && body.length <= MAX_BODU ? body.length : 0;
+    while (this.bodyEl.children.length > pocet) this.bodyEl.lastChild.remove();
+    while (this.bodyEl.children.length < pocet) {
+      const d = document.createElement('div');
+      d.className = 'ps-bod';
+      d.title = 'Posunout bod (dvojklik bod odebere, dvojklik na okraj tvaru přidá)';
+      this.bodyEl.appendChild(d);
+    }
+    for (let i = 0; i < pocet; i++) {
+      const [bx, by] = body[i].split(',').map(Number);
+      const d = this.bodyEl.children[i];
+      d.dataset.bod = i;
+      d.style.left = bx * 100 + '%';
+      d.style.top = by * 100 + '%';
+    }
+    this.dom.classList.toggle('ma-body', pocet > 0);
   }
 
   // Kopie rámečku přes hřbet (presah) jde upravit jen ve dvojstraně, kde je rámeček celý -
@@ -135,13 +189,107 @@ export class PrvekView {
 
   stopEvent(e) { return !this.contentDOM || !this.contentDOM.contains(e.target); }
 
+  // Úchyt náplasti (velikost, otočení, bod) podle prvku, na který se kliklo - volá ho
+  // i nástroj Náplast a výběr, když úchyt leží pod textem (navrh.js).
+  chytni(e, cil) {
+    const u = cil.closest && cil.closest('[data-uchyt], [data-bod]');
+    if (!u) return false;
+    if (u.dataset.bod != null) {
+      // Dvojklik bod odebere (vlastní měření - pointerdown počet kliknutí spolehlivě nenese).
+      const i = +u.dataset.bod, ted = performance.now(), minule = this._klikBodu;
+      this._klikBodu = { i, ted };
+      if (minule && minule.i === i && ted - minule.ted < 400) {
+        e.preventDefault();
+        e.stopPropagation();
+        this._klikBodu = null;
+        this.odeberBod(i);
+        return true;
+      }
+      this.zacni(e, 'bod', null, i);
+    } else if (u.dataset.uchyt === 'otoc') this.zacni(e, 'otoc');
+    else this.zacni(e, 'velikost', null, u.dataset.uchyt);
+    return true;
+  }
+
+  // Střed obdélníku náplasti na obrazovce (kolem něj se otáčí).
+  stredNaObrazovce() {
+    const r = this.dom.getBoundingClientRect();
+    return [(r.left + r.right) / 2, (r.top + r.bottom) / 2];
+  }
+
+  // Bod obrazovky v podílech obdélníku náplasti (i otočené) - podle původních atributů tahu.
+  podilBodu(e, a) {
+    const pxNaMm = MM_NA_PX * this.volby.meritko();
+    const [sx, sy] = this.tah ? this.tah.stred : this.stredNaObrazovce();
+    const dx = (e.clientX - sx) / pxNaMm, dy = (e.clientY - sy) / pxNaMm;
+    const u = -(a.otoceni || 0) * Math.PI / 180;
+    const lx = dx * Math.cos(u) - dy * Math.sin(u), ly = dx * Math.sin(u) + dy * Math.cos(u);
+    return [lx / a.w + 0.5, ly / a.h + 0.5];
+  }
+
+  // Body v podílech (smí přesahovat 0-1) -> nové x, y, w, h, body: obdélník se natáhne
+  // přesně kolem bodů a střed se posune s ohledem na otočení.
+  normalizujBody(a, body) {
+    const xs = body.map((b) => b[0] * a.w), ys = body.map((b) => b[1] * a.h);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const w = Math.max(maxX - minX, 0.2), h = Math.max(maxY - minY, 0.2);
+    const ox = (minX + maxX) / 2 - a.w / 2, oy = (minY + maxY) / 2 - a.h / 2;
+    const u = (a.otoceni || 0) * Math.PI / 180;
+    const cx = a.x + a.w / 2 + ox * Math.cos(u) - oy * Math.sin(u);
+    const cy = a.y + a.h / 2 + ox * Math.sin(u) + oy * Math.cos(u);
+    return { ...a, x: r1(cx - w / 2), y: r1(cy - h / 2), w: r1(w), h: r1(h),
+      body: xs.map((x, i) => `${r4((x - minX) / w)},${r4((ys[i] - minY) / h)}`).join(' ') };
+  }
+
+  bodyPole(a) {
+    return (a.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map(Number));
+  }
+
+  odeberBod(i) {
+    const a = this.node.attrs;
+    const body = this.bodyPole(a);
+    if (body.length <= 3) return;
+    body.splice(i, 1);
+    this.zapis(this.normalizujBody(a, body));
+  }
+
+  // Dvojklik na okraj vybraného mnohoúhelníku přidá bod na nejbližší hranu.
+  pridejBod(e) {
+    const a = this.node.attrs;
+    if (!this.dom.classList.contains('ma-body') || !this.dom.classList.contains('vybrany')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const body = this.bodyPole(a);
+    if (body.length >= MAX_BODU) return;
+    const [px, py] = this.podilBodu(e, a);
+    let nej = 0, vzd = Infinity;
+    for (let i = 0; i < body.length; i++) {
+      const [ax, ay] = body[i], [bx, by] = body[(i + 1) % body.length];
+      // Vzdálenost bodu od úsečky v mm.
+      const vx = (bx - ax) * a.w, vy = (by - ay) * a.h, wx = (px - ax) * a.w, wy = (py - ay) * a.h;
+      const t = Math.max(0, Math.min(1, (vx * wx + vy * wy) / (vx * vx + vy * vy || 1)));
+      const d = Math.hypot(wx - t * vx, wy - t * vy);
+      if (d < vzd) { vzd = d; nej = i; }
+    }
+    body.splice(nej + 1, 0, [px, py]);
+    this.zapis(this.normalizujBody(a, body));
+  }
+
+  zapis(attrs) {
+    const tr = closeHistory(this.view.state.tr).setNodeMarkup(this.getPos(), null, attrs);
+    tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
+    this.view.dispatch(tr);
+    this.view.focus();
+  }
+
   // priKliku: co udělat místo výběru, když se nepohnulo (klik, ne tah).
-  zacni(e, druh, priKliku = null) {
+  zacni(e, druh, priKliku = null, co = null) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     const a = this.node.attrs;
-    this.tah = { druh, x0: e.clientX, y0: e.clientY, puvodni: { ...a }, nove: { ...a }, posunuto: false, priKliku };
+    this.tah = { druh, co, x0: e.clientX, y0: e.clientY, puvodni: { ...a }, nove: { ...a }, posunuto: false, priKliku,
+      stred: this.jeTvar ? this.stredNaObrazovce() : null };
     this.dom.classList.add('tazeny');
     this._pohyb = (ev) => this.pohyb(ev);
     this._konec = () => this.konec();
@@ -165,7 +313,19 @@ export class PrvekView {
     const p = t.puvodni;
     // Náplast se ladí jemněji (0,1 mm) - zakrývá i malé věci.
     const zaokrouhli = this.jeTvar ? (x) => Math.round(x * 10) / 10 : zaokrouhliMm;
-    if (t.druh === 'presun') {
+    if (t.druh === 'velikost') t.nove = this.zmenVelikost(p, dx, dy, t.co, e.shiftKey);
+    else if (t.druh === 'otoc') {
+      const [sx, sy] = t.stred;
+      let uhel = Math.atan2(e.clientY - sy, e.clientX - sx) * 180 / Math.PI + 90;
+      if (e.shiftKey) uhel = Math.round(uhel / 15) * 15;
+      else if (Math.abs(uhel - Math.round(uhel / 90) * 90) < 4) uhel = Math.round(uhel / 90) * 90;  // přichytí k pravému úhlu
+      uhel = ((Math.round(uhel * 10) / 10) % 360 + 540) % 360 - 180;
+      t.nove = { ...p, otoceni: uhel === -180 ? 180 : uhel };
+    } else if (t.druh === 'bod') {
+      const body = this.bodyPole(p);
+      body[t.co] = this.podilBodu(e, p);
+      t.nove = this.normalizujBody(p, body);
+    } else if (t.druh === 'presun') {
       t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -M), sirka + M - p.w);
       t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -M), vyska + M - p.h);
     } else {
@@ -187,10 +347,34 @@ export class PrvekView {
     this.nastav(t.nove);
   }
 
+  // Velikost náplasti za úchyt `u` (n, ne, e…) v jejích (otočených) osách: protější
+  // strana / roh zůstane na místě. Roh se Shiftem drží poměr stran.
+  zmenVelikost(p, dx, dy, u, drzetPomer) {
+    const sx = u.includes('e') ? 1 : u.includes('w') ? -1 : 0;
+    const sy = u.includes('s') ? 1 : u.includes('n') ? -1 : 0;
+    const uhel = (p.otoceni || 0) * Math.PI / 180, cos = Math.cos(uhel), sin = Math.sin(uhel);
+    const lx = dx * cos + dy * sin, ly = -dx * sin + dy * cos;     // posun v osách náplasti
+    let w = sx ? Math.max(p.w + sx * lx, 0.2) : p.w;
+    let h = sy ? Math.max(p.h + sy * ly, 0.2) : p.h;
+    if (drzetPomer && sx && sy) {
+      const k = Math.max(w / p.w, h / p.h);
+      w = p.w * k;
+      h = p.h * k;
+    }
+    w = r1(w);
+    h = r1(h);
+    // Kotva (protější strana) zůstává: nový střed = kotva + půlka nového rozměru.
+    const kx = -sx * p.w / 2, ky = -sy * p.h / 2;
+    const ox = kx + sx * w / 2, oy = ky + sy * h / 2;
+    const cx = p.x + p.w / 2 + ox * cos - oy * sin, cy = p.y + p.h / 2 + ox * sin + oy * cos;
+    return { ...p, x: r1(cx - w / 2), y: r1(cy - h / 2), w, h };
+  }
+
   konec() {
     const t = this.tah;
     this.uklid();
     if (!t) return;
+    if (t.posunuto) this._klikBodu = null;     // tažení bodu není první klik dvojkliku
     if (!t.posunuto) {
       if (t.priKliku) t.priKliku();
       else if (this.jeAtom) {

@@ -16,7 +16,11 @@
   border: 1px solid var(--panel-border, #ddd); border-right: 0;
   border-radius: 8px 0 0 8px;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.18);
+  /* Nenápadná vrstva nad stránkou: nic neodsouvá, je poloprůhledná a plně se ukáže
+     až pod myší nebo s fokusem. */
+  opacity: 0.4; transition: opacity 0.15s;
 }
+.zv-zalozka:hover, .zv-zalozka:focus-visible { opacity: 1; }
 .zv-zalozka[hidden] { display: none; }
 .zv-zalozka svg { writing-mode: horizontal-tb; flex: none; }
 @media (hover: hover) { .zv-zalozka:hover { background: var(--panel-btn-bg, #f0f0f0); } }

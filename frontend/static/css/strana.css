@@ -24,9 +24,6 @@
   border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22); overflow: hidden;
 }
 .navrh.bez-panelu { grid-template-columns: 64px minmax(0, 1fr) 0; }
-/* Záložka Zpětná vazba u pravého okraje okna (zpetna-vazba.css): editor jde až k okraji,
-   bez místa by záložka zakryla kraj panelu s poli. */
-body:has(.zv-zalozka:not([hidden])) .navrh { margin-right: 34px; }
 .navrh.bez-panelu .navrh-panel { display: none; }
 
 /* Společný vzhled tlačítek ovládání (hlavička, nástroje, kontextová lišta). */
@@ -75,7 +72,23 @@ body:has(.zv-zalozka:not([hidden])) .navrh { margin-right: 34px; }
   border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
 }
 .listovani-lp { min-width: 3.6em; }
+.listovani-lp:empty { display: none; }     /* dvojstrana: „Strany 4–5“ bez levá/pravá */
 .navrh-listovani .nova-strana[hidden] { display: none; }
+/* Přidat stranu: malé okénko pod tlačítkem + */
+.pridat-stranu { position: relative; display: flex; }
+.nabidka-stran { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 250px; padding: 12px 14px; gap: 10px; font-size: 14px; }
+.ns-nadpis { font-weight: 600; font-size: 15px; }
+.ns-volby { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ns-volby legend { padding: 0; margin-bottom: 4px; font-size: 12px; color: var(--panel-muted, #555); text-transform: uppercase; letter-spacing: 0.04em; }
+.ns-volby label, .ns-pocet { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.ns-volby select, .ns-pocet input { font: inherit; font-size: 13px; padding: 2px 4px; border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-bg, #fff); color: inherit; }
+.ns-volby select { max-width: 150px; }
+.ns-pocet input { width: 4em; }
+.ns-chyba { margin: 0; color: #b00020; font-size: 13px; }
+.ns-chyba[hidden] { display: none; }
+.ns-akce { display: flex; justify-content: flex-end; }
+.nabidka-stran .hlavni { height: 32px; padding: 0 18px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--brand-dark, #1b5e20); color: #fff; }
+.nabidka-stran .hlavni:disabled { opacity: 0.6; cursor: default; }
 .navrh-hlava .jina-strana { font-size: 13px; color: var(--panel-muted, #555); }
 .stav-ulozeni { font-size: 13px; color: var(--panel-muted, #666); margin-right: 6px; white-space: nowrap; }
 .stav-ulozeni.neulozeno::before {
@@ -396,18 +409,47 @@ body:has(.zv-zalozka:not([hidden])) .navrh { margin-right: 34px; }
 .ps-tvar { pointer-events: none; }
 .ps-tvar > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
 .ps-tvar polygon { pointer-events: visiblePainted; cursor: move; stroke: none; }
-.ps-tvar .ps-prvek-roh { pointer-events: auto; }
+/* Úchyty vybrané náplasti (ramecky.js): 8 na velikost, kolečko nad ní na otočení,
+   u mnohoúhelníku body. Jsou uvnitř náplasti, takže se otáčejí s ní. */
+.ps-uchyty { position: absolute; inset: 0; display: none; pointer-events: none; }
+.ps-tvar.vybrany > .ps-uchyty, .ps-tvar.tazeny > .ps-uchyty { display: block; }
+.ps-uchyt {
+  position: absolute; width: calc(9px / var(--meritko)); height: calc(9px / var(--meritko));
+  margin: calc(-4.5px / var(--meritko)) 0 0 calc(-4.5px / var(--meritko));
+  background: #fff; border: calc(1.5px / var(--meritko)) solid #1a73e8; box-sizing: border-box;
+  border-radius: calc(2px / var(--meritko)); pointer-events: auto;
+}
+.ps-uchyt-nw { left: 0; top: 0; } .ps-uchyt-n { left: 50%; top: 0; } .ps-uchyt-ne { left: 100%; top: 0; }
+.ps-uchyt-e { left: 100%; top: 50%; } .ps-uchyt-se { left: 100%; top: 100%; } .ps-uchyt-s { left: 50%; top: 100%; }
+.ps-uchyt-sw { left: 0; top: 100%; } .ps-uchyt-w { left: 0; top: 50%; }
+.ps-uchyt-otoc {
+  left: 50%; top: calc(-22px / var(--meritko)); width: calc(12px / var(--meritko)); height: calc(12px / var(--meritko));
+  margin: calc(-6px / var(--meritko)) 0 0 calc(-6px / var(--meritko)); border-radius: 50%; cursor: grab;
+}
+.ps-otoc-stopka {
+  position: absolute; left: 50%; top: calc(-16px / var(--meritko)); height: calc(16px / var(--meritko));
+  border-left: calc(1px / var(--meritko)) solid #1a73e8;
+}
+.ps-body { position: absolute; inset: 0; pointer-events: none; }
+.ps-bod {
+  position: absolute; width: calc(9px / var(--meritko)); height: calc(9px / var(--meritko));
+  transform: translate(-50%, -50%); border-radius: 50%; box-sizing: border-box;
+  background: #1a73e8; border: calc(1.5px / var(--meritko)) solid #fff; box-shadow: 0 0 0 calc(1px / var(--meritko)) #1a73e8;
+  pointer-events: auto; cursor: crosshair;
+}
+.rezim-naplasti .ps-uchyt-otoc { cursor: grab !important; }
+.rezim-naplasti .ps-bod { cursor: crosshair !important; }
+.navrh[data-vyber="nic"] .ps-uchyty, .navrh[data-vyber="cislo"] .ps-uchyty, .rezim-textu .ps-uchyty, .ps-cteni .ps-uchyty { display: none !important; }
 .rezim-naplasti .ps-tvar polygon { stroke: #1a73e8; stroke-width: 1px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
 @media (hover: hover) { .ps-tvar:hover polygon { stroke: rgba(26, 115, 232, 0.6); stroke-width: 1px; vector-effect: non-scaling-stroke; } }
 .ps-tvar.vybrany polygon, .ps-tvar.tazeny polygon { stroke: #1a73e8; stroke-width: 1.5px; stroke-dasharray: none; vector-effect: non-scaling-stroke; }
 /* Nástroj Náplast: kreslí se křížkem, rozkreslený tvar je náhled nad stranou. */
 /* Všude křížek (i nad obrázkem a textem - s nástrojem se nehýbou, klik kreslí), jen
    nad náplastí šipky přesunu. */
-.rezim-naplasti .stranka, .rezim-naplasti .stranka * { cursor: crosshair !important; }
+.rezim-naplasti .stranka, .rezim-naplasti .stranka *:not(.ps-uchyt) { cursor: crosshair !important; }
 /* Nástroj Text: křížek na volné ploše, nad textem obvyklý kurzor (klik do textu nástroj vypne). */
 .rezim-textu .stranka { cursor: crosshair; }
 .rezim-naplasti .ps-tvar polygon { cursor: move !important; }
-.rezim-naplasti .ps-tvar .ps-prvek-roh { cursor: nwse-resize !important; }
 .ps-naplast-nahled { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 5; }
 .ps-naplast-nahled polygon, .ps-naplast-nahled polyline { stroke: #1a73e8; stroke-width: calc(1.5px / var(--meritko)); stroke-dasharray: 4 3; opacity: 0.85; }
 .ps-naplast-nahled circle { fill: rgba(26, 115, 232, 0.25); stroke: #1a73e8; stroke-width: calc(1px / var(--meritko)); }

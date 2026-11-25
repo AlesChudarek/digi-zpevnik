@@ -103,6 +103,7 @@ export const ROLE = {
 const mm = (x) => `${x}mm`;
 // Poloha prvku a jeho vrstva (z-index; podklad vždy vespod).
 export const stylPrvku = (a) => `left:${mm(a.x)};top:${mm(a.y)};width:${mm(a.w)};height:${mm(a.h)};z-index:${a.podklad ? 0 : (a.z || 0) + 1}`;
+export const otoceniCss = (a) => (a.otoceni ? `;transform:rotate(${a.otoceni}deg)` : '');
 
 export const schema = new Schema({
   nodes: {
@@ -161,16 +162,19 @@ export const schema = new Schema({
       attrs: {
         x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 },
         barva: { default: '#ffffff' }, body: { default: null }, z: { default: 0 },
+        // Otočení ve stupních kolem středu obdélníku (po směru hodinových ručiček).
+        otoceni: { default: 0 },
       },
       toDOM: (n) => ['div', {
         class: 'ps-tvar', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
-        'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '', 'data-z': n.attrs.z, style: stylPrvku(n.attrs),
+        'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '', 'data-z': n.attrs.z,
+        ...(n.attrs.otoceni ? { 'data-otoceni': n.attrs.otoceni } : {}), style: stylPrvku(n.attrs) + otoceniCss(n.attrs),
       }, ['http://www.w3.org/2000/svg svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none' },
         ['http://www.w3.org/2000/svg polygon', { points: bodyTvaru(n.attrs.body), fill: n.attrs.barva }]]],
       parseDOM: [{
         tag: 'div.ps-tvar',
         getAttrs: (d) => ({ x: +d.dataset.x || 20, y: +d.dataset.y || 20, w: +d.dataset.w || 30, h: +d.dataset.h || 10,
-          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null, z: +d.dataset.z || 0 }),
+          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null, z: +d.dataset.z || 0, otoceni: +d.dataset.otoceni || 0 }),
       }],
     },
 
@@ -358,6 +362,16 @@ R: [C]Hraj, kytaro, [G]hraj,
 [G]a když oheň [D]tiše dohasí[Emi]ná,
 [C]každý ví, že [D]ráno začí[G]ná.`;
 
+// Prázdná strana: jeden prázdný rámeček přes sazbu - dá se rovnou psát.
+export function prazdnaStrana(format) {
+  const okraj = format.okraj;
+  return N.doc.create(null, [
+    N.ramecek.create({ x: okraj, y: okraj, w: format.sirka - 2 * okraj, h: format.vyska - 2 * okraj },
+      [N.odstavec.create({ styl: 'normalni' })]),
+  ]);
+}
+
+// Strana s ukázkovou písní.
 export function prazdnyDokument(format) {
   const okraj = format.okraj;
   return N.doc.create(null, [

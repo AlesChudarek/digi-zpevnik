@@ -128,6 +128,10 @@ def otevri_editor(page, base):
       body: JSON.stringify({ styly: {} }) })""")
     page.reload()
     page.wait_for_function('window.navrhStrany && document.fonts.status === "loaded"', timeout=15000)
+    # Prázdná strana je prázdná - testy pracují s ukázkovou písní (jako „Přidat stranu
+    # s ukázkovou písní“).
+    page.evaluate("""async () => { const { UKAZKA } = await import('/static/js/strana/schema.js');
+      navrhStrany.nahradTextem('U ohně', 'ukázková píseň', UKAZKA); }""")
     page.evaluate(POMOCNE)
 
 
@@ -1008,7 +1012,16 @@ def test_vrstvy_ukazky(page):
     ok('PDF: náplast v popředí se kreslí až po textu', pdf_po[1] == 1, pdf_po)
     page.keyboard.press(f'{MOD}+ArrowDown')
     ok('Ctrl+↓ ji dá o vrstvu níž - pod rámeček, se kterým se překrývá', nahore() == 'ramecek', nahore())
-    page.mouse.click(*srdce)
+    # Vybraná náplast má úchyty (velikost, body) a ty mají přednost i pod textem - klik
+    # na místo náplasti mimo ně.
+    volne = J("""() => { const p = document.querySelectorAll('.ps-tvar polygon')[2]; const r = p.getBoundingClientRect();
+      for (let fy = 0.15; fy < 0.9; fy += 0.05) for (let fx = 0.15; fx < 0.9; fx += 0.05) {
+        const x = r.left + r.width * fx, y = r.top + r.height * fy;
+        const v = document.elementsFromPoint(x, y);
+        if (v.includes(p) && !v.some((e) => e.matches('[data-uchyt], [data-bod]'))) return [x, y]; }
+      return null; }""")
+    ok('vybraná náplast má i místo bez úchytů', volne is not None, volne)
+    page.mouse.click(*(volne or srdce))
     page.wait_for_function("navrhStrany.view.state.selection.empty", timeout=3000)
     ok('obyčejný klik na místo vybrané náplasti pod textem dá kurzor do textu', vyber() == 'text', vyber())
     ok('u rámečku s kurzorem jde Pořadí v liště použít', not J("document.getElementById('poradi-tlacitko').disabled"))
@@ -1028,6 +1041,78 @@ def test_vrstvy_ukazky(page):
     })()""")
     ok('strana ze schématu 2 se převede: sken podklad, náplasti a obrázky za textem < rámečky < obrázky před textem',
        prevod == [['obrazek', 0, True], ['ramecek', 3, False], ['obrazek', 5, False], ['tvar', 1, False], ['ramecek', 4, False], ['obrazek', 2, False]], prevod)
+
+
+def test_uchyty_naplasti(page):
+    """Náplast jako v Canvě: klik nástrojem na náplast (i pod textem) ji vybere, úchyty
+    mění velikost i u otočené, kolečko otáčí, mnohoúhelník má táhnutelné body."""
+    print('\n── úchyty náplasti ──')
+    J = page.evaluate
+    puvodni = J("navrhStrany.view.state.doc.toJSON()")
+    TV = """() => { const v = navrhStrany.view; const s = v.state.selection; const n = s.node;
+      return { pocet: v.state.doc.toJSON().content.filter((u) => u.type === 'tvar').length,
+               vyber: n ? n.type.name : 'text', a: n ? n.attrs : null }; }"""
+    page.click('[data-prikaz="naplast"]')
+    page.click('[data-prikaz="naplast-obdelnik"]')
+    r = J("(() => { const r = document.querySelectorAll('.ps-ramecek')[0].getBoundingClientRect(); return [r.left, r.top]; })()")
+    x0, y0 = r[0] + 60, r[1] + 120
+    page.mouse.move(x0, y0); page.mouse.down(); page.mouse.move(x0 + 80, y0 + 40, steps=5); page.mouse.up()
+    t = J(TV)
+    pocet = t['pocet']
+    page.mouse.click(x0 + 20, y0 + 20)
+    t2 = J(TV)
+    ok('nástroj Náplast: klik na náplast přes text ji vybere, nekreslí novou', t2['pocet'] == pocet and t2['vyber'] == 'tvar', t2)
+    def uchyt(u):
+        return J(f"(() => {{ const d = document.querySelector('.ps-tvar.vybrany [data-uchyt=\"{u}\"]'); if (!d) return null; const r = d.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()")
+    def tahni(bod, dx, dy):
+        page.mouse.move(*bod); page.mouse.down(); page.mouse.move(bod[0] + dx, bod[1] + dy, steps=6); page.mouse.up()
+        page.wait_for_timeout(60)
+        return J(TV)['a']
+    ok('vybraná náplast má 8 úchytů velikosti a kolečko otočení',
+       J("document.querySelectorAll('.ps-tvar.vybrany [data-uchyt]').length") == 9 and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'block')
+    ok('obdélník táhnutelné body nemá (na to jsou rohy)', J("document.querySelectorAll('.ps-tvar.vybrany .ps-bod').length") == 0)
+    a0 = J(TV)['a']
+    a1 = tahni(uchyt('se'), 30, 15)
+    ok('roh vpravo dole zvětší náplast, levý horní roh zůstane', a1['w'] > a0['w'] + 5 and a1['h'] > a0['h'] + 2
+       and abs(a1['x'] - a0['x']) < 0.2 and abs(a1['y'] - a0['y']) < 0.2, (a0, a1))
+    a2 = tahni(uchyt('w'), -20, 0)
+    ok('levý úchyt rozšíří doleva, pravý okraj zůstane', a2['w'] > a1['w'] + 3 and abs((a2['x'] + a2['w']) - (a1['x'] + a1['w'])) < 0.2, (a1, a2))
+    o = uchyt('otoc')
+    c = J("(() => { const r = document.querySelector('.ps-tvar.vybrany').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    page.mouse.move(*o); page.mouse.down(); page.mouse.move(c[0] + 100, c[1] + 2, steps=8); page.mouse.up()
+    a3 = J(TV)['a']
+    ok('kolečko nad náplastí otočí (u pravého úhlu se přichytí)', a3['otoceni'] == 90 and J("document.getElementById('tvar-otoceni').value") == '90', a3)
+    ok('otočení je vidět', 'rotate(90deg)' in J("document.querySelector('.ps-tvar.vybrany').style.transform"))
+    a4 = tahni(uchyt('e'), 0, 30)
+    ok('u otočené náplasti úchyt táhne v jejích osách (pravý úchyt je teď dole)',
+       a4['w'] > a3['w'] + 5 and abs(a4['h'] - a3['h']) < 0.2, (a3, a4))
+    page.fill('#tvar-otoceni', '-30'); page.press('#tvar-otoceni', 'Enter')
+    ok('otočení jde napsat v liště', J(TV)['a']['otoceni'] == -30, J(TV)['a'])
+    cteni = J("""() => { const k = navrhStrany.vykresliStranu(navrhStrany.zdroj(), {});
+      return [...k.querySelectorAll('.ps-tvar')].map((t) => t.style.transform).filter(Boolean); }""")
+    ok('čtečka náplast otočí stejně', cteni == ['rotate(-30deg)'], cteni)
+    pdf = J("""async () => { const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+      const z = navrhStrany.zdroj(); z.obsah.content = z.obsah.content.filter((n) => n.type !== 'obrazek');
+      const { bytes } = await pdfStrany(z, {}); return bytes.length; }""")
+    ok('PDF s otočenou náplastí se vyrobí', pdf > 1000, pdf)
+    page.keyboard.press('Escape')     # vypne nástroj
+    # Mnohoúhelník (srdce ukázky): body
+    srd = J("""(() => { const p = document.querySelectorAll('.ps-tvar polygon')[2]; const r = p.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height * 0.6]; })()""")
+    page.mouse.click(*srd)
+    ok('mnohoúhelník má po výběru všechny body', J("document.querySelectorAll('.ps-tvar.vybrany .ps-bod').length") == 10)
+    B = "(() => { const d = document.querySelectorAll('.ps-tvar.vybrany .ps-bod')[5]; const r = d.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()"
+    h0 = J(TV)['a']['h']
+    a5 = tahni(J(B), 0, 25)
+    ok('tažení bodu změní tvar a obdélník kolem se natáhne', a5['h'] > h0 + 3 and len(a5['body'].split()) == 10, (h0, a5))
+    b = J(B)
+    page.mouse.click(*b); page.mouse.click(*b)
+    a6 = J(TV)['a']
+    ok('dvojklik na bod ho odebere', a6 and len(a6['body'].split()) == 9, a6)
+    for _ in range(12):
+        if J("navrhStrany.view.state.doc.toJSON()") == puvodni:
+            break
+        page.keyboard.press(f'{MOD}+z')
+    ok('Zpět vrátí ukázku, jak byla', J("navrhStrany.view.state.doc.toJSON()") == puvodni)
 
 
 def test_pristup(p, base):
@@ -1064,6 +1149,7 @@ def test_pristup(p, base):
        sorted(druhy) == ['obrazek', 'ramecek', 'ramecek', 'tvar', 'tvar', 'tvar']
        and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body && n.attrs.body.split(' ').length <= 10)"), druhy)
     test_vrstvy_ukazky(page)
+    test_uchyty_naplasti(page)
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)

@@ -1243,6 +1243,20 @@ kdo maže.
       25. 11.: Náplast umí i elipsu (36 bodů, se Shiftem kruh) a trojúhelník - místo zvláštních
       Tvarů (Aleš: rozšířit náplast); záložka Strana v panelu zrušena, formát je v liště při
       „nic nevybráno“ (klik na prázdnou stranu, štítek Strana) se zástupnými Pozadí a Vodítka.
+      Později 25. 11.: **náplast jako v Canvě** - klik nástrojem Náplast na náplast (i pod
+      textem) ji vybere, nekreslí novou; vybraná má 8 úchytů velikosti (táhnou v osách
+      náplasti i otočené, roh se Shiftem drží poměr), kolečko na otočení (Shift po 15°,
+      u pravého úhlu se přichytí, pole Otočení v liště; schéma: `otoceni` u tvaru, čtečka
+      i PDF ho kreslí) a mnohoúhelník (volný tvar, trojúhelník) táhnutelné body - dvojklik
+      bod odebere, dvojklik na okraj přidá. Úchyty vybrané náplasti mají přednost i pod
+      textem. **Přidat stranu** (+ v hlavičce) je nabídka: za tuto / na konec, prázdná /
+      s ukázkovou písní / kopie vybrané strany, počet; strany vzniknou hned na serveru, editor
+      otevře první, bez ptaní na uložení (rozdělaná úprava zůstane jako při listování).
+      I /editor-strany/nova stranu založí hned při otevření - „duch“ nové strany zmizel.
+      Prázdná strana je opravdu prázdná (jeden prázdný rámeček), ne ukázková píseň.
+      Souběžné ukládání se řadí za sebe a otisk je z okamžiku odeslání (úprava během
+      ukládání dřív vypadala jako uložená). Záložka Zpětná vazba je poloprůhledná vrstva,
+      nic neodsouvá.
       Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
       „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
       v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok

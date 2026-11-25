@@ -66,7 +66,7 @@
     <symbol id="i-obdelnik" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1"/></symbol>
     <symbol id="i-elipsa" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="7"/></symbol>
     <symbol id="i-trojuhelnik" viewBox="0 0 24 24"><path d="M12 4 21 20H3z"/></symbol>
-    <symbol id="i-volny" viewBox="0 0 24 24"><path d="M4 18 7 5l7 4 6-3-2 13-8-3z"/><circle cx="4" cy="18" r="1.3"/><circle cx="7" cy="5" r="1.3"/></symbol>
+    <symbol id="i-volny" viewBox="0 0 24 24"><path d="M4 10 11 4l9 5-2 10-11 1z"/></symbol>
     <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></symbol>
     <symbol id="i-orez" viewBox="0 0 24 24"><path d="M6 2v16h16"/><path d="M2 6h16v16"/></symbol>
     <symbol id="i-cislo" viewBox="0 0 24 24"><path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17"/></symbol>
@@ -96,7 +96,25 @@
           <span class="listovani-lp" id="listovani-lp"></span>
         </label>
         <button type="button" class="ikona" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
-        <a class="ikona nova-strana" id="nova-strana" href="#" hidden data-napoveda="Nová strana za touto (doprostřed písně, která pokračuje na další stranu, nejde)" aria-label="Nová strana"><svg><use href="#i-plus"/></svg></a>
+        <div class="pridat-stranu">
+          <button type="button" class="ikona nova-strana" id="nova-strana" hidden aria-haspopup="dialog" aria-expanded="false" data-napoveda="Přidat stranu" aria-label="Přidat stranu"><svg><use href="#i-plus"/></svg></button>
+          {# Přidat stranu: strany vzniknou hned na serveru (prázdné, s ukázkou, nebo kopie) #}
+          <div class="nabidka nabidka-stran" id="nabidka-stran" role="dialog" aria-label="Přidat stranu" hidden>
+            <div class="ns-nadpis">Přidat stranu</div>
+            <fieldset class="ns-volby"><legend>Kam</legend>
+              <label><input type="radio" name="ns-kam" value="za" checked> <span id="ns-za-popis">Za tuto stranu</span></label>
+              <label><input type="radio" name="ns-kam" value="konec"> Na konec zpěvníku</label>
+            </fieldset>
+            <fieldset class="ns-volby"><legend>Obsah</legend>
+              <label><input type="radio" name="ns-obsah" value="prazdna" checked> Prázdná</label>
+              <label><input type="radio" name="ns-obsah" value="ukazka"> S ukázkovou písní</label>
+              <label class="ns-kopie"><input type="radio" name="ns-obsah" value="kopie"> Kopie strany <select id="ns-kopie" aria-label="Kterou stranu zkopírovat"></select></label>
+            </fieldset>
+            <label class="ns-pocet">Počet stran <input type="number" id="ns-pocet" min="1" max="20" value="1"></label>
+            <p class="ns-chyba" id="ns-chyba" hidden></p>
+            <div class="ns-akce"><button type="button" class="hlavni" id="ns-pridat">Přidat</button></div>
+          </div>
+        </div>
         <button type="button" class="jina-strana" data-vyber-strany data-zpevnik="{{ kontext.zpevnik }}"
                 data-napoveda="Otevřít jinou stranu nebo jiný zpěvník">Jiná strana…</button>
       </div>
@@ -188,6 +206,8 @@
         <button type="button" class="ikona" data-prikaz="naplast-volny" data-napoveda="Volný tvar: klikáním body" aria-label="Volný tvar"><svg><use href="#i-volny"/></svg></button>
       </div>
       <label class="pole-v-liste">Barva <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti"></label>
+      <label class="pole-v-liste" id="tvar-otoceni-pole" hidden data-napoveda="Otočení ve stupních (otáčet jde i kolečkem nad náplastí)">Otočení
+        <input type="number" id="tvar-otoceni" min="-180" max="180" step="1" aria-label="Otočení náplasti ve stupních">°</label>
       <button type="button" class="ikona nebezpecne" id="tvar-smazat" data-napoveda="Smazat náplast (Delete)" aria-label="Smazat náplast"><svg><use href="#i-kos"/></svg></button>
       <button type="button" class="s-popisem nebezpecne" id="tvar-smazat-vse">Smazat všechny</button>
     </div>

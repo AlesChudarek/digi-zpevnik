@@ -248,10 +248,17 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
       const r = t.getBoundingClientRect();
       if (mimo(r.left, r.top, r.right, r.bottom)) return;
       const body = (t.dataset.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map(Number));
-      const w = r.width * PT_NA_PX, h = r.height * PT_NA_PX;
-      const cesta = body.map(([fx, fy], i) => `${i ? 'L' : 'M'}${fx * w} ${fy * h}`).join(' ') + ' Z';
+      // Otočená náplast: getBoundingClientRect dá obdélník kolem otočeného tvaru - střed
+      // sedí, rozměr je z rozložení (offsetWidth) a body se otočí kolem středu.
+      const w = t.offsetWidth * PT_NA_PX, h = t.offsetHeight * PT_NA_PX;
+      const u = (parseFloat(t.dataset.otoceni) || 0) * Math.PI / 180;
+      const cos = Math.cos(u), sin = Math.sin(u);
+      const cesta = body.map(([fx, fy], i) => {
+        const lx = fx * w - w / 2, ly = fy * h - h / 2;
+        return `${i ? 'L' : 'M'}${lx * cos - ly * sin} ${lx * sin + ly * cos}`;
+      }).join(' ') + ' Z';
       stranka.drawSvgPath(cesta, {
-        x: (r.left - r0.left) * PT_NA_PX, y: H - (r.top - r0.top) * PT_NA_PX,
+        x: ((r.left + r.right) / 2 - r0.left) * PT_NA_PX, y: H - ((r.top + r.bottom) / 2 - r0.top) * PT_NA_PX,
         color: rgb(...barva(t.dataset.barva || '#ffffff')), borderWidth: 0,
       });
     };

@@ -11,7 +11,7 @@ import {
   EditorState, EditorView, NodeSelection, TextSelection, Plugin, keymap, baseKeymap, history,
   undo, redo, undoDepth, redoDepth, toggleMark, Slice, Fragment, closeHistory,
 } from 'prosemirror';
-import { schema, ROLE, VERZE_SCHEMATU, znamaVerze, dokumentZeZdroje, poradiVrstev, nastavVrstvy, zNahore, prazdnyDokument, odstavceZTextu, textZUzlu } from './schema.js';
+import { schema, ROLE, VERZE_SCHEMATU, znamaVerze, dokumentZeZdroje, poradiVrstev, nastavVrstvy, zNahore, prazdnyDokument, prazdnaStrana, odstavceZTextu, textZUzlu } from './schema.js';
 import { AkordView, OvladacAkordu, pluginAkordu, akordyPoMazani } from './akord-uzel.js';
 import { PrvekView, nactiObrazek, vlozObrazek } from './ramecky.js';
 import { pluginSlok, klicSlok, znackySlok } from './sloky.js';
@@ -492,7 +492,7 @@ async function nactiProtejsek(p) {
   } catch (_) {
     return null;
   }
-  return { nastaveni: { ...nastaveni }, doc: prazdnyDokument(format()), koncept: false };
+  return { nastaveni: { ...nastaveni }, doc: prazdnaStrana(format()), koncept: false };
 }
 
 async function dokumentSeSkenem(src) {
@@ -572,12 +572,13 @@ function prvkyPodBodem(x, y) {
       const r = dom.getBoundingClientRect();
       if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
       if (node.type !== N.tvar) return true;
+      // Přes matici SVG - platí i pro otočenou náplast.
       const poly = dom.querySelector('polygon');
       const svg = poly.ownerSVGElement;
       const bod = svg.createSVGPoint();
-      bod.x = (x - r.left) / r.width * 100;
-      bod.y = (y - r.top) / r.height * 100;
-      return poly.isPointInFill(bod);
+      bod.x = x;
+      bod.y = y;
+      return poly.isPointInFill(bod.matrixTransform(svg.getScreenCTM().inverse()));
     });
 }
 
@@ -614,7 +615,7 @@ function ukazkovyDokument() {
 
 // Dvojstrana k úpravě: jen u uložené strany s protější stranou stejného formátu (jinak
 // zůstane protější strana jen k náhledu).
-let docStart = zaloha ? zaloha.doc : (UKAZKA ? ukazkovyDokument() : prazdnyDokument(format()));
+let docStart = zaloha ? zaloha.doc : (UKAZKA ? ukazkovyDokument() : KONTEXT ? prazdnaStrana(format()) : prazdnyDokument(format()));
 if (dvojstrana && KONTEXT && KONTEXT.strana) {
   const p = protejsiStrana();
   const druha = p && p.st ? await nactiProtejsek(p) : null;
@@ -1254,11 +1255,16 @@ function naplanujKoncept() {
 
 // Zdroj strany na server: PDF a náhled se vyrobí ze zdroje, server verzi připojí na místo
 // (cil = { strana } nebo { za }). Vrací odpověď serveru.
-async function odesliStranu(zdroj, cil) {
+async function souboryStrany(zdroj) {
   const { pdfStrany } = await import(new URL('./pdf-strany.js', import.meta.url).href);
   // PDF i náhled bez čísla strany - to se dokreslí podle pozice ve zpěvníku.
   const { bytes } = await pdfStrany(zdroj, {});
   const { blob: nahled } = await obrazekStrany(zdroj, { sirkaPx: 420 });
+  return { bytes, nahled };
+}
+// soubory: už vyrobené PDF a náhled (víc stejných nových stran naráz).
+async function odesliStranu(zdroj, cil, soubory = null) {
+  const { bytes, nahled } = soubory || await souboryStrany(zdroj);
   const fd = new FormData();
   fd.append('zdroj', JSON.stringify(zdroj));
   fd.append('pdf', new Blob([bytes], { type: 'application/pdf' }), 'strana.pdf');
@@ -1283,8 +1289,10 @@ async function ulozAktualni() {
   if (spoj && neulozenoStrana(spoj.druha.lp)) {
     // Protější strana dvojstrany (vždy uložená strana zpěvníku).
     const dr = spoj.druha;
+    // Otisk z okamžiku odeslání - úprava během ukládání zůstane neuložená.
+    const otisk2 = otiskStrany(dr.lp);
     const d2 = await odesliStranu(zdrojStrany(dr.lp), { strana: dr.st.id });
-    dr.otisk = otiskStrany(dr.lp);
+    dr.otisk = otisk2;
     dr.navrh = d2.id;
     smazKoncept(klicDruhe());
     const st = KONTEXT.strany.find((x) => x.id === dr.st.id);
@@ -1292,8 +1300,9 @@ async function ulozAktualni() {
   }
   if (KONTEXT.strana && !neulozenoStrana(KONTEXT.lp)) return;
   const staryKlic = klicKonceptu(KONTEXT);
+  const otisk = otiskStrany();
   const d = await odesliStranu(zdrojStrany(), { strana: KONTEXT.strana, za: KONTEXT.za });
-  otiskPriNacteni = otiskStrany();
+  otiskPriNacteni = otisk;
   KONTEXT.navrh = d.id;
   smazKoncept(staryKlic);
   if (!KONTEXT.strana && d.strana) {
@@ -1353,9 +1362,16 @@ async function potvrdPresahy() {
 }
 
 let ulozitSe = false;
-// vse: uložit i ostatní rozdělané strany. Vrací true, když se všechno povedlo.
+let ukladani = null;
+// vse: uložit i ostatní rozdělané strany. Vrací true, když se všechno povedlo. Když se
+// zrovna ukládá (třeba nová strana hned po otevření), počká a uloží znovu.
 async function ulozitStranu(vse) {
-  if (!KONTEXT || ulozitSe) return false;
+  if (!KONTEXT) return false;
+  while (ukladani) await ukladani;
+  ukladani = ulozitStranuTed(vse);
+  try { return await ukladani; } finally { ukladani = null; }
+}
+async function ulozitStranuTed(vse) {
   if (neulozeno() && !(await potvrdPresahy())) return false;
   ulozitSe = true;
   clearTimeout(casovacKonceptu);
@@ -1420,14 +1436,140 @@ function obnovListovani() {
     const b = koren.querySelector(`[data-prikaz="${prikaz}"]`);
     if (b) b.disabled = !sousedniStrana(smer);
   }
-  // Nová strana: za upravovanou (ve dvojstraně za pravou). Nová, ještě neuložená strana
-  // další přidat nedá.
+  // Přidat stranu (nabídka, viz pridejStrany) jde jen od strany, která už ve zpěvníku je.
   const nova = el('nova-strana');
-  if (nova) {
-    const za = spoj ? (KONTEXT.lp === 'P' ? KONTEXT.strana : spoj.druha.st.id) : KONTEXT.strana;
-    nova.hidden = !KONTEXT.strana;
-    if (KONTEXT.strana) nova.href = `/editor-strany/nova?zpevnik=${encodeURIComponent(KONTEXT.zpevnik)}&za=${za}`;
+  if (nova) nova.hidden = !KONTEXT.strana;
+}
+
+// --- přidat stranu ----------------------------------------------------------------------
+// Tlačítko + otevře nabídku: kam (za tuto stranu / na konec), obsah (prázdná, s ukázkovou
+// písní, kopie vybrané strany) a počet. Strany vzniknou hned na serveru a editor otevře
+// první z nich; rozdělaná úprava této strany zůstane v prohlížeči jako při listování.
+
+// Strana, za kterou se přidává a která se nabídne ke kopii: upravovaná, ve dvojstraně ta
+// s vyšším číslem.
+function stranaProPridani() {
+  if (spoj && spoj.druha.cislo > KONTEXT.cislo) return { id: spoj.druha.st.id, cislo: spoj.druha.cislo };
+  return { id: KONTEXT.strana, cislo: KONTEXT.cislo };
+}
+
+function ukazNabidkuStran(ukazat) {
+  const n = el('nabidka-stran');
+  n.hidden = !ukazat;
+  el('nova-strana').setAttribute('aria-expanded', String(ukazat));
+  if (!ukazat) return;
+  const ja = stranaProPridani();
+  el('ns-za-popis').textContent = `Za stranu ${ja.cislo}`;
+  const vyber = el('ns-kopie');
+  vyber.innerHTML = '';
+  for (const st of KONTEXT.strany) {
+    const o = document.createElement('option');
+    o.value = String(st.id);
+    o.textContent = String(st.cislo);
+    o.selected = st.id === ja.id;
+    vyber.appendChild(o);
   }
+  el('ns-chyba').hidden = true;
+}
+
+// Zdroj nové strany z dokumentu: nastavení této strany (formát, akordy, číslo), styly
+// odstavců jako kopie z knihovny.
+function zdrojNoveStrany(doc) {
+  const styly = {};
+  const obsah = doc.toJSON();
+  const projdi = (u) => {
+    if (u.type === 'odstavec' && u.attrs) {
+      const k = u.attrs.styl;
+      if (nastaveni.styly[k]) styly[k] = nastaveni.styly[k];
+      else {
+        const id = knihovna[k] ? k : idZKlice(k);
+        if (knihovna[id]) {
+          u.attrs.styl = klicStylu(id);
+          styly[u.attrs.styl] = { ...knihovna[id] };
+        }
+      }
+    }
+    (u.content || []).forEach(projdi);
+  };
+  projdi(obsah);
+  return { verze: VERZE_SCHEMATU, nastaveni: { ...nastaveniStrany(KONTEXT.lp), styly, cisloSkryte: false }, obsah, zlomy: {} };
+}
+
+// Zdroj strany ke kopii: z plátna (i s neuloženou úpravou), z rozdělané úpravy
+// v prohlížeči, uložená verze, sken jako podklad, jinak prázdná.
+async function zdrojKopie(id) {
+  if (id === KONTEXT.strana) return zdrojStrany(KONTEXT.lp);
+  if (spoj && id === spoj.druha.st.id) return zdrojStrany(spoj.druha.lp);
+  const st = KONTEXT.strany.find((x) => x.id === id);
+  if (!st) throw new Error('Strana ke kopii ve zpěvníku už není.');
+  const k = prectiKoncept(klicKonceptu({ strana: id }));
+  if (k && k.zdroj && znamaVerze(k.zdroj.verze)) return k.zdroj;
+  if (st.navrh) {
+    const r = await fetch(`/api/navrh/strana/${st.navrh}`, { credentials: 'same-origin' });
+    const d = await r.json().catch(() => ({}));
+    if (!d.ok) throw new Error(d.error || 'Stranu ke kopii se nepodařilo načíst.');
+    return d.zdroj;
+  }
+  if (st.obrazek) return zdrojNoveStrany(await dokumentSeSkenem(st.obrazek));
+  return zdrojNoveStrany(prazdnaStrana(format()));
+}
+
+let pridavaSe = false;
+async function pridejStrany() {
+  if (pridavaSe || !KONTEXT || !KONTEXT.strana) return;
+  const kam = koren.querySelector('input[name="ns-kam"]:checked').value;
+  const obsah = koren.querySelector('input[name="ns-obsah"]:checked').value;
+  const pocet = Math.max(1, Math.min(20, parseInt(el('ns-pocet').value, 10) || 1));
+  const tlacitko = el('ns-pridat');
+  const chyba = el('ns-chyba');
+  pridavaSe = true;
+  tlacitko.disabled = true;
+  tlacitko.textContent = pocet > 1 ? `Přidává se 0 / ${pocet}…` : 'Přidává se…';
+  chyba.hidden = true;
+  try {
+    const zdroj = obsah === 'kopie' ? await zdrojKopie(+el('ns-kopie').value)
+      : zdrojNoveStrany(obsah === 'ukazka' ? prazdnyDokument(format()) : prazdnaStrana(format()));
+    if (JSON.stringify(zdroj.obsah).includes('"src":"data:')) {
+      throw new Error('Strana ke kopii má obrázek, který se ještě nenahrál. Nejdřív ji otevřete a uložte.');
+    }
+    const soubory = await souboryStrany(zdroj);
+    let za = kam === 'konec' ? KONTEXT.strany[KONTEXT.strany.length - 1].id : stranaProPridani().id;
+    let prvni = null;
+    for (let i = 0; i < pocet; i++) {
+      const d = await odesliStranu(zdroj, { za }, soubory);
+      if (prvni == null) prvni = d.strana;
+      za = d.strana;
+      if (pocet > 1) tlacitko.textContent = `Přidává se ${i + 1} / ${pocet}…`;
+    }
+    jdiNa(`/editor-strany/${prvni}`);
+  } catch (e) {
+    chyba.textContent = String(e.message || e);
+    chyba.hidden = false;
+    tlacitko.disabled = false;
+    tlacitko.textContent = 'Přidat';
+    pridavaSe = false;
+  }
+}
+
+function napojPridaniStran() {
+  const tlacitko = el('nova-strana');
+  if (!tlacitko) return;
+  tlacitko.addEventListener('click', () => ukazNabidkuStran(el('nabidka-stran').hidden));
+  // Výběr strany ke kopii rovnou zvolí „Kopie strany“.
+  el('ns-kopie').addEventListener('input', () => { koren.querySelector('input[name="ns-obsah"][value="kopie"]').checked = true; });
+  el('ns-kopie').addEventListener('focus', () => { koren.querySelector('input[name="ns-obsah"][value="kopie"]').checked = true; });
+  el('ns-pridat').addEventListener('click', pridejStrany);
+  el('nabidka-stran').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.tagName !== 'SELECT') { e.preventDefault(); pridejStrany(); } });
+  document.addEventListener('pointerdown', (e) => {
+    if (!el('nabidka-stran').hidden && !pridavaSe && !e.target.closest('.pridat-stranu')) ukazNabidkuStran(false);
+  }, true);
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || el('nabidka-stran').hidden || pridavaSe) return;
+    ukazNabidkuStran(false);
+    tlacitko.focus();
+    e.preventDefault();
+    e.stopPropagation();
+  }, true);
 }
 
 // --- dvojstrana -------------------------------------------------------------------------
@@ -1992,6 +2134,8 @@ function aktualizujListu() {
   el('tvar-smazat-vse').hidden = naplasti < 1 || (!!tvar && naplasti < 2);
   el('tvar-smazat-vse').textContent = `Smazat všechny (${naplasti})`;
   if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
+  el('tvar-otoceni-pole').hidden = !tvar;
+  if (tvar && document.activeElement !== el('tvar-otoceni')) el('tvar-otoceni').value = String(Math.round(tvar.attrs.otoceni || 0));
   // Pořadí vrstev (nabídka v liště): položka, která by nic nezměnila, je vypnutá, bez
   // takové položky i celé tlačítko. Podklad ve vrstvách není.
   el('obrazek-podklad').hidden = !(obrazek && obrazek.attrs.podklad);
@@ -2261,6 +2405,17 @@ function napojPanelAkordu() {
   el('tvar-barva').addEventListener('input', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, false); });
   el('tvar-barva').addEventListener('change', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, true); });
   // Všechny náplasti strany jedním krokem (Ctrl+Z je vrátí).
+  el('tvar-otoceni').addEventListener('change', (e) => {
+    const sel = view.state.selection;
+    if (!(sel instanceof NodeSelection) || sel.node.type !== N.tvar) return;
+    let uhel = parseFloat(String(e.target.value).replace(',', '.'));
+    if (!Number.isFinite(uhel)) uhel = 0;
+    uhel = ((uhel % 360) + 540) % 360 - 180;
+    if (uhel === -180) uhel = 180;
+    const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, otoceni: Math.round(uhel * 10) / 10 });
+    view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, sel.from)));
+  });
+  el('tvar-otoceni').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.target.blur(); view.focus(); } });
   el('tvar-smazat-vse').addEventListener('click', () => {
     const pozice = [];
     view.state.doc.forEach((n, pos) => { if (n.type === N.tvar) pozice.push([pos, n.nodeSize]); });
@@ -2386,11 +2541,31 @@ for (const b of koren.querySelectorAll('[data-zalozka]')) {
 stranka.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || (naplast && naplast.body)) return;
   const t = e.target;
+  // Úchyt vybrané náplasti má přednost před vším, co leží nad ním (text, lišta jiného
+  // prvku) - náplasti leží pod textem a jinak by na úchyty nešlo dosáhnout.
+  if (t.closest('.ps-uchyty')) return;
+  const uchyt = document.elementsFromPoint(e.clientX, e.clientY)
+    .find((x) => x.matches('.ps-tvar.vybrany [data-uchyt], .ps-tvar.vybrany [data-bod]'));
+  if (uchyt) {
+    e.stopImmediatePropagation();
+    uchyt.closest('.ps-tvar').prvekView.chytni(e, uchyt);
+    return;
+  }
   // Vlastní ovládání (lišta, roh, akord, číslo strany) a místa mimo prvky si klik nechají.
   if (t.closest('.ps-prvek-lista, .ps-prvek-roh, .akord-kotva, .ps-cislo-strany')) return;
   if (!t.closest('.ps-ramecek, .ps-obrazek, .ps-tvar') && !t.closest('.stranka-obsah')) return;
   const pod = prvkyPodBodem(e.clientX, e.clientY);
   if (!pod.length) return;
+  // Nástroj Náplast: klik na náplast ji vybere (a táhne), i když leží pod textem -
+  // nekreslí přes ni novou.
+  if (naplast && naplast.aktivni && !e.altKey) {
+    const tvar = pod.find((h) => h.node.type === N.tvar);
+    if (tvar && tvar.dom.prvekView) {
+      e.stopImmediatePropagation();
+      tvar.dom.prvekView.zacni(e, 'presun');
+    }
+    return;
+  }
   const vybrany = prvekVyberu(view.state);
   const i = vybrany ? pod.findIndex((h) => h.index === vybrany.index) : -1;
   let volba = null, priKliku = null;
@@ -2558,6 +2733,11 @@ obnovListovani();
 
 // Pro testy a ladění.
 // nahradTextem: test začíná od známého textu, ne od ukázkové písně.
+if (KONTEXT) napojPridaniStran();
+// Nová strana (/editor-strany/nova - z výběru strany nebo z editoru zpěvníku) se ve
+// zpěvníku založí hned při otevření, ne až prvním Uložit.
+if (KONTEXT && !KONTEXT.strana && !UKAZKA) ulozitStranu(false);
+
 window.navrhStrany = {
   view, schema, TextSelection, NodeSelection, nastaveni: () => nastaveni, knihovna: () => knihovna, meritko: () => meritko, prepniRezimAkordu,
   cislo: () => cisloStrany,
