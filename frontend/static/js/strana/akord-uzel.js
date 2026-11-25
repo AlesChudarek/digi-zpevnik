@@ -358,6 +358,9 @@ export class OvladacAkordu {
       inst, pos, x0: e.clientX, y0: e.clientY, posunuto: false, alt: false,
       dx0: inst.node.attrs.dx, dy0: inst.node.attrs.dy, dx: inst.node.attrs.dx,
       dy: inst.node.attrs.dy, pismo, kandidat: null,
+      // Otočený rámeček: posun myši se převede do os rámečku. Přichycení k jinému znaku
+      // a k výšce ostatních akordů měří vodorovné řádky - tam se vynechá.
+      otoceni: parseFloat(inst.dom.closest('.ps-ramecek')?.dataset.otoceni) || 0,
     };
     // Pohyb se poslouchá na window: tažený prvek může ProseMirror mezitím překreslit
     // a pointer capture by se ztratil.
@@ -373,7 +376,11 @@ export class OvladacAkordu {
     const t = this.tah;
     if (!t) return;
     const m = this.meritko();
-    const mx = (e.clientX - t.x0) / m, my = (e.clientY - t.y0) / m;
+    let mx = (e.clientX - t.x0) / m, my = (e.clientY - t.y0) / m;
+    if (t.otoceni) {
+      const u = -t.otoceni * Math.PI / 180;
+      [mx, my] = [mx * Math.cos(u) - my * Math.sin(u), mx * Math.sin(u) + my * Math.cos(u)];
+    }
     if (!t.posunuto && Math.hypot(mx, my) * m < 4) return;
     if (!t.posunuto) { t.posunuto = true; t.inst.tazeni = true; t.inst.dom.classList.add('tazeny'); }
     t.alt = e.altKey;
@@ -382,8 +389,8 @@ export class OvladacAkordu {
     t.dy = e.shiftKey ? t.dy0 : zaokrouhli(t.dy0 + my / t.pismo);
     t.inst.posun.style.setProperty('--dx', t.dx);
     t.inst.posun.style.setProperty('--dy', t.dy);
-    t.kandidat = t.alt ? null : this.najdiKandidata(t);
-    t.uroven = e.shiftKey ? null : this.prichytVysku(t);
+    t.kandidat = t.alt || t.otoceni ? null : this.najdiKandidata(t);
+    t.uroven = e.shiftKey || t.otoceni ? null : this.prichytVysku(t);
     const kandZnak = t.kandidat != null ? kotevniZnak(this.view.state.doc, t.kandidat) : null;
     const stary = klicAkordu.getState(this.view.state).kandidat;
     if (JSON.stringify(stary) !== JSON.stringify(kandZnak)) {

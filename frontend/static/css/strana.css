@@ -65,18 +65,35 @@
 .navrh-hlava .kde-strana { padding: 0 8px 0 4px; flex: 0 1 auto; min-width: 0; }
 .navrh-hlava .kde-sipka { font-size: 20px; line-height: 1; }
 .navrh-hlava .kde-nazev { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 16em; }
-.navrh-listovani { display: flex; align-items: center; gap: 2px; padding-left: 8px; border-left: 1px solid var(--ram); flex: none; }
-.listovani-cislo { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-muted, #666); }
-.listovani-cislo input {
-  width: 3.2em; height: 28px; box-sizing: border-box; text-align: center; font: inherit; font-size: 14px;
-  border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-btn-bg, #f4f4f4); color: var(--panel-text, #222);
+/* Listování uprostřed spodní lišty: výrazné šipky, číslo a Přidat stranu. */
+.navrh-listovani {
+  display: flex; align-items: center; gap: 4px; padding: 3px; flex: none;
+  background: var(--panel-btn-bg, #f1f3f4); border: 1px solid var(--ram); border-radius: 10px;
 }
-.listovani-lp { min-width: 3.6em; }
+.navrh-listovani button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; min-width: 34px; padding: 0 10px; box-sizing: border-box;
+  background: transparent; color: var(--panel-text, #333); border: 0; border-radius: 7px;
+  font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap;
+}
+.navrh-listovani .ikona { padding: 0; }
+.navrh-listovani .ikona svg { width: 22px; height: 22px; }
+@media (hover: hover) { .navrh-listovani button:hover:not(:disabled) { background: var(--panel-bg, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); } }
+.navrh-listovani button:disabled { opacity: 0.35; cursor: default; }
+.listovani-cislo { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--panel-text, #333); padding: 0 4px; }
+.listovani-cislo input {
+  width: 3.2em; height: 30px; box-sizing: border-box; text-align: center; font: inherit; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+}
+.navrh-listovani .nova-strana { background: var(--brand-dark, #1b5e20); color: #fff; font-weight: 600; padding: 0 12px 0 8px; margin-left: 4px; }
+.navrh-listovani .nova-strana svg { width: 18px; height: 18px; }
+@media (hover: hover) { .navrh-listovani .nova-strana:hover:not(:disabled) { background: var(--brand-dark, #1b5e20); filter: brightness(1.12); } }
+.listovani-lp { min-width: 3.6em; color: var(--panel-muted, #666); font-size: 13px; }
 .listovani-lp:empty { display: none; }     /* dvojstrana: „Strany 4–5“ bez levá/pravá */
 .navrh-listovani .nova-strana[hidden] { display: none; }
-/* Přidat stranu: malé okénko pod tlačítkem + */
+/* Přidat stranu: malé okénko nad tlačítkem (lišta je dole) */
 .pridat-stranu { position: relative; display: flex; }
-.nabidka-stran { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; min-width: 250px; padding: 12px 14px; gap: 10px; font-size: 14px; }
+.nabidka-stran { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 40; min-width: 250px; padding: 12px 14px; gap: 10px; font-size: 14px; }
 .ns-nadpis { font-weight: 600; font-size: 15px; }
 .ns-volby { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .ns-volby legend { padding: 0; margin-bottom: 4px; font-size: 12px; color: var(--panel-muted, #555); text-transform: uppercase; letter-spacing: 0.04em; }
@@ -89,7 +106,7 @@
 .ns-akce { display: flex; justify-content: flex-end; }
 .nabidka-stran .hlavni { height: 32px; padding: 0 18px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--brand-dark, #1b5e20); color: #fff; }
 .nabidka-stran .hlavni:disabled { opacity: 0.6; cursor: default; }
-.navrh-hlava .jina-strana { font-size: 13px; color: var(--panel-muted, #555); }
+.navrh-listovani .jina-strana { font-size: 13px; color: var(--panel-muted, #555); }
 .stav-ulozeni { font-size: 13px; color: var(--panel-muted, #666); margin-right: 6px; white-space: nowrap; }
 .stav-ulozeni.neulozeno::before {
   content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -160,6 +177,9 @@
 .pole-v-liste { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--panel-muted, #666); padding: 0 6px 0 2px; }
 .pole-v-liste .s-jednotkou { display: inline-flex; align-items: center; gap: 4px; }
 .pole-v-liste input[type="number"] { width: 58px; }
+.otoceni-pole svg { width: 17px; height: 17px; }
+.otoceni-pole input[type="number"] { width: 52px; }
+.navrh-kontext #prvek-zamek[aria-pressed="true"] { background: rgba(26, 115, 232, 0.14); color: var(--akcent); }
 .navrh-kontext input[type="color"] {
   width: 34px; height: 28px; padding: 1px 2px; border-radius: 6px; cursor: pointer;
   background: var(--panel-btn-bg, #f4f4f4); border: 1px solid var(--ram);
@@ -216,15 +236,17 @@
 
 /* --- stavový řádek -------------------------------------------------------------------- */
 .navrh-dole {
-  grid-area: dole; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
-  padding: 4px 10px; border-top: 1px solid var(--ram); font-size: 13px; min-height: 40px; box-sizing: border-box;
+  grid-area: dole; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px;
+  padding: 5px 10px; border-top: 1px solid var(--ram); font-size: 13px; min-height: 48px; box-sizing: border-box;
 }
+.dole-vlevo { grid-column: 1; display: flex; flex-direction: column; min-width: 0; }
+.dole-format select { height: 30px; font-size: 13px; }
 .navrh-popis { color: var(--panel-muted, #555); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .navrh-popis b { color: var(--panel-text, #222); font-weight: 600; }
 .navrh-popis.pripravuje-zprava, .navrh-popis.pripravuje-zprava b { color: var(--akcent); }
 .navrh-stav:empty { display: none; }
 .navrh-stav .varovani { color: #b00020; font-weight: 600; }
-.navrh-vpravo { display: flex; flex-wrap: nowrap; justify-content: flex-end; gap: 8px; white-space: nowrap; }
+.navrh-vpravo { grid-column: 3; display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-end; gap: 8px; white-space: nowrap; }
 .navrh-zoom { display: inline-flex; align-items: center; gap: 2px; }
 .navrh-zoom button {
   display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
@@ -409,10 +431,22 @@
 .ps-tvar { pointer-events: none; }
 .ps-tvar > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
 .ps-tvar polygon { pointer-events: visiblePainted; cursor: move; stroke: none; }
-/* Úchyty vybrané náplasti (ramecky.js): 8 na velikost, kolečko nad ní na otočení,
-   u mnohoúhelníku body. Jsou uvnitř náplasti, takže se otáčejí s ní. */
-.ps-uchyty { position: absolute; inset: 0; display: none; pointer-events: none; }
-.ps-tvar.vybrany > .ps-uchyty, .ps-tvar.tazeny > .ps-uchyty { display: block; }
+/* Šrafování přes plochu náplasti (jen editor, ramecky.js): bílá náplast na bílém je
+   jinak k nenalezení. Ořízne se na tvar přes clip-path, otáčí se s ní. */
+.ps-srafy {
+  position: absolute; inset: 0; pointer-events: none; opacity: 0.45;
+  background: repeating-linear-gradient(-45deg, rgba(70, 85, 110, 0.55) 0 calc(1px / var(--meritko)), transparent 0 calc(6px / var(--meritko)));
+}
+.ps-tvar.vybrany > .ps-srafy, .ps-tvar.tazeny > .ps-srafy { opacity: 0.8; }
+@media (hover: hover) { .ps-tvar:hover > .ps-srafy { opacity: 0.8; } }
+.ps-cteni .ps-srafy { display: none; }
+/* Úchyty vybraného prvku (ramecky.js): 8 na velikost (obrázek 4 rohy), kolečko pod ním
+   na otočení, u mnohoúhelníku náplasti body. Jsou uvnitř prvku, takže se otáčejí s ním.
+   Rámeček je má, když je v něm kurzor. */
+.ps-uchyty { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 1; }
+.ps-tvar.vybrany > .ps-uchyty, .ps-obrazek.vybrany > .ps-uchyty, .ps-ramecek.aktivni > .ps-uchyty,
+.ps-ramecek.vybrany > .ps-uchyty, .tazeny > .ps-uchyty { display: block; }
+.ps-obrazek.ps-podklad > .ps-uchyty { display: none; }
 .ps-uchyt {
   position: absolute; width: calc(9px / var(--meritko)); height: calc(9px / var(--meritko));
   margin: calc(-4.5px / var(--meritko)) 0 0 calc(-4.5px / var(--meritko));
@@ -423,11 +457,11 @@
 .ps-uchyt-e { left: 100%; top: 50%; } .ps-uchyt-se { left: 100%; top: 100%; } .ps-uchyt-s { left: 50%; top: 100%; }
 .ps-uchyt-sw { left: 0; top: 100%; } .ps-uchyt-w { left: 0; top: 50%; }
 .ps-uchyt-otoc {
-  left: 50%; top: calc(-22px / var(--meritko)); width: calc(12px / var(--meritko)); height: calc(12px / var(--meritko));
+  left: 50%; top: calc(100% + 22px / var(--meritko)); width: calc(12px / var(--meritko)); height: calc(12px / var(--meritko));
   margin: calc(-6px / var(--meritko)) 0 0 calc(-6px / var(--meritko)); border-radius: 50%; cursor: grab;
 }
 .ps-otoc-stopka {
-  position: absolute; left: 50%; top: calc(-16px / var(--meritko)); height: calc(16px / var(--meritko));
+  position: absolute; left: 50%; top: 100%; height: calc(16px / var(--meritko));
   border-left: calc(1px / var(--meritko)) solid #1a73e8;
 }
 .ps-body { position: absolute; inset: 0; pointer-events: none; }
@@ -467,25 +501,26 @@
 .navrh[data-vyber="nic"] .ps-ramecek.aktivni, .navrh[data-vyber="cislo"] .ps-ramecek.aktivni,
 .navrh[data-vyber="nic"] .ps-obrazek.vybrany, .navrh[data-vyber="cislo"] .ps-obrazek.vybrany { outline: none; }
 .navrh[data-vyber="nic"] .ps-tvar.vybrany polygon, .navrh[data-vyber="cislo"] .ps-tvar.vybrany polygon { stroke: none; }
-.navrh[data-vyber="nic"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="nic"] .vybrany > .ps-prvek-roh,
-.navrh[data-vyber="nic"] .aktivni > .ps-prvek-lista, .navrh[data-vyber="nic"] .aktivni > .ps-prvek-roh,
-.navrh[data-vyber="cislo"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="cislo"] .vybrany > .ps-prvek-roh,
-.navrh[data-vyber="cislo"] .aktivni > .ps-prvek-lista, .navrh[data-vyber="cislo"] .aktivni > .ps-prvek-roh { opacity: 0; }
+.navrh[data-vyber="nic"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="nic"] .aktivni > .ps-prvek-lista,
+.navrh[data-vyber="cislo"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="cislo"] .aktivni > .ps-prvek-lista { opacity: 0; }
+.navrh[data-vyber="nic"] .ps-zamek, .navrh[data-vyber="cislo"] .ps-zamek { display: none !important; }
 .navrh[data-vyber="nic"] .akord-kotva.vybrany .akord, .navrh[data-vyber="cislo"] .akord-kotva.vybrany .akord { outline: none; }
 /* Nástroj Náplast kreslí i přes text a obrázky - ty na myš nereagují (žádný obrys ani
    lišta), ať je jasné, že klik kreslí. Reagují jen náplasti. */
 .rezim-naplasti .ps-ramecek, .rezim-naplasti .ps-obrazek { outline: none !important; }
-.rezim-naplasti .ps-ramecek > .ps-prvek-lista, .rezim-naplasti .ps-ramecek > .ps-prvek-roh,
-.rezim-naplasti .ps-obrazek > .ps-prvek-lista, .rezim-naplasti .ps-obrazek > .ps-prvek-roh { opacity: 0 !important; pointer-events: none; }
+.rezim-naplasti .ps-ramecek > .ps-prvek-lista, .rezim-naplasti .ps-obrazek > .ps-prvek-lista { opacity: 0 !important; pointer-events: none; }
+.rezim-naplasti .ps-ramecek > .ps-uchyty, .rezim-naplasti .ps-obrazek > .ps-uchyty,
+.rezim-naplasti .ps-ramecek > .ps-zamek, .rezim-naplasti .ps-obrazek > .ps-zamek { display: none !important; }
 .rezim-naplasti .ps-cislo-strany { pointer-events: none; }
 /* Nástroj Nový text: obrázky a náplasti na myš nereagují. */
 .rezim-textu .ps-obrazek { outline: none !important; }
-.rezim-textu .ps-obrazek > .ps-prvek-lista, .rezim-textu .ps-obrazek > .ps-prvek-roh, .rezim-textu .ps-tvar > .ps-prvek-roh { opacity: 0 !important; }
+.rezim-textu .ps-obrazek > .ps-prvek-lista { opacity: 0 !important; }
+.rezim-textu .ps-zamek { display: none !important; }
 .rezim-textu .ps-tvar polygon { stroke: none !important; }
 
 /* Kopie rámečku přes hřbet z vedlejší strany: jen k vidění (upravuje se ve dvojstraně). */
 .ps-ramecek.ps-presah { outline: calc(1px / var(--meritko)) dashed rgba(0, 0, 0, 0.35) !important; cursor: default; }
-.ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-prvek-roh { display: none; }
+.ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-uchyty, .ps-ramecek.ps-presah > .ps-zamek { display: none !important; }
 .ps-cteni .ps-ramecek.ps-presah { outline: none !important; }
 .ps-ramecek.pretece { outline: calc(2px / var(--meritko)) solid #d00 !important; }
 .ps-ramecek-obsah { position: relative; width: 100%; height: 100%; }
@@ -502,21 +537,29 @@
   border: 0; background: transparent; color: #fff; cursor: pointer; padding: 0 calc(5px / var(--meritko));
   font-size: calc(14px / var(--meritko)); line-height: 1; font-family: sans-serif;
 }
-.ps-prvek-roh {
-  position: absolute; right: calc(-5px / var(--meritko)); bottom: calc(-5px / var(--meritko));
-  width: calc(10px / var(--meritko)); height: calc(10px / var(--meritko));
-  background: #fff; border: calc(1.5px / var(--meritko)) solid #1a73e8; box-sizing: border-box;
-  border-radius: 2px; cursor: nwse-resize; opacity: 0; transition: opacity 0.12s;
-}
-.ps-ramecek.aktivni > .ps-prvek-lista, .ps-ramecek.aktivni > .ps-prvek-roh,
-.ps-obrazek.vybrany > .ps-prvek-lista, .ps-obrazek.vybrany > .ps-prvek-roh,
-.ps-tvar.vybrany > .ps-prvek-roh,
-.tazeny > .ps-prvek-lista, .tazeny > .ps-prvek-roh { opacity: 1; }
+.ps-ramecek.aktivni > .ps-prvek-lista, .ps-obrazek.vybrany > .ps-prvek-lista, .tazeny > .ps-prvek-lista { opacity: 1; }
 @media (hover: hover) {
-  .ps-ramecek:hover > .ps-prvek-lista, .ps-ramecek:hover > .ps-prvek-roh,
-  .ps-obrazek:hover > .ps-prvek-lista, .ps-obrazek:hover > .ps-prvek-roh,
-  .ps-tvar:hover > .ps-prvek-roh { opacity: 1; }
+  .ps-ramecek:hover > .ps-prvek-lista, .ps-obrazek:hover > .ps-prvek-lista { opacity: 1; }
 }
+/* Zamčený prvek: lišta bez ×, místo úchytů zámek (klik odemkne). Tah ho jen vybere. */
+.zamceny > .ps-prvek-lista { cursor: default; }
+.zamceny > .ps-prvek-lista > .ps-prvek-smazat { display: none; }
+.zamceny > .ps-uchyty { display: none !important; }
+.zamceny.ps-obrazek img { cursor: default; }
+.rezim-naplasti .ps-tvar.zamceny polygon, .ps-tvar.zamceny polygon { cursor: default !important; }
+.ps-zamek {
+  position: absolute; right: calc(-10px / var(--meritko)); bottom: calc(-10px / var(--meritko)); z-index: 2;
+  width: calc(20px / var(--meritko)); height: calc(20px / var(--meritko)); padding: 0; display: none;
+  align-items: center; justify-content: center; border-radius: 50%; cursor: pointer;
+  background: #fff; color: #1a73e8; border: calc(1.5px / var(--meritko)) solid #1a73e8; box-sizing: border-box;
+}
+.ps-zamek svg {
+  width: calc(12px / var(--meritko)) !important; height: calc(12px / var(--meritko)) !important;
+  fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;
+}
+.zamceny.vybrany > .ps-zamek, .zamceny.aktivni > .ps-zamek { display: flex; }
+@media (hover: hover) { .zamceny:hover > .ps-zamek { display: flex; } .ps-zamek:hover { background: #e8f0fe; } }
+.ps-cteni .ps-zamek { display: none !important; }
 .ProseMirror-selectednode.ps-obrazek { outline-offset: 0; }
 
 /* Odstavce. Vzhled stylu přichází z vygenerovaných pravidel .stranka .ps-<styl>,
@@ -707,6 +750,9 @@ html.navrh-ukazka .nahled-cteni-obal::after { content: "UKÁZKA"; font-size: 34m
   .navrh-kontext .poradi-tlacitko .poradi-popisek { display: none; }
   .navrh-kontext .vyber-styl { width: 100px; }
   .navrh-kontext .vyber-pismo { width: 120px; }
+  /* V textu je lišta plná formátování: otáčí se kolečkem pod rámečkem, číslo jen
+     u obrázku a náplasti (nebo v širším okně). */
+  .navrh[data-vyber="text"] .otoceni-pole { display: none; }
 }
 
 /* --- úzké okno (na konci: přebíjí pravidla výš) --------------------------------------- */
@@ -724,9 +770,11 @@ html.navrh-ukazka .nahled-cteni-obal::after { content: "UKÁZKA"; font-size: 34m
   .nastroje-oddelovac { width: 1px; height: 32px; margin: 0 6px; }
   .navrh-panel { border-left: 0; border-top: 1px solid var(--ram); }
   .navrh-dole { grid-template-columns: minmax(0, 1fr) auto; }
-  .navrh-stav { grid-column: 1 / -1; grid-row: 2; }
+  .dole-vlevo { grid-column: 1; grid-row: 2; }
+  .navrh-vpravo { grid-column: 2; grid-row: 2; }
+  .navrh-listovani { grid-column: 1 / -1; grid-row: 1; justify-self: center; flex-wrap: wrap; justify-content: center; }
   #prepinac-panelu { display: none; }
 }
 @media (max-width: 600px) {
-  .stav-ulozeni, .navrh-hlava .jina-strana { display: none; }
+  .stav-ulozeni, .navrh-listovani .jina-strana { display: none; }
 }

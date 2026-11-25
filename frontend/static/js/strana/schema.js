@@ -104,6 +104,11 @@ const mm = (x) => `${x}mm`;
 // Poloha prvku a jeho vrstva (z-index; podklad vždy vespod).
 export const stylPrvku = (a) => `left:${mm(a.x)};top:${mm(a.y)};width:${mm(a.w)};height:${mm(a.h)};z-index:${a.podklad ? 0 : (a.z || 0) + 1}`;
 export const otoceniCss = (a) => (a.otoceni ? `;transform:rotate(${a.otoceni}deg)` : '');
+// Otočení (stupně kolem středu, po směru hodinových ručiček) a zámek (prvek se nedá
+// posunout, zvětšit, otočit ani smazat, dokud se neodemkne) mají všechny prvky.
+const attrsPolohy = { otoceni: { default: 0 }, zamceno: { default: false } };
+const domPolohy = (a) => ({ ...(a.otoceni ? { 'data-otoceni': a.otoceni } : {}), ...(a.zamceno ? { 'data-zamceno': '1' } : {}) });
+const zDomPolohy = (d) => ({ otoceni: +d.dataset.otoceni || 0, zamceno: d.dataset.zamceno === '1' });
 
 export const schema = new Schema({
   nodes: {
@@ -116,15 +121,16 @@ export const schema = new Schema({
       // presah: kopie rámečku přes hřbet dvojstrany na straně, kde nemá střed - vykreslí
       // se (každá strana ukáže svou část), ale nepočítá se do slok (značky nese pevně
       // v odstavcích) a obsahem zpěvníku (hledání, export) je jen originál.
-      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 }, presah: { default: false }, z: { default: 0 } },
+      attrs: { x: { default: 12 }, y: { default: 12 }, w: { default: 124 }, h: { default: 186 }, presah: { default: false }, z: { default: 0 }, ...attrsPolohy },
       toDOM: (n) => ['div', {
         class: 'ps-ramecek', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
-        ...(n.attrs.presah ? { 'data-presah': '1' } : {}), 'data-z': n.attrs.z, style: stylPrvku(n.attrs),
+        ...(n.attrs.presah ? { 'data-presah': '1' } : {}), 'data-z': n.attrs.z, ...domPolohy(n.attrs),
+        style: stylPrvku(n.attrs) + otoceniCss(n.attrs),
       }, ['div', { class: 'ps-ramecek-obsah' }, 0]],
       parseDOM: [{
         tag: 'div.ps-ramecek', contentElement: '.ps-ramecek-obsah',
         getAttrs: (d) => ({ x: +d.dataset.x || 12, y: +d.dataset.y || 12, w: +d.dataset.w || 124, h: +d.dataset.h || 186,
-          presah: d.dataset.presah === '1', z: +d.dataset.z || 0 }),
+          presah: d.dataset.presah === '1', z: +d.dataset.z || 0, ...zDomPolohy(d) }),
       }],
     },
 
@@ -135,12 +141,12 @@ export const schema = new Schema({
       group: 'prvek', atom: true, selectable: true, draggable: false,
       attrs: {
         src: {}, x: { default: 20 }, y: { default: 20 }, w: { default: 50 }, h: { default: 40 },
-        podklad: { default: false }, z: { default: 0 },
+        podklad: { default: false }, z: { default: 0 }, ...attrsPolohy,
       },
       toDOM: (n) => ['div', {
         class: `ps-obrazek${n.attrs.podklad ? ' ps-podklad' : ''}`, 'data-x': n.attrs.x, 'data-y': n.attrs.y,
         'data-w': n.attrs.w, 'data-h': n.attrs.h, ...(n.attrs.podklad ? { 'data-podklad': '1' } : {}), 'data-z': n.attrs.z,
-        style: stylPrvku(n.attrs),
+        ...domPolohy(n.attrs), style: stylPrvku(n.attrs) + otoceniCss(n.attrs),
       }, ['img', { src: n.attrs.src, alt: '' }]],
       parseDOM: [{
         tag: 'div.ps-obrazek',
@@ -148,7 +154,7 @@ export const schema = new Schema({
           const img = d.querySelector('img');
           if (!img) return false;
           return { src: img.getAttribute('src'), x: +d.dataset.x || 20, y: +d.dataset.y || 20,
-            w: +d.dataset.w || 50, h: +d.dataset.h || 40, podklad: d.dataset.podklad === '1', z: +d.dataset.z || 0 };
+            w: +d.dataset.w || 50, h: +d.dataset.h || 40, podklad: d.dataset.podklad === '1', z: +d.dataset.z || 0, ...zDomPolohy(d) };
         },
       }],
     },
@@ -162,19 +168,18 @@ export const schema = new Schema({
       attrs: {
         x: { default: 20 }, y: { default: 20 }, w: { default: 30 }, h: { default: 10 },
         barva: { default: '#ffffff' }, body: { default: null }, z: { default: 0 },
-        // Otočení ve stupních kolem středu obdélníku (po směru hodinových ručiček).
-        otoceni: { default: 0 },
+        ...attrsPolohy,
       },
       toDOM: (n) => ['div', {
         class: 'ps-tvar', 'data-x': n.attrs.x, 'data-y': n.attrs.y, 'data-w': n.attrs.w, 'data-h': n.attrs.h,
         'data-barva': n.attrs.barva, 'data-body': n.attrs.body || '', 'data-z': n.attrs.z,
-        ...(n.attrs.otoceni ? { 'data-otoceni': n.attrs.otoceni } : {}), style: stylPrvku(n.attrs) + otoceniCss(n.attrs),
+        ...domPolohy(n.attrs), style: stylPrvku(n.attrs) + otoceniCss(n.attrs),
       }, ['http://www.w3.org/2000/svg svg', { viewBox: '0 0 100 100', preserveAspectRatio: 'none' },
         ['http://www.w3.org/2000/svg polygon', { points: bodyTvaru(n.attrs.body), fill: n.attrs.barva }]]],
       parseDOM: [{
         tag: 'div.ps-tvar',
         getAttrs: (d) => ({ x: +d.dataset.x || 20, y: +d.dataset.y || 20, w: +d.dataset.w || 30, h: +d.dataset.h || 10,
-          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null, z: +d.dataset.z || 0, otoceni: +d.dataset.otoceni || 0 }),
+          barva: d.dataset.barva || '#ffffff', body: d.dataset.body || null, z: +d.dataset.z || 0, ...zDomPolohy(d) }),
       }],
     },
 

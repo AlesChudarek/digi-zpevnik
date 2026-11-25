@@ -160,7 +160,7 @@ function useckyTextu(koren, r0) {
 // Vektorové PDF jedné strany. Vrací { bytes: Uint8Array, ms }.
 export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
   const zacatek = performance.now();
-  const { PDFDocument, rgb, fontkit, setCharacterSpacing } = await nactiKnihovnu();
+  const { PDFDocument, rgb, fontkit, setCharacterSpacing, degrees } = await nactiKnihovnu();
   const f = formatStrany(zdroj.nastaveni);
   const koren = vykresliStranu(zdroj, { cislo, strana });
   const drzak = document.createElement('div');
@@ -190,6 +190,27 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
     // ale hledání a kopírování textu by ho našlo. Každé slovo má vlastní polohu, takže
     // vynechání nic dalšího neposune; zčásti viditelné slovo se zapíše a strana ho ořízne.
     const mimo = (l, t, r, b) => r <= r0.left || l >= r0.right || b <= r0.top || t >= r0.bottom;
+    // Otočený rámeček a obrázek: změří se neotočený (transform pryč, rozložení je stejné)
+    // a každé slovo / obrázek se nakreslí otočené kolem středu prvku. pdf-lib otáčí kolem
+    // počátku kreslení (účaří slova, levý dolní roh obrázku), tak se otočí i ten.
+    let otoc = null;            // { cx, cy, cos, sin, deg } v pt, osa y nahoru
+    const bod = (x, y) => {
+      if (!otoc) return { x, y };
+      const dx = x - otoc.cx, dy = y - otoc.cy;
+      return { x: otoc.cx + dx * otoc.cos - dy * otoc.sin, y: otoc.cy + dx * otoc.sin + dy * otoc.cos };
+    };
+    const natoceni = () => (otoc ? { rotate: degrees(otoc.deg) } : {});
+    const sOtocenim = async (o, kresli) => {
+      const uhel = parseFloat(o.dataset.otoceni) || 0;
+      if (!uhel) return kresli();
+      o.style.transform = 'none';
+      const r = o.getBoundingClientRect();
+      // Na obrazovce po směru hodinových ručiček = v PDF (osa y nahoru) záporný úhel.
+      const u = -uhel * Math.PI / 180;
+      otoc = { cx: ((r.left + r.right) / 2 - r0.left) * PT_NA_PX, cy: H - ((r.top + r.bottom) / 2 - r0.top) * PT_NA_PX,
+        cos: Math.cos(u), sin: Math.sin(u), deg: -uhel };
+      try { return await kresli(); } finally { otoc = null; }
+    };
     const vlozena = new Map();
     const pismo = async (soubor) => {
       if (!vlozena.has(soubor.url)) {
@@ -224,7 +245,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
         const rozestup = sirkaPx != null && kusy.length === 1 && znaku > 1
           ? (sirkaPx * PT_NA_PX - sirkaPdf) / (znaku - 1) : 0;
         if (rozestup) stranka.pushOperators(setCharacterSpacing(rozestup));
-        stranka.drawText(t, { x: xKusu * PT_NA_PX, y: H - ucari * PT_NA_PX, size: velikostPt, font, color: rgb(cr, cg, cb) });
+        stranka.drawText(t, { ...bod(xKusu * PT_NA_PX, H - ucari * PT_NA_PX), ...natoceni(), size: velikostPt, font, color: rgb(cr, cg, cb) });
         if (rozestup) stranka.pushOperators(setCharacterSpacing(0));
         xKusu += (sirkaPdf + rozestup * (znaku - 1)) / PT_NA_PX;
       }
@@ -238,7 +259,7 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
       if (mimo(r.left, r.top, r.right, r.bottom)) return;
       const emb = await vlozObrazek(doc, img.src);
       stranka.drawImage(emb, {
-        x: (r.left - r0.left) * PT_NA_PX, y: H - (r.bottom - r0.top) * PT_NA_PX,
+        ...bod((r.left - r0.left) * PT_NA_PX, H - (r.bottom - r0.top) * PT_NA_PX), ...natoceni(),
         width: r.width * PT_NA_PX, height: r.height * PT_NA_PX,
       });
     };
@@ -273,8 +294,8 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
         if (/underline/.test(u.styl.textDecorationLine)) {
           const tl = Math.max(0.5, parseFloat(u.styl.fontSize) / 16);
           stranka.drawLine({
-            start: { x: u.x * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
-            end: { x: konec * PT_NA_PX, y: H - (ucariU + tl * 1.6) * PT_NA_PX },
+            start: bod(u.x * PT_NA_PX, H - (ucariU + tl * 1.6) * PT_NA_PX),
+            end: bod(konec * PT_NA_PX, H - (ucariU + tl * 1.6) * PT_NA_PX),
             thickness: tl * PT_NA_PX, color: rgb(...barva(u.styl.color)),
           });
         }
@@ -295,8 +316,8 @@ export async function pdfStrany(zdroj, { cislo = null, strana = 'P' } = {}) {
     prvky.sort((a, b) => vrstva(a) - vrstva(b));    // sort je stabilní - shoda zůstane v pořadí
     for (const o of prvky) {
       if (o.classList.contains('ps-tvar')) kresliTvar(o);
-      else if (o.classList.contains('ps-obrazek')) await kresliObrazek(o);
-      else await kresliRamecek(o);
+      else if (o.classList.contains('ps-obrazek')) await sOtocenim(o, () => kresliObrazek(o));
+      else await sOtocenim(o, () => kresliRamecek(o));
     }
 
     // Číslo strany (ve zpěvníku ho dokreslí server - tady jen pro náhled).

@@ -33,7 +33,7 @@ const bodyVObdelniku = (body, x, y, w, h) => (body || '0,0 1,0 1,1 0,1').split('
   .map((b) => { const [bx, by] = b.split(',').map(Number); return [x + bx * w, y + by * h]; });
 
 export class NastrojNaplasti {
-  // volby: view, stranka (prvek strany), koren (editor), meritko(), poZmene()
+  // volby: view, stranka (prvek strany), koren (editor), meritko(), poZmene(), zrusVyber()
   constructor(volby) {
     this.v = volby;
     this.aktivni = false;
@@ -88,6 +88,8 @@ export class NastrojNaplasti {
     if (!this.body && e.target.closest && e.target.closest('.ps-tvar')) return;
     e.preventDefault();
     e.stopPropagation();
+    // Kreslí se nový tvar: dosavadní výběr (poslední náplast) pryč, ať nemate.
+    if (!this.body && this.v.zrusVyber) this.v.zrusVyber();
     if (this.druh === 'volny') this.bodVolneho(e);
     else this.tahObdelniku(e);
   }

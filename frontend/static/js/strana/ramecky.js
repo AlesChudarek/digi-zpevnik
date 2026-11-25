@@ -1,11 +1,12 @@
-// Prvky na straně (jako v Canvě): textové rámečky a obrázky - přesun, změna velikosti,
-// smazání.
+// Prvky na straně (jako v Canvě): textové rámečky, obrázky a náplasti - přesun, změna
+// velikosti, otočení, zámek, smazání.
 //
-// Prvek je blokový uzel s polohou v mm. Lišta s úchytem nad horním okrajem a roh vpravo
-// dole nejsou součástí textu (contenteditable=false) a obsluhuje je tenhle pohled; obsah
-// textového rámečku spravuje ProseMirror. Obrázek jde táhnout za celou plochu a jeho roh
-// drží poměr stran (se Shiftem volně). Během tažení se mění jen styl a teprve při
-// puštění jde jedna transakce - celý přesun vrátí jedno „Zpět“.
+// Prvek je blokový uzel s polohou v mm. Lišta s úchytem nad horním okrajem a úchyty
+// vybraného prvku (8 na velikost, kolečko pod ním na otočení) nejsou součástí textu
+// (contenteditable=false) a obsluhuje je tenhle pohled; obsah textového rámečku spravuje
+// ProseMirror. Obrázek jde táhnout za celou plochu a jeho rohy drží poměr stran (se
+// Shiftem volně). Zamčený prvek úchyty nemá a tah ho jen vybere. Během tažení se mění
+// jen styl a teprve při puštění jde jedna transakce - celý přesun vrátí jedno „Zpět“.
 
 import { closeHistory, TextSelection, NodeSelection } from 'prosemirror';
 import { bodyTvaru, zNahore } from './schema.js';
@@ -49,22 +50,46 @@ export class PrvekView {
     this.smazat.title = `Smazat ${nazev}`;
     this.lista.appendChild(this.smazat);
 
-    this.roh = document.createElement('div');
-    this.roh.className = 'ps-prvek-roh';
-    this.roh.contentEditable = 'false';
-    this.roh.title = 'Změnit velikost';
+    // Úchyty vybraného prvku (jako v Canvě): 8 na velikost (obrázek jen rohy - strany by
+    // ho deformovaly), kolečko pod ním na otočení, u mnohoúhelníku náplasti i body.
+    // Jsou uvnitř prvku, takže se otáčejí s ním.
+    this.uchyty = document.createElement('div');
+    this.uchyty.className = 'ps-uchyty';
+    this.uchyty.contentEditable = 'false';
+    const stopka = document.createElement('div');
+    stopka.className = 'ps-otoc-stopka';
+    this.uchyty.appendChild(stopka);
+    const rohyAStrany = this.jeObrazek ? ['nw', 'ne', 'se', 'sw'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+    for (const u of [...rohyAStrany, 'otoc']) {
+      const d = document.createElement('div');
+      d.className = u === 'otoc' ? 'ps-uchyt ps-uchyt-otoc' : `ps-uchyt ps-uchyt-${u}`;
+      d.dataset.uchyt = u;
+      d.title = u === 'otoc' ? 'Otočit (se Shiftem po 15°)'
+        : this.jeObrazek ? 'Změnit velikost (se Shiftem i poměr stran)' : 'Změnit velikost (u rohu se Shiftem ve stejném poměru)';
+      this.uchyty.appendChild(d);
+    }
+    this.uchyty.addEventListener('pointerdown', (e) => this.chytni(e, e.target));
+    // Zámek: u zamčeného prvku místo úchytů, klik ho odemkne.
+    this.zamek = document.createElement('button');
+    this.zamek.type = 'button';
+    this.zamek.className = 'ps-zamek';
+    this.zamek.contentEditable = 'false';
+    this.zamek.title = 'Zamčeno - klik odemkne';
+    this.zamek.setAttribute('aria-label', 'Odemknout');
+    this.zamek.innerHTML = '<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+    this.zamek.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
+    this.zamek.addEventListener('click', (e) => { e.stopPropagation(); this.nastavZamek(false); });
 
     if (this.jeObrazek) {
       this.img = document.createElement('img');
       this.img.alt = '';
       this.img.draggable = false;
       this.dom.contentEditable = 'false';
-      this.dom.append(this.lista, this.img, this.roh);
+      this.dom.append(this.lista, this.img, this.uchyty, this.zamek);
       this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
     } else if (this.jeTvar) {
       // Náplast bez lišty: táhne se za samotný tvar (klikat jde jen na jeho plochu, ne na
-      // prázdné rohy obdélníku kolem volného tvaru), obrys kreslí SVG. Vybraná má úchyty
-      // jako v Canvě: 8 na velikost, kolečko nad ní na otočení a u mnohoúhelníku body.
+      // prázdné rohy obdélníku kolem volného tvaru), obrys kreslí SVG.
       this.dom.contentEditable = 'false';
       const NS = 'http://www.w3.org/2000/svg';
       this.svg = document.createElementNS(NS, 'svg');
@@ -72,30 +97,18 @@ export class PrvekView {
       this.svg.setAttribute('preserveAspectRatio', 'none');
       this.polygon = document.createElementNS(NS, 'polygon');
       this.svg.appendChild(this.polygon);
-      this.uchyty = document.createElement('div');
-      this.uchyty.className = 'ps-uchyty';
-      this.uchyty.contentEditable = 'false';
-      const stopka = document.createElement('div');
-      stopka.className = 'ps-otoc-stopka';
-      this.uchyty.appendChild(stopka);
-      for (const u of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w', 'otoc']) {
-        const d = document.createElement('div');
-        d.className = u === 'otoc' ? 'ps-uchyt ps-uchyt-otoc' : `ps-uchyt ps-uchyt-${u}`;
-        d.dataset.uchyt = u;
-        d.title = u === 'otoc' ? 'Otočit (se Shiftem po 15°)' : 'Změnit velikost (u rohu se Shiftem ve stejném poměru)';
-        this.uchyty.appendChild(d);
-      }
       this.bodyEl = document.createElement('div');
       this.bodyEl.className = 'ps-body';
       this.uchyty.appendChild(this.bodyEl);
-      this.dom.append(this.svg, this.uchyty);
+      this.srafy = document.createElement('div');
+      this.srafy.className = 'ps-srafy';
+      this.dom.append(this.svg, this.srafy, this.uchyty, this.zamek);
       this.polygon.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
-      this.uchyty.addEventListener('pointerdown', (e) => this.chytni(e, e.target));
       this.polygon.addEventListener('dblclick', (e) => this.pridejBod(e));
     } else {
       this.contentDOM = document.createElement('div');
       this.contentDOM.className = 'ps-ramecek-obsah';
-      this.dom.append(this.lista, this.contentDOM, this.roh);
+      this.dom.append(this.lista, this.contentDOM, this.uchyty, this.zamek);
     }
     this.nastav();
     this.oznacPresah();
@@ -104,7 +117,6 @@ export class PrvekView {
       if (e.target === this.smazat) return;
       this.zacni(e, 'presun');
     });
-    this.roh.addEventListener('pointerdown', (e) => this.zacni(e, 'rozmer'));
     this.smazat.addEventListener('click', () => this.odstran());
   }
 
@@ -119,19 +131,22 @@ export class PrvekView {
       if (this.img.getAttribute('src') !== a.src) this.img.src = a.src;
       this.dom.classList.toggle('ps-podklad', !!a.podklad);
     }
+    s.transform = a.otoceni ? `rotate(${a.otoceni}deg)` : '';
+    if (a.otoceni) this.dom.dataset.otoceni = a.otoceni; else delete this.dom.dataset.otoceni;
+    this.dom.classList.toggle('zamceny', !!a.zamceno);
+    // Kurzor úchytu podle toho, kam po otočení míří.
+    const KURZORY = ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'];
+    const SMERY = { n: 0, ne: 1, e: 2, se: 3, s: 0, sw: 1, w: 2, nw: 3 };
+    for (const d of this.uchyty.querySelectorAll('[data-uchyt]')) {
+      if (d.dataset.uchyt === 'otoc') continue;
+      d.style.cursor = KURZORY[(SMERY[d.dataset.uchyt] + Math.round((a.otoceni || 0) / 45) + 8) % 4];
+    }
     if (this.jeTvar) {
       this.polygon.setAttribute('points', bodyTvaru(a.body));
       this.polygon.setAttribute('fill', a.barva);
-      s.transform = a.otoceni ? `rotate(${a.otoceni}deg)` : '';
-      this.dom.dataset.otoceni = a.otoceni || '';
+      const body = (a.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map((x) => +x * 100 + '%').join(' '));
+      this.srafy.style.clipPath = `polygon(${body.join(',')})`;
       this.nastavBody(a);
-      // Kurzor úchytu podle toho, kam po otočení míří.
-      const KURZORY = ['ns-resize', 'nesw-resize', 'ew-resize', 'nwse-resize'];
-      const SMERY = { n: 0, ne: 1, e: 2, se: 3, s: 0, sw: 1, w: 2, nw: 3 };
-      for (const d of this.uchyty.querySelectorAll('[data-uchyt]')) {
-        if (d.dataset.uchyt === 'otoc') continue;
-        d.style.cursor = KURZORY[(SMERY[d.dataset.uchyt] + Math.round((a.otoceni || 0) / 45) + 8) % 4];
-      }
     }
   }
 
@@ -277,9 +292,13 @@ export class PrvekView {
 
   zapis(attrs) {
     const tr = closeHistory(this.view.state.tr).setNodeMarkup(this.getPos(), null, attrs);
-    tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
+    if (this.jeAtom) tr.setSelection(NodeSelection.create(tr.doc, this.getPos()));
     this.view.dispatch(tr);
     this.view.focus();
+  }
+
+  nastavZamek(zamknout) {
+    this.zapis({ ...this.node.attrs, zamceno: !!zamknout });
   }
 
   // priKliku: co udělat místo výběru, když se nepohnulo (klik, ne tah).
@@ -289,7 +308,7 @@ export class PrvekView {
     e.stopPropagation();
     const a = this.node.attrs;
     this.tah = { druh, co, x0: e.clientX, y0: e.clientY, puvodni: { ...a }, nove: { ...a }, posunuto: false, priKliku,
-      stred: this.jeTvar ? this.stredNaObrazovce() : null };
+      stred: this.stredNaObrazovce(), zamceno: !!a.zamceno };
     this.dom.classList.add('tazeny');
     this._pohyb = (ev) => this.pohyb(ev);
     this._konec = () => this.konec();
@@ -304,6 +323,7 @@ export class PrvekView {
     if (!t) return;
     const pxNaMm = MM_NA_PX * this.volby.meritko();
     const dx = (e.clientX - t.x0) / pxNaMm, dy = (e.clientY - t.y0) / pxNaMm;
+    if (t.zamceno) return;      // zamčený prvek se nehne - tah je jen klik (výběr)
     if (!t.posunuto && Math.hypot(dx, dy) * pxNaMm < 3) return;
     t.posunuto = true;
     // Prvky smí i mimo stranu (strana je ořízne, editor je ukáže zašedlé) - jen do
@@ -313,10 +333,13 @@ export class PrvekView {
     const p = t.puvodni;
     // Náplast se ladí jemněji (0,1 mm) - zakrývá i malé věci.
     const zaokrouhli = this.jeTvar ? (x) => Math.round(x * 10) / 10 : zaokrouhliMm;
-    if (t.druh === 'velikost') t.nove = this.zmenVelikost(p, dx, dy, t.co, e.shiftKey);
-    else if (t.druh === 'otoc') {
+    if (t.druh === 'velikost') {
+      // Obrázek drží poměr stran (se Shiftem volně), ostatní naopak.
+      t.nove = this.zmenVelikost(p, dx, dy, t.co, this.jeObrazek ? !e.shiftKey : e.shiftKey);
+    } else if (t.druh === 'otoc') {
+      // Kolečko je pod prvkem: svisle dolů od středu = 0°.
       const [sx, sy] = t.stred;
-      let uhel = Math.atan2(e.clientY - sy, e.clientX - sx) * 180 / Math.PI + 90;
+      let uhel = Math.atan2(e.clientY - sy, e.clientX - sx) * 180 / Math.PI - 90;
       if (e.shiftKey) uhel = Math.round(uhel / 15) * 15;
       else if (Math.abs(uhel - Math.round(uhel / 90) * 90) < 4) uhel = Math.round(uhel / 90) * 90;  // přichytí k pravému úhlu
       uhel = ((Math.round(uhel * 10) / 10) % 360 + 540) % 360 - 180;
@@ -328,41 +351,30 @@ export class PrvekView {
     } else if (t.druh === 'presun') {
       t.nove.x = Math.min(Math.max(zaokrouhli(p.x + dx), -M), sirka + M - p.w);
       t.nove.y = Math.min(Math.max(zaokrouhli(p.y + dy), -M), vyska + M - p.h);
-    } else {
-      let w = Math.max(zaokrouhli(p.w + dx), MIN_MM);
-      let h = Math.max(zaokrouhli(p.h + dy), MIN_MM);
-      if (this.jeTvar) {
-        // Náplast nemá nejmenší velikost - i malá ploška je potřeba.
-        w = Math.max(zaokrouhli(p.w + dx), 0.2);
-        h = Math.max(zaokrouhli(p.h + dy), 0.2);
-      } else if (this.jeObrazek && !e.shiftKey) {
-        // Poměr stran: rozhoduje větší z obou změn.
-        const pomer = p.w / p.h;
-        if (Math.abs(dx) * p.h >= Math.abs(dy) * p.w) h = zaokrouhli(w / pomer);
-        else w = zaokrouhli(h * pomer);
-      }
-      t.nove.w = Math.min(w, sirka + M - p.x);
-      t.nove.h = Math.min(h, vyska + M - p.y);
     }
     this.nastav(t.nove);
   }
 
-  // Velikost náplasti za úchyt `u` (n, ne, e…) v jejích (otočených) osách: protější
-  // strana / roh zůstane na místě. Roh se Shiftem drží poměr stran.
+  // Velikost za úchyt `u` (n, ne, e…) v osách prvku (i otočeného): protější strana / roh
+  // zůstane na místě. drzetPomer: roh mění obě strany ve stejném poměru. Náplast nemá
+  // nejmenší velikost (i malá ploška je potřeba), rámeček a obrázek MIN_MM.
   zmenVelikost(p, dx, dy, u, drzetPomer) {
+    const min = this.jeTvar ? 0.2 : MIN_MM;
+    const zaokr = this.jeTvar ? r1 : zaokrouhliMm;
     const sx = u.includes('e') ? 1 : u.includes('w') ? -1 : 0;
     const sy = u.includes('s') ? 1 : u.includes('n') ? -1 : 0;
     const uhel = (p.otoceni || 0) * Math.PI / 180, cos = Math.cos(uhel), sin = Math.sin(uhel);
     const lx = dx * cos + dy * sin, ly = -dx * sin + dy * cos;     // posun v osách náplasti
-    let w = sx ? Math.max(p.w + sx * lx, 0.2) : p.w;
-    let h = sy ? Math.max(p.h + sy * ly, 0.2) : p.h;
+    let w = sx ? Math.max(p.w + sx * lx, min) : p.w;
+    let h = sy ? Math.max(p.h + sy * ly, min) : p.h;
     if (drzetPomer && sx && sy) {
-      const k = Math.max(w / p.w, h / p.h);
-      w = p.w * k;
-      h = p.h * k;
+      // Rozhoduje větší z obou změn.
+      const k = Math.abs(w / p.w - 1) >= Math.abs(h / p.h - 1) ? w / p.w : h / p.h;
+      w = Math.max(p.w * k, min);
+      h = Math.max(p.h * k, min);
     }
-    w = r1(w);
-    h = r1(h);
+    w = zaokr(w);
+    h = zaokr(h);
     // Kotva (protější strana) zůstává: nový střed = kotva + půlka nového rozměru.
     const kx = -sx * p.w / 2, ky = -sy * p.h / 2;
     const ox = kx + sx * w / 2, oy = ky + sy * h / 2;
@@ -410,6 +422,7 @@ export class PrvekView {
   }
 
   odstran() {
+    if (this.node.attrs.zamceno) return;
     const { state } = this.view;
     const pos = this.getPos();
     this.view.dispatch(closeHistory(state.tr).delete(pos, pos + this.node.nodeSize));

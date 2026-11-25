@@ -10,7 +10,7 @@
 // nestahuje.
 
 import { DOMSerializer } from 'prosemirror';
-import { schema, dokumentZeZdroje, stylPrvku } from './schema.js';
+import { schema, dokumentZeZdroje, stylPrvku, otoceniCss } from './schema.js';
 import { znackySlok } from './sloky.js';
 import { CisloStrany } from './cislo-strany.js';
 import { prepocitej } from './kolize.js';
@@ -73,13 +73,15 @@ const serializer = (() => {
       return kotva;
     },
     ramecek(n) {
-      const dom = element('div', 'ps-ramecek', stylPrvku(n.attrs));
+      const dom = element('div', 'ps-ramecek', stylPrvku(n.attrs) + otoceniCss(n.attrs));
+      Object.assign(dom.dataset, n.attrs.otoceni ? { otoceni: n.attrs.otoceni } : {});
       const obsah = element('div', 'ps-ramecek-obsah');
       dom.appendChild(obsah);
       return { dom, contentDOM: obsah };
     },
     obrazek(n) {
-      const dom = element('div', `ps-obrazek${n.attrs.podklad ? ' ps-podklad' : ''}`, stylPrvku(n.attrs));
+      const dom = element('div', `ps-obrazek${n.attrs.podklad ? ' ps-podklad' : ''}`, stylPrvku(n.attrs) + otoceniCss(n.attrs));
+      Object.assign(dom.dataset, n.attrs.otoceni ? { otoceni: n.attrs.otoceni } : {});
       const img = element('img');
       img.src = n.attrs.src;
       img.alt = '';

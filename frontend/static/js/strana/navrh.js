@@ -125,6 +125,7 @@ function koncepty() {
   return out.sort((a, b) => a.cislo - b.cislo);
 }
 const MM_NA_PX = 96 / 25.4;
+let casovacPripravy = null;     // krátká zpráva ve stavovém řádku (připravuje se, zamčeno)
 
 
 const PISMA = ['Noto Sans', 'Noto Serif', 'Roboto Condensed', 'Caveat'];
@@ -418,7 +419,21 @@ const klavesy = keymap({
   'Mod-Shift-ArrowUp': () => vybranyAtom(view.state) && (zmenVrstvu('popredi'), true),
   'Mod-Shift-ArrowDown': () => vybranyAtom(view.state) && (zmenVrstvu('pozadi'), true),
   Escape: () => { if (rezimAkordu) prepniRezimAkordu(false); else zrusVyber(); return true; },
+  // Zamčený prvek klávesou nesmazat (odemyká zámek v liště nebo na prvku).
+  Delete: (state) => state.selection instanceof NodeSelection && jeZamceny(state.selection.node),
+  Backspace: (state) => state.selection instanceof NodeSelection && jeZamceny(state.selection.node),
 });
+
+function jeZamceny(node) {
+  if (!node.attrs.zamceno) return false;
+  // Krátce ve stavovém řádku (okno by zdržovalo) - stejně jako připravované funkce.
+  clearTimeout(casovacPripravy);
+  const popis = el('navrh-popis');
+  napisPopis(popis, 'Zamčeno', 'smazat jde po odemčení (zámek v liště nebo na prvku)');
+  popis.classList.add('pripravuje-zprava');
+  casovacPripravy = setTimeout(aktualizujListu, 3500);
+  return true;
+}
 
 // Vkládání textu: každý řádek je odstavec, prázdný řádek dělí sloky, [Ami] je ukotvený
 // akord. První řádek se připojí k odstavci s kurzorem (ProseMirror kus otevře naplno);
@@ -571,6 +586,13 @@ function prvkyPodBodem(x, y) {
       if (!dom) return false;
       const r = dom.getBoundingClientRect();
       if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+      if (node.attrs.otoceni && node.type !== N.tvar) {
+        // Otočený prvek: bod v jeho osách (kolem středu) proti jeho rozměru.
+        const k = MM_NA_PX * meritko, u = -node.attrs.otoceni * Math.PI / 180;
+        const dx = x - (r.left + r.right) / 2, dy = y - (r.top + r.bottom) / 2;
+        const lx = dx * Math.cos(u) - dy * Math.sin(u), ly = dx * Math.sin(u) + dy * Math.cos(u);
+        return Math.abs(lx) <= node.attrs.w * k / 2 && Math.abs(ly) <= node.attrs.h * k / 2;
+      }
       if (node.type !== N.tvar) return true;
       // Přes matici SVG - platí i pro otočenou náplast.
       const poly = dom.querySelector('polygon');
@@ -2134,8 +2156,6 @@ function aktualizujListu() {
   el('tvar-smazat-vse').hidden = naplasti < 1 || (!!tvar && naplasti < 2);
   el('tvar-smazat-vse').textContent = `Smazat všechny (${naplasti})`;
   if (tvar && el('tvar-barva').value !== tvar.attrs.barva) { el('tvar-barva').value = tvar.attrs.barva; if (naplast) naplast.barva = tvar.attrs.barva; }
-  el('tvar-otoceni-pole').hidden = !tvar;
-  if (tvar && document.activeElement !== el('tvar-otoceni')) el('tvar-otoceni').value = String(Math.round(tvar.attrs.otoceni || 0));
   // Pořadí vrstev (nabídka v liště): položka, která by nic nezměnila, je vypnutá, bez
   // takové položky i celé tlačítko. Podklad ve vrstvách není.
   el('obrazek-podklad').hidden = !(obrazek && obrazek.attrs.podklad);
@@ -2147,6 +2167,17 @@ function aktualizujListu() {
   }
   el('poradi-tlacitko').disabled = !nejakePoradi;
   if (!nejakePoradi) ukazPoradi(false);
+  // Otočení a zámek vybraného prvku.
+  if (prvek) {
+    if (document.activeElement !== el('prvek-otoceni')) el('prvek-otoceni').value = String(Math.round(prvek.node.attrs.otoceni || 0));
+    el('prvek-otoceni').disabled = !!prvek.node.attrs.zamceno;
+    const z = !!prvek.node.attrs.zamceno;
+    el('prvek-zamek').setAttribute('aria-pressed', String(z));
+    el('prvek-zamek').setAttribute('aria-label', z ? 'Odemknout' : 'Zamknout');
+    el('prvek-zamek').dataset.napoveda = z ? 'Zamčeno: klik odemkne' : 'Zamknout polohu: prvek se nedá posunout, zvětšit, otočit ani smazat (text v rámečku jde psát dál)';
+  }
+  el('tvar-smazat').disabled = !!tvar?.attrs.zamceno;
+  el('obrazek-smazat').disabled = !!obrazek?.attrs.zamceno;
 
   // Nabídka akordů u sloky s kurzorem (bez myši nad stranou).
   if (rezimAkordu && nabidkaSloky.hidden && state.selection.empty) ukazNabidkuSloky(slokaNaPozici(state.selection.from));
@@ -2220,7 +2251,8 @@ function obnovKontext(state) {
   if (nastroj === 'akord' || druh === 'akord') ukaz.add('akordy');
   if (druh === 'nic' && !nastroj) ukaz.add('strana');
   const p = zvlastniVyber ? null : prvekVyberu(state);
-  if (p && !p.node.attrs.podklad && !p.node.attrs.presah && druh !== 'akord' && nastroj !== 'text'
+  // S nástrojem Akord jen akordy a text (pořadí, otočení a zámek by lištu zalomily).
+  if (p && !p.node.attrs.podklad && !p.node.attrs.presah && druh !== 'akord' && nastroj !== 'text' && nastroj !== 'akord'
       && !(nastroj === 'naplast' && druh !== 'naplast')) ukaz.add('prvek');
   if (zvlastniVyber) {
     el('vybrany-akord').hidden = true;
@@ -2249,7 +2281,7 @@ function obnovKontext(state) {
   // Stavový řádek: popis výběru, u nástroje jak s ním pracovat.
   const popis = el('navrh-popis');
   popis.classList.remove('pripravuje-zprava');
-  const rozmer = (a) => `${cisloMm(a.w)} × ${cisloMm(a.h)} mm`;
+  const rozmer = (a) => `${cisloMm(a.w)} × ${cisloMm(a.h)} mm${a.otoceni ? ` · otočeno o ${Math.round(a.otoceni)}°` : ''}${a.zamceno ? ' · zamčeno' : ''}`;
   if (nastroj === 'akord') napisPopis(popis, 'Nástroj Akord', 'klik na znak vloží akord, tažením se akord posune · Esc ukončí');
   else if (nastroj === 'naplast' && druh !== 'naplast') {
     napisPopis(popis, 'Nástroj Náplast', naplast.druh === 'volny'
@@ -2257,9 +2289,9 @@ function obnovKontext(state) {
       : `klik vloží ${{ obdelnik: 'malý obdélník', elipsa: 'malou elipsu', trojuhelnik: 'malý trojúhelník' }[naplast.druh]}, tažení větší${naplast.druh === 'trojuhelnik' ? '' : ` (se Shiftem ${naplast.druh === 'elipsa' ? 'kruh' : 'čtverec'})`} · Esc ukončí`);
   } else if (nastroj === 'text') napisPopis(popis, 'Nástroj Text', 'klik nebo tažení na straně vloží rámeček · Esc ukončí');
   else if (druh === 'akord') napisPopis(popis, `Akord ${sel.node.attrs.n || ''}`.trim(), 'tažením posunout (Alt drží znak, Shift jen vodorovně) · Delete smaže');
-  else if (druh === 'obrazek') napisPopis(popis, 'Obrázek', `${rozmer(sel.node.attrs)} · přesun za lištu, velikost za roh · pravé tlačítko nabídne další`);
+  else if (druh === 'obrazek') napisPopis(popis, 'Obrázek', `${rozmer(sel.node.attrs)}${sel.node.attrs.zamceno ? '' : ' · přesun tažením, velikost za rohy, otočení kolečkem pod ním'} · pravé tlačítko nabídne další`);
   else if (druh === 'podklad') napisPopis(popis, 'Podklad strany', 'leží vždy vespod, klik ho nevybere (jen Alt+klik) · Delete smaže');
-  else if (druh === 'naplast') napisPopis(popis, 'Náplast', `${rozmer(sel.node.attrs)} · přesun tažením, velikost za roh · pravé tlačítko nabídne další`);
+  else if (druh === 'naplast') napisPopis(popis, 'Náplast', `${rozmer(sel.node.attrs)}${sel.node.attrs.zamceno ? '' : ' · přesun tažením, velikost za úchyty, otočení kolečkem pod ní'} · pravé tlačítko nabídne další`);
   else if (druh === 'ramecek') napisPopis(popis, 'Rámeček', rozmer(sel.node.attrs));
   else if (druh === 'text') {
     const id = souhrnVyberu(state).styl;
@@ -2328,12 +2360,20 @@ function nactiPanelVidet() {
 
 // Duplikát prvku (obrázek, náplast, rámeček s kurzorem): o 5 mm vedle, nahoru ve vrstvách,
 // v pořadí čtení na konec. Podklad ani kopie přes hřbet se neduplikují.
+// Změna atributů prvku (otočení, zámek) jedním krokem Zpět; výběr zůstane.
+function zmenPrvek(p, zmena) {
+  const tr = closeHistory(view.state.tr).setNodeMarkup(p.pos, null, { ...p.node.attrs, ...zmena });
+  if (view.state.selection instanceof NodeSelection && view.state.selection.from === p.pos) tr.setSelection(NodeSelection.create(tr.doc, p.pos));
+  view.dispatch(tr);
+}
+
 function duplikuj() {
   const { state } = view;
   const p = prvekVyberu(state);
   if (!p || p.node.attrs.podklad || p.node.attrs.presah) return false;
   const a = p.node.attrs;
-  const kopie = p.node.type.create({ ...a, x: a.x + 5, y: a.y + 5, z: zNahore(state.doc) }, p.node.content, p.node.marks);
+  // Kopie je odemčená - vzniká proto, aby se s ní hýbalo.
+  const kopie = p.node.type.create({ ...a, x: a.x + 5, y: a.y + 5, z: zNahore(state.doc), zamceno: false }, p.node.content, p.node.marks);
   const konec = state.doc.content.size;
   const tr = closeHistory(state.tr).insert(konec, kopie);
   tr.setSelection(kopie.type === N.ramecek ? TextSelection.near(tr.doc.resolve(konec + 1)) : NodeSelection.create(tr.doc, konec));
@@ -2405,20 +2445,25 @@ function napojPanelAkordu() {
   el('tvar-barva').addEventListener('input', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, false); });
   el('tvar-barva').addEventListener('change', (e) => { naplast.barva = e.target.value; upravTvar(e.target.value, true); });
   // Všechny náplasti strany jedním krokem (Ctrl+Z je vrátí).
-  el('tvar-otoceni').addEventListener('change', (e) => {
-    const sel = view.state.selection;
-    if (!(sel instanceof NodeSelection) || sel.node.type !== N.tvar) return;
+  // Otočení a zámek vybraného prvku (rámeček i s kurzorem v textu).
+  el('prvek-otoceni').addEventListener('change', (e) => {
+    const p = prvekVyberu(view.state);
+    if (!p) return;
     let uhel = parseFloat(String(e.target.value).replace(',', '.'));
     if (!Number.isFinite(uhel)) uhel = 0;
     uhel = ((uhel % 360) + 540) % 360 - 180;
     if (uhel === -180) uhel = 180;
-    const tr = closeHistory(view.state.tr).setNodeMarkup(sel.from, null, { ...sel.node.attrs, otoceni: Math.round(uhel * 10) / 10 });
-    view.dispatch(tr.setSelection(NodeSelection.create(tr.doc, sel.from)));
+    zmenPrvek(p, { otoceni: Math.round(uhel * 10) / 10 });
   });
-  el('tvar-otoceni').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.target.blur(); view.focus(); } });
+  el('prvek-otoceni').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.target.blur(); view.focus(); } });
+  el('prvek-zamek').addEventListener('click', () => {
+    const p = prvekVyberu(view.state);
+    if (p) zmenPrvek(p, { zamceno: !p.node.attrs.zamceno });
+    view.focus();
+  });
   el('tvar-smazat-vse').addEventListener('click', () => {
     const pozice = [];
-    view.state.doc.forEach((n, pos) => { if (n.type === N.tvar) pozice.push([pos, n.nodeSize]); });
+    view.state.doc.forEach((n, pos) => { if (n.type === N.tvar && !n.attrs.zamceno) pozice.push([pos, n.nodeSize]); });
     let tr = closeHistory(view.state.tr);
     for (const [pos, size] of pozice.reverse()) tr = tr.delete(pos, pos + size);
     if (pozice.length) view.dispatch(tr);
@@ -2426,12 +2471,12 @@ function napojPanelAkordu() {
   });
   el('tvar-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
-    if (sel instanceof NodeSelection && sel.node.type === N.tvar) view.dispatch(view.state.tr.deleteSelection());
+    if (sel instanceof NodeSelection && sel.node.type === N.tvar && !jeZamceny(sel.node)) view.dispatch(view.state.tr.deleteSelection());
     view.focus();
   });
   el('obrazek-smazat').addEventListener('click', () => {
     const sel = view.state.selection;
-    if (sel instanceof NodeSelection && sel.node.type === N.obrazek) view.dispatch(view.state.tr.deleteSelection());
+    if (sel instanceof NodeSelection && sel.node.type === N.obrazek && !jeZamceny(sel.node)) view.dispatch(view.state.tr.deleteSelection());
     view.focus();
   });
   el('akord-smazat').addEventListener('click', () => {
@@ -2541,18 +2586,19 @@ for (const b of koren.querySelectorAll('[data-zalozka]')) {
 stranka.addEventListener('pointerdown', (e) => {
   if (e.button !== 0 || (naplast && naplast.body)) return;
   const t = e.target;
-  // Úchyt vybrané náplasti má přednost před vším, co leží nad ním (text, lišta jiného
+  // Úchyt vybraného prvku má přednost před vším, co leží nad ním (text, lišta jiného
   // prvku) - náplasti leží pod textem a jinak by na úchyty nešlo dosáhnout.
-  if (t.closest('.ps-uchyty')) return;
+  if (t.closest('.ps-uchyty, .ps-zamek')) return;
   const uchyt = document.elementsFromPoint(e.clientX, e.clientY)
-    .find((x) => x.matches('.ps-tvar.vybrany [data-uchyt], .ps-tvar.vybrany [data-bod]'));
+    .find((x) => x.matches('.vybrany > .ps-uchyty [data-uchyt], .aktivni > .ps-uchyty [data-uchyt], .vybrany > .ps-uchyty [data-bod]')
+      && getComputedStyle(x.closest('.ps-uchyty')).display !== 'none');
   if (uchyt) {
     e.stopImmediatePropagation();
-    uchyt.closest('.ps-tvar').prvekView.chytni(e, uchyt);
+    uchyt.closest('.ps-tvar, .ps-obrazek, .ps-ramecek').prvekView.chytni(e, uchyt);
     return;
   }
-  // Vlastní ovládání (lišta, roh, akord, číslo strany) a místa mimo prvky si klik nechají.
-  if (t.closest('.ps-prvek-lista, .ps-prvek-roh, .akord-kotva, .ps-cislo-strany')) return;
+  // Vlastní ovládání (lišta, akord, číslo strany) a místa mimo prvky si klik nechají.
+  if (t.closest('.ps-prvek-lista, .akord-kotva, .ps-cislo-strany')) return;
   if (!t.closest('.ps-ramecek, .ps-obrazek, .ps-tvar') && !t.closest('.stranka-obsah')) return;
   const pod = prvkyPodBodem(e.clientX, e.clientY);
   if (!pod.length) return;
@@ -2595,7 +2641,7 @@ function klikNaPrvek(h, e) {
 }
 
 // Nástroj Náplast (naplast.js): kreslí do strany, dokud je zapnutý.
-naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
+naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu(), zrusVyber: () => zrusVyber() });
 nastrojTextu = new NastrojTextu({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
 // Esc a Enter i mimo editor textu (po kliknutí do strany fokus v textu být nemusí).
 window.addEventListener('keydown', (e) => {
@@ -2608,7 +2654,6 @@ window.addEventListener('keydown', (e) => {
 }, true);
 // Připravované funkce: tlačítko jen na chvíli napíše do stavového řádku, že funkce zatím
 // není (okno by zbytečně zdržovalo).
-let casovacPripravy = null;
 for (const b of koren.querySelectorAll('[data-pripravuje]')) {
   b.addEventListener('mousedown', (e) => e.preventDefault());
   b.addEventListener('click', () => {
@@ -2647,6 +2692,9 @@ for (const b of koren.querySelectorAll('[data-pripravuje]')) {
     if (!(sel instanceof NodeSelection && sel.from === h.pos)) view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, h.pos)));
     for (const b of nabidka.querySelectorAll('[data-poradi]')) b.disabled = !poradiPoPrikazu(view.state.doc, h.index, b.dataset.poradi);
     nabidka.querySelector('[data-akce="duplikovat"]').disabled = !!h.node.attrs.podklad || !!h.node.attrs.presah;
+    nabidka.querySelector('[data-akce="smazat"]').disabled = !!h.node.attrs.zamceno;
+    nabidka.querySelector('[data-akce="zamek"]').hidden = !!h.node.attrs.podklad;
+    nabidka.querySelector('.zamek-popis').textContent = h.node.attrs.zamceno ? 'Odemknout' : 'Zamknout';
     nabidka.hidden = false;
     const r = nabidka.getBoundingClientRect();
     nabidka.style.left = Math.max(4, Math.min(e.clientX, window.innerWidth - r.width - 8)) + 'px';
@@ -2658,7 +2706,11 @@ for (const b of koren.querySelectorAll('[data-pripravuje]')) {
       zavri();
       if (b.dataset.poradi) zmenVrstvu(b.dataset.poradi);
       else if (b.dataset.akce === 'duplikovat') duplikuj();
-      else if (b.dataset.akce === 'smazat' && view.state.selection instanceof NodeSelection) {
+      else if (b.dataset.akce === 'zamek') {
+        const p = prvekVyberu(view.state);
+        if (p) zmenPrvek(p, { zamceno: !p.node.attrs.zamceno });
+        view.focus();
+      } else if (b.dataset.akce === 'smazat' && view.state.selection instanceof NodeSelection && !view.state.selection.node.attrs.zamceno) {
         view.dispatch(view.state.tr.deleteSelection());
         view.focus();
       }

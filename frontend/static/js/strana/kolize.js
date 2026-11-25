@@ -10,7 +10,15 @@
 
 const MEZERA_EM = 0.35;      // nejmenší vzduch mezi akordy, v em písma textu
 
-export function prepocitej(koren, { automatickaMezera, meritko }) {
+export function prepocitej(koren, volby) {
+  // Otočený rámeček: měří se neotočený (řádky jsou pak vodorovné, rozložení je stejné).
+  const otocene = [...koren.querySelectorAll('.ps-ramecek')].filter((r) => r.style.transform && r.style.transform !== 'none');
+  const transformy = otocene.map((r) => r.style.transform);
+  for (const r of otocene) r.style.transform = 'none';
+  try { return prepocitejRovne(koren, volby); } finally { otocene.forEach((r, i) => { r.style.transform = transformy[i]; }); }
+}
+
+function prepocitejRovne(koren, { automatickaMezera, meritko }) {
   const kotvy = koren.querySelectorAll('.akord-kotva');
   for (const k of kotvy) {
     k.style.marginLeft = '';

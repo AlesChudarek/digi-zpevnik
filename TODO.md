@@ -1257,6 +1257,19 @@ kdo maže.
       Souběžné ukládání se řadí za sebe a otisk je z okamžiku odeslání (úprava během
       ukládání dřív vypadala jako uložená). Záložka Zpětná vazba je poloprůhledná vrstva,
       nic neodsouvá.
+      Ještě 25. 11.: **listování dole** - šipky, číslo strany, Přidat stranu (nabídka se
+      otevírá nahoru), Jiná strana… uprostřed spodní lišty; vpravo Formát A5/A4, dvojstrana,
+      přiblížení. Hlavička jen zpěvník, Zpět/Znovu, uložení. **Otočení a 8 úchytů i pro
+      text a obrázky** (obrázek jen 4 rohy - drží poměr, se Shiftem volně), kolečko je
+      teď pod prvkem; do otočeného rámečku jde psát; PDF otočený text a obrázek kreslí
+      (`rotate` u drawText/drawImage, změří se neotočené), akordy se měří neotočené,
+      tažení akordu v otočeném rámečku jde v jeho osách, ale bez přichycení k jinému
+      znaku. Pole Otočení je v liště prvku (v textu pod 1400 px schované - lišta by se
+      zalomila). **Zámek** (`zamceno` u všech prvků): v liště prvku, v nabídce na pravé
+      tlačítko, na zamčeném prvku znak zámku (klik odemkne); zamčený se nehne, nemá
+      úchyty, nejde smazat (Delete, ×, Smazat všechny ho vynechá), text v rámečku jde psát
+      dál, duplikát je odemčený. **Šrafování náplastí** v editoru (bílá na bílém), kreslení
+      nové náplasti zruší dosavadní výběr, ikona volného tvaru konkávní.
       Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
       „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
       v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok

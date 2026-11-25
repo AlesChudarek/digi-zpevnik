@@ -707,7 +707,7 @@ def test_prohlizece(p, base, jmeno):
     page.mouse.up()
     o2 = J("(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (n.type.name === 'obrazek') a = n.attrs; }); return a; })()")
     ok('obrázek jde přesunout za plochu (o 10 mm)', abs(o2['x'] - o['x'] - 10) < 0.6 and abs(o2['y'] - o['y'] - 10) < 0.6, (o['x'], o['y'], o2['x'], o2['y']))
-    roh = J("document.querySelector('.ps-obrazek .ps-prvek-roh').getBoundingClientRect().toJSON()")
+    roh = J("document.querySelector('.ps-obrazek.vybrany [data-uchyt=\"se\"]').getBoundingClientRect().toJSON()")
     page.mouse.move(roh['x'] + roh['width'] / 2, roh['y'] + roh['height'] / 2)
     page.mouse.down()
     page.mouse.move(roh['x'] + roh['width'] / 2 + krok, roh['y'] + roh['height'] / 2 + 2, steps=5)
@@ -1068,6 +1068,7 @@ def test_uchyty_naplasti(page):
         page.mouse.move(*bod); page.mouse.down(); page.mouse.move(bod[0] + dx, bod[1] + dy, steps=6); page.mouse.up()
         page.wait_for_timeout(60)
         return J(TV)['a']
+    ok('vybraná náplast je šrafovaná (bílá na bílém jde najít)', J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-srafy')).backgroundImage").startswith('repeating-linear-gradient'))
     ok('vybraná náplast má 8 úchytů velikosti a kolečko otočení',
        J("document.querySelectorAll('.ps-tvar.vybrany [data-uchyt]').length") == 9 and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'block')
     ok('obdélník táhnutelné body nemá (na to jsou rohy)', J("document.querySelectorAll('.ps-tvar.vybrany .ps-bod').length") == 0)
@@ -1079,14 +1080,15 @@ def test_uchyty_naplasti(page):
     ok('levý úchyt rozšíří doleva, pravý okraj zůstane', a2['w'] > a1['w'] + 3 and abs((a2['x'] + a2['w']) - (a1['x'] + a1['w'])) < 0.2, (a1, a2))
     o = uchyt('otoc')
     c = J("(() => { const r = document.querySelector('.ps-tvar.vybrany').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
-    page.mouse.move(*o); page.mouse.down(); page.mouse.move(c[0] + 100, c[1] + 2, steps=8); page.mouse.up()
+    ok('kolečko otočení je pod náplastí', o[1] > c[1], (o, c))
+    page.mouse.move(*o); page.mouse.down(); page.mouse.move(c[0] - 100, c[1] + 2, steps=8); page.mouse.up()
     a3 = J(TV)['a']
-    ok('kolečko nad náplastí otočí (u pravého úhlu se přichytí)', a3['otoceni'] == 90 and J("document.getElementById('tvar-otoceni').value") == '90', a3)
+    ok('kolečko pod náplastí otočí (u pravého úhlu se přichytí)', a3['otoceni'] == 90 and J("document.getElementById('prvek-otoceni').value") == '90', a3)
     ok('otočení je vidět', 'rotate(90deg)' in J("document.querySelector('.ps-tvar.vybrany').style.transform"))
     a4 = tahni(uchyt('e'), 0, 30)
     ok('u otočené náplasti úchyt táhne v jejích osách (pravý úchyt je teď dole)',
        a4['w'] > a3['w'] + 5 and abs(a4['h'] - a3['h']) < 0.2, (a3, a4))
-    page.fill('#tvar-otoceni', '-30'); page.press('#tvar-otoceni', 'Enter')
+    page.fill('#prvek-otoceni', '-30'); page.press('#prvek-otoceni', 'Enter')
     ok('otočení jde napsat v liště', J(TV)['a']['otoceni'] == -30, J(TV)['a'])
     cteni = J("""() => { const k = navrhStrany.vykresliStranu(navrhStrany.zdroj(), {});
       return [...k.querySelectorAll('.ps-tvar')].map((t) => t.style.transform).filter(Boolean); }""")
@@ -1109,6 +1111,141 @@ def test_uchyty_naplasti(page):
     a6 = J(TV)['a']
     ok('dvojklik na bod ho odebere', a6 and len(a6['body'].split()) == 9, a6)
     for _ in range(12):
+        if J("navrhStrany.view.state.doc.toJSON()") == puvodni:
+            break
+        page.keyboard.press(f'{MOD}+z')
+    ok('Zpět vrátí ukázku, jak byla', J("navrhStrany.view.state.doc.toJSON()") == puvodni)
+    # Kreslení dalšího volného tvaru: dosavadní výběr zmizí hned prvním bodem.
+    page.mouse.click(*srd)
+    ok('(náplast vybraná)', J("document.getElementById('navrh').dataset.vyber") == 'naplast')
+    page.click('[data-prikaz="naplast"]')
+    page.click('[data-prikaz="naplast-volny"]')
+    page.mouse.click(x0 + 150, y0 + 150)
+    ok('první bod nového volného tvaru zruší výběr náplasti', J("document.getElementById('navrh').dataset.vyber") == 'nic'
+       and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'none')
+    page.keyboard.press('Escape'); page.keyboard.press('Escape')
+    ok('kresba se nic neuložila', J("navrhStrany.view.state.doc.toJSON()") == puvodni)
+
+
+def test_otoceni_a_zamek(page, jmeno):
+    """Text a obrázky jde otáčet a zvětšovat úchyty jako náplast (i psát do otočeného
+    rámečku), PDF otočení sedí s obrazovkou; zamčený prvek se nehne a nejde smazat."""
+    print('\n── otočení a zámek ──')
+    J = page.evaluate
+    puvodni = J("navrhStrany.view.state.doc.toJSON()")
+    R = "(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (!a && n.type.name === 'ramecek') a = n.attrs; }); return a; })()"
+    O = "(() => { let a; navrhStrany.view.state.doc.forEach(n => { if (!a && n.type.name === 'obrazek' && !n.attrs.podklad) a = n.attrs; }); return a; })()"
+    ram = J("(() => { const r = document.querySelector('.ps-ramecek .ps-p').getBoundingClientRect(); return [r.left + 20, r.top + r.height / 2]; })()")
+    page.mouse.click(*ram)
+    page.wait_for_function("document.getElementById('navrh').dataset.vyber === 'text'", timeout=3000)
+    ok('rámeček s kurzorem má 8 úchytů a kolečko', J("document.querySelectorAll('.ps-ramecek.aktivni [data-uchyt]').length") == 9
+       and J("getComputedStyle(document.querySelector('.ps-ramecek.aktivni .ps-uchyty')).display") == 'block')
+    def uchyt(sel, u):
+        return J(f"(() => {{ const d = document.querySelector('{sel} [data-uchyt=\"{u}\"]'); const r = d.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()")
+    def tahni(bod, dx, dy):
+        page.mouse.move(*bod); page.mouse.down(); page.mouse.move(bod[0] + dx, bod[1] + dy, steps=6); page.mouse.up()
+        page.wait_for_timeout(60)
+    a0 = J(R)
+    tahni(uchyt('.ps-ramecek.aktivni', 's'), 0, -40)
+    a1 = J(R)
+    ok('spodní úchyt rámeček zkrátí, horní okraj zůstane', a1['h'] < a0['h'] - 5 and a1['y'] == a0['y'] and a1['w'] == a0['w'], (a0, a1))
+    page.mouse.click(*ram)
+    ok('lišta s formátováním textu a zámkem zůstane v 1280 px na jednom řádku', J("document.querySelector('.navrh-kontext').getBoundingClientRect().height") < 50)
+    # Kolečko se Shiftem: po 15° (směr od středu ke kolečku je otočení).
+    import math
+    stred = J("(() => { const r = document.querySelector('.ps-ramecek.aktivni').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    o = uchyt('.ps-ramecek.aktivni', 'otoc')
+    page.keyboard.down('Shift')
+    page.mouse.move(*o); page.mouse.down()
+    page.mouse.move(stred[0] - 200 * math.sin(math.radians(14)), stred[1] + 200 * math.cos(math.radians(14)), steps=8); page.mouse.up()
+    page.keyboard.up('Shift')
+    a2 = J(R)
+    ok('kolečko pod rámečkem ho otočí (se Shiftem po 15°)', a2['otoceni'] == 15 and 'rotate(15deg)' in J("document.querySelector('.ps-ramecek').style.transform"), a2)
+    delka = J("navrhStrany.view.state.doc.textContent.length")
+    page.mouse.click(*J("(() => { const r = document.querySelector('.ps-ramecek .ps-p').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()"))
+    page.keyboard.type('Šikmo')
+    ok('do otočeného rámečku jde psát', J("navrhStrany.view.state.doc.textContent.length") == delka + 5
+       and 'Šikmo' in J("navrhStrany.view.state.doc.firstChild ? navrhStrany.view.state.doc.textContent : ''"))
+    # Obrázek (logo ukázky): rohy drží poměr, otočení kolečkem.
+    obr = J("(() => { const r = document.querySelector('.ps-obrazek:not(.ps-podklad) img').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    page.keyboard.press('Escape')
+    page.mouse.click(*obr)
+    if J("document.getElementById('navrh').dataset.vyber") != 'obrazek':
+        page.keyboard.down('Alt'); page.mouse.click(*obr); page.keyboard.up('Alt')
+    ok('(obrázek vybraný)', J("document.getElementById('navrh').dataset.vyber") == 'obrazek', J("document.getElementById('navrh').dataset.vyber"))
+    ok('obrázek má jen 4 rohy a kolečko (strany by ho deformovaly)', J("document.querySelectorAll('.ps-obrazek.vybrany [data-uchyt]').length") == 5)
+    b0 = J(O)
+    stred = J("(() => { const r = document.querySelector('.ps-obrazek.vybrany').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    o = uchyt('.ps-obrazek.vybrany', 'otoc')
+    page.mouse.move(*o); page.mouse.down(); page.mouse.move(stred[0] - 60, stred[1] + 60, steps=8); page.mouse.up()
+    b1 = J(O)
+    ok('kolečko obrázek otočí', abs(b1['otoceni'] - 45) < 1 and b1['w'] == b0['w'], b1)
+    tahni(uchyt('.ps-obrazek.vybrany', 'se'), 20, 20)
+    b2 = J(O)
+    ok('roh otočeného obrázku ho zvětší se stejným poměrem', b2['w'] > b1['w'] + 2 and abs(b2['w'] / b2['h'] - b1['w'] / b1['h']) < 0.03, (b1, b2))
+    # PDF s otočeným textem a obrázkem jako prohlížeč (pdf.js proti obrázku z prohlížeče).
+    v = J("""async () => {
+      if (!window.pdfjsLib) await new Promise((ok, ch) => { const s = document.createElement('script'); s.src = '/static/vendor/pdfjs/pdf.min.js'; s.onload = ok; s.onerror = ch; document.head.appendChild(s); });
+      pdfjsLib.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.js';
+      const zdroj = navrhStrany.zdroj();
+      // Logo ukázky je SVG (do PDF nejde) - místo něj tmavé PNG s pruhy, ať je otočení vidět.
+      const pl = document.createElement('canvas'); pl.width = 480; pl.height = 140;
+      const g = pl.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, 480, 140); g.fillStyle = '#123';
+      for (let x = 0; x < 480; x += 60) g.fillRect(x, 0, 30, 140);
+      for (const n of zdroj.obsah.content) if (n.type === 'obrazek') n.attrs.src = pl.toDataURL('image/png');
+      const { pdfStrany } = await import('/static/js/strana/pdf-strany.js');
+      const { bytes } = await pdfStrany(zdroj, {});
+      const W = 1748;
+      const str = await (await pdfjsLib.getDocument({ data: bytes.slice() }).promise).getPage(1);
+      const vp = str.getViewport({ scale: W / str.getViewport({ scale: 1 }).width });
+      const c1 = document.createElement('canvas'); c1.width = Math.round(vp.width); c1.height = Math.round(vp.height);
+      await str.render({ canvasContext: c1.getContext('2d'), viewport: vp }).promise;
+      const polozky = (await str.getTextContent()).items.map(i => i.str);
+      const { blob } = await navrhStrany.obrazekStrany(zdroj, { sirkaPx: W });
+      const c2 = document.createElement('canvas'); c2.width = c1.width; c2.height = c1.height;
+      c2.getContext('2d').drawImage(await createImageBitmap(blob), 0, 0, c2.width, c2.height);
+      const w = c1.width, h = c1.height;
+      const maska = (c) => { const d = c.getContext('2d').getImageData(0, 0, w, h).data; const m = new Uint8Array(w * h);
+        for (let i = 0, j = 0; i < d.length; i += 4, j++) m[j] = (d[i] * 0.3 + d[i+1] * 0.59 + d[i+2] * 0.11) < 140 ? 1 : 0; return m; };
+      const A = maska(c1), B = maska(c2);
+      let n = 0, shoda = 0;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) { if (!A[y*w+x]) continue; n++;
+        let nasel = false; for (let dy = -2; dy <= 2 && !nasel; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x+dx, Y = y+dy; if (X >= 0 && Y >= 0 && X < w && Y < h && B[Y*w+X]) { nasel = true; break; } } if (nasel) shoda++; }
+      return { shoda: shoda / n * 100, polozky };
+    }""")
+    prah = 94 if jmeno == 'webkit' else 97
+    ok(f'PDF s otočeným textem a obrázkem vypadá jako prohlížeč (shoda ≥ {prah} %)', v['shoda'] >= prah, round(v['shoda'], 2))
+    ok('otočený text v PDF jde najít', 'Šikmo' in ''.join(v['polozky']), [t for t in v['polozky'] if t.strip()][:8])
+    # Zámek: obrázek se nehne, nejde smazat, úchyty nemá; zámek na prvku ho odemkne.
+    page.click('#prvek-zamek')
+    ok('zámek v liště obrázek zamkne', J(O)['zamceno'] is True and J("document.getElementById('prvek-zamek').getAttribute('aria-pressed')") == 'true')
+    ok('zamčený obrázek nemá úchyty, ale znak zámku', J("getComputedStyle(document.querySelector('.ps-obrazek.vybrany .ps-uchyty')).display") == 'none'
+       and J("getComputedStyle(document.querySelector('.ps-obrazek.vybrany .ps-zamek')).display") == 'flex')
+    b3 = J(O)
+    obr = J("(() => { const r = document.querySelector('.ps-obrazek.vybrany').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    tahni(obr, 40, 30)
+    ok('zamčený obrázek tažením nepohne', J(O)['x'] == b3['x'] and J(O)['y'] == b3['y'])
+    page.keyboard.press('Delete')
+    ok('Delete zamčený obrázek nesmaže a stavový řádek řekne proč', J(O) is not None and 'Zamčeno' in J("document.getElementById('navrh-popis').textContent"))
+    page.keyboard.press(f'{MOD}+d')
+    ok('duplikát zamčeného obrázku je odemčený', J("navrhStrany.view.state.selection.node.attrs.zamceno") is False)
+    page.keyboard.press(f'{MOD}+z')
+    page.mouse.click(*obr)
+    zamek = J("(() => { const r = document.querySelector('.ps-obrazek.vybrany .ps-zamek').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()")
+    page.mouse.click(*zamek)
+    ok('klik na zámek na prvku odemkne', J(O)['zamceno'] is False)
+    # Rámeček: zamčený se za lištu nehne, text v něm jde psát dál.
+    page.mouse.click(*ram)
+    page.click('#prvek-zamek')
+    ok('zámek zamkne i rámeček s kurzorem', J(R)['zamceno'] is True)
+    lista = J("(() => { const r = document.querySelector('.ps-ramecek.aktivni > .ps-prvek-lista').getBoundingClientRect(); return [r.left + 30, r.top + r.height / 2]; })()")
+    r0 = J(R)
+    tahni(lista, 30, 30)
+    ok('zamčený rámeček se za lištu nehne', J(R)['x'] == r0['x'] and J(R)['y'] == r0['y'])
+    page.mouse.click(*ram)
+    page.keyboard.type('Z')
+    ok('do zamčeného rámečku jde psát', 'Z' in J("navrhStrany.view.state.doc.textContent"))
+    for _ in range(30):
         if J("navrhStrany.view.state.doc.toJSON()") == puvodni:
             break
         page.keyboard.press(f'{MOD}+z')
@@ -1150,6 +1287,7 @@ def test_pristup(p, base):
        and page.evaluate("navrhStrany.view.state.doc.toJSON().content.filter(n => n.type === 'tvar').every(n => n.attrs.body && n.attrs.body.split(' ').length <= 10)"), druhy)
     test_vrstvy_ukazky(page)
     test_uchyty_naplasti(page)
+    test_otoceni_a_zamek(page, 'chromium')
     page.wait_for_timeout(400)
     ok('a vejde se bez přetečení', page.evaluate("document.querySelectorAll('.ps-ramecek.pretece').length") == 0
        and page.evaluate("document.querySelector('.ps-obrazek img').naturalWidth") > 0)

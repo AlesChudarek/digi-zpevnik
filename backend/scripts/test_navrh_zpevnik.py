@@ -113,12 +113,14 @@ def otevri_editor_zpevniku(page):
 LISTA = """(() => { const h = document.querySelector('.navrh-hlava').getBoundingClientRect();
   const kde = document.querySelector('.navrh-hlava .kde-strana').getBoundingClientRect();
   const li = document.querySelector('.navrh-listovani').getBoundingClientRect();
+  const dole = document.querySelector('.navrh-dole').getBoundingClientRect();
   const st = document.querySelector('.navrh-hlava .hlava-stred').getBoundingClientRect();
   const ul = document.querySelector('[data-prikaz="ulozit"]').getBoundingClientRect();
   const sk = [...document.querySelectorAll('.navrh-kontext .skupina')].filter(e => !e.hidden).map(e => Math.round(e.getBoundingClientRect().top));
   return { radku: new Set(sk).size, jedenRadek: h.height < 60,
-           kdeVlevo: kde.left - h.left < 20 && kde.right <= li.left + 1,
-           listovaniPredStredem: li.right <= st.left,
+           kdeVlevo: kde.left - h.left < 20,
+           listovaniDoleUprostred: li.top >= dole.top && li.bottom <= dole.bottom
+             && Math.abs((li.left + li.right) / 2 - (dole.left + dole.right) / 2) < 3,
            ulozitVpravo: h.right - ul.right < 20 && Math.abs(ul.top - kde.top) < 12,
            stred: Math.round((st.left + st.right) / 2 - (h.left + h.right) / 2) }; })()"""
 
@@ -190,13 +192,13 @@ def main():
                page.evaluate("[navrhStrany.nastaveni().nahledCisla, navrhStrany.nastaveni().nahledStrany]"))
             page.evaluate("navrhStrany.view.focus()")     # po otevření není nic vybrané
             s1400 = page.evaluate(LISTA)
-            ok("1400 px: v hlavičce zpěvník a listování vlevo, Zpět/Znovu uprostřed, Uložit vpravo, úpravy textu na jednom řádku",
-               s1400["kdeVlevo"] and s1400["listovaniPredStredem"] and s1400["ulozitVpravo"] and s1400["jedenRadek"]
+            ok("1400 px: v hlavičce zpěvník vlevo, Zpět/Znovu uprostřed, Uložit vpravo, listování uprostřed spodní lišty, úpravy textu na jednom řádku",
+               s1400["kdeVlevo"] and s1400["listovaniDoleUprostred"] and s1400["ulozitVpravo"] and s1400["jedenRadek"]
                and abs(s1400["stred"]) <= 2 and s1400["radku"] == 1, s1400)
             page.set_viewport_size({"width": 1920, "height": 1000})
             page.wait_for_timeout(200)
             s1920 = page.evaluate(LISTA)
-            ok("1920 px: totéž", s1920["radku"] == 1 and abs(s1920["stred"]) <= 2 and s1920["kdeVlevo"]
+            ok("1920 px: totéž", s1920["radku"] == 1 and abs(s1920["stred"]) <= 2 and s1920["kdeVlevo"] and s1920["listovaniDoleUprostred"]
                and s1920["ulozitVpravo"] and s1920["jedenRadek"], s1920)
             page.set_viewport_size({"width": 1400, "height": 1000})
 
@@ -477,9 +479,11 @@ def main():
             page.click("#nova-strana")
             nabidka = page.evaluate("""(() => ({ videt: !document.getElementById('nabidka-stran').hidden,
               za: document.getElementById('ns-za-popis').textContent, kopie: document.getElementById('ns-kopie').value,
-              moznosti: document.getElementById('ns-kopie').options.length }))()""")
+              moznosti: document.getElementById('ns-kopie').options.length,
+              nadListou: (() => { const r = document.getElementById('nabidka-stran').getBoundingClientRect();
+                return r.top >= 0 && r.bottom <= document.querySelector('.navrh-dole').getBoundingClientRect().top; })() }))()""")
             ok("+ otevře nabídku Přidat stranu: za touto (8), ke kopii předvybraná tato",
-               nabidka["videt"] and nabidka["za"] == "Za stranu 8" and nabidka["kopie"] == str(strana8) and nabidka["moznosti"] == 4, nabidka)
+               nabidka["videt"] and nabidka["za"] == "Za stranu 8" and nabidka["kopie"] == str(strana8) and nabidka["moznosti"] == 4 and nabidka["nadListou"], nabidka)
             page.keyboard.press("Escape")
             ok("Esc nabídku zavře", page.is_hidden("#nabidka-stran"))
             ok("po přelistování na 8 je výstraha s rozdělanými 6, 7",
@@ -504,10 +508,11 @@ def main():
             page.click("#zpet-do-zpevniku")
             page.wait_for_url("**/my-songbooks**")
             otevri_editor_zpevniku(page)
-            page.click("#es-navrhnout-novou")
-            editor_stran(page)
+            # Poslední strana před klikem: nová vzniká hned při otevření editoru.
             with A.app.app_context():
                 posledni = A.Strana.query.filter_by(songbook_id=ZPEVNIK).order_by(A.Strana.poradi.desc()).first().id
+            page.click("#es-navrhnout-novou")
+            editor_stran(page)
             page.wait_for_url(re.compile(r"/editor-strany/\d+$"), timeout=30000)
             page.wait_for_function("!document.querySelector('[data-prikaz=\"ulozit\"]').disabled", timeout=30000)
             with A.app.app_context():

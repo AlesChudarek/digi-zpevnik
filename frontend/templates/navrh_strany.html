@@ -66,9 +66,11 @@
     <symbol id="i-obdelnik" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="1"/></symbol>
     <symbol id="i-elipsa" viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="7"/></symbol>
     <symbol id="i-trojuhelnik" viewBox="0 0 24 24"><path d="M12 4 21 20H3z"/></symbol>
-    <symbol id="i-volny" viewBox="0 0 24 24"><path d="M4 10 11 4l9 5-2 10-11 1z"/></symbol>
+    <symbol id="i-volny" viewBox="0 0 24 24"><path d="M3 5l9 4 9-5-3 9 3 7-9-3-8 2 3-7z"/></symbol>
     <symbol id="i-import" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></symbol>
     <symbol id="i-orez" viewBox="0 0 24 24"><path d="M6 2v16h16"/><path d="M2 6h16v16"/></symbol>
+    <symbol id="i-zamek" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
+    <symbol id="i-otoceni" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></symbol>
     <symbol id="i-cislo" viewBox="0 0 24 24"><path d="M10 3 8 21M16 3l-2 18M4 9h17M3 15h17"/></symbol>
   </defs>
 </svg>
@@ -79,7 +81,8 @@
      - vlevo svislá lišta nástrojů - vždy je vidět, který nástroj je zapnutý (Výběr = žádný);
      - nad stranou kontextová lišta: jen úpravy toho, co je vybrané (štítek vlevo říká co);
      - vpravo panel s nastavením celé strany (styly, akordy, strana), jde schovat;
-     - dole stavový řádek: co je vybrané a jak s tím pracovat, varování, dvojstrana, přiblížení. #}
+     - dole lišta: co je vybrané a jak s tím pracovat, varování; uprostřed listování stranami
+       a přidání strany; vpravo formát, dvojstrana, přiblížení. #}
   <header class="navrh-hlava navrh-lista" aria-label="Strana">
     <div class="hlava-vlevo kde">
       {% if kontext %}
@@ -87,37 +90,6 @@
         <span class="kde-sipka" aria-hidden="true">‹</span>
         <span class="kde-nazev">{{ kontext.nazev }}</span>
       </a>
-      {# Listování zpěvníkem jako ve čtečce: rozdělaná strana se zálohuje v prohlížeči,
-         nikdo se neptá. Číslo strany jde napsat. #}
-      <div class="navrh-listovani" role="group" aria-label="Strana zpěvníku">
-        <button type="button" class="ikona" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
-        <label class="listovani-cislo"><span id="listovani-popis">Strana</span>
-          <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
-          <span class="listovani-lp" id="listovani-lp"></span>
-        </label>
-        <button type="button" class="ikona" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
-        <div class="pridat-stranu">
-          <button type="button" class="ikona nova-strana" id="nova-strana" hidden aria-haspopup="dialog" aria-expanded="false" data-napoveda="Přidat stranu" aria-label="Přidat stranu"><svg><use href="#i-plus"/></svg></button>
-          {# Přidat stranu: strany vzniknou hned na serveru (prázdné, s ukázkou, nebo kopie) #}
-          <div class="nabidka nabidka-stran" id="nabidka-stran" role="dialog" aria-label="Přidat stranu" hidden>
-            <div class="ns-nadpis">Přidat stranu</div>
-            <fieldset class="ns-volby"><legend>Kam</legend>
-              <label><input type="radio" name="ns-kam" value="za" checked> <span id="ns-za-popis">Za tuto stranu</span></label>
-              <label><input type="radio" name="ns-kam" value="konec"> Na konec zpěvníku</label>
-            </fieldset>
-            <fieldset class="ns-volby"><legend>Obsah</legend>
-              <label><input type="radio" name="ns-obsah" value="prazdna" checked> Prázdná</label>
-              <label><input type="radio" name="ns-obsah" value="ukazka"> S ukázkovou písní</label>
-              <label class="ns-kopie"><input type="radio" name="ns-obsah" value="kopie"> Kopie strany <select id="ns-kopie" aria-label="Kterou stranu zkopírovat"></select></label>
-            </fieldset>
-            <label class="ns-pocet">Počet stran <input type="number" id="ns-pocet" min="1" max="20" value="1"></label>
-            <p class="ns-chyba" id="ns-chyba" hidden></p>
-            <div class="ns-akce"><button type="button" class="hlavni" id="ns-pridat">Přidat</button></div>
-          </div>
-        </div>
-        <button type="button" class="jina-strana" data-vyber-strany data-zpevnik="{{ kontext.zpevnik }}"
-                data-napoveda="Otevřít jinou stranu nebo jiný zpěvník">Jiná strana…</button>
-      </div>
       {% else %}
       <span class="hlava-nazev">Editor strany</span>
       {% endif %}
@@ -206,8 +178,6 @@
         <button type="button" class="ikona" data-prikaz="naplast-volny" data-napoveda="Volný tvar: klikáním body" aria-label="Volný tvar"><svg><use href="#i-volny"/></svg></button>
       </div>
       <label class="pole-v-liste">Barva <input type="color" id="tvar-barva" value="#ffffff" aria-label="Barva náplasti"></label>
-      <label class="pole-v-liste" id="tvar-otoceni-pole" hidden data-napoveda="Otočení ve stupních (otáčet jde i kolečkem nad náplastí)">Otočení
-        <input type="number" id="tvar-otoceni" min="-180" max="180" step="1" aria-label="Otočení náplasti ve stupních">°</label>
       <button type="button" class="ikona nebezpecne" id="tvar-smazat" data-napoveda="Smazat náplast (Delete)" aria-label="Smazat náplast"><svg><use href="#i-kos"/></svg></button>
       <button type="button" class="s-popisem nebezpecne" id="tvar-smazat-vse">Smazat všechny</button>
     </div>
@@ -240,12 +210,12 @@
         </div>
       </div>
       <button type="button" class="ikona" data-prikaz="duplikovat" data-napoveda="Duplikovat (Ctrl+D)" aria-label="Duplikovat"><svg><use href="#i-duplikovat"/></svg></button>
+      <label class="pole-v-liste otoceni-pole" data-napoveda="Otočení ve stupních (otáčet jde i kolečkem pod vybraným prvkem)"><svg aria-hidden="true"><use href="#i-otoceni"/></svg>
+        <input type="number" id="prvek-otoceni" min="-180" max="180" step="1" aria-label="Otočení ve stupních">°</label>
+      <button type="button" class="ikona" id="prvek-zamek" aria-pressed="false" data-napoveda="Zamknout polohu: prvek se nedá posunout, zvětšit, otočit ani smazat (text v rámečku jde psát dál)" aria-label="Zamknout"><svg><use href="#i-zamek"/></svg></button>
     </div>
     {# Nic nevybráno: vlastnosti strany (jako klik na prázdnou stranu v grafických editorech). #}
     <div class="skupina" data-pro="strana">
-      <label class="pole-v-liste">Formát
-        <select data-nastaveni="format" data-napoveda="Formát strany (rámečky se zvětší nebo zmenší ve stejném poměru)"><option value="A5">A5</option><option value="A4">A4</option></select>
-      </label>
       <button type="button" class="s-popisem pripravuje" data-pripravuje="Pozadí strany (barva nebo obrázek)" data-napoveda="Pozadí strany - připravuje se">Pozadí</button>
       <button type="button" class="s-popisem pripravuje" data-pripravuje="Okraje sazby, mřížka a vodítka při přesunu prvků" data-napoveda="Vodítka a mřížka - připravuje se">Vodítka</button>
     </div>
@@ -274,12 +244,51 @@
     </div>
   </div>
 
-  {# Stavový řádek: vlevo co je vybrané / co dělá nástroj, uprostřed varování, vpravo
-     zobrazení (jedna strana / dvojstrana) a přiblížení. #}
+  {# Spodní lišta: vlevo co je vybrané / co dělá nástroj a varování, uprostřed listování
+     stranami a přidání strany, vpravo formát, zobrazení (jedna strana / dvojstrana)
+     a přiblížení. #}
   <footer class="navrh-dole">
-    <div class="navrh-popis" id="navrh-popis" aria-live="polite"></div>
-    <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+    <div class="dole-vlevo">
+      <div class="navrh-popis" id="navrh-popis" aria-live="polite"></div>
+      <div class="navrh-stav" id="navrh-stav" aria-live="polite"></div>
+    </div>
+    {% if kontext %}
+    {# Listování zpěvníkem jako ve čtečce: rozdělaná strana se zálohuje v prohlížeči,
+     nikdo se neptá. Číslo strany jde napsat. Uprostřed spodní lišty, ať se nemotá do nástrojů. #}
+    <div class="navrh-listovani" role="group" aria-label="Strana zpěvníku">
+      <button type="button" class="ikona" data-prikaz="predchozi-strana" data-napoveda="Předchozí strana" aria-label="Předchozí strana"><svg><use href="#i-vlevo-sipka"/></svg></button>
+      <label class="listovani-cislo"><span id="listovani-popis">Strana</span>
+        <input type="text" id="cislo-strany-zpevniku" inputmode="numeric" data-napoveda="Číslo strany (napsat a Enter)" aria-label="Číslo strany">
+        <span class="listovani-lp" id="listovani-lp"></span>
+      </label>
+      <button type="button" class="ikona" data-prikaz="dalsi-strana" data-napoveda="Další strana" aria-label="Další strana"><svg><use href="#i-vpravo-sipka"/></svg></button>
+      <div class="pridat-stranu">
+        <button type="button" class="nova-strana" id="nova-strana" hidden aria-haspopup="dialog" aria-expanded="false" data-napoveda="Přidat stranu" aria-label="Přidat stranu"><svg><use href="#i-plus"/></svg><span>Přidat stranu</span></button>
+        {# Přidat stranu: strany vzniknou hned na serveru (prázdné, s ukázkou, nebo kopie) #}
+        <div class="nabidka nabidka-stran" id="nabidka-stran" role="dialog" aria-label="Přidat stranu" hidden>
+          <div class="ns-nadpis">Přidat stranu</div>
+          <fieldset class="ns-volby"><legend>Kam</legend>
+            <label><input type="radio" name="ns-kam" value="za" checked> <span id="ns-za-popis">Za tuto stranu</span></label>
+            <label><input type="radio" name="ns-kam" value="konec"> Na konec zpěvníku</label>
+          </fieldset>
+          <fieldset class="ns-volby"><legend>Obsah</legend>
+            <label><input type="radio" name="ns-obsah" value="prazdna" checked> Prázdná</label>
+            <label><input type="radio" name="ns-obsah" value="ukazka"> S ukázkovou písní</label>
+            <label class="ns-kopie"><input type="radio" name="ns-obsah" value="kopie"> Kopie strany <select id="ns-kopie" aria-label="Kterou stranu zkopírovat"></select></label>
+          </fieldset>
+          <label class="ns-pocet">Počet stran <input type="number" id="ns-pocet" min="1" max="20" value="1"></label>
+          <p class="ns-chyba" id="ns-chyba" hidden></p>
+          <div class="ns-akce"><button type="button" class="hlavni" id="ns-pridat">Přidat</button></div>
+        </div>
+      </div>
+      <button type="button" class="jina-strana" data-vyber-strany data-zpevnik="{{ kontext.zpevnik }}"
+              data-napoveda="Otevřít jinou stranu nebo jiný zpěvník">Jiná strana…</button>
+    </div>
+    {% endif %}
     <div class="navrh-vpravo">
+      <label class="dole-format" data-napoveda="Formát strany (rámečky se zvětší nebo zmenší ve stejném poměru)">
+        <select data-nastaveni="format" aria-label="Formát strany"><option value="A5">A5</option><option value="A4">A4</option></select>
+      </label>
       {% if kontext %}
       <div class="navrh-zoom navrh-pohled" role="group" aria-label="Zobrazení">
         <button type="button" data-prikaz="jedna-strana" data-napoveda="Jedna strana" aria-label="Jedna strana"><svg><use href="#i-jedna-strana"/></svg></button>
@@ -373,6 +382,7 @@
     <button type="button" role="menuitem" data-poradi="pozadi"><svg><use href="#i-pozadi"/></svg>Do pozadí<kbd>Ctrl+Shift+↓</kbd></button>
     <span class="nabidka-oddelovac"></span>
     <button type="button" role="menuitem" data-akce="duplikovat"><svg><use href="#i-duplikovat"/></svg>Duplikovat<kbd>Ctrl+D</kbd></button>
+    <button type="button" role="menuitem" data-akce="zamek"><svg><use href="#i-zamek"/></svg><span class="zamek-popis">Zamknout</span></button>
     <button type="button" role="menuitem" data-akce="smazat" class="nebezpecne"><svg><use href="#i-kos"/></svg>Smazat<kbd>Delete</kbd></button>
   </div>
 
