@@ -875,10 +875,15 @@ def test_prohlizece(p, base, jmeno):
       let n = 0, shoda = 0;
       for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) { if (!A[y*w+x]) continue; n++;
         let nasel = false; for (let dy = -2; dy <= 2 && !nasel; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x+dx, Y = y+dy; if (X >= 0 && Y >= 0 && X < w && Y < h && B[Y*w+X]) { nasel = true; break; } } if (nasel) shoda++; }
-      return { shoda: shoda / n * 100, ms, kB: bytes.length / 1024, polozky };
+      // I naopak: co je v prohlížeči, musí být v PDF (neviditelné glyfy, chybějící nadpis).
+      let n2 = 0, shoda2 = 0;
+      for (let y = 0; y < h; y += 2) for (let x = 0; x < w; x += 2) { if (!B[y*w+x]) continue; n2++;
+        let nasel = false; for (let dy = -2; dy <= 2 && !nasel; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x+dx, Y = y+dy; if (X >= 0 && Y >= 0 && X < w && Y < h && A[Y*w+X]) { nasel = true; break; } } if (nasel) shoda2++; }
+      return { shoda: shoda / n * 100, zpet: shoda2 / n2 * 100, ms, kB: bytes.length / 1024, polozky };
     }""")
     prah = 96 if jmeno == 'webkit' else 99
     ok(f'PDF strany vypadá jako prohlížeč (shoda ≥ {prah} %)', v['shoda'] >= prah, round(v['shoda'], 2))
+    ok(f'všechno z prohlížeče je i v PDF - i nadpis v Noto Serif (shoda ≥ {prah} %)', v['zpet'] >= prah, round(v['zpet'], 2))
     text = ' '.join(v['polozky'])
     ok('text v PDF jde najít (celá slova i s akordem uprostřed a háčky)',
        all(sl in v['polozky'] for sl in ('písně', 'napiš', 'řádek', 'pokračování,')) and 'druhý' in v['polozky'],
@@ -1068,7 +1073,9 @@ def test_uchyty_naplasti(page):
         page.mouse.move(*bod); page.mouse.down(); page.mouse.move(bod[0] + dx, bod[1] + dy, steps=6); page.mouse.up()
         page.wait_for_timeout(60)
         return J(TV)['a']
-    ok('vybraná náplast je šrafovaná (bílá na bílém jde najít)', J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-srafy')).backgroundImage").startswith('repeating-linear-gradient'))
+    ok('vybraná náplast má modrý nádech (bílá na bílém jde najít), ostatní ne',
+       J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-nadech')).display") == 'block'
+       and J("[...document.querySelectorAll('.ps-tvar:not(.vybrany) .ps-nadech')].every(d => getComputedStyle(d).display === 'none')"))
     ok('vybraná náplast má 8 úchytů velikosti a kolečko otočení',
        J("document.querySelectorAll('.ps-tvar.vybrany [data-uchyt]').length") == 9 and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'block')
     ok('obdélník táhnutelné body nemá (na to jsou rohy)', J("document.querySelectorAll('.ps-tvar.vybrany .ps-bod').length") == 0)

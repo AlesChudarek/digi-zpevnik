@@ -80,17 +80,17 @@
 .navrh-listovani .ikona svg { width: 22px; height: 22px; }
 @media (hover: hover) { .navrh-listovani button:hover:not(:disabled) { background: var(--panel-bg, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); } }
 .navrh-listovani button:disabled { opacity: 0.35; cursor: default; }
-.listovani-cislo { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--panel-text, #333); padding: 0 4px; }
+.listovani-cislo { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--panel-text, #333); padding: 0 2px; }
+/* Pevné šířky (Strana/Strany, „12–13“): šipky při listování neuhýbají. */
+#listovani-popis { display: inline-block; width: 3.3em; text-align: right; }
 .listovani-cislo input {
-  width: 3.2em; height: 30px; box-sizing: border-box; text-align: center; font: inherit; font-size: 15px; font-weight: 600;
+  width: 4.4em; height: 30px; box-sizing: border-box; text-align: center; font: inherit; font-size: 15px; font-weight: 600;
   border: 1px solid var(--ram); border-radius: 6px; background: var(--panel-bg, #fff); color: var(--panel-text, #222);
 }
-.navrh-listovani .nova-strana { background: var(--brand-dark, #1b5e20); color: #fff; font-weight: 600; padding: 0 12px 0 8px; margin-left: 4px; }
-.navrh-listovani .nova-strana svg { width: 18px; height: 18px; }
-@media (hover: hover) { .navrh-listovani .nova-strana:hover:not(:disabled) { background: var(--brand-dark, #1b5e20); filter: brightness(1.12); } }
-.listovani-lp { min-width: 3.6em; color: var(--panel-muted, #666); font-size: 13px; }
-.listovani-lp:empty { display: none; }     /* dvojstrana: „Strany 4–5“ bez levá/pravá */
-.navrh-listovani .nova-strana[hidden] { display: none; }
+.listovani-oddelovac { width: 1px; height: 22px; background: var(--ram); margin: 0 2px; }
+.navrh-listovani .nova-strana { color: var(--brand-dark, #1b5e20); }
+.navrh-listovani .nova-strana svg { stroke-width: 2.4; }
+.navrh-listovani .nova-strana[aria-expanded="true"] { background: var(--panel-bg, #fff); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15); }
 /* Přidat stranu: malé okénko nad tlačítkem (lišta je dole) */
 .pridat-stranu { position: relative; display: flex; }
 .nabidka-stran { position: absolute; bottom: calc(100% + 10px); left: 50%; transform: translateX(-50%); z-index: 40; min-width: 250px; padding: 12px 14px; gap: 10px; font-size: 14px; }
@@ -106,7 +106,6 @@
 .ns-akce { display: flex; justify-content: flex-end; }
 .nabidka-stran .hlavni { height: 32px; padding: 0 18px; border: 0; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; background: var(--brand-dark, #1b5e20); color: #fff; }
 .nabidka-stran .hlavni:disabled { opacity: 0.6; cursor: default; }
-.navrh-listovani .jina-strana { font-size: 13px; color: var(--panel-muted, #555); }
 .stav-ulozeni { font-size: 13px; color: var(--panel-muted, #666); margin-right: 6px; white-space: nowrap; }
 .stav-ulozeni.neulozeno::before {
   content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
@@ -431,15 +430,11 @@
 .ps-tvar { pointer-events: none; }
 .ps-tvar > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; display: block; }
 .ps-tvar polygon { pointer-events: visiblePainted; cursor: move; stroke: none; }
-/* Šrafování přes plochu náplasti (jen editor, ramecky.js): bílá náplast na bílém je
-   jinak k nenalezení. Ořízne se na tvar přes clip-path, otáčí se s ní. */
-.ps-srafy {
-  position: absolute; inset: 0; pointer-events: none; opacity: 0.45;
-  background: repeating-linear-gradient(-45deg, rgba(70, 85, 110, 0.55) 0 calc(1px / var(--meritko)), transparent 0 calc(6px / var(--meritko)));
-}
-.ps-tvar.vybrany > .ps-srafy, .ps-tvar.tazeny > .ps-srafy { opacity: 0.8; }
-@media (hover: hover) { .ps-tvar:hover > .ps-srafy { opacity: 0.8; } }
-.ps-cteni .ps-srafy { display: none; }
+/* Vybraná náplast: lehký modrý nádech přes její plochu (jen editor, ramecky.js) - bílá
+   na bílém by jinak nebyla vidět. Ořízne se na tvar přes clip-path, otáčí se s ní. */
+.ps-nadech { position: absolute; inset: 0; pointer-events: none; display: none; background: rgba(26, 115, 232, 0.2); }
+.ps-tvar.vybrany > .ps-nadech, .ps-tvar.tazeny > .ps-nadech { display: block; }
+.navrh[data-vyber="nic"] .ps-nadech, .navrh[data-vyber="cislo"] .ps-nadech, .ps-cteni .ps-nadech { display: none !important; }
 /* Úchyty vybraného prvku (ramecky.js): 8 na velikost (obrázek 4 rohy), kolečko pod ním
    na otočení, u mnohoúhelníku náplasti body. Jsou uvnitř prvku, takže se otáčejí s ním.
    Rámeček je má, když je v něm kurzor. */
@@ -776,5 +771,5 @@ html.navrh-ukazka .nahled-cteni-obal::after { content: "UKÁZKA"; font-size: 34m
   #prepinac-panelu { display: none; }
 }
 @media (max-width: 600px) {
-  .stav-ulozeni, .navrh-listovani .jina-strana { display: none; }
+  .stav-ulozeni { display: none; }
 }

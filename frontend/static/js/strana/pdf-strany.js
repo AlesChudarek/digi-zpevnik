@@ -9,6 +9,9 @@
 // podle znaků rozdělí na části, každá se kreslí souborem, který ty znaky obsahuje.
 // Knihovna (pdf-lib + fontkit, 1,4 MB) se načítá až tady, při prvním PDF. Písma do PDF
 // jsou TTF (fonts/strana/ttf/) - fontkit s WOFF2 se složenými znaky padá.
+// Glyfy v TTF musí mít sudou délku (soubory Noto Serif jsou zarovnané na 4 bajty): fontkit
+// zapíše podmnožinu s krátkou tabulkou loca, a glyf liché délky by posunul všechny další -
+// v PDF by byly neviditelné (tak zmizely nadpisy). Při novém sloučení písem zarovnat znovu.
 
 import { vykresliStranu, dokonciStranu, formatStrany } from './vykresleni.js';
 

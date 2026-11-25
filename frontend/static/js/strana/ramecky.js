@@ -100,9 +100,9 @@ export class PrvekView {
       this.bodyEl = document.createElement('div');
       this.bodyEl.className = 'ps-body';
       this.uchyty.appendChild(this.bodyEl);
-      this.srafy = document.createElement('div');
-      this.srafy.className = 'ps-srafy';
-      this.dom.append(this.svg, this.srafy, this.uchyty, this.zamek);
+      this.nadech = document.createElement('div');
+      this.nadech.className = 'ps-nadech';
+      this.dom.append(this.svg, this.nadech, this.uchyty, this.zamek);
       this.polygon.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
       this.polygon.addEventListener('dblclick', (e) => this.pridejBod(e));
     } else {
@@ -145,7 +145,7 @@ export class PrvekView {
       this.polygon.setAttribute('points', bodyTvaru(a.body));
       this.polygon.setAttribute('fill', a.barva);
       const body = (a.body || '0,0 1,0 1,1 0,1').trim().split(/\s+/).map((b) => b.split(',').map((x) => +x * 100 + '%').join(' '));
-      this.srafy.style.clipPath = `polygon(${body.join(',')})`;
+      this.nadech.style.clipPath = `polygon(${body.join(',')})`;
       this.nastavBody(a);
     }
   }

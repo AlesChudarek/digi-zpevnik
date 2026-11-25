@@ -302,7 +302,7 @@ def main():
                 strana2 = A.Strana.query.filter_by(songbook_id=ZPEVNIK, poradi=2).first().id
             ok("další strana se otevře bez ptaní", page.url.endswith(f"/editor-strany/{strana2}"), page.url)
             ok("u Uložit je výstraha s rozdělanou stranou 6", page.is_visible("#neulozene-jinde")
-               and page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6",
+               and page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i jinde: strana 6",
                page.get_attribute("#neulozene-jinde", "data-napoveda"))
             page.fill("#cislo-strany-zpevniku", "5")
             page.press("#cislo-strany-zpevniku", "Enter")
@@ -321,8 +321,8 @@ def main():
             page.wait_for_selector("#app-confirm-overlay", state="visible")
             tlacitka = page.locator("#app-confirm-overlay button:visible").all_inner_texts()
             zprava = page.inner_text("#app-confirm-message")
-            ok("Uložit se zeptá: všechny / jen tuto / zrušit", tlacitka == ["Uložit všechny", "Uložit jen tuto", "Zrušit"]
-               and zprava == "Neuložené změny jsou i na stranách 6. Tato strana: 7.", (tlacitka, zprava))
+            ok("Uložit se srozumitelně zeptá: i stranu 6 / jen stranu 7 / zrušit", tlacitka == ["Uložit i stranu 6", "Uložit jen stranu 7", "Zrušit"]
+               and zprava == "Neuložené změny má i strana 6 (rozpracovaná při listování). Uložit i ji?", (tlacitka, zprava))
             page.click("#app-confirm-save")
             page.wait_for_function("document.querySelector('[data-prikaz=\"ulozit\"]').textContent === 'Uloženo'", timeout=30000)
             s2 = strany_db()
@@ -334,6 +334,8 @@ def main():
 
 
             print("\n── dvojstrana: obě strany upravitelné ──")
+            SIPKY = "['predchozi-strana', 'dalsi-strana'].map(p => Math.round(document.querySelector(`[data-prikaz=${p}]`).getBoundingClientRect().left))"
+            sipky_jedna = page.evaluate(SIPKY)
             page.click('[data-prikaz="dvojstrana"]')
             editor_stran(page)
             DV = """(() => { const s = document.getElementById('stranka'), r = s.getBoundingClientRect();
@@ -349,8 +351,9 @@ def main():
             ok("na plátně jsou obě strany (Šestá i Sedmá) a vejde se", "Šestá" in dv["text"] and "Sedmá" in dv["text"] and dv["vejdeSe"], dv)
             ok("obě čísla stran", dv["cisla"] == ["6", "7"], dv["cisla"])
             ok("sloky se číslují na každé straně zvlášť (jako ve čtečce)", dv["znacky"] == ["1.", "1."], dv["znacky"])
-            hl = page.evaluate("[document.getElementById('listovani-popis').textContent, document.getElementById('cislo-strany-zpevniku').value, document.getElementById('listovani-lp').textContent]")
-            ok("v hlavičce „Strany 6–7“ (obě strany se stejnou vahou)", hl == ["Strany", "6–7", ""], hl)
+            hl = page.evaluate("[document.getElementById('listovani-popis').textContent, document.getElementById('cislo-strany-zpevniku').value]")
+            ok("v listování „Strany 6–7“ (obě strany se stejnou vahou)", hl == ["Strany", "6–7"], hl)
+            ok("šipky listování zůstaly na místě (pevné šířky)", page.evaluate(SIPKY) == sipky_jedna, (sipky_jedna, page.evaluate(SIPKY)))
             # Číslo protější strany jde vybrat a táhnout stejně; poloha platí pro obě strany.
             druhe = page.evaluate("""(() => { const e = document.querySelector('#stranka .ps-cislo-druhe'); e.scrollIntoView({ block: 'center' });
               const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, e.textContent]; })()""")
@@ -487,7 +490,7 @@ def main():
             page.keyboard.press("Escape")
             ok("Esc nabídku zavře", page.is_hidden("#nabidka-stran"))
             ok("po přelistování na 8 je výstraha s rozdělanými 6, 7",
-               page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i na stranách 6, 7",
+               page.get_attribute("#neulozene-jinde", "data-napoveda") == "Neuložené změny i jinde: strany 6, 7",
                page.get_attribute("#neulozene-jinde", "data-napoveda"))
             page.click('[data-prikaz="predchozi-strana"]')
             editor_stran(page)

@@ -1422,11 +1422,14 @@ async function ulozitStranuTed(vse) {
 async function ulozit() {
   const jine = jineKoncepty();
   if (!jine.length) return ulozitStranu(false);
-  const tato = spoj ? `Tato dvojstrana: ${Math.min(KONTEXT.cislo, spoj.druha.cislo)}–${Math.max(KONTEXT.cislo, spoj.druha.cislo)}.`
-    : `Tato strana: ${KONTEXT.cislo}.`;
+  // Jiné rozdělané strany (z listování) - zeptat se, jestli uložit i je.
+  const tato = spoj ? `strany ${Math.min(KONTEXT.cislo, spoj.druha.cislo)}–${Math.max(KONTEXT.cislo, spoj.druha.cislo)}`
+    : `stranu ${KONTEXT.cislo}`;
+  const jedna = jine.length === 1;
   const volba = await window.showUnsavedConfirm(
-    `Neuložené změny jsou i na stranách ${cislaStran(jine)}. ${tato}`,
-    { save: 'Uložit všechny', discard: spoj ? 'Uložit jen tuto dvojstranu' : 'Uložit jen tuto', discardStyl: 'neutralni' });
+    jedna ? `Neuložené změny má i strana ${cislaStran(jine)} (rozpracovaná při listování). Uložit i ji?`
+      : `Neuložené změny mají i strany ${cislaStran(jine)} (rozpracované při listování). Uložit i je?`,
+    { save: jedna ? `Uložit i stranu ${cislaStran(jine)}` : 'Uložit všechny', discard: `Uložit jen ${tato}`, discardStyl: 'neutralni' });
   if (volba === 'cancel') return false;
   return ulozitStranu(volba === 'save');
 }
@@ -1439,20 +1442,23 @@ function obnovListovani() {
   if (!KONTEXT) return;
   const pole = el('cislo-strany-zpevniku');
   if (pole && document.activeElement !== pole) pole.value = String(KONTEXT.cislo);
-  // Dvojstrana: obě strany mají stejnou váhu - „Strany 6–7“ (ne „Strana 7 a 6“).
-  const lp = el('listovani-lp');
-  if (lp) lp.textContent = spoj ? '' : (KONTEXT.lp === 'L' ? 'levá' : 'pravá');
+  // Dvojstrana: obě strany mají stejnou váhu - „Strany 6–7“ (ne „Strana 7 a 6“). Šířky
+  // popisu i pole jsou pevné (CSS), ať šipky při listování neuhýbají; levá/pravá je jen
+  // v nápovědě pole.
   el('listovani-popis').textContent = spoj ? 'Strany' : 'Strana';
   if (pole && document.activeElement !== pole && spoj) {
     pole.value = `${Math.min(KONTEXT.cislo, spoj.druha.cislo)}–${Math.max(KONTEXT.cislo, spoj.druha.cislo)}`;
   }
-  if (pole) pole.style.width = Math.max(3.2, pole.value.length * 0.62 + 1.2) + 'em';
+  if (pole) {
+    pole.dataset.napoveda = spoj ? 'Čísla stran dvojstrany (napsat číslo a Enter)'
+      : `Strana ${KONTEXT.cislo}, ${KONTEXT.lp === 'L' ? 'levá' : 'pravá'} (napsat číslo a Enter)`;
+  }
   obnovStavUlozeni();
   const jine = jineKoncepty();
   const znak = el('neulozene-jinde');
   if (znak) {
     znak.hidden = !jine.length;
-    znak.setAttribute('data-napoveda', `Neuložené změny i na stranách ${cislaStran(jine)}`);
+    znak.setAttribute('data-napoveda', `Neuložené změny i jinde: ${jine.length === 1 ? 'strana' : 'strany'} ${cislaStran(jine)}`);
   }
   for (const [prikaz, smer] of [['predchozi-strana', -1], ['dalsi-strana', 1]]) {
     const b = koren.querySelector(`[data-prikaz="${prikaz}"]`);
@@ -1460,7 +1466,7 @@ function obnovListovani() {
   }
   // Přidat stranu (nabídka, viz pridejStrany) jde jen od strany, která už ve zpěvníku je.
   const nova = el('nova-strana');
-  if (nova) nova.hidden = !KONTEXT.strana;
+  if (nova) nova.disabled = !KONTEXT.strana;
 }
 
 // --- přidat stranu ----------------------------------------------------------------------
