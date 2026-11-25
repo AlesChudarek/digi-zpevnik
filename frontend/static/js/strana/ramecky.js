@@ -52,17 +52,22 @@ export class PrvekView {
 
     // Úchyty vybraného prvku (jako v Canvě): 8 na velikost (obrázek jen rohy - strany by
     // ho deformovaly), kolečko pod ním na otočení, u mnohoúhelníku náplasti i body.
-    // Jsou uvnitř prvku, takže se otáčejí s ním.
+    // Leží ve vlastní vrstvě nad celou stranou (volby.vrstvaUchytu), ne v prvku - jinak by
+    // je zakrýval prvek ve vyšší vrstvě i šedé okolí mimo stranu. Polohu, otočení a stav
+    // (třídy vybrany, aktivni, zamceny…) si berou z prvku, viz zrcadli().
     this.uchyty = document.createElement('div');
     this.uchyty.className = 'ps-uchyty';
     this.uchyty.contentEditable = 'false';
+    this.uchyty.dataset.druh = this.jeObrazek ? 'obrazek' : this.jeTvar ? 'tvar' : 'ramecek';
+    this.uchyty.prvekView = this;
     const stopka = document.createElement('div');
     stopka.className = 'ps-otoc-stopka';
     this.uchyty.appendChild(stopka);
     const rohyAStrany = this.jeObrazek ? ['nw', 'ne', 'se', 'sw'] : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
     for (const u of [...rohyAStrany, 'otoc']) {
       const d = document.createElement('div');
-      d.className = u === 'otoc' ? 'ps-uchyt ps-uchyt-otoc' : `ps-uchyt ps-uchyt-${u}`;
+      d.className = u === 'otoc' ? 'ps-uchyt ps-uchyt-otoc' : `ps-uchyt ps-uchyt-${u} ${u.length === 2 ? 'ps-uchyt-roh' : 'ps-uchyt-strana'}`;
+      if (u === 'otoc') d.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>';
       d.dataset.uchyt = u;
       d.title = u === 'otoc' ? 'Otočit (se Shiftem po 15°)'
         : this.jeObrazek ? 'Změnit velikost (se Shiftem i poměr stran)' : 'Změnit velikost (u rohu se Shiftem ve stejném poměru)';
@@ -85,7 +90,7 @@ export class PrvekView {
       this.img.alt = '';
       this.img.draggable = false;
       this.dom.contentEditable = 'false';
-      this.dom.append(this.lista, this.img, this.uchyty, this.zamek);
+      this.dom.append(this.lista, this.img, this.zamek);
       this.img.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
     } else if (this.jeTvar) {
       // Náplast bez lišty: táhne se za samotný tvar (klikat jde jen na jeho plochu, ne na
@@ -102,16 +107,23 @@ export class PrvekView {
       this.uchyty.appendChild(this.bodyEl);
       this.nadech = document.createElement('div');
       this.nadech.className = 'ps-nadech';
-      this.dom.append(this.svg, this.nadech, this.uchyty, this.zamek);
+      this.dom.append(this.svg, this.nadech, this.zamek);
       this.polygon.addEventListener('pointerdown', (e) => this.zacni(e, 'presun'));
       this.polygon.addEventListener('dblclick', (e) => this.pridejBod(e));
     } else {
       this.contentDOM = document.createElement('div');
       this.contentDOM.className = 'ps-ramecek-obsah';
-      this.dom.append(this.lista, this.contentDOM, this.uchyty, this.zamek);
+      this.dom.append(this.lista, this.contentDOM, this.zamek);
+    }
+    const vrstva = volby.vrstvaUchytu ? volby.vrstvaUchytu() : null;
+    (vrstva || this.dom).appendChild(this.uchyty);
+    if (vrstva) {
+      this._zrcadlo = new MutationObserver(() => this.zrcadli());
+      this._zrcadlo.observe(this.dom, { attributes: true, attributeFilter: ['class', 'style'] });
     }
     this.nastav();
     this.oznacPresah();
+    this.zrcadli();
 
     this.lista.addEventListener('pointerdown', (e) => {
       if (e.target === this.smazat) return;
@@ -150,6 +162,16 @@ export class PrvekView {
     }
   }
 
+  // Vrstva úchytů: stejná poloha, rozměr a otočení jako prvek, stejné třídy stavu.
+  zrcadli() {
+    if (this.uchyty.parentNode === this.dom) return;
+    const s = this.dom.style, u = this.uchyty.style;
+    u.left = s.left; u.top = s.top; u.width = s.width; u.height = s.height; u.transform = s.transform;
+    for (const t of ['vybrany', 'aktivni', 'tazeny', 'zamceny', 'ps-presah', 'ps-podklad']) {
+      this.uchyty.classList.toggle(t, this.dom.classList.contains(t));
+    }
+  }
+
   // Body mnohoúhelníku jde táhnout (volný tvar, trojúhelník). Obdélník má na to rohy
   // velikosti a elipsa (36 bodů) by byla jen hromada teček.
   nastavBody(a) {
@@ -170,6 +192,7 @@ export class PrvekView {
       d.style.top = by * 100 + '%';
     }
     this.dom.classList.toggle('ma-body', pocet > 0);
+    this.uchyty.classList.toggle('ma-body', pocet > 0);
   }
 
   // Kopie rámečku přes hřbet (presah) jde upravit jen ve dvojstraně, kde je rámeček celý -
@@ -429,7 +452,11 @@ export class PrvekView {
     this.view.focus();
   }
 
-  destroy() { this.uklid(); }
+  destroy() {
+    this.uklid();
+    if (this._zrcadlo) this._zrcadlo.disconnect();
+    if (this.uchyty.parentNode !== this.dom) this.uchyty.remove();
+  }
 }
 
 

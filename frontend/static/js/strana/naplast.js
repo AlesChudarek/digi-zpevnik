@@ -86,7 +86,7 @@ export class NastrojNaplasti {
   dolu(e) {
     if (!this.aktivni || e.button !== 0) return;
     // Na existující náplast (mimo rozkreslený tvar): výběr a přesun jako vždy.
-    if (!this.body && e.target.closest && e.target.closest('.ps-tvar')) return;
+    if (!this.body && e.target.closest && e.target.closest('.ps-tvar, .ps-uchyty')) return;
     e.preventDefault();
     e.stopPropagation();
     // Je vybraná náplast (upravuje se): klik vedle jen zruší výběr, kreslí až další klik.
@@ -215,8 +215,9 @@ export class NastrojNaplasti {
 
 // Nástroj Text: stejně jako Náplast se zapne tlačítkem a pak se na stranu klikne (rámeček
 // výchozí velikosti) nebo táhne (rámeček podle tahu). Po vložení nástroj skončí a kurzor
-// je v novém rámečku - další klik do textu má psát, ne zakládat další rámeček. Klik do
-// existujícího textu nástroj jen vypne.
+// je v novém rámečku - další klik do textu má psát, ne zakládat další rámeček. Rámeček
+// vznikne kdekoli, i přes existující text (jinak by přes celostránkový rámeček nešel
+// přidat další).
 const RAMECEK = { w: 60, h: 20 };   // rámeček z kliku (mm)
 const MIN_RAMECEK = { w: 10, h: 6 };
 
@@ -246,7 +247,6 @@ export class NastrojTextu {
 
   dolu(e) {
     if (!this.aktivni || e.button !== 0) return;
-    if (e.target.closest && e.target.closest('.ps-ramecek')) { this.prepni(false); return; }
     e.preventDefault();
     e.stopPropagation();
     const [x0, y0] = this.mm(e);

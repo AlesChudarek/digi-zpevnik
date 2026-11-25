@@ -435,29 +435,40 @@
 .ps-nadech { position: absolute; inset: 0; pointer-events: none; display: none; background: rgba(26, 115, 232, 0.2); }
 .ps-tvar.vybrany > .ps-nadech, .ps-tvar.tazeny > .ps-nadech { display: block; }
 .navrh[data-vyber="nic"] .ps-nadech, .navrh[data-vyber="cislo"] .ps-nadech, .ps-cteni .ps-nadech { display: none !important; }
-/* Úchyty vybraného prvku (ramecky.js): 8 na velikost (obrázek 4 rohy), kolečko pod ním
-   na otočení, u mnohoúhelníku náplasti body. Jsou uvnitř prvku, takže se otáčejí s ním.
-   Rámeček je má, když je v něm kurzor. */
-.ps-uchyty { position: absolute; inset: 0; display: none; pointer-events: none; z-index: 1; }
-.ps-tvar.vybrany > .ps-uchyty, .ps-obrazek.vybrany > .ps-uchyty, .ps-ramecek.aktivni > .ps-uchyty,
-.ps-ramecek.vybrany > .ps-uchyty, .tazeny > .ps-uchyty { display: block; }
-.ps-obrazek.ps-podklad > .ps-uchyty { display: none; }
+/* Úchyty vybraného prvku (ramecky.js): rohy čtverečky, strany podlouhlé pilulky (obrázek
+   jen rohy), pod prvkem kulaté tlačítko otočení, u mnohoúhelníku náplasti body. Leží ve
+   vlastní vrstvě nad celou stranou (jinak by je zakryl prvek ve vyšší vrstvě a šedé okolí
+   mimo stranu); krabička úchytů má polohu, rozměr, otočení i třídy stavu po prvku.
+   Rámeček je má, když je v něm kurzor. Velikosti na obrazovce nezávisí na přiblížení. */
+.ps-uchyty-vrstva { position: absolute; inset: 0; z-index: 1000; pointer-events: none; overflow: visible; }
+.ps-uchyty { position: absolute; display: none; pointer-events: none; transform-origin: 50% 50%; box-sizing: border-box; }
+.ps-uchyty.vybrany, .ps-uchyty[data-druh="ramecek"].aktivni, .ps-uchyty.tazeny { display: block; }
+.ps-uchyty.ps-podklad, .ps-uchyty.ps-presah, .ps-uchyty.zamceny { display: none !important; }
+.rezim-naplasti .ps-uchyty:not([data-druh="tvar"]) { display: none !important; }
 .ps-uchyt {
-  position: absolute; width: calc(9px / var(--meritko)); height: calc(9px / var(--meritko));
-  margin: calc(-4.5px / var(--meritko)) 0 0 calc(-4.5px / var(--meritko));
-  background: #fff; border: calc(1.5px / var(--meritko)) solid #1a73e8; box-sizing: border-box;
-  border-radius: calc(2px / var(--meritko)); pointer-events: auto;
+  position: absolute; box-sizing: border-box; pointer-events: auto;
+  background: #fff; border: calc(1.5px / var(--meritko)) solid #1a73e8;
+  box-shadow: 0 0 calc(2px / var(--meritko)) rgba(0, 0, 0, 0.3);
+  transform: translate(-50%, -50%);
 }
+.ps-uchyt-roh { width: calc(10px / var(--meritko)); height: calc(10px / var(--meritko)); border-radius: calc(2px / var(--meritko)); }
+.ps-uchyt-n, .ps-uchyt-s { width: calc(18px / var(--meritko)); height: calc(7px / var(--meritko)); border-radius: calc(4px / var(--meritko)); }
+.ps-uchyt-e, .ps-uchyt-w { width: calc(7px / var(--meritko)); height: calc(18px / var(--meritko)); border-radius: calc(4px / var(--meritko)); }
 .ps-uchyt-nw { left: 0; top: 0; } .ps-uchyt-n { left: 50%; top: 0; } .ps-uchyt-ne { left: 100%; top: 0; }
 .ps-uchyt-e { left: 100%; top: 50%; } .ps-uchyt-se { left: 100%; top: 100%; } .ps-uchyt-s { left: 50%; top: 100%; }
 .ps-uchyt-sw { left: 0; top: 100%; } .ps-uchyt-w { left: 0; top: 50%; }
 .ps-uchyt-otoc {
-  left: 50%; top: calc(100% + 22px / var(--meritko)); width: calc(12px / var(--meritko)); height: calc(12px / var(--meritko));
-  margin: calc(-6px / var(--meritko)) 0 0 calc(-6px / var(--meritko)); border-radius: 50%; cursor: grab;
+  left: 50%; top: calc(100% + 28px / var(--meritko)); width: calc(22px / var(--meritko)); height: calc(22px / var(--meritko));
+  border-radius: 50%; cursor: grab; display: flex; align-items: center; justify-content: center; color: #1a73e8;
 }
+.ps-uchyt-otoc svg {
+  width: calc(14px / var(--meritko)) !important; height: calc(14px / var(--meritko)) !important;
+  fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none;
+}
+@media (hover: hover) { .ps-uchyt:hover { background: #e8f0fe; } }
 .ps-otoc-stopka {
-  position: absolute; left: 50%; top: 100%; height: calc(16px / var(--meritko));
-  border-left: calc(1px / var(--meritko)) solid #1a73e8;
+  position: absolute; left: 50%; top: 100%; height: calc(17px / var(--meritko));
+  border-left: calc(1px / var(--meritko)) solid #1a73e8; transform: translateX(-50%);
 }
 .ps-body { position: absolute; inset: 0; pointer-events: none; }
 .ps-bod {
@@ -478,7 +489,9 @@
    nad náplastí šipky přesunu. */
 .rezim-naplasti .stranka, .rezim-naplasti .stranka *:not(.ps-uchyt) { cursor: crosshair !important; }
 /* Nástroj Text: křížek na volné ploše, nad textem obvyklý kurzor (klik do textu nástroj vypne). */
-.rezim-textu .stranka { cursor: crosshair; }
+.rezim-textu .stranka, .rezim-textu .stranka * { cursor: crosshair !important; }
+.rezim-textu .ps-ramecek { outline: none !important; }
+.rezim-textu .ps-ramecek > .ps-prvek-lista { opacity: 0 !important; pointer-events: none; }
 .rezim-naplasti .ps-tvar polygon { cursor: move !important; }
 .ps-naplast-nahled { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; z-index: 5; }
 .ps-naplast-nahled polygon, .ps-naplast-nahled polyline { stroke: #1a73e8; stroke-width: calc(1.5px / var(--meritko)); stroke-dasharray: 4 3; opacity: 0.85; }
@@ -504,7 +517,6 @@
    lišta), ať je jasné, že klik kreslí. Reagují jen náplasti. */
 .rezim-naplasti .ps-ramecek, .rezim-naplasti .ps-obrazek { outline: none !important; }
 .rezim-naplasti .ps-ramecek > .ps-prvek-lista, .rezim-naplasti .ps-obrazek > .ps-prvek-lista { opacity: 0 !important; pointer-events: none; }
-.rezim-naplasti .ps-ramecek > .ps-uchyty, .rezim-naplasti .ps-obrazek > .ps-uchyty,
 .rezim-naplasti .ps-ramecek > .ps-zamek, .rezim-naplasti .ps-obrazek > .ps-zamek { display: none !important; }
 .rezim-naplasti .ps-cislo-strany { pointer-events: none; }
 /* Nástroj Nový text: obrázky a náplasti na myš nereagují. */
@@ -515,7 +527,7 @@
 
 /* Kopie rámečku přes hřbet z vedlejší strany: jen k vidění (upravuje se ve dvojstraně). */
 .ps-ramecek.ps-presah { outline: calc(1px / var(--meritko)) dashed rgba(0, 0, 0, 0.35) !important; cursor: default; }
-.ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-uchyty, .ps-ramecek.ps-presah > .ps-zamek { display: none !important; }
+.ps-ramecek.ps-presah > .ps-prvek-lista, .ps-ramecek.ps-presah > .ps-zamek { display: none !important; }
 .ps-cteni .ps-ramecek.ps-presah { outline: none !important; }
 .ps-ramecek.pretece { outline: calc(2px / var(--meritko)) solid #d00 !important; }
 .ps-ramecek-obsah { position: relative; width: 100%; height: 100%; }
@@ -539,7 +551,6 @@
 /* Zamčený prvek: lišta bez ×, místo úchytů zámek (klik odemkne). Tah ho jen vybere. */
 .zamceny > .ps-prvek-lista { cursor: default; }
 .zamceny > .ps-prvek-lista > .ps-prvek-smazat { display: none; }
-.zamceny > .ps-uchyty { display: none !important; }
 .zamceny.ps-obrazek img { cursor: default; }
 .rezim-naplasti .ps-tvar.zamceny polygon, .ps-tvar.zamceny polygon { cursor: default !important; }
 .ps-zamek {

@@ -492,7 +492,13 @@ if (KONTEXT) {
 }
 
 // presah: jak daleko za plátno (mm) smí prvek - zhruba šířka strany na každou stranu.
-const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: plocha, presah: () => format().sirka });
+// Vrstva úchytů vybraného prvku nad celou stranou (ramecky.js).
+const vrstvaUchytu = () => {
+  let v = stranka.querySelector(':scope > .ps-uchyty-vrstva');
+  if (!v) { v = document.createElement('div'); v.className = 'ps-uchyty-vrstva'; stranka.appendChild(v); }
+  return v;
+};
+const prvek = (n, v, g) => new PrvekView(n, v, g, { meritko: () => meritko, rozmer: plocha, presah: () => format().sirka, vrstvaUchytu });
 
 // Protější strana pro úpravu ve dvojstraně: rozdělaná z prohlížeče (ke stejné verzi),
 // uložená verze, sken jako podklad, nebo prázdná strana - stejně jako při otevření samotné.
@@ -2595,15 +2601,8 @@ stranka.addEventListener('pointerdown', (e) => {
   const t = e.target;
   // Úchyt vybraného prvku má přednost před vším, co leží nad ním (text, lišta jiného
   // prvku) - náplasti leží pod textem a jinak by na úchyty nešlo dosáhnout.
+  // (Úchyty leží ve vlastní vrstvě nad stranou - klik na ně obslouží jejich PrvekView.)
   if (t.closest('.ps-uchyty, .ps-zamek')) return;
-  const uchyt = document.elementsFromPoint(e.clientX, e.clientY)
-    .find((x) => x.matches('.vybrany > .ps-uchyty [data-uchyt], .aktivni > .ps-uchyty [data-uchyt], .vybrany > .ps-uchyty [data-bod]')
-      && getComputedStyle(x.closest('.ps-uchyty')).display !== 'none');
-  if (uchyt) {
-    e.stopImmediatePropagation();
-    uchyt.closest('.ps-tvar, .ps-obrazek, .ps-ramecek').prvekView.chytni(e, uchyt);
-    return;
-  }
   // Vlastní ovládání (lišta, akord, číslo strany) a místa mimo prvky si klik nechají.
   if (t.closest('.ps-prvek-lista, .akord-kotva, .ps-cislo-strany')) return;
   if (!t.closest('.ps-ramecek, .ps-obrazek, .ps-tvar') && !t.closest('.stranka-obsah')) return;
