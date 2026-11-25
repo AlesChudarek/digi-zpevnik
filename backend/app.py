@@ -528,6 +528,10 @@ try:
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
     from models import Song, Obrazek, Strana, PisenNaStrane, NavrzenaStrana, KnihovnaStylu, navrh_obrazky, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, ZpetnaVazba, db, init_app
+try:
+    from backend import verze as verze_webu
+except ImportError:
+    import verze as verze_webu
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -1386,8 +1390,10 @@ def register():
         else:
             hashed_password = generate_password_hash(password, method='pbkdf2:sha256', salt_length=16)
             ted = datetime.now()
+            # Nový účet nic nezmeškal - tečka Novinek až u další verze.
             new_user = User(email=email, password=hashed_password, role='user',
-                            email_verified=False, vytvoreno=ted, posledni_prihlaseni=ted)
+                            email_verified=False, vytvoreno=ted, posledni_prihlaseni=ted,
+                            novinky_videne=verze_webu.posledni_funkcni())
             db.session.add(new_user)
             db.session.commit()
             # Nepouštíme ho pryč a nenutíme ho nejdřív ověřit. Kdyby si adresu překlepl nebo
@@ -1821,6 +1827,24 @@ def zmena_emailu():
         'Na novou adresu jsme poslali ověřovací e-mail.' if odeslano else
         'Ověřovací e-mail se ale nepodařilo odeslat. Adresa může obsahovat překlep nebo '
         'neexistovat - zkontrolujte ji a pošlete ověření znovu.')})
+
+
+# ---------- Verze a Novinky (CHANGELOG.md, backend/verze.py) ----------
+app.jinja_env.globals['verze_webu'] = verze_webu.verze
+app.jinja_env.globals['stav_gitu'] = verze_webu.stav_gitu
+app.jinja_env.globals['ma_novinky'] = lambda u: (u.is_authenticated and not is_guest(u)
+                                                 and verze_webu.ma_novinky(u))
+
+
+@app.route('/novinky')
+def novinky():
+    """Co přinesla která verze. Veřejná stránka; přihlášenému zhasne tečku Novinek."""
+    prihlaseny = current_user.is_authenticated and not is_guest(current_user)
+    posledni = verze_webu.posledni_funkcni()
+    if prihlaseny and posledni and current_user.novinky_videne != posledni:
+        current_user.novinky_videne = posledni
+        db.session.commit()
+    return render_template('novinky.html', verze=verze_webu.vsechny_verze(), guest=not prihlaseny)
 
 
 @app.route('/vitejte')

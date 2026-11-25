@@ -306,6 +306,10 @@
     @media (hover: hover) { .ucet-panel .ucet-polozka:hover { background: #f5f5f5; } }
     .ucet-panel .ucet-nebezpeci { color: #a5402f; }
     .ucet-panel .ucet-odhlasit { color: #b3261e; font-weight: 600; }
+    /* Novinky: číslo verze vpravo, tečka, dokud účet novou verzi s funkcemi neviděl. */
+    .ucet-panel .ucet-novinky { display: flex; align-items: center; gap: 8px; }
+    .ucet-panel .ucet-verze { margin-left: auto; font-size: 12px; color: #666; }
+    .ucet-panel .ucet-tecka-novinky { width: 8px; height: 8px; border-radius: 50%; background: #e0a000; flex: 0 0 auto; }
     .ucet-panel .ucet-adresa { color: #222; }
 
     /* Zabrané místo. Má být vidět, ale ne křičet - proto tenký pruh a číslo, a barva
@@ -525,7 +529,8 @@
             <span class="ucet-fotka">
               {{ avatar(current_user, 38) }}
               {% if not current_user.email_verified %}<span class="ucet-tecka" data-napoveda="Neověřená adresa"></span>
-              {% elif pocet_zadosti %}<span class="ucet-tecka" data-napoveda="Žádosti o přátelství"></span>{% endif %}
+              {% elif pocet_zadosti %}<span class="ucet-tecka" data-napoveda="Žádosti o přátelství"></span>
+              {% elif ma_novinky(current_user) %}<span class="ucet-tecka" data-napoveda="Novinky ve verzi {{ verze_webu() }}"></span>{% endif %}
             </span>
           </button>
 
@@ -568,6 +573,7 @@
 
             <button type="button" class="ucet-polozka" onclick="UcetOkna.otevri('ucet')">Účet</button>
             <button type="button" class="ucet-polozka" onclick="UcetOkna.otevri('pratele')">Přátelé{% if pocet_zadosti %} <span class="nav-pocet">{{ pocet_zadosti }}</span>{% endif %}</button>
+            <a class="ucet-polozka ucet-novinky" href="{{ url_for('novinky') }}">Novinky<span class="ucet-verze">verze {{ verze_webu() }}</span>{% if ma_novinky(current_user) %}<span class="ucet-tecka-novinky" aria-label="nové"></span>{% endif %}</a>
             <form id="logout-form" action="{{ url_for('logout') }}" method="post">
               <button type="submit" class="ucet-polozka ucet-odhlasit">Odhlásit se</button>
             </form>

@@ -198,6 +198,32 @@ def api():
     zkontroluj(radek(zid)["stav"] == "nova", "a stav se nezměnil")
 
 
+def novinky():
+    """Novinky a číslo verze (CHANGELOG.md, backend/verze.py)."""
+    print("\n── Novinky a verze ──")
+    with A.app.app_context():
+        verze = A.verze_webu.verze()
+        u = A.db.session.get(A.User, USER_ID)
+        u.novinky_videne = None
+        A.db.session.commit()
+    r = klient().get("/novinky")
+    html = r.get_data(as_text=True)
+    zkontroluj(r.status_code == 200 and f'id="v{verze}"' in html and 'id="v0.1.0"' in html and html.count("novinky-verze nejnovejsi") == 1,
+               "Novinky jsou veřejné, s celou historií, aktuální je jen nejnovější", r.status_code)
+    zkontroluj(f"Novinky · verze {verze}" in klient().get("/login").get_data(as_text=True), "přihlašovací stránka odkazuje na Novinky s verzí")
+    c = klient(USER_ID)
+    html = c.get("/my-songbooks").get_data(as_text=True)
+    zkontroluj('<span class="ucet-tecka-novinky"' in html and f"verze {verze}" in html, "nabídka účtu: Novinky s verzí a tečkou, dokud je účet neviděl")
+    c.get("/novinky")
+    html = c.get("/my-songbooks").get_data(as_text=True)
+    zkontroluj('<span class="ucet-tecka-novinky"' not in html and "Novinky ve verzi" not in html, "po otevření Novinek tečka zhasne")
+    with A.app.app_context():
+        zkontroluj(A.db.session.get(A.User, USER_ID).novinky_videne == A.verze_webu.posledni_funkcni(), "pamatuje se u účtu")
+    html = klient(ADMIN_ID).get("/sprava/zpetna-vazba").get_data(as_text=True)
+    zkontroluj(f"Verze {verze}" in html and "commit" in html, "Správa ukáže verzi a commit")
+    zkontroluj(klient(USER_ID).get("/sprava/zpetna-vazba").status_code == 404, "(běžný uživatel Správu nevidí)")
+
+
 def vycisti():
     """Před prohlížečem jen pár zpráv, ať je seznam přehledný."""
     with A.app.app_context():
@@ -544,6 +570,7 @@ def prohlizec():
 def main():
     try:
         api()
+        novinky()
         vycisti()
         prohlizec()
     finally:

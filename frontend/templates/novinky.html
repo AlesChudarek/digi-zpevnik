@@ -1,0 +1,39 @@
+{% extends "dashboard_base.html" %}
+{% block title %}Novinky{% endblock %}
+{% block content %}
+{# Co přinesla která verze - z CHANGELOG.md (backend/verze.py), nejnovější nahoře. #}
+<div class="novinky">
+  <h1>Novinky</h1>
+  <p class="novinky-uvod">Co přinesla která verze Digitálního zpěvníku. Teď běží verze <strong>{{ verze_webu() }}</strong>.</p>
+  {% for v in verze %}
+  <section class="novinky-verze{% if loop.first %} nejnovejsi{% endif %}" id="v{{ v.cislo }}">
+    <h2><span class="novinky-cislo">{{ v.cislo }}</span><span class="novinky-datum">{{ v.datum }}</span></h2>
+    {% if v.shrnuti %}<p class="novinky-shrnuti">{{ v.shrnuti }}</p>{% endif %}
+    {% if v.polozky %}
+    <ul>{% for p in v.polozky %}<li>{{ p }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+  {% endfor %}
+</div>
+<style>
+  .novinky {
+    max-width: 720px; margin: 24px auto; padding: 24px 28px; box-sizing: border-box;
+    background: var(--panel-bg, #fff); color: var(--panel-text, #222);
+    border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+  }
+  .novinky h1 { margin: 0 0 6px; font-size: 26px; }
+  .novinky-uvod { margin: 0 0 18px; color: var(--panel-muted, #555); }
+  .novinky-verze { padding: 16px 0; border-top: 1px solid var(--panel-border, #e2e2e2); }
+  .novinky-verze h2 { display: flex; align-items: baseline; gap: 12px; margin: 0 0 6px; font-size: 19px; }
+  .novinky-cislo { font-variant-numeric: tabular-nums; }
+  .novinky-datum { font-size: 14px; font-weight: normal; color: var(--panel-muted, #555); }
+  .novinky-verze.nejnovejsi .novinky-cislo::after {
+    content: "aktuální"; margin-left: 10px; padding: 2px 8px; border-radius: 999px; vertical-align: 2px;
+    font-size: 12px; font-weight: 600; background: var(--brand-dark, #1b5e20); color: #fff;
+  }
+  .novinky-shrnuti { margin: 0 0 6px; font-weight: 600; }
+  .novinky ul { margin: 0; padding-left: 20px; line-height: 1.5; }
+  .novinky li + li { margin-top: 4px; }
+  @media (max-width: 600px) { .novinky { margin: 12px; padding: 18px 16px; } }
+</style>
+{% endblock %}

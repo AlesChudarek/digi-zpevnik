@@ -6,3 +6,5 @@
   {% set novych = pocet_novych_zpetnych_vazeb() %}
   <a href="{{ url_for('sprava_zpetne_vazby') }}" {% if karta == 'zpetna-vazba' %}class="aktivni" aria-current="page"{% endif %}>Zpětná vazba<span class="sprava-karty-pocet" id="zv-pocet-novych" {% if not novych %}hidden{% endif %}>{{ novych }}</span></a>
 </nav>
+{% set git = stav_gitu() %}
+<p class="sprava-verze">Verze {{ verze_webu() }}{% if git %} · commit {{ git.commit }} z {{ git.datum }}{% if git.za_znackou %} · <strong>+{{ git.za_znackou }} {{ 'změna' if git.za_znackou == 1 else ('změny' if git.za_znackou < 5 else 'změn') }} od {{ git.znacka }}</strong>{% endif %}{% endif %}</p>

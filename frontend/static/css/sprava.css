@@ -5,6 +5,8 @@
 .sprava { max-width: 1200px; margin: 24px auto 40px; padding: 0 16px; box-sizing: border-box; }
 .sprava h1 { text-align: center; margin: 6px 0 18px; }
 
+.sprava-verze { text-align: center; margin: -8px 0 14px; font-size: 13px; color: var(--panel-muted, #666); }
+.sprava-verze strong { color: var(--panel-text, #222); }
 .sprava-karty { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: 16px; }
 .sprava-karty a {
   padding: 8px 16px; border-radius: 999px; text-decoration: none; font-size: 14px;
