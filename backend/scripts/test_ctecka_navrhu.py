@@ -315,6 +315,9 @@ def test_skenu(p, base):
     t = page.evaluate(PRVKY)
     ok("klik vloží malý obdélník v barvě nástroje", len(t) == 1 and t[0]["w"] == 8 and t[0]["h"] == 4
        and abs(t[0]["x"] - 36) < 0.3 and t[0]["barva"] == "#ff0000" and not t[0]["body"], t)
+    page.mouse.click(r["x"] + 120 * k, r["y"] + 190 * k)
+    ok("klik vedle vybrané náplasti jen zruší výběr, nic nevloží", len(page.evaluate(PRVKY)) == 1
+       and page.evaluate("document.querySelector('.navrh').dataset.vyber") == "nic")
     page.mouse.move(r["x"] + 60 * k, r["y"] + 100 * k)
     page.mouse.down()
     page.mouse.move(r["x"] + 61.5 * k, r["y"] + 101 * k, steps=4)
@@ -323,6 +326,7 @@ def test_skenu(p, base):
     ok("tažení vloží obdélník podle tahu, i velmi malý (1,5 × 1 mm)", len(t) == 2 and abs(t[1]["w"] - 1.5) < 0.25
        and abs(t[1]["h"] - 1) < 0.25, t[-1:])
     page.click('[data-prikaz="naplast-volny"]')
+    page.mouse.click(r["x"] + 120 * k, r["y"] + 190 * k)        # zruší výběr obdélníku
     for (x, y) in ((90, 20), (110, 25), (100, 45)):
         page.mouse.click(r["x"] + x * k, r["y"] + y * k)
     page.mouse.click(r["x"] + 90.3 * k, r["y"] + 20.2 * k)       # klik na první bod uzavře

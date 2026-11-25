@@ -2195,8 +2195,9 @@ function aktualizujListu() {
     ukazNabidkuSloky(s2);
   }
 
-  // Značka sloky: u sloky nebo refrénu, ve kterém je kurzor.
-  const zacatek = zacatekSloky(state);
+  // Značka sloky: jen když se píše text (kurzor ve sloce nebo refrénu) - u vybrané
+  // náplasti, obrázku nebo bez výběru karta nemá co dělat.
+  const zacatek = !zvlastniVyber && druhVyberu(state) === 'text' ? zacatekSloky(state) : null;
   el('panel-znacka').hidden = !zacatek;
   if (zacatek) {
     const pole = el('znacka-sloky');
@@ -2647,7 +2648,8 @@ function klikNaPrvek(h, e) {
 }
 
 // Nástroj Náplast (naplast.js): kreslí do strany, dokud je zapnutý.
-naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu(), zrusVyber: () => zrusVyber() });
+naplast = new NastrojNaplasti({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu(), zrusVyber: () => zrusVyber(),
+  vybranaNaplast: () => koren.dataset.vyber === 'naplast' });
 nastrojTextu = new NastrojTextu({ view, stranka, koren, meritko: () => meritko, poZmene: () => aktualizujListu() });
 // Esc a Enter i mimo editor textu (po kliknutí do strany fokus v textu být nemusí).
 window.addEventListener('keydown', (e) => {

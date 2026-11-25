@@ -204,6 +204,8 @@ def test_rozlozeni(page):
     ok('elipsa se Shiftem = kruh (stejná šířka a výška), mnohoúhelník z 36 bodů', J(pocet) == pred + 1
        and abs(a['w'] - a['h']) < 0.2 and len(a['body'].split(' ')) == 36, a)
     page.click('[data-prikaz="naplast-trojuhelnik"]')
+    page.mouse.click(x0 + 80, y0)      # elipsa je vybraná: první klik vedle jen zruší výběr
+    ok('klik vedle vybrané náplasti nic nenakreslí', J(pocet) == pred + 1, J(pocet))
     page.mouse.move(x0 + 80, y0); page.mouse.down(); page.mouse.move(x0 + 120, y0 + 30, steps=5); page.mouse.up()
     ok('trojúhelník', J("navrhStrany.view.state.doc.lastChild.attrs.body") == '0.5,0 1,1 0,1')
     page.keyboard.press(f'{MOD}+z'); page.keyboard.press(f'{MOD}+z')
@@ -1061,6 +1063,8 @@ def test_uchyty_naplasti(page):
     page.click('[data-prikaz="naplast-obdelnik"]')
     r = J("(() => { const r = document.querySelectorAll('.ps-ramecek')[0].getBoundingClientRect(); return [r.left, r.top]; })()")
     x0, y0 = r[0] + 60, r[1] + 120
+    if J("document.getElementById('navrh').dataset.vyber") == 'naplast':
+        page.mouse.click(x0, y0)       # vybraná náplast z dřívějška: klik jen zruší výběr
     page.mouse.move(x0, y0); page.mouse.down(); page.mouse.move(x0 + 80, y0 + 40, steps=5); page.mouse.up()
     t = J(TV)
     pocet = t['pocet']
@@ -1128,8 +1132,13 @@ def test_uchyty_naplasti(page):
     page.click('[data-prikaz="naplast"]')
     page.click('[data-prikaz="naplast-volny"]')
     page.mouse.click(x0 + 150, y0 + 150)
-    ok('první bod nového volného tvaru zruší výběr náplasti', J("document.getElementById('navrh').dataset.vyber") == 'nic'
-       and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'none')
+    ok('klik vedle vybrané náplasti jen zruší výběr (nic nekreslí)', J("document.getElementById('navrh').dataset.vyber") == 'nic'
+       and J("getComputedStyle(document.querySelector('.ps-tvar.vybrany .ps-uchyty')).display") == 'none'
+       and J("document.querySelectorAll('.ps-naplast-nahled *').length") == 0)
+    ok('odznačená náplast má s nástrojem obrys jako ostatní',
+       J("getComputedStyle(document.querySelector('.ps-tvar.vybrany polygon')).strokeDasharray") == J("getComputedStyle(document.querySelector('.ps-tvar:not(.vybrany) polygon')).strokeDasharray") != 'none')
+    page.mouse.click(x0 + 150, y0 + 150)
+    ok('další klik už kreslí', J("document.querySelectorAll('.ps-naplast-nahled *').length") > 0)
     page.keyboard.press('Escape'); page.keyboard.press('Escape')
     ok('kresba se nic neuložila', J("navrhStrany.view.state.doc.toJSON()") == puvodni)
 

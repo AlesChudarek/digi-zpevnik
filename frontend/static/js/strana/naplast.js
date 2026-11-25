@@ -8,7 +8,7 @@
 //   Enter, Esc rozkreslený tvar zahodí.
 //
 // Velikost není omezená - i malá ploška je potřeba. Klik na existující náplast ji vybere
-// a táhne (PrvekView). Při zapnutém nástroji je vidět obrys všech náplastí (třída
+// a táhne (PrvekView); klik vedle vybrané náplasti jen zruší výběr (další klik kreslí). Při zapnutém nástroji je vidět obrys všech náplastí (třída
 // rezim-naplasti na kořeni editoru).
 
 import { closeHistory, NodeSelection, TextSelection } from 'prosemirror';
@@ -33,7 +33,8 @@ const bodyVObdelniku = (body, x, y, w, h) => (body || '0,0 1,0 1,1 0,1').split('
   .map((b) => { const [bx, by] = b.split(',').map(Number); return [x + bx * w, y + by * h]; });
 
 export class NastrojNaplasti {
-  // volby: view, stranka (prvek strany), koren (editor), meritko(), poZmene(), zrusVyber()
+  // volby: view, stranka (prvek strany), koren (editor), meritko(), poZmene(), zrusVyber(),
+  // vybranaNaplast()
   constructor(volby) {
     this.v = volby;
     this.aktivni = false;
@@ -88,8 +89,11 @@ export class NastrojNaplasti {
     if (!this.body && e.target.closest && e.target.closest('.ps-tvar')) return;
     e.preventDefault();
     e.stopPropagation();
-    // Kreslí se nový tvar: dosavadní výběr (poslední náplast) pryč, ať nemate.
-    if (!this.body && this.v.zrusVyber) this.v.zrusVyber();
+    // Je vybraná náplast (upravuje se): klik vedle jen zruší výběr, kreslí až další klik.
+    if (!this.body && this.v.vybranaNaplast && this.v.vybranaNaplast()) {
+      this.v.zrusVyber();
+      return;
+    }
     if (this.druh === 'volny') this.bodVolneho(e);
     else this.tahObdelniku(e);
   }

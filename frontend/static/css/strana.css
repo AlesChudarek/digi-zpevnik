@@ -471,7 +471,8 @@
 .navrh[data-vyber="nic"] .ps-uchyty, .navrh[data-vyber="cislo"] .ps-uchyty, .rezim-textu .ps-uchyty, .ps-cteni .ps-uchyty { display: none !important; }
 .rezim-naplasti .ps-tvar polygon { stroke: #1a73e8; stroke-width: 1px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
 @media (hover: hover) { .ps-tvar:hover polygon { stroke: rgba(26, 115, 232, 0.6); stroke-width: 1px; vector-effect: non-scaling-stroke; } }
-.ps-tvar.vybrany polygon, .ps-tvar.tazeny polygon { stroke: #1a73e8; stroke-width: 1.5px; stroke-dasharray: none; vector-effect: non-scaling-stroke; }
+/* Výběr jen při skutečném výběru (bez fokusu - „nic“ - vypadá jako ostatní náplasti). */
+.navrh:not([data-vyber="nic"]):not([data-vyber="cislo"]) .ps-tvar.vybrany polygon, .ps-tvar.tazeny polygon { stroke: #1a73e8; stroke-width: 1.5px; stroke-dasharray: none; vector-effect: non-scaling-stroke; }
 /* Nástroj Náplast: kreslí se křížkem, rozkreslený tvar je náhled nad stranou. */
 /* Všude křížek (i nad obrázkem a textem - s nástrojem se nehýbou, klik kreslí), jen
    nad náplastí šipky přesunu. */
@@ -495,7 +496,6 @@
    bez fokusu a výběr se nemá ukazovat (navrh.js, zvlastniVyber). */
 .navrh[data-vyber="nic"] .ps-ramecek.aktivni, .navrh[data-vyber="cislo"] .ps-ramecek.aktivni,
 .navrh[data-vyber="nic"] .ps-obrazek.vybrany, .navrh[data-vyber="cislo"] .ps-obrazek.vybrany { outline: none; }
-.navrh[data-vyber="nic"] .ps-tvar.vybrany polygon, .navrh[data-vyber="cislo"] .ps-tvar.vybrany polygon { stroke: none; }
 .navrh[data-vyber="nic"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="nic"] .aktivni > .ps-prvek-lista,
 .navrh[data-vyber="cislo"] .vybrany > .ps-prvek-lista, .navrh[data-vyber="cislo"] .aktivni > .ps-prvek-lista { opacity: 0; }
 .navrh[data-vyber="nic"] .ps-zamek, .navrh[data-vyber="cislo"] .ps-zamek { display: none !important; }
