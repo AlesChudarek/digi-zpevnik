@@ -674,6 +674,9 @@ const view = new EditorView(stranka.querySelector('.stranka-mount'), {
     }
     if (tr.docChanged) zalohuj();
     if (blik.length) ovladac.blikni(blik);
+    // Nástroj Akord pracuje s textem: vybraný obrázek nebo náplast ho vypne (jedním klikem
+    // z akordů na náplast, ne nejdřív do textu a pak znovu).
+    if (rezimAkordu && tr.selectionSet && vybranyAtom(view.state)) { prepniRezimAkordu(false); return; }
     aktualizujListu();
   },
 });
@@ -682,8 +685,8 @@ ovladac.pripoj(view);
 
 const cisloStrany = new CisloStrany(stranka, el('navrh-plocha'), {
   format, nastaveni: () => nastaveni, meritko: () => meritko, posun: () => posunAktualni(),
-  vyber: () => vyberCislo(),
-  zmen: (zmena) => { nastaveni = { ...nastaveni, ...zmena }; pouzijNastaveni(); zalohuj(); },
+  vyber: (jine) => vyberCislo(jine),
+  zmen: (zmena) => { nastaveni = { ...nastaveni, ...zmena }; sjednotCislo(); pouzijNastaveni(); zalohuj(); },
 });
 
 // --- přepočet kolizí a přetečení ------------------------------------------------------
@@ -750,10 +753,15 @@ function vykresliDruheCislo() {
   if (!e) {
     e = document.createElement('div');
     e.className = 'ps-cislo-strany ps-cislo-druhe';
+    e.title = 'Číslo protější strany: klik vybere, tažením poloha';
+    // Táhne se stejně jako číslo upravované strany (poloha platí pro obě).
+    e.addEventListener('pointerdown', (ev) => cisloStrany.zacni(ev, { el: e, strana: spoj.druha.lp, posun: posunStrany(spoj.druha.lp) }));
     stranka.appendChild(e);
   }
   const d = spoj.druha, c = d.nastaveni.cislo;
-  e.hidden = !c || !c.zobrazit || !!d.nastaveni.cisloSkryte;
+  e.hidden = !c || !c.zobrazit;
+  // Skryté na protější straně: bledě, jako u upravované (jinak by nešlo kliknout a odkrýt).
+  e.classList.toggle('skryte', !!d.nastaveni.cisloSkryte);
   if (e.hidden) return;
   const { x, y } = CisloStrany.poloha(c, format(), d.lp);
   e.textContent = String(d.cislo);
@@ -835,6 +843,13 @@ function napojPanel() {
       if (klic === 'format') { zmenFormat(prvek.value); return; }
       const h = hodnotaPrvku(prvek);
       if (Number.isNaN(h)) return;
+      // Skrýt číslo u vybraného čísla protější strany (dvojstrana).
+      if (klic === 'cisloSkryte' && spoj && cisloStrany.vybraneJine) {
+        spoj.druha.nastaveni = { ...spoj.druha.nastaveni, cisloSkryte: h };
+        pouzijNastaveni();
+        zalohuj();
+        return;
+      }
       nastaveni = { ...nastaveni, [klic]: h };
       pouzijNastaveni();
       zalohuj();
@@ -862,6 +877,7 @@ function napojPanel() {
   // Číslo strany: data-cislo-pole (vnořené nastaveni.cislo), přepínač tučně, levá/pravá.
   const zmenCislo = (zmena) => {
     nastaveni = { ...nastaveni, cislo: { ...nastaveni.cislo, ...zmena } };
+    sjednotCislo();
     pouzijNastaveni();
     zalohuj();
     // Vypnuté číslování: vybrané číslo zmizelo.
@@ -909,6 +925,9 @@ function nactiPanel() {
     if (prvek.type === 'checkbox') prvek.checked = !!h; else prvek.value = h;
   }
   for (const b of koren.querySelectorAll('[data-cislo-prepinac]')) b.classList.toggle('aktivni', !!nastaveni.cislo[b.dataset.cisloPrepinac]);
+  if (spoj && typeof cisloStrany !== 'undefined' && cisloStrany.vybraneJine) {
+    koren.querySelector('.navrh-kontext [data-nastaveni="cisloSkryte"]').checked = !!spoj.druha.nastaveni.cisloSkryte;
+  }
   if (!rozbalenyStyl) return;
   const s = knihovna[rozbalenyStyl];
   for (const prvek of koren.querySelectorAll('[data-styl-pole]')) {
@@ -1382,8 +1401,14 @@ function obnovListovani() {
   if (!KONTEXT) return;
   const pole = el('cislo-strany-zpevniku');
   if (pole && document.activeElement !== pole) pole.value = String(KONTEXT.cislo);
+  // Dvojstrana: obě strany mají stejnou váhu - „Strany 6–7“ (ne „Strana 7 a 6“).
   const lp = el('listovani-lp');
-  if (lp) lp.textContent = spoj ? `a ${spoj.druha.cislo}` : (KONTEXT.lp === 'L' ? 'levá' : 'pravá');
+  if (lp) lp.textContent = spoj ? '' : (KONTEXT.lp === 'L' ? 'levá' : 'pravá');
+  el('listovani-popis').textContent = spoj ? 'Strany' : 'Strana';
+  if (pole && document.activeElement !== pole && spoj) {
+    pole.value = `${Math.min(KONTEXT.cislo, spoj.druha.cislo)}–${Math.max(KONTEXT.cislo, spoj.druha.cislo)}`;
+  }
+  if (pole) pole.style.width = Math.max(3.2, pole.value.length * 0.62 + 1.2) + 'em';
   obnovStavUlozeni();
   const jine = jineKoncepty();
   const znak = el('neulozene-jinde');
@@ -1535,8 +1560,9 @@ if (KONTEXT) {
   const skoc = () => {
     const n = parseInt(pole.value, 10);
     const st = KONTEXT.strany.find((x) => x.cislo === n);
-    if (st && st.id !== KONTEXT.strana) jdiNaStranu(st);
-    else pole.value = String(KONTEXT.cislo);
+    // Strana z právě otevřené dvojstrany: nikam se nejde.
+    if (st && st.id !== KONTEXT.strana && !(spoj && st.id === spoj.druha.st.id)) jdiNaStranu(st);
+    else { pole.blur(); obnovListovani(); }
   };
   pole?.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); skoc(); } });
   pole?.addEventListener('change', skoc);
@@ -1760,6 +1786,12 @@ obal.addEventListener('pointermove', (e) => {
   ukazNabidkuSloky(res ? slokaNaPozici(res.pos) : null);
 });
 
+// Rozepsaný akord (pole nad akordem) se před přepnutím nástroje zapíše - tlačítka
+// nástrojů fokus neberou, takže by pole zůstalo otevřené.
+function zapisAkord() {
+  if (ovladac.upravovany != null) ovladac.potvrdPole({ vratFokus: false });
+}
+
 const PRIKAZY = {
   tucne: () => toggleMark(M.tucne)(view.state, view.dispatch),
   kurziva: () => toggleMark(M.kurziva)(view.state, view.dispatch),
@@ -1776,24 +1808,28 @@ const PRIKAZY = {
   'transp-nahoru': () => transponujVse(1),
   // Nástroje (Akord, Text, Náplast) se navzájem vypínají - zapnutý je vždy nejvýš jeden.
   ramecek: () => {
+    zapisAkord();
     if (rezimAkordu) prepniRezimAkordu(false);
     if (naplast.aktivni) naplast.prepni(false);
     nastrojTextu.prepni();
   },
-  obrazek: () => el('soubor-obrazku').click(),
+  obrazek: () => { zapisAkord(); el('soubor-obrazku').click(); },
   naplast: () => {
+    zapisAkord();
     if (rezimAkordu) prepniRezimAkordu(false);
     if (nastrojTextu.aktivni) nastrojTextu.prepni(false);
     naplast.prepni();
   },
   // Výběr = žádný nástroj (i × ve štítku nástroje).
   vybrat: () => {
+    zapisAkord();
     if (rezimAkordu) prepniRezimAkordu(false);
     if (nastrojTextu.aktivni) nastrojTextu.prepni(false);
     if (naplast.aktivni) naplast.prepni(false);
   },
   duplikovat: () => duplikuj(),
   cislo: () => {
+    zapisAkord();
     zapniCislovani(true);
     vyberCislo();
     stranka.querySelector('.ps-cislo-strany').scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -2106,10 +2142,17 @@ function zrusVyber() {
   view.dom.blur();
   aktualizujListu();
 }
-function vyberCislo() {
+// Ve dvojstraně mají obě strany stejné číslování (poloha, písmo): změna u jedné platí i pro
+// druhou. Skrytí čísla je dál jen pro jednu stranu.
+function sjednotCislo() {
+  if (spoj) spoj.druha.nastaveni = { ...spoj.druha.nastaveni, cislo: nastaveni.cislo };
+}
+// jine: ve dvojstraně vybrané číslo protější strany ({ el, strana }).
+function vyberCislo(jine = null) {
   if (zapnutyNastroj()) PRIKAZY.vybrat();
   zvlastniVyber = 'cislo';
-  cisloStrany.nastavVybrane(true);
+  cisloStrany.nastavVybrane(true, jine);
+  nactiPanel();
   view.dom.blur();
   aktualizujListu();
 }
@@ -2484,7 +2527,7 @@ window.addEventListener('keydown', (e) => {
   if (document.querySelector('.oznameni-zaclona, #app-confirm-overlay[aria-hidden="false"]')) return;
   const mod = e.metaKey || e.ctrlKey;
   const k = e.key.toLowerCase();
-  if (e.key === 'Escape' && zvlastniVyber === 'cislo') { e.target.blur?.(); zrusVyber(); }
+  if (e.key === 'Escape' && zvlastniVyber === 'cislo') { e.target.blur?.(); zrusVyber(); nactiPanel(); }
   else if (mod && k === 'z' && !e.shiftKey) undo(view.state, view.dispatch);
   else if (mod && (k === 'y' || (k === 'z' && e.shiftKey))) redo(view.state, view.dispatch);
   else if (mod && k === 's') { if (KONTEXT && !UKAZKA) ulozit(); }

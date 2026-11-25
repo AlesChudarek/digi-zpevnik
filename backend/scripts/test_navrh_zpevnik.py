@@ -342,6 +342,24 @@ def main():
             ok("na plátně jsou obě strany (Šestá i Sedmá) a vejde se", "Šestá" in dv["text"] and "Sedmá" in dv["text"] and dv["vejdeSe"], dv)
             ok("obě čísla stran", dv["cisla"] == ["6", "7"], dv["cisla"])
             ok("sloky se číslují na každé straně zvlášť (jako ve čtečce)", dv["znacky"] == ["1.", "1."], dv["znacky"])
+            hl = page.evaluate("[document.getElementById('listovani-popis').textContent, document.getElementById('cislo-strany-zpevniku').value, document.getElementById('listovani-lp').textContent]")
+            ok("v hlavičce „Strany 6–7“ (obě strany se stejnou vahou)", hl == ["Strany", "6–7", ""], hl)
+            # Číslo protější strany jde vybrat a táhnout stejně; poloha platí pro obě strany.
+            druhe = page.evaluate("""(() => { const e = document.querySelector('#stranka .ps-cislo-druhe'); e.scrollIntoView({ block: 'center' });
+              const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2, e.textContent]; })()""")
+            st = page.evaluate("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+            pred = page.evaluate("[navrhStrany.zdroj('L').nastaveni.cislo.y, navrhStrany.zdroj('P').nastaveni.cislo.y]")
+            page.mouse.move(druhe[0], druhe[1])
+            page.mouse.down()
+            page.mouse.move(druhe[0], druhe[1] - 30 * st['height'] / 210, steps=6)
+            page.mouse.up()
+            po = page.evaluate("[navrhStrany.zdroj('L').nastaveni.cislo.y, navrhStrany.zdroj('P').nastaveni.cislo.y]")
+            ok("číslo protější strany jde táhnout a poloha se změní na obou stranách", po[0] == po[1] and po[0] < pred[0] - 20,
+               (druhe[2], pred, po))
+            ok("a je vybrané (úpravy čísla v liště)", page.evaluate("document.getElementById('navrh').dataset.vyber") == "cislo"
+               and page.evaluate("document.querySelector('#stranka .ps-cislo-druhe').classList.contains('vybrane')"))
+            page.evaluate("""navrhStrany.cislo().volby.zmen({ cislo: { ...navrhStrany.nastaveni().cislo, y: %s } })""" % pred[0])
+            page.keyboard.press("Escape")
             ok("listování přeskakuje celou dvojstranu", page.evaluate("[...['predchozi-strana', 'dalsi-strana']].map(p => document.querySelector(`[data-prikaz=${p}]`).disabled)") == [False, False])
 
             # Rámeček strany 7 (vpravo) přetáhnout za lištu na levou stranu.

@@ -63,26 +63,33 @@ export class CisloStrany {
     this.obnovNahled();
   }
 
-  nastavVybrane(v) {
+  // Vybrané číslo: upravované strany, nebo ve dvojstraně protější (jine = { el, strana }).
+  nastavVybrane(v, jine = null) {
     this.vybrane = !!v;
-    this.el.classList.toggle('vybrane', this.vybrane);
+    this.vybraneJine = v ? jine : null;
+    this.el.classList.toggle('vybrane', this.vybrane && !jine);
+    for (const e of this.stranka.querySelectorAll('.ps-cislo-druhe')) e.classList.toggle('vybrane', this.vybrane && !!jine && e === jine.el);
     this.obnovNahled();
   }
 
   obnovNahled(c = null) {
     const n = this.volby.nastaveni();
     this.nahled.hidden = !(this.vybrane || this.tah) || !n.cislo.zobrazit;
-    if (!this.nahled.hidden) vykresliDvojstranu(this.nahled, this.volby.format(), c || n.cislo, String(n.nahledCisla), n.nahledStrany);
+    const strana = this.tah ? this.tah.strana : this.vybraneJine ? this.vybraneJine.strana : n.nahledStrany;
+    const cislo = strana === n.nahledStrany ? n.nahledCisla : (strana === 'L' ? n.nahledCisla - 1 : n.nahledCisla + 1);
+    if (!this.nahled.hidden) vykresliDvojstranu(this.nahled, this.volby.format(), c || n.cislo, String(cislo), strana);
   }
 
-  zacni(e) {
+  // jine: číslo protější strany ve dvojstraně - { el, strana, posun (mm) }.
+  zacni(e, jine = null) {
     if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
-    if (this.volby.vyber) this.volby.vyber();
+    if (this.volby.vyber) this.volby.vyber(jine);
     const n = this.volby.nastaveni();
-    this.tah = { strana: n.nahledStrany, posun: false };
-    this.el.classList.add('tazene');
+    const el = jine ? jine.el : this.el;
+    this.tah = { strana: jine ? jine.strana : n.nahledStrany, posun: false, el, odsazeni: jine ? jine.posun : this.posun() };
+    el.classList.add('tazene');
     this._pohyb = (ev) => this.pohyb(ev);
     this._konec = () => this.konec();
     window.addEventListener('pointermove', this._pohyb);
@@ -96,7 +103,8 @@ export class CisloStrany {
     const f = this.volby.format();
     const r = this.stranka.getBoundingClientRect();
     const pxNaMm = MM_NA_PX * this.volby.meritko();
-    let x = (e.clientX - r.left) / pxNaMm - this.posun(), y = (e.clientY - r.top) / pxNaMm;
+    const odsazeni = this.tah.odsazeni;
+    let x = (e.clientX - r.left) / pxNaMm - odsazeni, y = (e.clientY - r.top) / pxNaMm;
     x = Math.min(Math.max(x, 2), f.sirka - 2);
     y = Math.min(Math.max(y, 2), f.vyska - 2);
     // Přichycení: střed strany, okraje sazby, polovina okraje (číslo v okraji).
@@ -108,31 +116,31 @@ export class CisloStrany {
     if (py != null) y = py;
     x = Math.round(x * 2) / 2;
     y = Math.round(y * 2) / 2;
-    this.ukazVoditka(px, py);
+    this.ukazVoditka(px, py, odsazeni);
     // Na levé straně se zrcadlením se tahá zrcadlový obraz - uloží se poloha pro pravou.
     const n = this.volby.nastaveni();
     const pravaX = this.tah.strana === 'L' && n.cislo.zrcadlit ? f.sirka - x : x;
     this.tah.nove = { ...n.cislo, x: pravaX, y };
     this.tah.posun = true;
     const { x: vx, y: vy } = CisloStrany.poloha(this.tah.nove, f, this.tah.strana);
-    this.el.style.left = vx + this.posun() + 'mm';
-    this.el.style.top = vy + 'mm';
+    this.tah.el.style.left = vx + odsazeni + 'mm';
+    this.tah.el.style.top = vy + 'mm';
     this.obnovNahled(this.tah.nove);
   }
 
-  ukazVoditka(x, y) {
+  ukazVoditka(x, y, odsazeni = 0) {
     this.voditkoX.style.display = x != null ? 'block' : 'none';
     this.voditkoY.style.display = y != null ? 'block' : 'none';
-    if (x != null) this.voditkoX.style.left = x + this.posun() + 'mm';
+    if (x != null) this.voditkoX.style.left = x + odsazeni + 'mm';
     if (y != null) this.voditkoY.style.top = y + 'mm';
   }
 
   konec() {
     window.removeEventListener('pointermove', this._pohyb);
     window.removeEventListener('pointerup', this._konec);
-    this.el.classList.remove('tazene');
-    this.ukazVoditka(null, null);
     const t = this.tah;
+    if (t) t.el.classList.remove('tazene');
+    this.ukazVoditka(null, null);
     this.tah = null;
     if (t && t.posun) this.volby.zmen({ cislo: t.nove });
     this.obnovNahled();

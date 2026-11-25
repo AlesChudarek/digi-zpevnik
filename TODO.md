@@ -1301,6 +1301,10 @@ kdo maže.
       **Postup**: 1. pojistka na serveru, 2. stránka editoru stran (bez rámu), 3. řádek
       strany v editoru zpěvníku, 4. listování a záloha, 5. obrázková strana + náplast,
       6. dokončení exportu a nasazení, 7. „použít i v ostatních zpěvnících“, odkaz v liště.
+      - [ ] **ukázková píseň** (Aleš 25. 11.: „hrozné, jak je to generované“) - vyměnit
+        ukázkovou píseň nové strany i ukázky pro neprémiové (`ukazkovyDokument`, text „U ohně“)
+        za skutečně napsanou píseň s rozumně rozmístěnými akordy; vybrat s Alešem (autorská
+        práva - vlastní text nebo lidová).
       **Nálezy z používání** (11. 11.):
       - [X] editor stran: lištička pro tažení vybraného rámečku je o ~2 px užší než jeho
         modrý obrys (má šířku rámečku bez obrysu)

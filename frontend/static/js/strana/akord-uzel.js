@@ -281,7 +281,9 @@ export class OvladacAkordu {
     obal.appendChild(this.pole);
     this.pole.addEventListener('keydown', (e) => this.klavesaPole(e));
     this.pole.addEventListener('input', () => this.rozmerPole());
-    this.pole.addEventListener('blur', () => { if (!this.pole.hidden) this.potvrdPole(); });
+    // Klik jinam (náplast, pole v liště): zapsat, ale fokus nevracet - patří tomu, na co
+    // se kliklo (jinak první klik na náplast skončil v textu).
+    this.pole.addEventListener('blur', () => { if (!this.pole.hidden) this.potvrdPole({ vratFokus: false }); });
   }
 
   pripoj(view) {
@@ -545,15 +547,19 @@ export class OvladacAkordu {
     const { state } = this.view;
     const node = state.doc.nodeAt(pos);
     if (!jeAkord(node)) return pos;
+    // Výběr se vrací k akordu, jen když na něm pořád je - klik na jiný prvek (zavřel pole)
+    // už vybral ten prvek a zápis akordu mu ho nesmí vzít.
+    const sel = state.selection;
+    const naAkordu = (sel instanceof NodeSelection && sel.from === pos) || (sel.empty && (sel.from === pos || sel.from === pos + 1));
     let tr = closeHistory(state.tr);
     if (!hodnota) {
       tr = tr.delete(pos, pos + 1);
-      tr.setSelection(TextSelection.create(tr.doc, pos));
+      if (naAkordu) tr.setSelection(TextSelection.create(tr.doc, pos));
     } else {
       if (hodnota !== node.attrs.n) tr = tr.setNodeMarkup(pos, null, { ...node.attrs, n: hodnota });
       // Kurzor před akord, ne výběr akordu: písmeno napsané do vybraného uzlu by ho
       // nahradilo.
-      tr.setSelection(TextSelection.create(tr.doc, pos));
+      if (naAkordu) tr.setSelection(TextSelection.create(tr.doc, pos));
     }
     this.view.dispatch(tr);
     if (vratFokus) this.view.focus();
