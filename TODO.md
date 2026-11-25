@@ -1171,7 +1171,8 @@ kdo maže.
       5. [ ] šablona zpěvníku (styly pro celý zpěvník), číslo strany, obrázky
          v rámečcích + obtékání vlevo/vpravo, vodítka při přesunu rámečků
       6. [ ] ChordPro tam i zpět, vložení „akordů nad textem“ z webu
-      7. [ ] nasazení pro prémiové účty
+      7. [X] (25. 11.) nasazení jako verze 3.0.0 (s Zpětnou vazbou a Novinkami; záloha DB
+         na serveru v zalohy/pred-nasazenim/zpevnik-pred-3.0.0.db)
       **Editor stran jako samostatná stránka** (rozhodnuto s Alešem 11. 11.; nahrazuje
       rám nad editorem zpěvníku - mizela lišta, adresa se neměnila):
       - Editor zpěvníku zůstává oknem v Mých zpěvnících. Editor stran je vlastní stránka
