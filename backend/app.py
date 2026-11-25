@@ -522,11 +522,12 @@ try:
         Pratelstvi,
         LoginAttempt,
         ZasahAdmina,
+        ZpetnaVazba,
         db,
         init_app,
     )
 except ImportError:  # fallback pro přímé spuštění skriptu
-    from models import Song, Obrazek, Strana, PisenNaStrane, NavrzenaStrana, KnihovnaStylu, navrh_obrazky, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, db, init_app
+    from models import Song, Obrazek, Strana, PisenNaStrane, NavrzenaStrana, KnihovnaStylu, navrh_obrazky, Songbook, Author, User, UserSongbookAccess, Pozvanka, Oznameni, PoradiZpevniku, Pratelstvi, LoginAttempt, ExportPokus, ZasahAdmina, ZpetnaVazba, db, init_app
 
 # Permission functions
 def can_view_songbook(user, songbook):
@@ -3350,6 +3351,232 @@ def sprava_zkopiruj_zpevnik(songbook_id):
     dopocitej_nahledy(nova.id)
     schedule_export_warm(nova.id)
     return jsonify({'ok': True, 'id': nova.id})
+
+
+# ---------- Zpětná vazba ----------
+# Záložka u pravého okraje každé stránky (static/js/zpetna-vazba.js): zpráva, druh,
+# volitelně snímek obrazovky a kontext stránky. Prohlíží se ve Správě, karta Zpětná vazba.
+# Vypíná se proměnnou prostředí ZPETNA_VAZBA=0 - záložka zmizí a API vrací 404. Zprávy,
+# které už přišly, zůstávají ve Správě.
+#
+# Snímky leží MIMO obrazový kořen ze stejného důvodu jako exporty: /songbooks/<path>
+# servíruje cokoliv pod IMAGES_DIR bez kontroly, a snímek obrazovky může ukazovat
+# cizí soukromý zpěvník. Ven ho pustí jen route pro admina.
+ZPETNA_VAZBA_DIR = Path(__file__).parent.parent / 'data' / 'zpetna-vazba'
+DRUHY_ZPETNE_VAZBY = {'chyba': 'Chyba', 'napad': 'Nápad', 'jine': 'Jiné'}
+STAVY_ZPETNE_VAZBY = {'nova': 'Nová', 'vyresena': 'Vyřešená'}
+ZV_MAX_ZPRAVA = 5000
+ZV_MAX_KONTEXT = 200_000        # JSON kontextu v znacích
+ZV_MAX_SNIMEK = 3_000_000       # data URL; klient posílá JPEG zmenšený na ≤ 1600 px
+ZV_ZA_HODINU = 30               # zpráv z jedné IP za hodinu
+_ZV_SNIMEK_RE = re.compile(r'^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$')
+
+
+def zpetna_vazba_zapnuta() -> bool:
+    """Čte se při každém požadavku, ať jde vypnout bez úpravy kódu (stačí restart)."""
+    return os.environ.get('ZPETNA_VAZBA', '1').strip().lower() not in ('0', 'off', 'false', 'ne', '')
+
+
+def pocet_novych_zpetnych_vazeb() -> int:
+    return ZpetnaVazba.query.filter_by(stav='nova').count()
+
+
+app.jinja_env.globals['zpetna_vazba_zapnuta'] = zpetna_vazba_zapnuta
+app.jinja_env.globals['pocet_novych_zpetnych_vazeb'] = pocet_novych_zpetnych_vazeb
+
+
+class ChybaZpetneVazby(ValueError):
+    """Chyba vstupu - jde klientovi jako 400 s tímhle textem."""
+
+
+def _zkontroluj_zpetnou_vazbu(data):
+    """Zkontroluje a ořízne zprávu od klienta. Vrací slovník, nebo vyhodí ChybaZpetneVazby."""
+    zprava = str(data.get('zprava') or '').strip()
+    if not zprava:
+        raise ChybaZpetneVazby('Zpráva je prázdná.')
+    if len(zprava) > ZV_MAX_ZPRAVA:
+        raise ChybaZpetneVazby(f'Zpráva je delší než {ZV_MAX_ZPRAVA} znaků.')
+    druh = str(data.get('druh') or 'jine')
+    if druh not in DRUHY_ZPETNE_VAZBY:
+        druh = 'jine'
+
+    snimek = None
+    surovy = data.get('snimek') or None
+    if surovy is not None:
+        surovy = str(surovy)
+        if len(surovy) > ZV_MAX_SNIMEK:
+            raise ChybaZpetneVazby('Snímek obrazovky je příliš velký.')
+        shoda = _ZV_SNIMEK_RE.match(surovy)
+        if not shoda:
+            raise ChybaZpetneVazby('Snímek obrazovky není obrázek.')
+        import base64
+        import binascii
+        try:
+            obsah = base64.b64decode(shoda.group(2), validate=True)
+            # Jen hlavička nestačí - prohlížeč by pak adminovi ukázal rozbitý obrázek.
+            with Image.open(BytesIO(obsah)) as obr:
+                obr.verify()
+        except (binascii.Error, ValueError, OSError, SyntaxError) as chyba:
+            raise ChybaZpetneVazby('Snímek obrazovky je poškozený.') from chyba
+        snimek = (obsah, 'jpg' if shoda.group(1) == 'jpeg' else shoda.group(1))
+
+    kontext = data.get('kontext') or {}
+    if not isinstance(kontext, dict):
+        kontext = {}
+    if len(json.dumps(kontext, ensure_ascii=False)) > ZV_MAX_KONTEXT:
+        kontext = {'oriznuto': True, 'url': str(kontext.get('url') or '')[:2000]}
+
+    return {'druh': druh, 'zprava': zprava, 'url': str(data.get('url') or '')[:2000],
+            'kontext': kontext, 'snimek': snimek}
+
+
+@app.route('/api/zpetna-vazba', methods=['POST'])
+def odeslat_zpetnou_vazbu():
+    """Zpráva ze záložky Zpětná vazba. Smí ji poslat kdokoli, i host - hlásit chybu
+    nemá být podmíněné účtem. Proti zahlcení brzda na IP."""
+    if not zpetna_vazba_zapnuta():
+        return jsonify({'ok': False, 'error': 'Zpětná vazba je vypnutá.'}), 404
+    # JSON se snímkem má nejvýš kolem 3,2 MB; víc ani nečíst.
+    if (request.content_length or 0) > ZV_MAX_SNIMEK + ZV_MAX_KONTEXT * 4 + 100_000:
+        return jsonify({'ok': False, 'error': 'Zpráva je příliš velká.'}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({'ok': False, 'error': 'Chybný požadavek.'}), 400
+    try:
+        cista = _zkontroluj_zpetnou_vazbu(data)
+    except ChybaZpetneVazby as chyba:
+        return jsonify({'ok': False, 'error': str(chyba)}), 400
+
+    ip = _ip_klienta()
+    pred_hodinou = datetime.now() - timedelta(hours=1)
+    if ZpetnaVazba.query.filter(ZpetnaVazba.ip == ip, ZpetnaVazba.cas >= pred_hodinou).count() >= ZV_ZA_HODINU:
+        return jsonify({'ok': False, 'error': 'Z této adresy přišlo za poslední hodinu příliš mnoho zpráv. '
+                                              'Další půjde odeslat později.'}), 429
+
+    prihlaseny = current_user.is_authenticated and not is_guest(current_user)
+    kontext = dict(cista['kontext'])
+    kontext['userAgent'] = (request.headers.get('User-Agent') or '')[:400]
+    kontext['uzivatel'] = ({'id': current_user.id, 'email': current_user.email, 'role': current_user.role}
+                           if prihlaseny else {'host': True})
+    zaznam = ZpetnaVazba(
+        cas=datetime.now(), user_id=current_user.id if prihlaseny else None,
+        autor=(f"{jmeno_uzivatele(current_user)} ({current_user.email})"
+               if prihlaseny and jmeno_uzivatele(current_user) != current_user.email
+               else (current_user.email if prihlaseny else None)),
+        ip=ip, druh=cista['druh'], zprava=cista['zprava'], url=cista['url'],
+        kontext=json.dumps(kontext, ensure_ascii=False), stav='nova')
+    soubor = None
+    if cista['snimek']:
+        obsah, pripona = cista['snimek']
+        ZPETNA_VAZBA_DIR.mkdir(parents=True, exist_ok=True)
+        jmeno = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid4().hex[:10]}.{pripona}"
+        soubor = ZPETNA_VAZBA_DIR / jmeno
+        soubor.write_bytes(obsah)
+        zaznam.snimek = jmeno
+    try:
+        db.session.add(zaznam)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        if soubor is not None:
+            soubor.unlink(missing_ok=True)
+        raise
+    return jsonify({'ok': True, 'id': zaznam.id}), 201
+
+
+def _soubor_snimku(zaznam):
+    """Cesta ke snímku, jen když opravdu leží ve složce snímků."""
+    if not zaznam.snimek or '/' in zaznam.snimek or '\\' in zaznam.snimek or zaznam.snimek.startswith('.'):
+        return None
+    return ZPETNA_VAZBA_DIR / zaznam.snimek
+
+
+def _cas_zpetne_vazby(cas):
+    dnes = datetime.now().date()
+    if cas.date() == dnes:
+        return f"dnes {cas:%H:%M}"
+    if cas.date() == dnes - timedelta(days=1):
+        return f"včera {cas:%H:%M}"
+    return cas.strftime('%-d. %-m. %Y %H:%M')
+
+
+@app.route('/sprava/zpetna-vazba')
+@login_required
+@jen_admin
+def sprava_zpetne_vazby():
+    zaznamy = ZpetnaVazba.query.order_by(ZpetnaVazba.cas.desc()).limit(1000).all()
+    uzivatele = {u.id: u for u in User.query.filter(
+        User.id.in_({z.user_id for z in zaznamy if z.user_id}))} if zaznamy else {}
+    radky = []
+    for z in zaznamy:
+        try:
+            kontext = json.loads(z.kontext or '{}')
+        except ValueError:
+            kontext = {}
+        if not isinstance(kontext, dict):
+            kontext = {}
+        u = uzivatele.get(z.user_id)
+        chyby = kontext.get('chybyJs') if isinstance(kontext.get('chybyJs'), list) else []
+        radky.append({
+            'id': z.id, 'cas': _cas_zpetne_vazby(z.cas), 'cas_iso': z.cas.isoformat(timespec='seconds'),
+            'druh': z.druh, 'druh_text': DRUHY_ZPETNE_VAZBY.get(z.druh, z.druh),
+            'zprava': z.zprava, 'url': z.url or '', 'stav': z.stav,
+            'autor_info': uzivatel_info(u) if u is not None else None,
+            # Účet mezitím smazaný: aspoň jméno z doby odeslání
+            'autor_text': z.autor if z.user_id else None,
+            'snimek': bool(_soubor_snimku(z)),
+            'kontext': kontext, 'chyby': [c for c in chyby if isinstance(c, dict)][:20],
+            'kontext_json': json.dumps(kontext, ensure_ascii=False, indent=2),
+        })
+    return render_template('sprava_zpetna_vazba.html', zpravy=radky, karta='zpetna-vazba',
+                           zapnuta=zpetna_vazba_zapnuta())
+
+
+def _zpetna_vazba_pro_spravu(zprava_id):
+    return db.session.get(ZpetnaVazba, zprava_id)
+
+
+@app.route('/sprava/zpetna-vazba/<int:zprava_id>/snimek')
+@login_required
+@jen_admin
+def sprava_snimek_zpetne_vazby(zprava_id):
+    zaznam = _zpetna_vazba_pro_spravu(zprava_id)
+    soubor = _soubor_snimku(zaznam) if zaznam else None
+    if soubor is None or not soubor.is_file():
+        abort(404)
+    odpoved = send_from_directory(str(ZPETNA_VAZBA_DIR), soubor.name)
+    odpoved.headers['Cache-Control'] = 'private, max-age=3600'
+    return odpoved
+
+
+@app.route('/api/sprava/zpetna-vazba/<int:zprava_id>/stav', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_stav_zpetne_vazby(zprava_id):
+    zaznam = _zpetna_vazba_pro_spravu(zprava_id)
+    if zaznam is None:
+        return jsonify({'ok': False, 'error': 'Zpráva nenalezena.'}), 404
+    stav = str((request.get_json(silent=True) or {}).get('stav') or '')
+    if stav not in STAVY_ZPETNE_VAZBY:
+        return jsonify({'ok': False, 'error': 'Neznámý stav.'}), 400
+    zaznam.stav = stav
+    db.session.commit()
+    return jsonify({'ok': True, 'stav': stav, 'novych': pocet_novych_zpetnych_vazeb()})
+
+
+@app.route('/api/sprava/zpetna-vazba/<int:zprava_id>/smazat', methods=['POST'])
+@login_required
+@jen_admin
+def sprava_smaz_zpetnou_vazbu(zprava_id):
+    zaznam = _zpetna_vazba_pro_spravu(zprava_id)
+    if zaznam is None:
+        return jsonify({'ok': False, 'error': 'Zpráva nenalezena.'}), 404
+    soubor = _soubor_snimku(zaznam)
+    db.session.delete(zaznam)
+    db.session.commit()
+    if soubor is not None:
+        soubor.unlink(missing_ok=True)
+    return jsonify({'ok': True, 'novych': pocet_novych_zpetnych_vazeb()})
 
 
 # ---------- Kopie a pozvánky ----------

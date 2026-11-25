@@ -413,6 +413,32 @@ class ZasahAdmina(db.Model):
     podrobnosti = db.Column(db.String, nullable=True)
 
 
+class ZpetnaVazba(db.Model):
+    """Zpráva ze záložky Zpětná vazba (static/js/zpetna-vazba.js): chyba, nápad nebo
+    cokoli jiného, s kontextem stránky a volitelně se snímkem obrazovky.
+
+    Snímek je soubor ve složce ZPETNA_VAZBA_DIR (app.py), v řádku je jen jeho jméno.
+    Autor je jako u záznamu zásahů i textem - zpráva má dávat smysl i po smazání účtu,
+    a proto `user_id` bez cizího klíče. Host a nepřihlášený mají `user_id` prázdné.
+    IP slouží jen brzdě proti zahlcení (tolik zpráv z jedné adresy za hodinu) - počítá
+    se z databáze, ať platí napříč workery gunicornu.
+    """
+
+    __tablename__ = "zpetna_vazba"
+
+    id = db.Column(db.Integer, primary_key=True)
+    cas = db.Column(db.DateTime, nullable=False, index=True)
+    user_id = db.Column(db.Integer, nullable=True, index=True)
+    autor = db.Column(db.String, nullable=True)
+    ip = db.Column(db.String, nullable=True, index=True)
+    druh = db.Column(db.String, nullable=False, default='jine')       # chyba | napad | jine
+    zprava = db.Column(db.Text, nullable=False)
+    url = db.Column(db.String, nullable=True)
+    kontext = db.Column(db.Text, nullable=True)                       # JSON
+    stav = db.Column(db.String, nullable=False, default='nova', index=True)   # nova | vyresena
+    snimek = db.Column(db.String, nullable=True)
+
+
 class UserSongbookAccess(db.Model):
     __tablename__ = "user_songbook_access"
 

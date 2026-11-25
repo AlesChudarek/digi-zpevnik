@@ -1003,6 +1003,18 @@ kdo maže.
       konkrétního zpěvníku. Háček: offline se uživatel nepřihlásí, takže by čtečka musela
       umět běžet z cache bez ověření session. Výrazně by tomu pomohly náhledové verze.
 
+## Zpětná vazba
+
+- [X] (25. 11.) záložka „Zpětná vazba“ u pravého okraje na všech stránkách (převzato
+      z periodikum_cropper / ČDK): Chyba / Nápad / Jiné, snímek obrazovky (pořídit, soubor,
+      schránka), kontext (adresa, prohlížeč, chyby JS, u editoru stran strana). Tabulka
+      `zpetna_vazba`, snímky v `data/zpetna-vazba/` (ne pod images - ty jsou veřejné),
+      brzda 30/h na IP, vypínač `ZPETNA_VAZBA=0`. Správa: čtvrtá karta Zpětná vazba
+      (Nové / Vyřešené / Vše, detail se snímkem, vyřešit, smazat). Test `test_zpetna_vazba`.
+- [ ] rozhodnout s Alešem: smějí posílat hosté (teď ano)? Mají zprávy zmizet se smazáním
+      účtu (teď zůstávají se jménem z doby odeslání)? Mazat staré IP? Zapisovat vyřešení
+      a smazání do Záznamu zásahů? Na serveru nasadit (tabulka vznikne sama).
+
 ## Velké projekty na později
 
 > Nezačínat, dokud nejsou hotové a odladěné úkoly výš. Zapsané, ať se na ně nezapomene.

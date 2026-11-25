@@ -24,6 +24,9 @@
   border-radius: 12px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22); overflow: hidden;
 }
 .navrh.bez-panelu { grid-template-columns: 64px minmax(0, 1fr) 0; }
+/* Záložka Zpětná vazba u pravého okraje okna (zpetna-vazba.css): editor jde až k okraji,
+   bez místa by záložka zakryla kraj panelu s poli. */
+body:has(.zv-zalozka:not([hidden])) .navrh { margin-right: 34px; }
 .navrh.bez-panelu .navrh-panel { display: none; }
 
 /* Společný vzhled tlačítek ovládání (hlavička, nástroje, kontextová lišta). */

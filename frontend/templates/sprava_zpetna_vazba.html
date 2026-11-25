@@ -1,0 +1,192 @@
+{% extends "dashboard_base.html" %}
+{% from "_sprava_makra.html" import kdo %}
+{% block title %}Zpětná vazba{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{{ static_bust('css/sprava.css') }}">
+<div class="sprava">
+  <h1>Zpětná vazba</h1>
+  {% include "_sprava_karty.html" %}
+
+  <div class="sprava-panel">
+    <div class="sprava-filtry" role="radiogroup" aria-label="Stav zpráv">
+      <label><input type="radio" name="zv-stav" value="nova" checked> Nové (<span data-pocet="nova">0</span>)</label>
+      <label><input type="radio" name="zv-stav" value="vyresena"> Vyřešené (<span data-pocet="vyresena">0</span>)</label>
+      <label><input type="radio" name="zv-stav" value="vse"> Vše (<span data-pocet="vse">0</span>)</label>
+      {% if not zapnuta %}<span class="sprava-pocet">Záložka je vypnutá (ZPETNA_VAZBA=0), nové zprávy nepřicházejí.</span>{% endif %}
+    </div>
+
+    <div class="sz-mrizka zv sz-hlavicka" aria-hidden="true">
+      <span>Kdy</span><span>Druh</span><span>Zpráva</span><span>Autor</span>
+    </div>
+
+    <div id="zv-seznam">
+      {% for z in zpravy %}
+      <div class="sz-radek zv-radek" id="zv-{{ z.id }}" data-id="{{ z.id }}" data-stav="{{ z.stav }}">
+        <div class="sz-mrizka zv sz-souhrn" role="button" tabindex="0" aria-expanded="false">
+          <div class="sz-udaj zv-kdy" title="{{ z.cas_iso }}"><span class="sz-popisek">Kdy:</span>{{ z.cas }}</div>
+          <div class="sz-udaj"><span class="sz-popisek">Druh:</span><span class="sz-stitek zv-druh zv-druh-{{ z.druh }}">{{ z.druh_text }}</span></div>
+          <div class="zv-zacatek"><span class="sz-stitek zv-vyreseno" {% if z.stav != 'vyresena' %}hidden{% endif %}>vyřešeno</span>{{ z.zprava|truncate(160, True, '…') }}</div>
+          <div class="sz-udaj"><span class="sz-popisek">Autor:</span>
+            {%- if z.autor_info %}{{ kdo(z.autor_info, 22) }}
+            {%- elif z.autor_text %}<span>{{ z.autor_text }} <span class="sz-ztlumene">(účet smazán)</span></span>
+            {%- else %}<span class="sz-ztlumene">host</span>{% endif %}</div>
+        </div>
+        <div class="sz-detail" hidden>
+          <p class="zv-zprava">{{ z.zprava }}</p>
+
+          {% if z.url %}
+          <h3>Stránka</h3>
+          <p class="zv-url">{% if z.url.startswith('http://') or z.url.startswith('https://') %}<a href="{{ z.url }}" target="_blank" rel="noopener">{{ z.url }}</a>{% else %}{{ z.url }}{% endif %}</p>
+          {% endif %}
+
+          {% if z.snimek %}
+          <h3>Snímek obrazovky</h3>
+          <a class="zv-snimek-odkaz" href="{{ url_for('sprava_snimek_zpetne_vazby', zprava_id=z.id) }}" target="_blank" rel="noopener">
+            <img class="zv-snimek" data-src="{{ url_for('sprava_snimek_zpetne_vazby', zprava_id=z.id) }}" alt="Snímek obrazovky">
+          </a>
+          {% endif %}
+
+          <h3>Kontext</h3>
+          {% set k = z.kontext %}
+          <dl class="zv-kontext">
+            {% if k.titulek %}<dt>Titulek stránky</dt><dd>{{ k.titulek }}</dd>{% endif %}
+            {% if k.userAgent %}<dt>Prohlížeč</dt><dd>{{ k.userAgent }}</dd>{% endif %}
+            {% if k.viewport %}<dt>Okno</dt><dd>{{ k.viewport }}{% if k.pomerPixelu %} <span class="sz-ztlumene">(poměr pixelů {{ k.pomerPixelu }})</span>{% endif %}</dd>{% endif %}
+            {% if k.jazyk %}<dt>Jazyk</dt><dd>{{ k.jazyk }}</dd>{% endif %}
+            {% if k.motiv %}<dt>Motiv</dt><dd>{{ k.motiv }}</dd>{% endif %}
+            {% if k.uzivatel and k.uzivatel.role %}<dt>Role</dt><dd>{{ k.uzivatel.role }}</dd>{% endif %}
+            {% if k.editorStran %}<dt>Editor stran</dt><dd>{{ k.editorStran.adresa or '' }}{% if k.editorStran.prvku is number %} <span class="sz-ztlumene">({{ k.editorStran.prvku }} prvků)</span>{% endif %}</dd>{% endif %}
+            {% if k.oriznuto %}<dt>Kontext</dt><dd>byl příliš velký, uložila se jen adresa</dd>{% endif %}
+          </dl>
+
+          {% if z.chyby %}
+          <h3>Chyby JavaScriptu ({{ z.chyby|length }})</h3>
+          <ul class="zv-chyby">
+            {% for c in z.chyby %}
+            <li><code>{{ c.zprava }}</code>{% if c.zdroj %} <span class="sz-ztlumene">{{ c.zdroj }}</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          <details class="zv-json">
+            <summary>Celý kontext (JSON)</summary>
+            <pre>{{ z.kontext_json }}</pre>
+          </details>
+
+          <div class="sz-akce">
+            <button type="button" class="btn" data-akce="stav">{{ 'Vrátit mezi nové' if z.stav == 'vyresena' else 'Označit jako vyřešené' }}</button>
+            <button type="button" class="btn nebezpecne" data-akce="smazat">Smazat</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="sprava-prazdne" id="zv-prazdne" hidden>Žádná zpráva.</div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const seznam = document.getElementById('zv-seznam');
+  let radky = Array.from(seznam.querySelectorAll('.zv-radek'));
+  const volby = Array.from(document.querySelectorAll('input[name="zv-stav"]'));
+  const PRAZDNE = { nova: 'Žádná nová zpráva.', vyresena: 'Žádná vyřešená zpráva.', vse: 'Zatím žádná zpráva.' };
+
+  // Filtr je v adrese (?stav=), ať přežije znovunačtení a dá se poslat odkazem.
+  const zAdresy = new URLSearchParams(location.search).get('stav');
+  volby.forEach(v => { if (v.value === zAdresy) v.checked = true; });
+  const filtr = () => (volby.find(v => v.checked) || volby[0]).value;
+
+  function prepni(radek, otevrit) {
+    otevrit = otevrit ?? !radek.classList.contains('otevreny');
+    // Otevřený je vždycky nejvýš jeden řádek - stejně jako v ostatních seznamech správy.
+    if (otevrit) radky.forEach(r => { if (r !== radek && r.classList.contains('otevreny')) prepni(r, false); });
+    radek.classList.toggle('otevreny', otevrit);
+    radek.querySelector('.sz-detail').hidden = !otevrit;
+    radek.querySelector('.sz-souhrn').setAttribute('aria-expanded', otevrit ? 'true' : 'false');
+    // Snímek se stahuje až při otevření - seznam jich může mít stovky.
+    const img = radek.querySelector('img.zv-snimek[data-src]');
+    if (otevrit && img) { img.src = img.dataset.src; img.removeAttribute('data-src'); }
+  }
+
+  function prepocitej() {
+    const f = filtr();
+    const pocty = { nova: 0, vyresena: 0, vse: radky.length };
+    let videt = 0;
+    radky.forEach(r => {
+      pocty[r.dataset.stav] = (pocty[r.dataset.stav] || 0) + 1;
+      const ok = f === 'vse' || r.dataset.stav === f;
+      if (!ok && r.classList.contains('otevreny')) prepni(r, false);
+      r.hidden = !ok;
+      if (ok) videt++;
+    });
+    document.querySelectorAll('[data-pocet]').forEach(el => { el.textContent = pocty[el.dataset.pocet] || 0; });
+    const prazdne = document.getElementById('zv-prazdne');
+    prazdne.textContent = PRAZDNE[f];
+    prazdne.hidden = videt > 0;
+    const vKarte = document.getElementById('zv-pocet-novych');
+    if (vKarte) { vKarte.textContent = pocty.nova; vKarte.hidden = !pocty.nova; }
+  }
+  volby.forEach(v => v.addEventListener('change', () => {
+    const adresa = new URL(location.href);
+    if (filtr() === 'nova') adresa.searchParams.delete('stav'); else adresa.searchParams.set('stav', filtr());
+    history.replaceState(null, '', adresa.pathname + adresa.search + adresa.hash);
+    prepocitej();
+  }));
+
+  radky.forEach(r => {
+    const souhrn = r.querySelector('.sz-souhrn');
+    souhrn.addEventListener('click', () => prepni(r));
+    souhrn.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); prepni(r); }
+    });
+  });
+
+  async function posli(url, telo, nadpisChyby) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(telo || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) { oznam(data.error || `Chyba serveru ${res.status}.`, { nadpis: nadpisChyby }); return null; }
+      return data;
+    } catch (_) {
+      oznam('Server neodpověděl. Příčinou bývá výpadek připojení.', { nadpis: 'Spojení se serverem selhalo' });
+      return null;
+    }
+  }
+
+  seznam.addEventListener('click', async e => {
+    const tlacitko = e.target.closest('button[data-akce]');
+    if (!tlacitko) return;
+    const radek = tlacitko.closest('.zv-radek');
+    const zakl = `/api/sprava/zpetna-vazba/${radek.dataset.id}`;
+    if (tlacitko.dataset.akce === 'stav') {
+      const novy = radek.dataset.stav === 'vyresena' ? 'nova' : 'vyresena';
+      tlacitko.disabled = true;
+      const data = await posli(`${zakl}/stav`, { stav: novy }, 'Změna stavu se nepovedla');
+      tlacitko.disabled = false;
+      if (!data) return;
+      radek.dataset.stav = data.stav;
+      tlacitko.textContent = data.stav === 'vyresena' ? 'Vrátit mezi nové' : 'Označit jako vyřešené';
+      radek.querySelector('.zv-vyreseno').hidden = data.stav !== 'vyresena';
+      prepocitej();
+    } else if (tlacitko.dataset.akce === 'smazat') {
+      if (!(await showConfirm('Smazat zprávu i se snímkem obrazovky? Akce je nevratná.', 'Smazat', { nebezpecne: true }))) return;
+      if (!(await posli(`${zakl}/smazat`, null, 'Smazání se nepovedlo'))) return;
+      radek.remove();
+      radky = radky.filter(r => r !== radek);
+      prepocitej();
+    }
+  });
+
+  prepocitej();
+  const zKotvy = location.hash && document.getElementById(location.hash.slice(1));
+  if (zKotvy && zKotvy.classList.contains('zv-radek') && !zKotvy.hidden) {
+    prepni(zKotvy, true);
+    zKotvy.scrollIntoView({ block: 'center' });
+  }
+})();
+</script>
+{% endblock %}

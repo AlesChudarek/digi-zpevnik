@@ -3,4 +3,6 @@
   <a href="{{ url_for('sprava_zpevniku') }}" {% if karta == 'zpevniky' %}class="aktivni" aria-current="page"{% endif %}>Všechny zpěvníky</a>
   <a href="{{ url_for('sprava_uzivatelu') }}" {% if karta == 'uzivatele' %}class="aktivni" aria-current="page"{% endif %}>Uživatelé</a>
   <a href="{{ url_for('sprava_zaznam') }}" {% if karta == 'zaznam' %}class="aktivni" aria-current="page"{% endif %}>Záznam zásahů</a>
+  {% set novych = pocet_novych_zpetnych_vazeb() %}
+  <a href="{{ url_for('sprava_zpetne_vazby') }}" {% if karta == 'zpetna-vazba' %}class="aktivni" aria-current="page"{% endif %}>Zpětná vazba<span class="sprava-karty-pocet" id="zv-pocet-novych" {% if not novych %}hidden{% endif %}>{{ novych }}</span></a>
 </nav>
