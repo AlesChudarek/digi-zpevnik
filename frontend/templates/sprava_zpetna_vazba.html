@@ -28,8 +28,7 @@
           <div class="zv-zacatek"><span class="sz-stitek zv-vyreseno" {% if z.stav != 'vyresena' %}hidden{% endif %}>vyřešeno</span>{{ z.zprava|truncate(160, True, '…') }}</div>
           <div class="sz-udaj"><span class="sz-popisek">Autor:</span>
             {%- if z.autor_info %}{{ kdo(z.autor_info, 22) }}
-            {%- elif z.autor_text %}<span>{{ z.autor_text }} <span class="sz-ztlumene">(účet smazán)</span></span>
-            {%- else %}<span class="sz-ztlumene">host</span>{% endif %}</div>
+            {%- else %}<span class="sz-ztlumene">{{ z.anonym }}</span>{% endif %}</div>
         </div>
         <div class="sz-detail" hidden>
           <p class="zv-zprava">{{ z.zprava }}</p>

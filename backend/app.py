@@ -678,7 +678,7 @@ def _dopln_chybejici_sloupce():
                                  ('verze_prihlaseni', 'INTEGER NOT NULL DEFAULT 0'),
                                  ('zamceno_od', 'DATETIME'), ('zamky_email', 'DATETIME'),
                                  ('nemazat', 'BOOLEAN NOT NULL DEFAULT 0'),
-                                 ('neaktivita_email', 'DATETIME')):
+                                 ('neaktivita_email', 'DATETIME'), ('novinky_videne', 'TEXT')):
                 if uzivatele and sloupec not in uzivatele:
                     db.session.execute(text(f"ALTER TABLE users ADD COLUMN {sloupec} {typ}"))
                     db.session.commit()
@@ -691,6 +691,10 @@ def _dopln_chybejici_sloupce():
             if strany_sl and 'navrzena_id' not in strany_sl:
                 db.session.execute(text(
                     "ALTER TABLE strany ADD COLUMN navrzena_id INTEGER REFERENCES navrzene_strany(id)"))
+                db.session.commit()
+            # Zpětná vazba: IP adresy se neukládají (posílá jen přihlášený, brzda je na
+            # účet) - co zbylo z doby, kdy se ukládaly, pryč.
+            if db.session.execute(text("UPDATE zpetna_vazba SET ip = NULL WHERE ip IS NOT NULL")).rowcount:
                 db.session.commit()
             sloupce = {r[1] for r in db.session.execute(text("PRAGMA table_info(images)"))}
             if sloupce and 'velikost' not in sloupce:
@@ -1964,6 +1968,17 @@ def zrus_ucet(user, co_se_stalo, prevest_k=None):
     # Navržené strany ve sdílených a převedených zpěvnících zůstávají; nepoužité smaže
     # úklid (_uklid_neulozenych_navrhu).
     db.session.query(NavrzenaStrana).filter_by(vlastnik_id=uid).update({'vlastnik_id': None})
+    # Zpětná vazba zůstane (pro vývoj je cenná), ale bez autora: jméno, e-mail a účet
+    # i z kontextu pryč.
+    for zv in ZpetnaVazba.query.filter_by(user_id=uid):
+        try:
+            kontext = json.loads(zv.kontext or '{}')
+        except ValueError:
+            kontext = {}
+        if isinstance(kontext, dict):
+            kontext['uzivatel'] = {'smazany': True}
+            zv.kontext = json.dumps(kontext, ensure_ascii=False)
+        zv.user_id, zv.autor = None, None
     db.session.query(User).filter_by(id=uid).delete()
     if pred:
         zkontroluj_limity(pred)
@@ -3368,7 +3383,7 @@ STAVY_ZPETNE_VAZBY = {'nova': 'Nová', 'vyresena': 'Vyřešená'}
 ZV_MAX_ZPRAVA = 5000
 ZV_MAX_KONTEXT = 200_000        # JSON kontextu v znacích
 ZV_MAX_SNIMEK = 3_000_000       # data URL; klient posílá JPEG zmenšený na ≤ 1600 px
-ZV_ZA_HODINU = 30               # zpráv z jedné IP za hodinu
+ZV_ZA_HODINU = 30               # zpráv z jednoho účtu za hodinu
 _ZV_SNIMEK_RE = re.compile(r'^data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$')
 
 
@@ -3432,10 +3447,12 @@ def _zkontroluj_zpetnou_vazbu(data):
 
 @app.route('/api/zpetna-vazba', methods=['POST'])
 def odeslat_zpetnou_vazbu():
-    """Zpráva ze záložky Zpětná vazba. Smí ji poslat kdokoli, i host - hlásit chybu
-    nemá být podmíněné účtem. Proti zahlcení brzda na IP."""
+    """Zpráva ze záložky Zpětná vazba. Jen pro přihlášený účet (ne hosta) - Aleš
+    25. 11.; proti zahlcení brzda na účet."""
     if not zpetna_vazba_zapnuta():
         return jsonify({'ok': False, 'error': 'Zpětná vazba je vypnutá.'}), 404
+    if not current_user.is_authenticated or is_guest(current_user):
+        return jsonify({'ok': False, 'error': 'Zpětnou vazbu jde poslat po přihlášení.'}), 401
     # JSON se snímkem má nejvýš kolem 3,2 MB; víc ani nečíst.
     if (request.content_length or 0) > ZV_MAX_SNIMEK + ZV_MAX_KONTEXT * 4 + 100_000:
         return jsonify({'ok': False, 'error': 'Zpráva je příliš velká.'}), 413
@@ -3447,23 +3464,19 @@ def odeslat_zpetnou_vazbu():
     except ChybaZpetneVazby as chyba:
         return jsonify({'ok': False, 'error': str(chyba)}), 400
 
-    ip = _ip_klienta()
     pred_hodinou = datetime.now() - timedelta(hours=1)
-    if ZpetnaVazba.query.filter(ZpetnaVazba.ip == ip, ZpetnaVazba.cas >= pred_hodinou).count() >= ZV_ZA_HODINU:
-        return jsonify({'ok': False, 'error': 'Z této adresy přišlo za poslední hodinu příliš mnoho zpráv. '
+    if ZpetnaVazba.query.filter(ZpetnaVazba.user_id == current_user.id, ZpetnaVazba.cas >= pred_hodinou).count() >= ZV_ZA_HODINU:
+        return jsonify({'ok': False, 'error': 'Za poslední hodinu odešlo z tohoto účtu příliš mnoho zpráv. '
                                               'Další půjde odeslat později.'}), 429
 
-    prihlaseny = current_user.is_authenticated and not is_guest(current_user)
     kontext = dict(cista['kontext'])
     kontext['userAgent'] = (request.headers.get('User-Agent') or '')[:400]
-    kontext['uzivatel'] = ({'id': current_user.id, 'email': current_user.email, 'role': current_user.role}
-                           if prihlaseny else {'host': True})
+    kontext['uzivatel'] = {'id': current_user.id, 'email': current_user.email, 'role': current_user.role}
     zaznam = ZpetnaVazba(
-        cas=datetime.now(), user_id=current_user.id if prihlaseny else None,
+        cas=datetime.now(), user_id=current_user.id,
         autor=(f"{jmeno_uzivatele(current_user)} ({current_user.email})"
-               if prihlaseny and jmeno_uzivatele(current_user) != current_user.email
-               else (current_user.email if prihlaseny else None)),
-        ip=ip, druh=cista['druh'], zprava=cista['zprava'], url=cista['url'],
+               if jmeno_uzivatele(current_user) != current_user.email else current_user.email),
+        ip=None, druh=cista['druh'], zprava=cista['zprava'], url=cista['url'],
         kontext=json.dumps(kontext, ensure_ascii=False), stav='nova')
     soubor = None
     if cista['snimek']:
@@ -3522,14 +3535,21 @@ def sprava_zpetne_vazby():
             'druh': z.druh, 'druh_text': DRUHY_ZPETNE_VAZBY.get(z.druh, z.druh),
             'zprava': z.zprava, 'url': z.url or '', 'stav': z.stav,
             'autor_info': uzivatel_info(u) if u is not None else None,
-            # Účet mezitím smazaný: aspoň jméno z doby odeslání
-            'autor_text': z.autor if z.user_id else None,
+            # Bez účtu: smazaný (zpráva je zanonymizovaná), u starých zpráv host
+            'anonym': 'host' if (kontext.get('uzivatel') or {}).get('host') else 'smazaný účet',
             'snimek': bool(_soubor_snimku(z)),
             'kontext': kontext, 'chyby': [c for c in chyby if isinstance(c, dict)][:20],
             'kontext_json': json.dumps(kontext, ensure_ascii=False, indent=2),
         })
     return render_template('sprava_zpetna_vazba.html', zpravy=radky, karta='zpetna-vazba',
                            zapnuta=zpetna_vazba_zapnuta())
+
+
+def _popis_zpetne_vazby(z):
+    """Řádek do záznamu zásahů: druh, od koho, kdy a začátek zprávy."""
+    zacatek = ' '.join(z.zprava.split())
+    zacatek = zacatek[:80] + ('…' if len(zacatek) > 80 else '')
+    return f"{DRUHY_ZPETNE_VAZBY.get(z.druh, z.druh)} od {z.autor or 'smazaného účtu'}, {z.cas:%-d. %-m. %Y %H:%M}: {zacatek}"
 
 
 def _zpetna_vazba_pro_spravu(zprava_id):
@@ -3559,6 +3579,9 @@ def sprava_stav_zpetne_vazby(zprava_id):
     stav = str((request.get_json(silent=True) or {}).get('stav') or '')
     if stav not in STAVY_ZPETNE_VAZBY:
         return jsonify({'ok': False, 'error': 'Neznámý stav.'}), 400
+    if zaznam.stav != stav:
+        zapis_zasah('označil zpětnou vazbu za vyřešenou' if stav == 'vyresena' else 'vrátil zpětnou vazbu mezi nové',
+                    podrobnosti=_popis_zpetne_vazby(zaznam))
     zaznam.stav = stav
     db.session.commit()
     return jsonify({'ok': True, 'stav': stav, 'novych': pocet_novych_zpetnych_vazeb()})
@@ -3572,6 +3595,7 @@ def sprava_smaz_zpetnou_vazbu(zprava_id):
     if zaznam is None:
         return jsonify({'ok': False, 'error': 'Zpráva nenalezena.'}), 404
     soubor = _soubor_snimku(zaznam)
+    zapis_zasah('smazal zpětnou vazbu', podrobnosti=_popis_zpetne_vazby(zaznam))
     db.session.delete(zaznam)
     db.session.commit()
     if soubor is not None:

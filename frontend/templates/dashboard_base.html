@@ -12,8 +12,8 @@
   <link rel="stylesheet" href="{{ static_bust('css/okna.css') }}">
   <link rel="stylesheet" href="{{ static_bust('css/profil.css') }}">
   <link rel="stylesheet" href="{{ static_bust('css/pratele.css') }}">
-  {% if zpetna_vazba_zapnuta() %}
-  {# Záložka Zpětná vazba u pravého okraje. Bez defer schválně: sbírá chyby JavaScriptu
+  {% if zpetna_vazba_zapnuta() and current_user.is_authenticated and current_user.role != 'guest' %}
+  {# Jen přihlášený účet (ne host). Záložka Zpětná vazba u pravého okraje. Bez defer schválně: sbírá chyby JavaScriptu
      od začátku načítání stránky, formulář si postaví až po DOMContentLoaded. #}
   <link rel="stylesheet" href="{{ static_bust('css/zpetna-vazba.css') }}">
   <script src="{{ static_bust('js/zpetna-vazba.js') }}"></script>

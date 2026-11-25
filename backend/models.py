@@ -113,6 +113,9 @@ class User(db.Model, UserMixin):
     # (testovací účty), `neaktivita_email` kdy odešlo upozornění, že se účet smaže.
     nemazat = db.Column(db.Boolean, nullable=False, default=False, server_default='0')
     neaktivita_email = db.Column(db.DateTime, nullable=True)
+    # Novinky: poslední verze s novými funkcemi (x.y.0), kterou účet viděl. Tečka
+    # u účtu svítí, dokud není stejná jako nejnovější taková verze (verze.py).
+    novinky_videne = db.Column(db.String, nullable=True)
 
     def get_id(self):
         return f"{self.id}:{self.verze_prihlaseni or 0}"
@@ -420,8 +423,10 @@ class ZpetnaVazba(db.Model):
     Snímek je soubor ve složce ZPETNA_VAZBA_DIR (app.py), v řádku je jen jeho jméno.
     Autor je jako u záznamu zásahů i textem - zpráva má dávat smysl i po smazání účtu,
     a proto `user_id` bez cizího klíče. Host a nepřihlášený mají `user_id` prázdné.
-    IP slouží jen brzdě proti zahlcení (tolik zpráv z jedné adresy za hodinu) - počítá
-    se z databáze, ať platí napříč workery gunicornu.
+    Posílat smí jen přihlášený účet; brzda proti zahlcení je na účet (počítá se
+    z databáze, ať platí napříč workery). Sloupec `ip` se už neplní a staré hodnoty
+    se při startu mažou - IP není k ničemu potřeba. Po smazání účtu zpráva zůstane
+    bez autora (zrus_ucet).
     """
 
     __tablename__ = "zpetna_vazba"

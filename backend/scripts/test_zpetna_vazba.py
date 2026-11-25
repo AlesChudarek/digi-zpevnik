@@ -101,8 +101,18 @@ def radek(zid):
 
 
 def api():
+    print("\n── API: jen přihlášený účet ──")
+    kod, d = posli(klient(), {"zprava": "nepřihlášený"})
+    zkontroluj(kod == 401 and "přihlášení" in d.get("error", ""), "nepřihlášený → 401", (kod, d))
+    with A.app.app_context():
+        host_id = A.User.query.filter_by(role="guest").first().id
+    kod, d = posli(klient(host_id), {"zprava": "od hosta"})
+    zkontroluj(kod == 401, "host → 401", (kod, d))
+    zkontroluj("zpetna-vazba.js" not in klient(host_id).get("/my-songbooks").get_data(as_text=True),
+               "host záložku nevidí")
+
     print("\n── API: validace ──")
-    c = klient()
+    c = klient(USER_ID)
     kod, d = posli(c, {"zprava": "   "})
     zkontroluj(kod == 400 and "prázdná" in d.get("error", ""), "prázdná zpráva → 400", (kod, d))
     kod, d = posli(c, {"zprava": "x" * 5001})
@@ -122,32 +132,43 @@ def api():
     r2 = c.post("/api/zpetna-vazba", data="nejson", content_type="application/json")
     zkontroluj(r2.status_code == 400, "nevalidní JSON → 400", r2.status_code)
 
-    print("\n── API: snímek, host a přihlášený ──")
+    print("\n── API: snímek a přihlášený ──")
     soubory_pred = set(A.ZPETNA_VAZBA_DIR.glob("*")) if A.ZPETNA_VAZBA_DIR.exists() else set()
-    kod, d = posli(c, {"zprava": "host se snímkem", "druh": "chyba", "url": "http://localhost/x",
+    kod, d = posli(c, {"zprava": "se snímkem", "druh": "chyba", "url": "http://localhost/x",
                        "snimek": data_url(obrazek()), "kontext": {"viewport": "1×1"}})
     r = radek(d.get("id")) if kod == 201 else None
-    zkontroluj(kod == 201 and r["user_id"] is None and r["druh"] == "chyba", "nepřihlášený smí poslat, bez uživatele", (kod, r))
+    zkontroluj(kod == 201 and r["user_id"] == USER_ID and r["druh"] == "chyba", "přihlášený pošle zprávu se snímkem", (kod, r))
+    with A.app.app_context():
+        zkontroluj(A.ZpetnaVazba.query.filter(A.ZpetnaVazba.ip.isnot(None)).count() == 0, "IP adresa se neukládá")
     soubor = A.ZPETNA_VAZBA_DIR / (r["snimek"] or "-") if r else None
     zkontroluj(soubor and soubor.is_file() and soubor.suffix == ".png"
                and set(A.ZPETNA_VAZBA_DIR.glob("*")) - soubory_pred == {soubor},
                "snímek je soubor ve složce snímků (ne v DB)", soubor)
-    zkontroluj(r and r["kontext"].get("uzivatel") == {"host": True} and "userAgent" in r["kontext"],
-               "server doplní uživatele (host) a userAgent", r and r["kontext"])
-
-    with A.app.app_context():
-        host_id = A.User.query.filter_by(role="guest").first().id
-    kod, d = posli(klient(host_id), {"zprava": "od hosta"})
-    zkontroluj(kod == 201 and radek(d["id"])["user_id"] is None, "účet hosta se ukládá jako host", (kod, d))
+    zkontroluj(r and (r["kontext"].get("uzivatel") or {}).get("email") == "user@test.com" and "userAgent" in r["kontext"],
+               "server doplní uživatele a userAgent", r and r["kontext"])
     kod, d = posli(klient(USER_ID), {"zprava": "od uživatele", "snimek": data_url(obrazek(fmt="JPEG"), "image/jpeg")})
     r = radek(d.get("id")) if kod == 201 else None
     zkontroluj(r and r["user_id"] == USER_ID and r["kontext"]["uzivatel"]["email"] == "user@test.com"
                and r["snimek"].endswith(".jpg"), "přihlášený: uživatel i e-mail v kontextu, JPEG snímek", r)
 
-    print("\n── API: brzda 30 zpráv za hodinu na IP ──")
-    kody = [posli(c, {"zprava": f"spam {i}"}, ip="10.99.0.1")[0] for i in range(31)]
+    print("\n── API: brzda 30 zpráv za hodinu na účet ──")
+    with A.app.app_context():
+        spamer = A.User(email="spamer@test.com", password=generate_password_hash(HESLO, method="pbkdf2:sha256"), role="user")
+        A.db.session.add(spamer)
+        A.db.session.commit()
+        spamer_id = spamer.id
+    s2 = klient(spamer_id)
+    kody = [posli(s2, {"zprava": f"spam {i}"})[0] for i in range(31)]
     zkontroluj(kody[:30] == [201] * 30 and kody[30] == 429, "30 projde, 31. → 429", kody[-3:])
-    zkontroluj(posli(c, {"zprava": "jiná IP"}, ip="10.99.0.2")[0] == 201, "jiná IP dál smí")
+    zkontroluj(posli(c, {"zprava": "jiný účet"})[0] == 201, "jiný účet dál smí")
+
+    print("\n── smazaný účet: zprávy zůstanou bez autora ──")
+    with A.app.app_context():
+        A.zrus_ucet(A.db.session.get(A.User, spamer_id), "{nazev}")
+        zbyle = A.ZpetnaVazba.query.filter(A.ZpetnaVazba.zprava.like("spam %")).all()
+        anonymni = all(z.user_id is None and z.autor is None and json.loads(z.kontext)["uzivatel"] == {"smazany": True}
+                       and "spamer" not in z.kontext for z in zbyle)
+    zkontroluj(len(zbyle) == 30 and anonymni, "30 zpráv zůstalo, bez účtu, jména i e-mailu", len(zbyle))
 
     print("\n── vypínač ZPETNA_VAZBA=0 ──")
     os.environ["ZPETNA_VAZBA"] = "0"
@@ -376,13 +397,7 @@ def prohlizec():
         hpage = hctx.new_page()
         hpage.goto(base + "/guest-login")
         hpage.wait_for_load_state("networkidle")
-        hpage.click(".zv-zalozka")
-        hpage.fill(".zv-text", "zpráva od hosta z prohlížeče")
-        hpage.click(".zv-okno .btn.primary")
-        hpage.wait_for_selector(".zv-podekovani:not([hidden])", timeout=5000)
-        with A.app.app_context():
-            r = radek(A.ZpetnaVazba.query.order_by(A.ZpetnaVazba.id.desc()).first().id)
-        zkontroluj(r["zprava"] == "zpráva od hosta z prohlížeče" and r["user_id"] is None, "host pošle zprávu", r["user_id"])
+        zkontroluj(hpage.locator(".zv-zalozka").count() == 0, "host záložku Zpětná vazba nemá")
         hctx.close()
 
         print("\n── kontrast ve všech motivech ──")
@@ -432,8 +447,8 @@ def prohlizec():
                     return [...r.children].map(c => c.textContent.trim().replace(/\\s+/g, ' ')); })()})""")
         zkontroluj(s["aktivni"].startswith("Zpětná vazba") and s["radku"] == novych and s["nove"] == str(novych)
                    and s["otevrene"] == 0, "seznam nových zpráv, nic nerozbalené", s)
-        zkontroluj(len(s["prvni"]) == 4 and s["prvni"][3].endswith("host"),
-                   "řádek: čas, druh, začátek zprávy, autor (host)", s["prvni"])
+        zkontroluj(len(s["prvni"]) == 4 and s["prvni"][3].startswith("Autor:") and len(s["prvni"][3]) > 7,
+                   "řádek: čas, druh, začátek zprávy, autor", s["prvni"])
 
         sel = f"#zv-{zid}"
         apage.click(f"{sel} .sz-souhrn")
@@ -476,6 +491,10 @@ def prohlizec():
         apage.click(f"{sel} [data-akce=stav]")
         apage.wait_for_function(f"() => document.querySelector('{sel}').dataset.stav === 'nova'", timeout=3000)
         zkontroluj(radek(zid)["stav"] == "nova" and not apage.is_visible(sel), "Vrátit mezi nové", radek(zid)["stav"])
+        with A.app.app_context():
+            akce = [z.akce for z in A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).limit(2)]
+        zkontroluj(akce == ["vrátil zpětnou vazbu mezi nové", "označil zpětnou vazbu za vyřešenou"],
+                   "vyřešení i vrácení je v Záznamu zásahů", akce)
         apage.check("input[name=zv-stav][value=vse]")
         vse = apage.locator(".zv-radek:not([hidden])").count()
         with A.app.app_context():
@@ -493,6 +512,10 @@ def prohlizec():
         apage.click("#app-confirm-ok")
         apage.wait_for_function(f"() => !document.querySelector('{sel}')", timeout=3000)
         zkontroluj(radek(zid) is None and not snimek.exists(), "zpráva smazaná i se souborem snímku", snimek)
+        with A.app.app_context():
+            posl = A.ZasahAdmina.query.order_by(A.ZasahAdmina.id.desc()).first()
+        zkontroluj(posl.akce == "smazal zpětnou vazbu" and "user@test.com" in (posl.podrobnosti or "") and "První řádek" in (posl.podrobnosti or ""),
+                   "smazání je v Záznamu zásahů i s popisem zprávy", (posl.akce, posl.podrobnosti))
 
         print("\n── Správa: telefon ──")
         apage.set_viewport_size({"width": 390, "height": 800})
