@@ -160,8 +160,8 @@ def test_rozlozeni(page):
     page.wait_for_timeout(200)
     ok('ikony ovládání jsou vidět', all(w >= 16 for w in J("""[...document.querySelectorAll('.navrh-hlava svg, .navrh-nastroje svg, .navrh-kontext svg')]
        .filter(s => !s.closest('[hidden]') && s.closest('button, label, a, .kontext-stitek').offsetParent).map(s => s.getBoundingClientRect().width)""")))
-    ok('panel má záložky Styly, Akordy, Strana',
-       J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.textContent.trim())") == ['Styly', 'Akordy', 'Strana'])
+    ok('panel má záložky Styly a Akordy (vlastnosti strany jsou v liště, když není nic vybrané)',
+       J("[...document.querySelectorAll('[data-zalozka]')].map(b => b.textContent.trim())") == ['Styly', 'Akordy'])
     ok('na záložce Styly jsou styly odstavců',
        J("document.querySelector('[data-panel=\"text\"] > section:not([hidden])').textContent.includes('Styly odstavců')"))
     STAV = """(() => ({ vyber: document.getElementById('navrh').dataset.vyber, nastroj: document.getElementById('navrh').dataset.nastroj,
@@ -186,6 +186,25 @@ def test_rozlozeni(page):
     ok('nástroj Náplast vypne Akord, lišta ukáže druh a barvu nových náplastí, formátování textu ne',
        st['aktivni'] == ['naplast'] and st['stitek'] == 'Nová náplast' and not st['text']
        and J("!document.getElementById('tvar-druh').hidden && !document.getElementById('vybrany-tvar').hidden"), st)
+    # Tvary náplasti: elipsa tažením (se Shiftem kruh), trojúhelník.
+    page.click('[data-prikaz="naplast-elipsa"]')
+    ok('druh Elipsa: štítek nástroje to říká', 'elipsa' in J("document.querySelector('#navrh-rezim .rezim-text').textContent"))
+    sr = J("document.getElementById('stranka').getBoundingClientRect().toJSON()")
+    x0, y0 = sr['x'] + sr['width'] * 0.3, sr['y'] + sr['height'] * 0.85
+    pocet = "(() => { let n = 0; navrhStrany.view.state.doc.forEach(u => { if (u.type.name === 'tvar') n++; }); return n; })()"
+    pred = J(pocet)
+    page.keyboard.down('Shift')
+    page.mouse.move(x0, y0); page.mouse.down(); page.mouse.move(x0 + 60, y0 + 25, steps=5); page.mouse.up()
+    page.keyboard.up('Shift')
+    a = J("navrhStrany.view.state.doc.lastChild.attrs")
+    ok('elipsa se Shiftem = kruh (stejná šířka a výška), mnohoúhelník z 36 bodů', J(pocet) == pred + 1
+       and abs(a['w'] - a['h']) < 0.2 and len(a['body'].split(' ')) == 36, a)
+    page.click('[data-prikaz="naplast-trojuhelnik"]')
+    page.mouse.move(x0 + 80, y0); page.mouse.down(); page.mouse.move(x0 + 120, y0 + 30, steps=5); page.mouse.up()
+    ok('trojúhelník', J("navrhStrany.view.state.doc.lastChild.attrs.body") == '0.5,0 1,1 0,1')
+    page.keyboard.press(f'{MOD}+z'); page.keyboard.press(f'{MOD}+z')
+    ok('Zpět oba tvary vrátí', J(pocet) == pred, J(pocet))
+    page.click('[data-prikaz="naplast-obdelnik"]')
     page.click('#navrh-rezim .rezim-konec')
     st = J(STAV)
     ok('× ve štítku nástroj ukončí (zpět Výběr)', st['aktivni'] == ['vybrat'] and not st['rezim'] and st['nastroj'] == '', st)
@@ -208,8 +227,9 @@ def test_rozlozeni(page):
     if prazdno:
         page.mouse.click(*prazdno)
         st = J(STAV)
-        ok('klik na prázdné místo strany výběr zruší (štítek Nic nevybráno, bez formátování textu)',
-           st['vyber'] == 'nic' and st['stitek'] == 'Nic nevybráno' and not st['text'] and not J("navrhStrany.view.hasFocus()"), st)
+        ok('klik na prázdné místo strany výběr zruší: štítek Strana, v liště formát strany, bez formátování textu',
+           st['vyber'] == 'nic' and st['stitek'] == 'Strana' and not st['text'] and not J("navrhStrany.view.hasFocus()")
+           and J("!document.querySelector('.navrh-kontext [data-pro=\"strana\"]').hidden"), st)
     J("navrhStrany.view.focus()")
     page.keyboard.press('Escape')
     ok('Esc v textu výběr zruší', J(STAV)['vyber'] == 'nic')

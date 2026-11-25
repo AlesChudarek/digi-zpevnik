@@ -1228,6 +1228,9 @@ kdo maže.
       náhled dvojstrany místo statického v panelu; tlačítko Číslo v levé liště zapne
       číslování a číslo vybere, Vypnout číslování u vybraného čísla); s nástrojem Náplast rámečky a obrázky
       na myš nereagují; nástroj Text přejmenovaný na „Nový text“ (vkládá rámeček).
+      25. 11.: Náplast umí i elipsu (36 bodů, se Shiftem kruh) a trojúhelník - místo zvláštních
+      Tvarů (Aleš: rozšířit náplast); záložka Strana v panelu zrušena, formát je v liště při
+      „nic nevybráno“ (klik na prázdnou stranu, štítek Strana) se zástupnými Pozadí a Vodítka.
       Hotovo 23. 11.: **vrstvy jako všude jinde** (Aleš: režimy podle nástroje nechtěl -
       „finiky“). Každý prvek má `z` (schéma 3), vyšší leží výš, při shodě pořadí
       v dokumentu. Pořadí uzlů záměrně vrstvou není - je to pořadí čtení (číslování slok

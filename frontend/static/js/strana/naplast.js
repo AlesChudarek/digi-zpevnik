@@ -1,7 +1,9 @@
 // Nástroj Náplast (jako Malování): zapne se tlačítkem v liště a zůstane zapnutý, dokud
 // se nevypne (znovu tlačítko, nebo Esc).
 //
-// - Obdélník: klik vloží malý obdélník, tažení obdélník podle tahu.
+// - Obdélník, elipsa, trojúhelník: klik vloží malý tvar, tažení tvar podle tahu (se
+//   Shiftem čtverec / kruh). Elipsa je mnohoúhelník z 36 bodů - schéma i PDF zůstávají
+//   u mnohoúhelníku.
 // - Volný tvar: každý klik přidá bod; tvar uzavře klik na první bod, dvojklik nebo
 //   Enter, Esc rozkreslený tvar zahodí.
 //
@@ -21,12 +23,21 @@ const PRVNI_BOD_PX = 8;         // klik tak blízko prvního bodu tvar uzavře
 const r1 = (x) => Math.round(x * 10) / 10;
 const r4 = (x) => Math.round(x * 10000) / 10000;
 
+// Základní tvary: body v podílech obdélníku kolem (jako uzel tvar), null = obdélník.
+const BODY_ELIPSY = Array.from({ length: 36 }, (_, i) => {
+  const a = (i / 36) * 2 * Math.PI;
+  return `${r4(0.5 + 0.5 * Math.cos(a))},${r4(0.5 + 0.5 * Math.sin(a))}`;
+}).join(' ');
+export const TVARY = { obdelnik: null, elipsa: BODY_ELIPSY, trojuhelnik: '0.5,0 1,1 0,1' };
+const bodyVObdelniku = (body, x, y, w, h) => (body || '0,0 1,0 1,1 0,1').split(' ')
+  .map((b) => { const [bx, by] = b.split(',').map(Number); return [x + bx * w, y + by * h]; });
+
 export class NastrojNaplasti {
   // volby: view, stranka (prvek strany), koren (editor), meritko(), poZmene()
   constructor(volby) {
     this.v = volby;
     this.aktivni = false;
-    this.druh = 'obdelnik';     // obdelnik | volny
+    this.druh = 'obdelnik';     // obdelnik | elipsa | trojuhelnik | volny
     this.barva = '#ffffff';
     this.body = null;           // rozkreslený volný tvar: [[x, y] mm]
     this.nahled = document.createElementNS(NS, 'svg');
@@ -46,7 +57,7 @@ export class NastrojNaplasti {
   }
 
   nastavDruh(druh) {
-    this.druh = druh === 'volny' ? 'volny' : 'obdelnik';
+    this.druh = druh === 'volny' || druh in TVARY ? druh : 'obdelnik';
     this.zrusVolny();
     this.v.poZmene();
   }
@@ -86,24 +97,36 @@ export class NastrojNaplasti {
   tahObdelniku(e) {
     const [x0, y0] = this.mm(e);
     const sx = e.clientX, sy = e.clientY;
+    const body = TVARY[this.druh] ?? null;
     let tazeno = false;
+    // Obdélník tahu; se Shiftem stejná šířka a výška (čtverec, kruh).
+    const obdelnik = (ev) => {
+      let [x1, y1] = this.mm(ev);
+      if (ev.shiftKey) {
+        const d = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+        x1 = x0 + Math.sign(x1 - x0 || 1) * d;
+        y1 = y0 + Math.sign(y1 - y0 || 1) * d;
+      }
+      return { x: Math.min(x0, x1), y: Math.min(y0, y1), w: Math.abs(x1 - x0), h: Math.abs(y1 - y0) };
+    };
     const pohyb = (ev) => {
       if (!tazeno && Math.hypot(ev.clientX - sx, ev.clientY - sy) < KLIK_PX) return;
       tazeno = true;
-      const [x1, y1] = this.mm(ev);
-      this.ukazNahled([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true);
+      const o = obdelnik(ev);
+      this.ukazNahled(bodyVObdelniku(body, o.x, o.y, o.w, o.h), true);
     };
     const konec = (ev) => {
       window.removeEventListener('pointermove', pohyb);
       window.removeEventListener('pointerup', konec);
       this.skryjNahled();
       if (!tazeno) {
-        this.vloz({ x: r1(x0 - MALY.w / 2), y: r1(y0 - MALY.h / 2), w: MALY.w, h: MALY.h, body: null });
+        // Klik: malý tvar (kruh a trojúhelník stejně široké jako vysoké).
+        const m = body ? { w: MALY.w, h: MALY.w } : MALY;
+        this.vloz({ x: r1(x0 - m.w / 2), y: r1(y0 - m.h / 2), w: m.w, h: m.h, body });
         return;
       }
-      const [x1, y1] = this.mm(ev);
-      const x = Math.min(x0, x1), y = Math.min(y0, y1);
-      this.vloz({ x: r1(x), y: r1(y), w: Math.max(r1(Math.abs(x1 - x0)), 0.2), h: Math.max(r1(Math.abs(y1 - y0)), 0.2), body: null });
+      const o = obdelnik(ev);
+      this.vloz({ x: r1(o.x), y: r1(o.y), w: Math.max(r1(o.w), 0.2), h: Math.max(r1(o.h), 0.2), body });
     };
     window.addEventListener('pointermove', pohyb);
     window.addEventListener('pointerup', konec);

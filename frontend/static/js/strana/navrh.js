@@ -1851,9 +1851,11 @@ const PRIKAZY = {
   dvojstrana: () => nastavRezim(true),
   'naplast-obdelnik': () => naplast.nastavDruh('obdelnik'),
   'naplast-volny': () => naplast.nastavDruh('volny'),
+  'naplast-elipsa': () => naplast.nastavDruh('elipsa'),
+  'naplast-trojuhelnik': () => naplast.nastavDruh('trojuhelnik'),
 };
 
-const BEZ_FOKUSU = ['cislo', 'zkratky', 'panel', 'mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
+const BEZ_FOKUSU = ['cislo', 'zkratky', 'panel', 'mensi', 'vetsi', 'cela-strana', 'ramecek', 'obrazek', 'naplast', 'naplast-obdelnik', 'naplast-volny', 'naplast-elipsa', 'naplast-trojuhelnik', 'nahled', 'ulozit', 'predchozi-strana', 'dalsi-strana', 'jedna-strana', 'dvojstrana'];
 
 function napojListu() {
   for (const b of koren.querySelectorAll('[data-prikaz]')) {
@@ -1958,7 +1960,7 @@ function aktualizujListu() {
     else if (c === 'akordy') b.classList.toggle('aktivni', rezimAkordu);
     else if (c === 'naplast') b.classList.toggle('aktivni', !!naplast?.aktivni);
     else if (c === 'ramecek') b.classList.toggle('aktivni', !!nastrojTextu?.aktivni);
-    else if (c === 'naplast-obdelnik' || c === 'naplast-volny') b.classList.toggle('aktivni', naplast?.druh === c.slice(8));
+    else if (c.startsWith('naplast-')) b.classList.toggle('aktivni', naplast?.druh === c.slice(8));
     else if (c === 'tucne') b.classList.toggle('aktivni', souhrn.tucne === true);
     else if (c === 'kurziva') b.classList.toggle('aktivni', souhrn.kurziva === true);
     else if (c === 'podtrzeni') b.classList.toggle('aktivni', souhrn.podtrzeni === true);
@@ -2044,12 +2046,13 @@ function druhVyberu(state) {
   return sel.$from.parent.type === N.odstavec ? 'text' : 'nic';
 }
 
+const NAZVY_TVARU = { obdelnik: 'Obdélník', elipsa: 'Elipsa', trojuhelnik: 'Trojúhelník', volny: 'Volný tvar' };
 const zapnutyNastroj = () => (naplast?.aktivni ? 'naplast' : nastrojTextu?.aktivni ? 'text' : rezimAkordu ? 'akord' : null);
 const cisloMm = (x) => String(Math.round(x * 10) / 10).replace('.', ',');
 const POPISY_VYBERU = {
   text: ['i-ramecek', 'Text'], ramecek: ['i-ramecek', 'Rámeček'], akord: ['i-akord', 'Akord'],
   obrazek: ['i-obrazek', 'Obrázek'], podklad: ['i-obrazek', 'Podklad strany'], naplast: ['i-naplast', 'Náplast'],
-  nic: ['i-kurzor', 'Nic nevybráno'], cislo: ['i-cislo', 'Číslo strany'], 'nova-naplast': ['i-naplast', 'Nová náplast'], 'novy-ramecek': ['i-ramecek', 'Nový rámeček'],
+  nic: ['i-jedna-strana', 'Strana'], cislo: ['i-cislo', 'Číslo strany'], 'nova-naplast': ['i-naplast', 'Nová náplast'], 'novy-ramecek': ['i-ramecek', 'Nový rámeček'],
 };
 
 // Text s tučným začátkem (název výběru) - bez innerHTML, název akordu píše uživatel.
@@ -2071,6 +2074,7 @@ function obnovKontext(state) {
   const ukaz = new Set();
   if (druh === 'text' && nastroj !== 'naplast' && nastroj !== 'text') ukaz.add('text');
   if (nastroj === 'akord' || druh === 'akord') ukaz.add('akordy');
+  if (druh === 'nic' && !nastroj) ukaz.add('strana');
   const p = zvlastniVyber ? null : prvekVyberu(state);
   if (p && !p.node.attrs.podklad && !p.node.attrs.presah && druh !== 'akord' && nastroj !== 'text'
       && !(nastroj === 'naplast' && druh !== 'naplast')) ukaz.add('prvek');
@@ -2096,7 +2100,7 @@ function obnovKontext(state) {
   const sel = state.selection;
   stitek.querySelector('span').textContent = druh === 'akord' && klic === 'akord' && sel.node.attrs.n ? `Akord ${sel.node.attrs.n}` : nazev;
   el('kontext-napoveda').textContent = klic === 'novy-ramecek' ? 'Klik na stranu vloží rámeček, tažením jde nakreslit libovolně velký.'
-    : klic === 'nic' ? 'Klik do textu ho upraví, klik na obrázek, náplast nebo číslo strany je vybere. Nové prvky vkládají nástroje vlevo.' : '';
+    : klic === 'nic' ? 'Klik do textu ho upraví, na prvek ho vybere.' : '';
 
   // Stavový řádek: popis výběru, u nástroje jak s ním pracovat.
   const popis = el('navrh-popis');
@@ -2106,7 +2110,7 @@ function obnovKontext(state) {
   else if (nastroj === 'naplast' && druh !== 'naplast') {
     napisPopis(popis, 'Nástroj Náplast', naplast.druh === 'volny'
       ? 'klikáním body, tvar uzavře klik na první bod, dvojklik nebo Enter · Esc ukončí'
-      : 'klik vloží malý obdélník, tažení větší · Esc ukončí');
+      : `klik vloží ${{ obdelnik: 'malý obdélník', elipsa: 'malou elipsu', trojuhelnik: 'malý trojúhelník' }[naplast.druh]}, tažení větší${naplast.druh === 'trojuhelnik' ? '' : ` (se Shiftem ${naplast.druh === 'elipsa' ? 'kruh' : 'čtverec'})`} · Esc ukončí`);
   } else if (nastroj === 'text') napisPopis(popis, 'Nástroj Text', 'klik nebo tažení na straně vloží rámeček · Esc ukončí');
   else if (druh === 'akord') napisPopis(popis, `Akord ${sel.node.attrs.n || ''}`.trim(), 'tažením posunout (Alt drží znak, Shift jen vodorovně) · Delete smaže');
   else if (druh === 'obrazek') napisPopis(popis, 'Obrázek', `${rozmer(sel.node.attrs)} · přesun za lištu, velikost za roh · pravé tlačítko nabídne další`);
@@ -2121,7 +2125,7 @@ function obnovKontext(state) {
     if (!sel.empty) casti.push(`označeno znaků: ${state.doc.textBetween(sel.from, sel.to, '').length}`);
     napisPopis(popis, 'Text', casti.join(' · '));
   } else if (druh === 'cislo') napisPopis(popis, 'Číslo strany', 'tažením posunout, přichytí se ke středu a k okrajům · platí pro všechny strany · Esc zruší výběr');
-  else napisPopis(popis, 'Nic nevybráno', `strana ${nastaveni.format || 'A5'}`);
+  else napisPopis(popis, 'Nic nevybráno', `strana ${nastaveni.format || 'A5'} · klik do textu ho upraví, klik na obrázek, náplast nebo číslo strany je vybere`);
 
   // Štítek nástroje nad stranou.
   const rezim = el('navrh-rezim');
@@ -2130,7 +2134,7 @@ function obnovKontext(state) {
     rezim.querySelector('use').setAttribute('href', nastroj === 'akord' ? '#i-akord' : nastroj === 'naplast' ? '#i-naplast' : '#i-ramecek');
     rezim.querySelector('.rezim-text').textContent = nastroj === 'akord' ? 'Nástroj Akord: klik na znak vloží akord'
       : nastroj === 'text' ? 'Nástroj Text: klik nebo tažení vloží rámeček'
-      : `Nástroj Náplast: ${naplast.druh === 'volny' ? 'volný tvar' : 'obdélník'}`;
+      : `Nástroj Náplast: ${NAZVY_TVARU[naplast.druh].toLowerCase()}`;
   }
 }
 
@@ -2497,7 +2501,7 @@ napojListu();
 napojPanelAkordu();
 nastavVysku();
 prepniZalozku((() => {
-  try { const z = localStorage.getItem(KLIC_ZALOZKY); return ['text', 'akordy', 'strana'].includes(z) ? z : 'text'; } catch (_) { return 'text'; }
+  try { const z = localStorage.getItem(KLIC_ZALOZKY); return ['text', 'akordy'].includes(z) ? z : 'text'; } catch (_) { return 'text'; }
 })());
 nactiPanelVidet();
 pouzijNastaveni();
